@@ -1,0 +1,10 @@
+node_modules/
+web/dist/
+.idea/
+config/*.local.json
+.env
+state/
+runs/
+work/
+__pycache__/
+*.pyc

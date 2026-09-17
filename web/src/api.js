@@ -1,0 +1,56 @@
+let token;
+export async function uploadManualImage(file) {
+  const response = await fetch('/api/channels/manual/images', {
+    method: 'POST',
+    headers: {
+      'content-type': file.type || 'application/octet-stream',
+      'x-tapd-token': token,
+    },
+    body: file,
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || '图片上传失败');
+  return result;
+}
+export async function api(url, data) {
+  const response = await fetch(
+    `/api${url}`,
+    data === undefined
+      ? {}
+      : {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-tapd-token': token,
+          },
+          body: JSON.stringify(data),
+        },
+  );
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || '请求失败');
+  return result;
+}
+export async function bootstrap() {
+  const result = await api('/bootstrap');
+  token = result.token;
+  return result;
+}
+export function statusLabel(status) {
+  return (
+    {
+      preparing: '准备中',
+      initializing: '初始化中',
+      starting: '启动中',
+      running: '执行中',
+      inProgress: '执行中',
+      completed: '本轮结束',
+      failed: '执行失败',
+      error: '异常',
+      interrupted: '已停止',
+      disconnected: '连接中断',
+      idle: '等待指令',
+    }[status] ||
+    status ||
+    '等待指令'
+  );
+}

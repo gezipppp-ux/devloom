@@ -1,0 +1,46 @@
+{
+  "name": "web-coding",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Standalone multi-channel requirement runner and Codex Web CLI",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "tapd:session": "node src/tapd_direct_session.cjs",
+    "tapd:auth:cookie": "node src/tapd_cookie_session.cjs",
+    "tapd:todo": "node src/tapd_direct_reader.cjs",
+    "tapd:search": "node src/tapd_direct_reader.cjs --type story",
+    "tapd:detail": "node src/tapd_direct_detail.cjs",
+    "tapd:task": "node src/tapd_task_package.cjs",
+    "tapd:users": "node src/tapd_users.cjs",
+    "tapd:transitions": "node src/tapd_workflow.cjs",
+    "tapd:transition": "node src/tapd_workflow.cjs --apply",
+    "tapd:run": "node src/tapd_runner.cjs",
+    "tapd:retry-transition": "node src/tapd_runner.cjs --retry-transition",
+    "tapd:status": "node src/tapd_runner.cjs --status",
+    "lint": "eslint src test web/src web/vite.config.mjs",
+    "test": "node --test test/*.test.cjs",
+    "test:web": "node test/browser.cjs",
+    "web:build": "vite build --config web/vite.config.mjs",
+    "tapd:web": "npm run web:build && node src/web_server.cjs",
+    "build": "npm run web:build",
+    "start": "node src/web_server.cjs"
+  },
+  "dependencies": {
+    "antdv-next": "1.2.0",
+    "dompurify": "3.4.5",
+    "marked": "16.4.2",
+    "pinyin-pro": "3.29.4",
+    "playwright": "1.59.1",
+    "vue": "^3.5.32"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "6.0.6",
+    "eslint": "10.2.0",
+    "eslint-plugin-vue": "10.8.0",
+    "prettier": "3.8.3",
+    "vite": "8.0.8",
+    "vue-eslint-parser": "10.4.0"
+  }
+}

@@ -1,0 +1,105 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const { execFileSync } = require('node:child_process');
+const { createHash } = require('node:crypto');
+const { runKey, sourceFor } = require('./run_identity.cjs');
+const { defaultWorktreeRoot } = require('./settings.cjs');
+const { validateWorktreeName } = require('./worktree_name.cjs');
+
+function git(repository, args) {
+  return execFileSync('git', ['-C', repository, ...args], {
+    encoding: 'utf8',
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 60000,
+  }).trim();
+}
+
+function repositoryFor(config, configFile, workspace, channel = 'tapd') {
+  const selected =
+    config.codex?.repositories?.[`${channel}:${workspace}`] ||
+    (channel === 'tapd' ? config.codex?.repositories?.[workspace] : null) ||
+    config.codex?.repository;
+  if (!selected)
+    throw new Error(
+      '请先在 Web 执行设置或 codex.repository 中配置目标代码仓库。',
+    );
+  const repository = path.resolve(path.dirname(configFile), selected);
+  const root = git(repository, ['rev-parse', '--show-toplevel']);
+  return path.resolve(root);
+}
+
+function worktreePlan(repository, item, baseRef = 'HEAD', options = {}) {
+  const source = options.source || sourceFor('tapd', item);
+  const key = runKey(source);
+  if (
+    options.slug !== undefined &&
+    !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(options.slug)
+  )
+    throw new Error('Invalid worktree title slug.');
+  const name = options.slug
+    ? `${source.channel}-${options.slug.slice(0, 64)}-${key.slice(-12)}`
+    : `${source.channel === 'tapd' ? 'tapd-' : ''}${key}`;
+  const directoryName = validateWorktreeName(options.name ?? '') || name;
+  const repositoryIdentity =
+    process.platform === 'win32'
+      ? path.resolve(repository).toLowerCase()
+      : path.resolve(repository);
+  const repositoryKey = createHash('sha256')
+    .update(repositoryIdentity)
+    .digest('hex')
+    .slice(0, 16);
+  const commit = git(repository, [
+    'rev-parse',
+    '--verify',
+    '--end-of-options',
+    `${baseRef}^{commit}`,
+  ]);
+  if (!/^[a-f\d]{40,64}$/i.test(commit))
+    throw new Error('Git did not return a valid base commit.');
+  return {
+    repository,
+    branch: `codex/${name}`,
+    path: path.join(
+      options.root || defaultWorktreeRoot(),
+      repositoryKey,
+      directoryName,
+    ),
+    base_commit: commit,
+  };
+}
+
+function createWorktree(plan) {
+  if (fs.existsSync(plan.path))
+    throw new Error(
+      `Worktree path already exists: ${plan.path}. Inspect the previous run before retrying.`,
+    );
+  let branchExists = false;
+  try {
+    git(plan.repository, [
+      'show-ref',
+      '--verify',
+      '--quiet',
+      `refs/heads/${plan.branch}`,
+    ]);
+    branchExists = true;
+  } catch (error) {
+    if (error.status !== 1) throw error;
+  }
+  if (branchExists)
+    throw new Error(
+      `任务分支已存在：${plan.branch}。修改 worktree 根目录不会清除旧分支；请检查原工作区和运行记录，确认没有未保存工作后清理，再重新启动。`,
+    );
+  fs.mkdirSync(path.dirname(plan.path), { recursive: true });
+  git(plan.repository, [
+    'worktree',
+    'add',
+    '-b',
+    plan.branch,
+    plan.path,
+    plan.base_commit,
+  ]);
+  return plan;
+}
+
+module.exports = { createWorktree, repositoryFor, worktreePlan };

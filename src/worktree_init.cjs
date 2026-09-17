@@ -1,0 +1,181 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const { spawn } = require('node:child_process');
+
+function validateInitCommands(value = []) {
+  if (
+    !Array.isArray(value) ||
+    value.length > 20 ||
+    value.some(
+      (command) =>
+        typeof command !== 'string' ||
+        !command.trim() ||
+        command.length > 4000 ||
+        /[\r\n\0]/.test(command),
+    )
+  )
+    throw new Error('初始化命令最多 20 条，每条为 1–4000 字符且不能包含换行。');
+  return value.map((command) => command.trim());
+}
+
+function stopTree(child) {
+  if (!child.pid) return;
+  if (process.platform === 'win32') {
+    const killer = spawn(
+      'taskkill.exe',
+      ['/pid', String(child.pid), '/t', '/f'],
+      {
+        windowsHide: true,
+        stdio: 'ignore',
+        shell: false,
+      },
+    );
+    killer.on('error', () => child.kill());
+  } else {
+    try {
+      process.kill(-child.pid, 'SIGKILL');
+    } catch {
+      child.kill('SIGKILL');
+    }
+  }
+}
+
+async function initializeWorktree({
+  commands,
+  cwd,
+  directory,
+  signal,
+  onUpdate = () => {},
+  timeoutMs = 15 * 60 * 1000,
+}) {
+  commands = validateInitCommands(commands);
+  if (!commands.length) return;
+  const local = new AbortController();
+  const abort = () => local.abort();
+  const combined = signal
+    ? AbortSignal.any([signal, local.signal])
+    : local.signal;
+  process.once('SIGINT', abort);
+  process.once('SIGTERM', abort);
+  const state = {
+    status: 'running',
+    commands: commands.map((command) => ({
+      command,
+      status: 'pending',
+      output: '',
+    })),
+  };
+  let logBytes = 0;
+  const logFile = path.join(directory, 'initialization.log');
+  const log = (text) => {
+    const limit = 5 * 1024 * 1024;
+    if (logBytes >= limit) return;
+    const chunk = Buffer.from(text).subarray(0, limit - logBytes);
+    fs.appendFileSync(logFile, chunk, { mode: 0o600 });
+    logBytes += chunk.length;
+    if (logBytes >= limit)
+      fs.appendFileSync(logFile, '\n[日志已达到 5 MiB 上限]\n');
+  };
+  try {
+    for (const [index, entry] of state.commands.entries()) {
+      try {
+        if (combined.aborted) throw new Error('初始化已停止。');
+        entry.status = 'running';
+        entry.started_at = new Date().toISOString();
+        log(`\n[${index + 1}/${commands.length}] ${entry.command}\n`);
+        onUpdate(state, index);
+        await new Promise((resolve, reject) => {
+          const env = { ...process.env };
+          env.INIT_CWD = cwd;
+          delete env.CODEX_THREAD_ID;
+          for (const key of Object.keys(env))
+            if (key.startsWith('TAPD_')) delete env[key];
+          // Commands come only from local execution settings, never requirement text.
+          const child = spawn(entry.command, {
+            cwd,
+            env,
+            shell:
+              process.platform === 'win32'
+                ? process.env.ComSpec || 'cmd.exe'
+                : '/bin/sh',
+            detached: process.platform !== 'win32',
+            windowsHide: true,
+            stdio: ['ignore', 'pipe', 'pipe'],
+          });
+          let failure, publishTimer;
+          const stop = (message) => {
+            failure ||= new Error(message);
+            stopTree(child);
+          };
+          const interrupted = () => stop('初始化已停止。');
+          const timeout = setTimeout(
+            () =>
+              stop(`初始化命令超时（${Math.round(timeoutMs / 1000)} 秒）。`),
+            timeoutMs,
+          );
+          combined.addEventListener('abort', interrupted, { once: true });
+          if (combined.aborted) interrupted();
+          const output = (chunk) => {
+            try {
+              log(chunk);
+              entry.output = (entry.output + chunk).slice(-20000);
+              if (!publishTimer)
+                publishTimer = setTimeout(() => {
+                  publishTimer = null;
+                  try {
+                    onUpdate(state, index);
+                  } catch (error) {
+                    stop(error.message);
+                  }
+                }, 200);
+            } catch (error) {
+              stop(error.message);
+            }
+          };
+          child.stdout.setEncoding('utf8').on('data', output);
+          child.stderr.setEncoding('utf8').on('data', output);
+          child.on('error', (error) => {
+            failure = error;
+          });
+          child.once('close', (code, exitSignal) => {
+            clearTimeout(timeout);
+            clearTimeout(publishTimer);
+            combined.removeEventListener('abort', interrupted);
+            entry.exit_code = code;
+            entry.signal = exitSignal;
+            if (failure) reject(failure);
+            else if (code !== 0)
+              reject(
+                new Error(
+                  `退出码 ${code}${exitSignal ? ` (${exitSignal})` : ''}`,
+                ),
+              );
+            else resolve();
+          });
+        });
+        entry.status = 'completed';
+        entry.finished_at = new Date().toISOString();
+        onUpdate(state, index);
+      } catch (error) {
+        entry.status = combined.aborted ? 'interrupted' : 'failed';
+        entry.finished_at = new Date().toISOString();
+        entry.error = error.message;
+        state.status = entry.status;
+        for (const next of state.commands.slice(index + 1))
+          next.status = 'skipped';
+        onUpdate(state, index);
+        throw new Error(
+          `Worktree 初始化第 ${index + 1} 条命令失败：${entry.command}；${error.message}`,
+        );
+      }
+    }
+    state.status = 'completed';
+    onUpdate(state, state.commands.length - 1);
+    return state;
+  } finally {
+    process.removeListener('SIGINT', abort);
+    process.removeListener('SIGTERM', abort);
+  }
+}
+
+module.exports = { initializeWorktree, validateInitCommands };

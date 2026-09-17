@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "tapd": {
+    "image_hosts": [],
+    "session": {
+      "endpoint": "https://www.tapd.cn/api/my_worktable/my_worktable/get_my_worktable_by_page?needRepeatInterceptors=false",
+      "origin": "https://www.tapd.cn",
+      "referer": "https://www.tapd.cn/tapd_fe/my/work?left_tree=1",
+      "cookie_header": "",
+      "request_body": {
+        "group": "workspace",
+        "group_id": "YOUR_WORKSPACE_ID",
+        "select_workspace_ids": ["YOUR_WORKSPACE_ID"],
+        "select_object_types": ["story"],
+        "tab": "todo",
+        "setting_view": "tree",
+        "perpage": "20",
+        "page": 1,
+        "dsc_token": ""
+      }
+    }
+  },
+  "workflow": {
+    "allow_write": false,
+    "target_status": "developing",
+    "fields": {}
+  },
+  "codex": {
+    "repository": "",
+    "repositories": {},
+    "base_ref": "HEAD",
+    "init_commands": [],
+    "startup_timeout_ms": 120000,
+    "worktree_root": ""
+  }
+}
