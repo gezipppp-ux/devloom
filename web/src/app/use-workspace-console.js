@@ -1,0 +1,149 @@
+import { onMounted, onUnmounted, ref } from "vue";
+import { bootstrap, apiPath } from "../shared/api/api.js";
+import { useTaskList } from "../features/tasks/use-task-list.js";
+import { useSession } from "../features/session/use-session.js";
+
+export function useWorkspaceConsole({
+  canRefresh,
+  onOpen,
+  onOpened,
+  onItem,
+  onEmpty,
+}) {
+  const channels = ref([]),
+    workspace = ref(""),
+    online = ref(false);
+  const tasks = useTaskList();
+  const conversation = useSession({
+    online,
+    canRefresh,
+    onOpen,
+    onOpened,
+    onItem,
+    onMutation: scheduleRefresh,
+  });
+  let events,
+    refreshTimer,
+    disposed = false,
+    bootstrapping = true,
+    refreshQueued = false;
+
+  function scheduleRefresh() {
+    if (disposed) return;
+    // Subscribe before loading snapshots, but let the initial list decide the
+    // default session before an SSE refresh can supersede that list request.
+    if (bootstrapping) {
+      refreshQueued = true;
+      return;
+    }
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(
+      () =>
+        Promise.all([tasks.refresh(), conversation.refresh()]).catch((e) => {
+          if (!disposed) conversation.error.value = e.message;
+        }),
+      400,
+    );
+  }
+
+  function metadataSaved(key, metadata) {
+    tasks.updateMetadata(key, metadata);
+    conversation.updateMetadata(key, metadata);
+  }
+
+  function eventReceived(event) {
+    if (event.type === "metadata") {
+      metadataSaved(event.key, event.metadata);
+      return;
+    }
+    conversation.receiveEvent(event);
+    if (event.type !== "item") scheduleRefresh();
+  }
+
+  async function reloadChannels() {
+    const initial = await bootstrap();
+    if (disposed) return;
+    workspace.value = initial.workspace;
+    channels.value = initial.channels;
+  }
+
+  onMounted(async () => {
+    try {
+      await reloadChannels();
+      if (disposed) return;
+      events = new EventSource(apiPath("/events"));
+      events.onopen = () => {
+        online.value = true;
+        scheduleRefresh();
+      };
+      events.onerror = () => {
+        online.value = false;
+      };
+      events.onmessage = (event) => eventReceived(JSON.parse(event.data));
+      await tasks.refresh();
+      if (disposed) return;
+      if (tasks.runs.value.length)
+        await conversation.open(tasks.runs.value[0].key);
+      else onEmpty();
+    } catch (e) {
+      if (!disposed) conversation.error.value = e.message;
+    } finally {
+      bootstrapping = false;
+      if (refreshQueued) {
+        refreshQueued = false;
+        scheduleRefresh();
+      }
+    }
+  });
+  onUnmounted(() => {
+    disposed = true;
+    events?.close();
+    clearTimeout(refreshTimer);
+  });
+
+  const {
+    active,
+    session,
+    loading,
+    busy,
+    error,
+    notice,
+    running,
+    initializing,
+    canSend,
+    executionSettings,
+    canEditSettings,
+    settingsBusy,
+    settingsError,
+    updateExecutionSettings,
+    open,
+    action,
+    older,
+  } = conversation;
+  return {
+    channels,
+    workspace,
+    online,
+    runs: tasks.runs,
+    active,
+    session,
+    loading,
+    busy,
+    error,
+    notice,
+    running,
+    initializing,
+    canSend,
+    executionSettings,
+    canEditSettings,
+    settingsBusy,
+    settingsError,
+    updateExecutionSettings,
+    open,
+    action,
+    older,
+    refreshList: tasks.refresh,
+    reloadChannels,
+    metadataSaved,
+  };
+}

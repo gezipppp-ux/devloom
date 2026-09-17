@@ -6,6 +6,8 @@ Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install
 
 ## Before development
 
+- Read [architecture.md](./architecture.md) for module ownership, dependency direction, directory layout and test placement before adding or moving code.
+
 - For visual changes, read [ui-design.md](./ui-design.md). Use shared design tokens and form sections across pages; validate responsive screenshots with fixture data.
 
 - Read `README.md` and the task PRD/design for CLI and configuration contracts.
@@ -23,7 +25,7 @@ Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install
 5. Persist dispatch intent before creating the worktree/process. Lock by workspace/item, and never automatically redispatch an existing or uncertain run. Store execution and TAPD-transition states independently.
 6. Record `thread.started` first; update TAPD only after `turn.started` for that session. Preflight permitted transitions and required fields before dispatch, reread before mutation, and verify the resulting status after mutation. A process spawn or a session ID alone does not prove execution started.
 7. A transition-only retry requires a recorded session and execution-start timestamp, uses the persisted work-item identity, and does not rerun Codex. An already successful transition is not replayed.
-8. Spawn with an argument array, no shell, and stdin for the prompt. Remove TAPD credential environment variables. Keep default model selection in the user's Codex configuration and use workspace-write sandboxing.
+8. Spawn with an argument array, no shell, and stdin for the prompt. Remove TAPD credential environment variables. Default model selection comes from the user's Codex configuration. Web defaults to workspace-write with user approval; explicit per-task permission choices follow the Web CLI contract and take effect only on the next turn.
 
 ## Verification
 

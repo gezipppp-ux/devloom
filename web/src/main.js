@@ -1,8 +1,8 @@
 /* global document, getComputedStyle */
 import { createApp, h } from "vue";
 import { ConfigProvider, Form, FormItem } from "antdv-next";
-import App from "./App.vue";
-import "./style.css";
+import App from "./app/App.vue";
+import "./shared/styles/style.css";
 
 const tokens = getComputedStyle(document.documentElement);
 const token = (name) => tokens.getPropertyValue(name).trim();

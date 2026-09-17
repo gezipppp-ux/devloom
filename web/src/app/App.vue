@@ -1,0 +1,38 @@
+<script setup>
+import { ref } from "vue";
+import { useWorkspaceSelection } from "./use-workspace-selection.js";
+import WorkspaceConsole from "./WorkspaceConsole.vue";
+import WorkspacePicker from "../features/workspaces/WorkspacePicker.vue";
+
+const picker = ref();
+const { workspaces, current, ready, error, standalone, navigate } =
+  useWorkspaceSelection();
+</script>
+
+<template>
+  <WorkspaceConsole
+    v-if="ready && (current || standalone)"
+    :workspace-name="current?.name || ''"
+    @rename-workspace="picker?.edit(true)"
+  >
+    <template v-if="!standalone" #workspace-rail>
+      <WorkspacePicker
+        ref="picker"
+        rail
+        :workspaces="workspaces"
+        :current="current"
+        @select="navigate"
+      />
+    </template>
+  </WorkspaceConsole>
+  <section v-else class="workspace-welcome">
+    <div class="welcome-mark" aria-hidden="true">t_</div>
+    <div class="eyebrow">需求 × CODEX</div>
+    <h1>{{ ready ? "创建或选择工作区" : "正在连接工作台…" }}</h1>
+    <p class="welcome-description">
+      一个项目，一套配置。独立管理需求与开发会话。
+    </p>
+    <p v-if="error" class="error" role="alert">{{ error }}</p>
+    <WorkspacePicker v-if="ready" :workspaces="workspaces" @select="navigate" />
+  </section>
+</template>

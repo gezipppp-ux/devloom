@@ -1,5 +1,6 @@
-const { createTapdChannel } = require("./tapd.cjs");
-const { createManualChannel } = require("./manual.cjs");
+const { createTapdChannel } = require("./tapd/adapter.cjs");
+const { defaultTapdConfig } = require("./tapd/config.cjs");
+const { createManualChannel } = require("./manual/adapter.cjs");
 
 class ChannelRegistry {
   constructor(channels) {
@@ -31,4 +32,9 @@ function defaultChannels(configFile, options) {
     createManualChannel(configFile, options),
   ]);
 }
-module.exports = { ChannelRegistry, defaultChannels };
+
+function defaultChannelConfig() {
+  return { ...defaultTapdConfig() };
+}
+
+module.exports = { ChannelRegistry, defaultChannels, defaultChannelConfig };

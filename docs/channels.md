@@ -1,18 +1,20 @@
 # 需求渠道扩展契约
 
-`src/channels/registry.cjs` 是显式注册入口；当前渠道为 TAPD 和手动输入。新增渠道时实现适配器并加入注册表，不需要修改 Codex 传输、会话控制或执行核心。模拟第二渠道的完整验证见 `test/decoupling.test.cjs`，手动渠道验证见 `test/manual.test.cjs`。
+`src/channels/registry.cjs` 是显式注册入口；当前渠道为 TAPD 和手动输入。新增渠道时实现适配器并加入注册表，不需要修改 Codex 传输、会话控制或执行核心。模拟第二渠道的完整验证见 `test/integration/channel-isolation.test.cjs`，手动渠道验证见 `test/integration/manual-channel.test.cjs`。
 
 ## 分层
 
-- `channels/tapd.cjs`：TAPD 登录读取、需求检索、人员验证、图文任务包和状态流转。复用现有 TAPD HTTP 模块。
-- `channels/manual.cjs`：标题/正文验证、图片暂存与任务包、标题拼音命名；无需 TAPD 凭据，渠道同步返回 skipped。
-- `execution_runner.cjs`：幂等、锁、Git worktree、session 启动次序与记录持久化；通过适配器回调同步渠道状态。
-- `web_sessions.cjs`：原 session 续聊、实时输出、中断、审批和问题回复。
-- `web_server.cjs`：同源保护、HTTP/SSE、静态资源及按渠道转发请求。
-- `workspaces.cjs`：应用工作区目录、配置与各工作区独立的渠道/会话管理器。
-- `settings.cjs`：验证并保存执行位置、基准引用、初始化命令及模型，保留同文件中的渠道凭据。
-- `channels/tapd_settings.cjs`：TAPD 项目绑定、Cookie 维护和只读连接检测。
-- `tapd_runner.cjs`：旧 TAPD CLI 的兼容入口，转发至通用执行核心。
+- `src/channels/tapd/adapter.cjs`：TAPD 登录读取、需求检索、人员验证、图文任务包和状态流转。复用现有 TAPD HTTP 模块。
+- `src/channels/manual/adapter.cjs`：手动输入验证与渠道组合；图片暂存/过期清理由 `uploads.cjs` 管理，标题命名与任务包由 `task-package.cjs` 管理；渠道同步返回 skipped。
+- `src/execution/runner.cjs`：幂等、锁、Git worktree、session 启动次序与记录持久化；通过适配器回调同步渠道状态。
+- `src/application/sessions.cjs`：原 session 续聊、中断和生命周期；事件/审批、查询、公开数据分别由 `session-events.cjs`、`session-views.cjs`、`session-presenter.cjs` 管理。
+- `src/http/`：同源保护、请求适配、HTTP/SSE 与静态资源传输；业务组合由 `application/workspace-services.cjs` 提供。
+- `src/application/workspaces.cjs`：应用工作区目录、配置与各工作区独立的渠道/会话管理器。
+- `src/config/execution-settings.cjs`：验证并保存执行位置、基准引用和初始化命令，保留同文件中的渠道凭据。
+- `src/channels/tapd/settings.cjs`：TAPD 项目绑定、Cookie 维护和只读连接检测。
+- `src/cli/tapd/`：TAPD 命令输入/输出适配；`src/application/tapd-run.cjs` 组合渠道与通用执行核心。
+
+各渠道拥有自己的默认配置（TAPD 为 `defaultTapdConfig()`），注册表通过 `defaultChannelConfig()` 组合后交给工作区创建；通用工作区不内嵌渠道状态码或流程字段。工厂每次返回独立对象，不能把一个工作区的设置变成另一个工作区的默认值。
 
 ## 渠道对象
 

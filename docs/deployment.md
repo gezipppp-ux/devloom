@@ -17,6 +17,8 @@ npm start -- --port 4317
 
 Windows 也支持上述 npm 命令。`npm run tapd:web` 会先构建再启动，生产部署可先构建一次然后 `npm start`。
 
+更新源码后需要重新构建前端并重启 Web 服务。服务不会热加载后端代码；只构建或刷新页面可能使新版页面连接旧接口，出现“接口不存在”。确认没有执行中的任务后停止原服务，再从当前安装目录运行 `npm start -- --port 4317`，并刷新浏览器。重启继续使用同一 `RUNNER_DATA_DIR`，保留已有会话及 worktree。
+
 ## 持久化与配置
 
 安装目录、运行数据、业务仓库和 worktree 可以分别放在不同位置：
@@ -65,7 +67,7 @@ User=runner
 WorkingDirectory=/opt/requirement-runner
 Environment=RUNNER_DATA_DIR=/var/lib/requirement-runner
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
-ExecStart=/usr/bin/node /opt/requirement-runner/src/web_server.cjs --port 4317
+ExecStart=/usr/bin/node /opt/requirement-runner/src/cli/web.cjs --port 4317
 Restart=on-failure
 TimeoutStopSec=120
 UMask=0077

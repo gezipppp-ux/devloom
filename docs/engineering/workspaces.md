@@ -8,6 +8,8 @@ One application workspace owns one repository and one configuration. Application
 
 Each context owns its channels, RunStore, WebSessions and lazy Codex client. Switching clients/pages does not close contexts or stop background execution. Shutdown closes every instantiated manager. Workspace selection is carried in URLs, never mutable server-global active state. Independent tabs must remain independent.
 
+When opening the root URL without a workspace parameter, persist the automatically selected workspace with `history.replaceState`, retaining other query parameters and the fragment. Later catalog additions or renames must not change that tab's workspace on refresh.
+
 The Web shell uses an icon rail for workspace selection next to the project/session pane. Icons expose full names through accessible labels and titles, mark the current workspace, and disambiguate repeated initials with a small index. Create and rename use a keyboard-accessible modal; Escape cancels without saving. The rail scrolls vertically on desktop and horizontally on narrow screens. Long project names truncate visually while retaining the full title. Navigation changes must preserve workspace URLs, session identity and background execution.
 
 Workspace icons come from a curated 40-icon SVG component catalog (`@antdv-next/icons`). `shared/workspace-icons.json` defines IDs and Chinese/English search metadata shared by server validation and the Web picker. Persist only an allowed string ID, or null for the default name initial; omitted icon preserves the current selection. Arbitrary SVG, URLs and unknown IDs are rejected before writing. The edit/create dialog provides search, preview and reset. Icon changes do not modify credentials, project settings or session identities.
@@ -18,7 +20,7 @@ Workspace icons come from a curated 40-icon SVG component catalog (`@antdv-next/
 - `GET /api/workspaces` lists workspace summaries without credentials.
 - `POST /api/workspaces {name,icon?}` creates an empty workspace.
 - `POST /api/workspaces/:id {name,icon?}` updates its display name and icon.
-- All settings, refs, requirements, users, runs, messages, interrupts, approvals, images, uploads, bootstrap and SSE use `/api/workspaces/:id/<existing route>`.
+- All settings, refs, requirements, users, runs, messages, interrupts, approvals, images, uploads, bootstrap and SSE use `/api/workspaces/:id/<existing route>`. This includes `execution-options` and per-run `execution-settings`; model/permission updates cannot address a run in another workspace.
 - Missing workspace context is rejected. Unknown UUIDs return 404; malformed UUIDs cannot construct paths.
 - SSE is delivered only to clients subscribed to the emitting workspace manager. Attachment URLs carry the workspace prefix; image path validation remains inside the selected RunStore.
 - Same-origin, loopback Host and POST token protection apply to creation, settings and Cookie checks as well as execution.
@@ -33,17 +35,17 @@ New branches use `codex/<workspace UUID>/<channel task name>`, paths use `<confi
 
 CLI `--app-workspace <UUID>` / `RUNNER_WORKSPACE` selects the same config and runs. `--workspace` is still a TAPD project ID. Web rejects `--config` and uses the workspace catalog under RUNNER_DATA_DIR.
 
-## Codex model and reasoning selection
+## Codex model, reasoning and permissions
 
-`GET .../models` reads the current workspace client's `model/list` with pagination. Expose only model ID, display label, supported reasoning efforts and default effort. Filter hidden models; reject malformed pagination. Discovery never starts a thread/turn or closes the shared client.
+`GET .../models` reads the current workspace client's `model/list` with pagination. Expose only model ID, display label, supported reasoning efforts, default effort and `isDefault`. Filter hidden models; reject malformed pagination. Discovery never starts a thread/turn or closes the shared client.
 
-`POST .../runs` accepts optional `model` and `reasoningEffort` strings for both TAPD and manual requirements. Each new requirement form defaults to blank (local Codex defaults). The linked dropdowns retain current draft values on discovery failure, allow retry, and clear an unsupported effort when changing model. An explicit effort requires a concrete model. Every submitted explicit selection is validated against the catalog before resolving the channel or claiming a run; defaults need no catalog lookup. Unsupported combinations and invalid types are rejected.
+`POST .../runs` accepts optional `model`, `reasoningEffort` and `permissionMode` strings for both TAPD and manual requirements. Each new requirement form defaults to blank model/effort (local Codex defaults) and `ask` permission. The linked dropdowns retain current draft values on discovery failure, allow retry, and clear an unsupported effort when changing model. An explicit effort requires a concrete model. Every submitted explicit selection is validated against the catalog before resolving the channel or claiming a run; blank model/effort is resolved against effective config and catalog defaults before starting a turn. Unsupported combinations and invalid types are rejected.
 
-Workspace settings neither expose nor accept model/effort. Old workspace values are ignored when starting Web tasks and removed on the next project settings save; existing run snapshots remain untouched. New runs snapshot only model and reasoning effort; first thread creation uses model and first `turn/start` uses effort. Followups and resumed sessions use the run snapshot. Run summaries expose only `{model,reasoningEffort}` for the session details, or null for unrecorded legacy values. CLI supplies `-c model_reasoning_effort=...` as an argument for explicit CLI configuration. Verify same-workspace task isolation, defaults ignoring stale settings, invalid selections, offline discovery, both input channels and continuation after reconnect.
+Workspace settings neither expose nor accept model/effort. Old workspace values are ignored when starting Web tasks and removed on the next project settings save; existing run snapshots remain untouched. New Web runs snapshot model, reasoning effort and permission mode in `run.json.codex`. Subsequent choices live in `execution-settings.json`, with current and next-turn semantics defined in [web-cli.md](./web-cli.md). Each new turn explicitly sends resolved model/effort and selected approval/sandbox settings on the same thread. Run summaries retain the original `codex` model/effort for context and expose current choices separately as `executionSettings`, `activeExecutionSettings` and `settingsPending`. CLI supplies `-c model_reasoning_effort=...` as an argument for explicit CLI configuration. Verify same-workspace task isolation, defaults ignoring stale settings, invalid selections, offline discovery, both input channels, active-turn staging and continuation after reconnect.
 
 ## TAPD settings contract
 
-Channel-specific validation and credential maintenance live in `src/channels/tapd_settings.cjs`. Other execution/session code remains source-independent.
+Channel-specific validation and credential maintenance live in `src/channels/tapd/settings.cjs`. Other execution/session code remains source-independent.
 
 - `GET .../settings/tapd`: `{workspaceId,hasCookie,targetStatus,imageHosts}`; never return Cookie or DSC token.
 - `POST .../settings/tapd`: accepts `{workspaceId,cookie?,clearCookie?,targetStatus?,imageHosts?}`. Blank/omitted Cookie preserves the existing secret; `clearCookie:true` removes it. A supplied Cookie must be single-line, bounded, and include `dsc-token`. Rebuild the session using the shared auth utilities, preserve other workspace configuration.
@@ -53,7 +55,7 @@ Channel-specific validation and credential maintenance live in `src/channels/tap
 
 ## Verification
 
-Run lint, unit tests, build and both browser suites through `npm run test:web`. `workspaces.test.cjs` exercises same-requirement execution in shared repositories with real temporary worktrees and separate fake clients, interruption independence, settings and uploads, SSE/HTTP scope, credential masking/preservation/clearing, draft checks, expired/non-JSON responses, atomic persisted reload and invalid IDs. `workspaces-browser.cjs` exercises the actual create/switch/rename/settings flows, Cookie draft success/failure, bound TAPD project, per-task model selection, manual images and background execution across switching/reloading. No live requirement or TAPD mutation is permitted for validation.
+Run lint, unit tests, build and both browser suites through `npm run test:web`. `test/integration/workspaces.test.cjs` exercises same-requirement execution in shared repositories with real temporary worktrees and separate fake clients, interruption independence, settings and uploads, SSE/HTTP scope, credential masking/preservation/clearing, draft checks, expired/non-JSON responses, atomic persisted reload and invalid IDs. `test/browser/workspaces.cjs` exercises the actual create/switch/rename/settings flows, Cookie draft success/failure, bound TAPD project, per-task model selection, manual images and background execution across switching/reloading. No live requirement or TAPD mutation is permitted for validation.
 
 
 ## Local task classification and human progress

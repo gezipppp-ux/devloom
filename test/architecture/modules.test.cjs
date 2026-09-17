@@ -1,0 +1,337 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { execFileSync } = require("node:child_process");
+const { createRequire } = require("node:module");
+const { test } = require("node:test");
+const { Linter } = require("eslint");
+
+const root = path.resolve(__dirname, "../..");
+const sourceRoot = path.join(root, "src");
+const catalogRoot = path.join(root, "shared");
+const dependencies = {
+  shared: ["shared"],
+  domain: ["domain", "shared"],
+  storage: ["storage", "domain", "shared"],
+  git: ["git", "domain", "shared"],
+  config: ["config", "git", "storage", "domain", "shared"],
+  codex: ["codex", "domain", "shared"],
+  execution: [
+    "execution",
+    "codex",
+    "git",
+    "config",
+    "storage",
+    "domain",
+    "shared",
+  ],
+  channels: ["channels", "config", "storage", "domain", "shared"],
+  application: [
+    "application",
+    "channels",
+    "execution",
+    "codex",
+    "git",
+    "config",
+    "storage",
+    "domain",
+    "shared",
+  ],
+  http: ["http", "application", "config", "domain", "shared"],
+  cli: [
+    "cli",
+    "http",
+    "application",
+    "channels",
+    "execution",
+    "codex",
+    "config",
+    "storage",
+    "domain",
+    "shared",
+  ],
+};
+
+function isInside(directory, file) {
+  const relative = path.relative(directory, file);
+  return (
+    relative !== ".." &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
+  );
+}
+
+function filesIn(directory) {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const file = path.join(directory, entry.name);
+    return entry.isDirectory() ? filesIn(file) : [file];
+  });
+}
+
+function inspectModules() {
+  return filesIn(sourceRoot)
+    .filter((file) => file.endsWith(".cjs"))
+    .map((file) => {
+      const name = path.relative(sourceRoot, file).split(path.sep).join("/");
+      const group = name.split("/")[0];
+      const source = fs.readFileSync(file, "utf8");
+      const { imports, commandAccess } = inspectSource(source);
+      const resolve = createRequire(file).resolve;
+      const local = imports
+        .filter((specifier) => specifier.startsWith("."))
+        .map((specifier) => {
+          let target;
+          try {
+            target = resolve(specifier);
+          } catch (error) {
+            assert.fail(
+              `${name}: unresolved dependency ${specifier}: ${error.message}`,
+            );
+          }
+          return { target, specifier };
+        });
+      return { file, name, group, local, imports, commandAccess };
+    });
+}
+
+function inspectSource(source) {
+  const imports = [];
+  const commandAccess = [];
+  const propertyName = (node) =>
+    node.computed ? node.property.value : node.property.name;
+  const messages = new Linter().verify(source, [
+    {
+      languageOptions: { sourceType: "commonjs", ecmaVersion: "latest" },
+      plugins: {
+        architecture: {
+          rules: {
+            inspect: {
+              create(context) {
+                return {
+                  CallExpression(node) {
+                    if (
+                      node.callee.type !== "Identifier" ||
+                      node.callee.name !== "require"
+                    )
+                      return;
+                    if (
+                      node.arguments.length !== 1 ||
+                      node.arguments[0].type !== "Literal" ||
+                      typeof node.arguments[0].value !== "string"
+                    ) {
+                      context.report({
+                        node,
+                        message:
+                          "Use literal CommonJS imports so module boundaries can be checked.",
+                      });
+                    } else imports.push(node.arguments[0].value);
+                  },
+                  MemberExpression(node) {
+                    if (node.object.type !== "Identifier") return;
+                    const object = node.object.name;
+                    const property = propertyName(node);
+                    if (
+                      (object === "process" &&
+                        [
+                          "argv",
+                          "stdout",
+                          "stderr",
+                          "exit",
+                          "exitCode",
+                        ].includes(property)) ||
+                      (object === "require" && property === "main")
+                    ) {
+                      commandAccess.push(`${object}.${property}`);
+                    }
+                  },
+                };
+              },
+            },
+          },
+        },
+      },
+      rules: { "architecture/inspect": "error" },
+    },
+  ]);
+  assert.deepEqual(
+    messages,
+    [],
+    "Architecture source parsing must succeed with literal imports.",
+  );
+  return { imports, commandAccess };
+}
+
+test("backend modules resolve within their declared layers and shared catalogs", () => {
+  const modules = inspectModules();
+  assert.ok(modules.length > 0);
+  for (const module of modules) {
+    assert.ok(
+      Object.hasOwn(dependencies, module.group),
+      `${module.name}: place backend code in a declared module directory`,
+    );
+    for (const { target, specifier } of module.local) {
+      if (isInside(sourceRoot, target)) {
+        const targetGroup = path
+          .relative(sourceRoot, target)
+          .split(path.sep)[0];
+        assert.ok(
+          dependencies[module.group].includes(targetGroup),
+          `${module.name} must not depend on ${targetGroup}: ${specifier}`,
+        );
+        if (module.group === "channels" && module.name.split("/").length > 2) {
+          const channel = module.name.split("/")[1];
+          const targetName = path
+            .relative(sourceRoot, target)
+            .split(path.sep)
+            .join("/");
+          assert.ok(
+            targetGroup !== "channels" ||
+              targetName.startsWith(`channels/${channel}/`),
+            `${module.name}: a channel cannot import another channel or the registry`,
+          );
+        }
+        if (module.group === "http" && targetGroup === "config")
+          assert.equal(
+            target,
+            path.join(sourceRoot, "config/runtime.cjs"),
+            `${module.name}: settings operations belong to application services`,
+          );
+      } else {
+        assert.ok(
+          module.group === "domain" &&
+            isInside(catalogRoot, target) &&
+            path.extname(target) === ".json",
+          `${module.name}: dependencies outside src must be domain catalogs under shared/: ${specifier}`,
+        );
+      }
+    }
+  }
+});
+
+test("only CLI adapters access command arguments, terminal output and process exit", () => {
+  for (const module of inspectModules()) {
+    if (module.group !== "cli")
+      assert.deepEqual(module.commandAccess, [], module.name);
+    if (module.group === "domain")
+      assert.ok(
+        !module.imports.some((specifier) =>
+          /^(?:node:)?(?:fs|child_process|http|https|net)(?:\/|$)/.test(
+            specifier,
+          ),
+        ),
+        `${module.name}: domain rules cannot perform storage, subprocess or network I/O`,
+      );
+    if (["storage", "config"].includes(module.group))
+      assert.ok(
+        !module.imports.some((specifier) =>
+          /^(?:node:)?child_process$/.test(specifier),
+        ),
+        `${module.name}: Git/process operations must have their own infrastructure module`,
+      );
+  }
+});
+
+test("architecture inspection recognizes real dependencies and ignores example text", () => {
+  assert.deepEqual(
+    inspectSource(
+      `// require('bad'); process.argv\nconst example = "process.exit(1)";`,
+    ),
+    { imports: [], commandAccess: [] },
+  );
+  assert.deepEqual(
+    inspectSource(`require('./task.cjs'); process['argv']; require.main;`),
+    {
+      imports: ["./task.cjs"],
+      commandAccess: ["process.argv", "require.main"],
+    },
+  );
+  assert.throws(() => inspectSource("require(variable)"), /literal imports/);
+});
+
+test("backend module dependencies do not contain cycles", () => {
+  const modules = inspectModules();
+  const graph = new Map(modules.map((module) => [module.file, module]));
+  const completed = new Set();
+  const active = [];
+  function visit(file) {
+    const cycleStart = active.indexOf(file);
+    assert.equal(
+      cycleStart,
+      -1,
+      `Dependency cycle: ${active
+        .slice(cycleStart)
+        .concat(file)
+        .map((entry) => graph.get(entry).name)
+        .join(" -> ")}`,
+    );
+    if (completed.has(file)) return;
+    active.push(file);
+    for (const { target } of graph.get(file).local) {
+      if (graph.has(target)) visit(target);
+    }
+    active.pop();
+    completed.add(file);
+  }
+  for (const module of modules) visit(module.file);
+});
+
+test("package Node entrypoints still resolve after module moves", () => {
+  const scripts = JSON.parse(
+    fs.readFileSync(path.join(root, "package.json"), "utf8"),
+  ).scripts;
+  const entries = Object.entries(scripts).flatMap(([name, command]) =>
+    [...command.matchAll(/\bnode\s+(src\/[\w/-]+\.cjs)\b/g)].map((match) => ({
+      name,
+      file: match[1],
+    })),
+  );
+  assert.ok(entries.length > 0);
+  for (const { name, file } of entries) {
+    assert.ok(
+      file.startsWith("src/cli/"),
+      `${name}: process entrypoints belong in src/cli/`,
+    );
+    assert.ok(
+      fs.statSync(path.join(root, file)).isFile(),
+      `${name}: missing entrypoint ${file}`,
+    );
+  }
+});
+
+test("installation root and shared catalogs stay independent of cwd and data root", (t) => {
+  const directory = fs.mkdtempSync(
+    path.join(os.tmpdir(), "web-coding-architecture-"),
+  );
+  t.after(() => {
+    assert.equal(
+      path.dirname(path.resolve(directory)),
+      path.resolve(os.tmpdir()),
+    );
+    assert.ok(path.basename(directory).startsWith("web-coding-architecture-"));
+    fs.rmSync(directory, { recursive: true, force: true, maxRetries: 3 });
+  });
+  const runtime = path.join(sourceRoot, "config", "runtime.cjs");
+  const program = `
+    const runtime = require(${JSON.stringify(runtime)});
+    require(${JSON.stringify(path.join(sourceRoot, "domain", "task-metadata.cjs"))});
+    require(${JSON.stringify(path.join(sourceRoot, "domain", "workspace-icon.cjs"))});
+    process.stdout.write(JSON.stringify({ root: runtime.root, dataRoot: runtime.dataRoot }));
+  `;
+  for (const dataRoot of [undefined, path.join(directory, "separate-data")]) {
+    const env = { ...process.env };
+    delete env.RUNNER_DATA_DIR;
+    if (dataRoot) env.RUNNER_DATA_DIR = dataRoot;
+    const result = JSON.parse(
+      execFileSync(process.execPath, ["-e", program], {
+        cwd: directory,
+        env,
+        encoding: "utf8",
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "pipe"],
+      }),
+    );
+    assert.equal(result.root, root);
+    assert.equal(result.dataRoot, dataRoot || root);
+  }
+});
