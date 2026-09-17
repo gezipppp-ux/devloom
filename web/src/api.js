@@ -1,56 +1,69 @@
 let token;
+let workspaceId = "";
+export function selectWorkspace(id) {
+  workspaceId = id;
+}
+export function apiPath(url) {
+  return `/api${workspaceId ? `/workspaces/${workspaceId}` : ""}${url}`;
+}
 export async function uploadManualImage(file) {
-  const response = await fetch('/api/channels/manual/images', {
-    method: 'POST',
+  const response = await fetch(apiPath("/channels/manual/images"), {
+    method: "POST",
     headers: {
-      'content-type': file.type || 'application/octet-stream',
-      'x-tapd-token': token,
+      "content-type": file.type || "application/octet-stream",
+      "x-tapd-token": token,
     },
     body: file,
   });
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || '图片上传失败');
+  if (!response.ok) throw new Error(result.error || "图片上传失败");
   return result;
 }
+export async function appApi(url, data) {
+  return request(`/api${url}`, data);
+}
 export async function api(url, data) {
+  return request(apiPath(url), data);
+}
+async function request(url, data) {
   const response = await fetch(
-    `/api${url}`,
+    url,
     data === undefined
       ? {}
       : {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'content-type': 'application/json',
-            'x-tapd-token': token,
+            "content-type": "application/json",
+            "x-tapd-token": token,
           },
           body: JSON.stringify(data),
         },
   );
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || '请求失败');
+  if (!response.ok) throw new Error(result.error || "请求失败");
   return result;
 }
 export async function bootstrap() {
-  const result = await api('/bootstrap');
+  const result = await api("/bootstrap");
   token = result.token;
   return result;
 }
 export function statusLabel(status) {
   return (
     {
-      preparing: '准备中',
-      initializing: '初始化中',
-      starting: '启动中',
-      running: '执行中',
-      inProgress: '执行中',
-      completed: '本轮结束',
-      failed: '执行失败',
-      error: '异常',
-      interrupted: '已停止',
-      disconnected: '连接中断',
-      idle: '等待指令',
+      preparing: "准备中",
+      initializing: "初始化中",
+      starting: "启动中",
+      running: "执行中",
+      inProgress: "执行中",
+      completed: "本轮结束",
+      failed: "执行失败",
+      error: "异常",
+      interrupted: "已停止",
+      disconnected: "连接中断",
+      idle: "等待指令",
     }[status] ||
     status ||
-    '等待指令'
+    "等待指令"
   );
 }

@@ -1,25 +1,25 @@
 <script setup>
 /* global FileReader */
-import { ref } from 'vue';
-import { uploadManualImage } from './api';
+import { ref } from "vue";
+import { uploadManualImage } from "./api";
 const props = defineProps({
   form: { type: Object, required: true },
   disabled: Boolean,
 });
-const emit = defineEmits(['uploading', 'change']);
+const emit = defineEmits(["uploading", "change"]);
 const uploading = ref(false);
-const error = ref('');
+const error = ref("");
 const previews = ref([]);
 async function upload(event) {
   const files = [...event.target.files];
-  event.target.value = '';
-  error.value = '';
+  event.target.value = "";
+  error.value = "";
   if (previews.value.length + files.length > 20) {
-    error.value = '最多上传 20 张图片。';
+    error.value = "最多上传 20 张图片。";
     return;
   }
   uploading.value = true;
-  emit('uploading', true);
+  emit("uploading", true);
   try {
     for (const file of files) {
       if (file.size > 10 * 1024 * 1024)
@@ -28,22 +28,22 @@ async function upload(event) {
       const preview = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
-        reader.onerror = () => reject(new Error('无法读取图片预览。'));
+        reader.onerror = () => reject(new Error("无法读取图片预览。"));
         reader.readAsDataURL(file);
       });
       previews.value.push({ id: result.id, name: file.name, preview });
-      emit('change', { images: [...props.form.images, result.id] });
+      emit("change", { images: [...props.form.images, result.id] });
     }
   } catch (e) {
     error.value = e.message;
   } finally {
     uploading.value = false;
-    emit('uploading', false);
+    emit("uploading", false);
   }
 }
 function remove(index) {
   previews.value.splice(index, 1);
-  emit('change', {
+  emit("change", {
     images: props.form.images.filter((_, offset) => offset !== index),
   });
 }
@@ -67,7 +67,7 @@ function remove(index) {
         :value="form.content"
         @input="emit('change', { content: $event.target.value })"
         aria-label="需求内容"
-        rows="8"
+        rows="5"
         maxlength="60000"
         :disabled="disabled"
         placeholder="描述目标、交互和验收标准，支持 Markdown；也可仅上传图片。"
@@ -82,9 +82,7 @@ function remove(index) {
         :disabled="disabled || uploading"
         @change="upload"
       />
-      <p class="muted">
-        PNG、JPEG、WebP，每张最多 10 MiB，最多 20 张。图片按顺序传给 Codex。
-      </p>
+      <p class="field-hint">PNG、JPEG、WebP，每张最多 10 MiB，最多 20 张。</p>
       <p v-if="uploading" role="status">正在上传图片…</p>
       <p v-if="error" role="alert" class="error">{{ error }}</p>
       <div class="manual-images">
@@ -102,10 +100,6 @@ function remove(index) {
         </figure>
       </div>
     </a-form-item>
-    <p class="muted">
-      目录和分支按标题生成：英文保留，中文转拼音，并添加唯一标识。使用执行设置中的
-      worktree 根目录；无需同步外部渠道。
-    </p>
     <a-form-item label="worktree 目录名称（可选）" name="worktreeName">
       <input
         :value="form.worktreeName"
@@ -116,9 +110,8 @@ function remove(index) {
         :disabled="disabled"
         placeholder="例如 login-entry；留空按标题自动生成"
       />
-      <p class="muted">
-        只填写目录名称，支持英文、数字、短横线和下划线。保存在配置的 worktree
-        根目录下、当前仓库专属子目录内；已有同名目录时会报错。
+      <p class="field-hint">
+        留空按标题生成。支持英文、数字、短横线和下划线；已有同名目录时会报错。
       </p>
     </a-form-item>
   </div>

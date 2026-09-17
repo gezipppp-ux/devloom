@@ -20,6 +20,7 @@ function commandFor(config, repository, directory, images) {
     path.join(directory, 'final.md'),
   ];
   if (config.model) args.push('--model', config.model);
+  if (config.reasoning_effort) args.push('-c', `model_reasoning_effort=${JSON.stringify(config.reasoning_effort)}`);
   for (const image of images) args.push('--image', image.path);
   args.push('-');
   return { command: resolved.command, args };

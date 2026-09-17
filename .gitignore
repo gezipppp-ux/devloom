@@ -8,3 +8,5 @@ runs/
 work/
 __pycache__/
 *.pyc
+workspaces/
+tmp/

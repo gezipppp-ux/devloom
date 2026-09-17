@@ -1,5 +1,8 @@
 # Requirement channels and portable execution
 
+> 工作区版：参见 [workspaces.md](./workspaces.md)。生产 Web 的 API 均在 `/api/workspaces/:workspaceId` 下，配置/运行/上传/事件独立。本文旧全局路径仅对应单管理器测试及显式 CLI 配置，不是数据迁移约定。
+
+
 ## 1. Scope / trigger
 
 Applies to `src/channels`, `execution_runner.cjs`, `settings.cjs`, `run_identity.cjs`, Git planning and corresponding Web forms in the standalone web-coding repository.

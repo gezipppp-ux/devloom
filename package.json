@@ -21,13 +21,15 @@
     "tapd:status": "node src/tapd_runner.cjs --status",
     "lint": "eslint src test web/src web/vite.config.mjs",
     "test": "node --test test/*.test.cjs",
-    "test:web": "node test/browser.cjs",
+    "test:web": "node test/browser.cjs && node test/workspaces-browser.cjs",
+    "test:visual": "node test/visual.cjs",
     "web:build": "vite build --config web/vite.config.mjs",
     "tapd:web": "npm run web:build && node src/web_server.cjs",
     "build": "npm run web:build",
     "start": "node src/web_server.cjs"
   },
   "dependencies": {
+    "@antdv-next/icons": "1.1.2",
     "antdv-next": "1.2.0",
     "dompurify": "3.4.5",
     "marked": "16.4.2",

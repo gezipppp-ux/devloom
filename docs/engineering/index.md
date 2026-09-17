@@ -2,7 +2,11 @@
 
 Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install from its own package-lock.json using npm ci. NestJS and Vben modules are not dependencies. Playwright is used for capturing an already-authenticated CDP session and browser verification; daily TAPD operations use HTTP.
 
+工作区模型以 [workspaces.md](./workspaces.md) 为准；它取代下述历史全局 Web 配置和运行目录约定。
+
 ## Before development
+
+- For visual changes, read [ui-design.md](./ui-design.md). Use shared design tokens and form sections across pages; validate responsive screenshots with fixture data.
 
 - Read `README.md` and the task PRD/design for CLI and configuration contracts.
 - For Web CLI changes, read [web-cli.md](./web-cli.md) for session identity, streaming, approval and HTTP contracts.

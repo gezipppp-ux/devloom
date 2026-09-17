@@ -1,0 +1,202 @@
+[
+  {
+    "id": "appstore",
+    "label": "应用",
+    "keywords": "application app 应用商店"
+  },
+  {
+    "id": "code",
+    "label": "代码",
+    "keywords": "code development 开发"
+  },
+  {
+    "id": "cloud",
+    "label": "云服务",
+    "keywords": "cloud server 服务"
+  },
+  {
+    "id": "database",
+    "label": "数据库",
+    "keywords": "database data 数据"
+  },
+  {
+    "id": "experiment",
+    "label": "实验",
+    "keywords": "experiment test 测试"
+  },
+  {
+    "id": "rocket",
+    "label": "火箭",
+    "keywords": "rocket launch 启动"
+  },
+  {
+    "id": "folder",
+    "label": "文件夹",
+    "keywords": "folder files 文件"
+  },
+  {
+    "id": "shopping",
+    "label": "购物",
+    "keywords": "shopping commerce 电商"
+  },
+  {
+    "id": "shop",
+    "label": "商店",
+    "keywords": "shop store 门店"
+  },
+  {
+    "id": "team",
+    "label": "团队",
+    "keywords": "team group 团队"
+  },
+  {
+    "id": "user",
+    "label": "用户",
+    "keywords": "user account 用户"
+  },
+  {
+    "id": "global",
+    "label": "网站",
+    "keywords": "global web website 网站"
+  },
+  {
+    "id": "mobile",
+    "label": "手机",
+    "keywords": "mobile phone 移动端"
+  },
+  {
+    "id": "desktop",
+    "label": "桌面",
+    "keywords": "desktop computer 电脑"
+  },
+  {
+    "id": "dashboard",
+    "label": "仪表盘",
+    "keywords": "dashboard monitor 监控"
+  },
+  {
+    "id": "project",
+    "label": "项目",
+    "keywords": "project board 项目"
+  },
+  {
+    "id": "api",
+    "label": "接口",
+    "keywords": "api interface 接口"
+  },
+  {
+    "id": "bug",
+    "label": "缺陷",
+    "keywords": "bug debug 问题"
+  },
+  {
+    "id": "tool",
+    "label": "工具",
+    "keywords": "tool tools 工具"
+  },
+  {
+    "id": "build",
+    "label": "构建",
+    "keywords": "build architecture 架构"
+  },
+  {
+    "id": "setting",
+    "label": "设置",
+    "keywords": "setting settings 配置"
+  },
+  {
+    "id": "thunderbolt",
+    "label": "闪电",
+    "keywords": "thunderbolt lightning 快速"
+  },
+  {
+    "id": "safety",
+    "label": "安全",
+    "keywords": "safety security 安全"
+  },
+  {
+    "id": "file-text",
+    "label": "文档",
+    "keywords": "file document docs 文档"
+  },
+  {
+    "id": "picture",
+    "label": "图片",
+    "keywords": "picture image 图片"
+  },
+  {
+    "id": "video-camera",
+    "label": "视频",
+    "keywords": "video camera 视频"
+  },
+  {
+    "id": "customer-service",
+    "label": "客服",
+    "keywords": "customer service support 客服"
+  },
+  {
+    "id": "book",
+    "label": "书籍",
+    "keywords": "book library 书籍"
+  },
+  {
+    "id": "read",
+    "label": "阅读",
+    "keywords": "read knowledge 知识"
+  },
+  {
+    "id": "calendar",
+    "label": "日历",
+    "keywords": "calendar date 日期"
+  },
+  {
+    "id": "schedule",
+    "label": "日程",
+    "keywords": "schedule plan 计划"
+  },
+  {
+    "id": "bar-chart",
+    "label": "统计",
+    "keywords": "bar chart statistics 统计"
+  },
+  {
+    "id": "pie-chart",
+    "label": "分析",
+    "keywords": "pie chart analytics 分析"
+  },
+  {
+    "id": "fund",
+    "label": "趋势",
+    "keywords": "fund trend 趋势"
+  },
+  {
+    "id": "home",
+    "label": "首页",
+    "keywords": "home house 首页"
+  },
+  {
+    "id": "heart",
+    "label": "爱心",
+    "keywords": "heart health 健康"
+  },
+  {
+    "id": "star",
+    "label": "星标",
+    "keywords": "star favorite 收藏"
+  },
+  {
+    "id": "trophy",
+    "label": "奖杯",
+    "keywords": "trophy award 奖杯"
+  },
+  {
+    "id": "car",
+    "label": "汽车",
+    "keywords": "car vehicle 车辆"
+  },
+  {
+    "id": "coffee",
+    "label": "咖啡",
+    "keywords": "coffee cafe 咖啡"
+  }
+]

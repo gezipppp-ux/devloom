@@ -25,6 +25,8 @@ function options(t, mode = 'success') {
 
 test('new persistent session uses stdin, isolated cwd and --image; strips TAPD env', async (t) => {
   const input = options(t);
+  input.config.model = 'fixture-model';
+  input.config.reasoning_effort = 'high';
   const calls = [];
   input.onSession = (id) => calls.push(id);
   input.onStarted = () => calls.push('running');
@@ -45,6 +47,8 @@ test('new persistent session uses stdin, isolated cwd and --image; strips TAPD e
     input.task.images[0].path,
   );
   assert.equal(captured.args.includes('--ephemeral'), false);
+  assert.equal(captured.args[captured.args.indexOf('--model') + 1], 'fixture-model');
+  assert.equal(captured.args[captured.args.indexOf('-c') + 1], 'model_reasoning_effort="high"');
   assert.equal(captured.tapdEnv, null);
 });
 

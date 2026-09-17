@@ -28,9 +28,11 @@ Windows 也支持上述 npm 命令。`npm run tapd:web` 会先构建再启动，
 | 业务 Git 仓库   | `/srv/repos/product`          |
 | Worktree 根目录 | `/srv/worktrees`              |
 
-启动前设置 `RUNNER_DATA_DIR` 为运行数据目录。该目录下的 `config/tapd.local.json` 保存 TAPD 登录与渠道设置，`config/runner.local.json` 保存 Web 执行设置，`runs/` 保存任务。未设置此变量时沿用包内的 `config/`、`runs/`，保留现有历史记录。静态页面始终取自安装包的 `web/dist`。
+启动前设置 `RUNNER_DATA_DIR` 为运行数据目录。每个工作区的数据在 `workspaces/<UUID>/`：`config.json` 保存该项目执行配置和 TAPD 凭据，`runs/` 保存任务，`uploads/` 保存暂存图片。未设置变量时在应用目录下创建 `workspaces/`。静态页面始终取自安装包的 `web/dist`。
 
-`--config /path/to/tapd.local.json` 或 `TAPD_CONFIG` 仍支持指定渠道配置，`runner.local.json` 放在该配置文件的同级目录。仓库中的配置例子不包含登录态。TAPD 无头认证可以从环境变量读取 Cookie，无需 Linux 图形桌面；执行 `npm run tapd:auth:cookie` 初始化。不要将凭据写入 service 文件或版本控制。
+首次进入页面创建工作区，再配置项目仓库和 TAPD。Cookie 可以直接在 Web 保存、替换、清除及检测，无需 Linux 图形桌面。检测只读且不保存草稿。旧的全局配置、runs 和 uploads 不迁移、不被新版 Web 读取，可以停止旧服务后清理。不要删除业务仓库。
+
+Web 不再接受 `--config`。CLI 使用 `--app-workspace <UUID>` 或 `RUNNER_WORKSPACE` 选择同一工作区；CLI 显式 `--config` 仍可用于独立排查。不要将凭据写入 service 文件或版本控制。
 
 登录 Codex 的用户必须与运行服务的用户一致。在 Web「执行设置」中选择服务端的代码仓库、worktree 根目录和基准分支。Linux 路径区分大小写，不接受 Windows 盘符路径。
 
@@ -43,7 +45,7 @@ Web 与 CLI 自动定位 Codex 的顺序：
 
 Linux 候选必须具有执行权限；npm 的 `codex.js` 入口通过当前 Node 启动，避免依赖 shell 初始化。Windows 标准 npm `codex.cmd` 也使用相邻 `node_modules/@openai/codex/bin/codex.js`，不会执行任意 `.cmd`、`.bat`、`.ps1` 内容。
 
-迁移到 Linux 时删除旧的 Windows `codex.command`（以及与旧安装绑定的 `command_args`），再启用自动查找。systemd 不会自动读取 `.bashrc` 或 nvm 初始化脚本；如果 Codex 安装在另一套 Node 或自定义目录中，需要在 service 中添加该目录到 `PATH`，或设置 `Environment=CODEX_BIN=/absolute/path/to/codex`。修改 service 后执行 `systemctl daemon-reload` 并重启服务；修改本地配置也需要重启。
+迁移到 Linux 时删除旧的 Windows `codex.command`（以及与旧安装绑定的 `command_args`），再启用自动查找。systemd 不会自动读取 `.bashrc` 或 nvm 初始化脚本；如果 Codex 安装在另一套 Node 或自定义目录中，需要在 service 中添加该目录到 `PATH`，或设置 `Environment=CODEX_BIN=/absolute/path/to/codex`。修改 service 后执行 `systemctl daemon-reload` 并重启服务；Web 中保存工作区配置无需重启；手动修改 Codex 启动程序路径后需要重启。
 
 现有 session 不会因为设置改动而迁移。跨主机迁移还需要对应的 Codex 用户数据、业务仓库与 worktree 的 Git 元数据；仅复制 `run.json` 不足以恢复执行，路径不一致的历史会话保持只读。
 

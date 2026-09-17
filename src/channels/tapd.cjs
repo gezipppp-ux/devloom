@@ -3,18 +3,29 @@ const {
   loadSession,
   numericId,
   workspaceId,
-} = require('../config.cjs');
-const { todos, detail } = require('../tapd_direct_detail.cjs');
-const { buildTask } = require('../tapd_task_package.cjs');
-const { searchUsers } = require('../tapd_users.cjs');
+} = require("../config.cjs");
+const { todos, detail } = require("../tapd_direct_detail.cjs");
+const { buildTask } = require("../tapd_task_package.cjs");
+const { searchUsers } = require("../tapd_users.cjs");
 const {
   workflowInfo,
   planTransition,
   applyTransition,
-} = require('../tapd_workflow.cjs');
-const { sourceFor, runKey } = require('../run_identity.cjs');
+} = require("../tapd_workflow.cjs");
+const { readOptional } = require("../settings.cjs");
+const { sourceFor, runKey } = require("../run_identity.cjs");
 
 function createTapdChannel(configFile, dependencies = {}) {
+  function boundWorkspace(value) {
+    const config = loadConfig(configFile);
+    if (!config.workspace) return numericId(value, "TAPD 项目 ID");
+    const bound = workspaceId(loadSession(configFile));
+    if (value && String(value) !== bound)
+      throw new Error(
+        "TAPD 项目与当前工作区绑定不一致，请在工作区设置中修改。",
+      );
+    return numericId(bound, "TAPD 项目 ID");
+  }
   const services = {
     detail,
     buildTask,
@@ -24,17 +35,17 @@ function createTapdChannel(configFile, dependencies = {}) {
     ...dependencies,
   };
   return {
-    id: 'tapd',
-    label: 'TAPD',
+    id: "tapd",
+    label: "TAPD",
     capabilities: { search: true, assignees: true },
     validate(config) {
       if (config.workflow?.allow_write !== true)
         throw new Error(
-          'Set workflow.allow_write to true before executing or retrying a TAPD transition.',
+          "Set workflow.allow_write to true before executing or retrying a TAPD transition.",
         );
     },
     describe() {
-      let workspace = '';
+      let workspace = "";
       try {
         workspace = workspaceId(loadSession(configFile));
       } catch {
@@ -45,14 +56,15 @@ function createTapdChannel(configFile, dependencies = {}) {
         label: this.label,
         capabilities: this.capabilities,
         workspace,
-        scopeLabel: 'TAPD 工作区 ID',
+        scopeLabel: "TAPD 项目 ID",
+        scopeLocked: Boolean(readOptional(configFile).workspace),
       };
     },
     async search({ workspace, query }) {
       return (
         await todos(loadSession(configFile), {
-          type: 'story',
-          workspace: numericId(workspace, '工作区'),
+          type: "story",
+          workspace: boundWorkspace(workspace),
           query,
         })
       ).map((item) => ({
@@ -65,7 +77,7 @@ function createTapdChannel(configFile, dependencies = {}) {
     async searchUsers({ workspace, query }) {
       return (
         await services.searchUsers(loadSession(configFile), {
-          workspace: numericId(workspace, '工作区'),
+          workspace: boundWorkspace(workspace),
           query,
         })
       ).map((user) => ({
@@ -76,20 +88,20 @@ function createTapdChannel(configFile, dependencies = {}) {
     },
     async resolve({ id, workspace, developer, tester }) {
       const item = {
-        id: numericId(id, '需求 ID'),
-        workspace_id: numericId(workspace, '工作区 ID'),
-        type: 'story',
+        id: numericId(id, "需求 ID"),
+        workspace_id: boundWorkspace(workspace),
+        type: "story",
       };
       const config = loadConfig(configFile),
         session = loadSession(configFile);
       for (const name of [developer, tester]) {
         if (
-          typeof name !== 'string' ||
+          typeof name !== "string" ||
           !name.trim() ||
           name.length > 100 ||
           /[;\r\n]/.test(name)
         )
-          throw new Error('请搜索并选择开发人员和测试人员。');
+          throw new Error("请搜索并选择开发人员和测试人员。");
         const users = await services.searchUsers(session, {
           workspace: item.workspace_id,
           query: name,
@@ -123,7 +135,7 @@ function createTapdChannel(configFile, dependencies = {}) {
     async prepare({ session, item, directory, config }) {
       if (config.workflow?.allow_write !== true)
         throw new Error(
-          'Set workflow.allow_write to true before executing a TAPD requirement.',
+          "Set workflow.allow_write to true before executing a TAPD requirement.",
         );
       const workitem = await services.detail(session, item);
       const task = await services.buildTask(
@@ -142,7 +154,7 @@ function createTapdChannel(configFile, dependencies = {}) {
     async transition({ session, state, config }) {
       if (config.workflow?.allow_write !== true)
         throw new Error(
-          'Set workflow.allow_write to true before retrying a transition.',
+          "Set workflow.allow_write to true before retrying a transition.",
         );
       return services.applyTransition(
         session,

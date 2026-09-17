@@ -1,5 +1,8 @@
 # TAPD Web CLI contracts
 
+> 工作区版：参见 [workspaces.md](./workspaces.md)。生产 Web 的 API 均在 `/api/workspaces/:workspaceId` 下，配置/运行/上传/事件独立。本文旧全局路径仅对应单管理器测试及显式 CLI 配置，不是数据迁移约定。
+
+
 ## 1. Scope / trigger
 
 Applies to `src/{app_server,web_sessions,web_store,web_server}.cjs` and `web`. The standalone local Vue console uses Codex app-server JSON-RPC, not a PTY or a deployed NestJS service.

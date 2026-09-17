@@ -1,16 +1,16 @@
-const fs = require('node:fs');
-const path = require('node:path');
+const fs = require("node:fs");
+const path = require("node:path");
 const {
   argument,
   configPath,
   loadConfig,
   loadSession,
   numericId,
-  dataRoot,
+  runsPath,
   workspaceId,
-} = require('./config.cjs');
-const { runExecution, saveState } = require('./execution_runner.cjs');
-const { createTapdChannel } = require('./channels/tapd.cjs');
+} = require("./config.cjs");
+const { runExecution, saveState } = require("./execution_runner.cjs");
+const { createTapdChannel } = require("./channels/tapd.cjs");
 
 function runRequirement(input, dependencies = {}) {
   return runExecution(
@@ -20,9 +20,9 @@ function runRequirement(input, dependencies = {}) {
 }
 
 async function main() {
-  if (process.argv.includes('--help')) {
+  if (process.argv.includes("--help")) {
     process.stdout.write(
-      'Usage: npm run tapd:run --id <story-id> [--workspace <id>] [--config <file>]\nCreates an isolated Git worktree and persistent Codex session with description images.\nUse tapd:task for a preview, tapd:status to inspect, tapd:retry-transition to repair status only.\n',
+      "Usage: npm run tapd:run --id <story-id> [--workspace <id>] [--config <file>]\nCreates an isolated Git worktree and persistent Codex session with description images.\nUse tapd:task for a preview, tapd:status to inspect, tapd:retry-transition to repair status only.\n",
     );
     return;
   }
@@ -30,21 +30,22 @@ async function main() {
   const config = loadConfig(file);
   const session = config.tapd?.session || config;
   const item = {
-    id: numericId(argument('--id'), 'Item (--id)'),
+    id: numericId(argument("--id"), "Item (--id)"),
     workspace_id: numericId(
-      workspaceId(session, argument('--workspace')),
-      'Workspace',
+      workspaceId(session, argument("--workspace")),
+      "Workspace",
     ),
-    type: 'story',
+    type: "story",
   };
+  if (config.workspace && item.workspace_id !== workspaceId(session))
+    throw new Error("TAPD 项目与当前工作区绑定不一致。");
   const directory = path.join(
-    dataRoot,
-    'runs',
+    runsPath(config, file),
     `${item.workspace_id}-${item.id}`,
   );
-  if (process.argv.includes('--status')) {
+  if (process.argv.includes("--status")) {
     const state = JSON.parse(
-      fs.readFileSync(path.join(directory, 'run.json'), 'utf8'),
+      fs.readFileSync(path.join(directory, "run.json"), "utf8"),
     );
     process.stdout.write(`${JSON.stringify(state, null, 2)}\n`);
     return;
@@ -55,12 +56,12 @@ async function main() {
     session: loadSession(file),
     item,
     directory,
-    retry: process.argv.includes('--retry-transition'),
+    retry: process.argv.includes("--retry-transition"),
   });
   process.stdout.write(`${JSON.stringify(state, null, 2)}\n`);
   if (
-    state.execution.status !== 'completed' ||
-    state.transition.status !== 'succeeded'
+    state.execution.status !== "completed" ||
+    state.transition.status !== "succeeded"
   )
     process.exitCode = 1;
 }

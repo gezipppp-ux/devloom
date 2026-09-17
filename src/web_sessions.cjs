@@ -7,6 +7,8 @@ const { runExecution, saveState } = require('./execution_runner.cjs');
 const { defaultChannels } = require('./channels/registry.cjs');
 const { executionConfig, readOptional } = require('./settings.cjs');
 const { sourceFor, runKey } = require('./run_identity.cjs');
+const { validateModelSelection } = require('./codex_models.cjs');
+const { validateTaskMetadata, defaultTaskMetadata } = require('./task_metadata.cjs');
 
 function initializationItem(entry, index) {
   return {
@@ -446,6 +448,7 @@ class WebSessions extends EventEmitter {
       approvalPolicy: 'on-request',
       sandbox: 'workspace-write',
       excludeTurns: true,
+      ...(state.codex?.model ? { model: state.codex.model } : {}),
     });
     runtime.connected = true;
     runtime.turnId = null;
@@ -479,10 +482,13 @@ class WebSessions extends EventEmitter {
         });
       } else {
         let result;
+        const savedCodex = this.store.read(key).codex || {};
         try {
           result = await this.client.request('turn/start', {
             threadId: runtime.sessionId,
             input,
+            ...(savedCodex.model ? { model: savedCodex.model } : {}),
+            ...(savedCodex.reasoning_effort ? { effort: savedCodex.reasoning_effort } : {}),
           });
         } catch (error) {
           runtime.connected = false;
@@ -529,17 +535,24 @@ class WebSessions extends EventEmitter {
   }
 
   async start(input) {
+    validateTaskMetadata(input.metadata === undefined ? {} : input.metadata);
     const channel = this.channels.get(input.channel || 'tapd');
-    const resolved = await channel.resolve(input);
+    const selection = await validateModelSelection(this.client, input);
+    const sourceInput = { ...input };
+    delete sourceInput.model;
+    delete sourceInput.reasoningEffort;
+    delete sourceInput.metadata;
+    const resolved = await channel.resolve(sourceInput);
     const source = sourceFor(channel.id, resolved.item);
     const key = runKey(source);
     return this.launch(
       key,
       resolved.item,
-      resolved.config,
+      { ...resolved.config, codex: { ...resolved.config.codex, ...selection } },
       resolved.session,
       {},
       channel,
+      validateTaskMetadata(input.metadata || {}, defaultTaskMetadata(resolved.item)),
     );
   }
 
@@ -550,7 +563,9 @@ class WebSessions extends EventEmitter {
     session,
     _fields,
     channel = this.channels.get('tapd'),
+    metadata = defaultTaskMetadata(item),
   ) {
+    metadata = validateTaskMetadata(metadata);
     config = executionConfig(config, this.configFile);
     const source = sourceFor(channel.id, item);
     if (
@@ -561,6 +576,7 @@ class WebSessions extends EventEmitter {
     // Resolve before creating run ownership, downloading images or creating a branch.
     this.client.validateCommand?.();
     this.store.claim(key);
+    this.store.writeTaskMetadata(key, metadata, item);
     const runtime = this.runtime(key);
     runtime.prepareAbort = new AbortController();
     runtime.status = 'preparing';
@@ -623,7 +639,7 @@ class WebSessions extends EventEmitter {
               })),
             ];
             this.client
-              .request('turn/start', { threadId: runtime.sessionId, input })
+              .request('turn/start', { threadId: runtime.sessionId, input, ...(config.codex?.reasoning_effort ? { effort: config.codex.reasoning_effort } : {}) })
               .then((response) => {
                 if (
                   runtime.initial &&
@@ -668,6 +684,7 @@ class WebSessions extends EventEmitter {
         ...(saved.get(runtime.key) || {
           key: runtime.key,
           title: '正在准备需求',
+          metadata: this.store.readTaskMetadata(runtime.key),
         }),
         status: runtime.status,
         sessionId: runtime.sessionId,
@@ -677,6 +694,13 @@ class WebSessions extends EventEmitter {
     return [...saved.values()].sort((a, b) =>
       String(b.updatedAt).localeCompare(String(a.updatedAt)),
     );
+  }
+
+  updateTaskMetadata(key, input) {
+    const state = this.store.read(key);
+    const metadata = this.store.writeTaskMetadata(key, input, state.workitem);
+    this.emit('event', { key, type: 'metadata', metadata, at: new Date().toISOString() });
+    return { metadata };
   }
 
   async close() {

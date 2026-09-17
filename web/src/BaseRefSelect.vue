@@ -1,24 +1,24 @@
 <script setup>
-import { computed, onUnmounted, ref, useId, watch } from 'vue';
-import { Select as ASelect } from 'antdv-next';
-import { api } from './api';
+import { computed, onUnmounted, ref, useId, watch } from "vue";
+import { Select as ASelect } from "antdv-next";
+import { api } from "./api";
 
 const props = defineProps({
-  modelValue: { type: String, default: 'HEAD' },
-  repository: { type: String, default: '' },
+  modelValue: { type: String, default: "HEAD" },
+  repository: { type: String, default: "" },
 });
-const emit = defineEmits(['update:modelValue']);
+const emit = defineEmits(["update:modelValue"]);
 const inputId = `base-ref-${useId()}`;
 const refs = ref([]),
   loading = ref(false),
-  error = ref(''),
-  query = ref('');
+  error = ref(""),
+  query = ref("");
 let timer,
   revision = 0;
 const options = computed(() => {
   const list = [...refs.value];
-  if (!list.some((item) => item.value === 'HEAD'))
-    list.unshift({ value: 'HEAD', label: 'HEAD · 当前检出提交' });
+  if (!list.some((item) => item.value === "HEAD"))
+    list.unshift({ value: "HEAD", label: "HEAD · 当前检出提交" });
   if (props.modelValue && !list.some((item) => item.value === props.modelValue))
     list.push({
       value: props.modelValue,
@@ -40,9 +40,9 @@ watch(
     clearTimeout(timer);
     const current = ++revision;
     refs.value = [];
-    error.value = '';
-    query.value = '';
-    if (previous && previous !== repository) emit('update:modelValue', 'HEAD');
+    error.value = "";
+    query.value = "";
+    if (previous && previous !== repository) emit("update:modelValue", "HEAD");
     loading.value = Boolean(repository.trim());
     if (!loading.value) return;
     timer = setTimeout(async () => {
@@ -90,8 +90,17 @@ onUnmounted(() => {
       }
     "
   />
-  <p v-if="!repository.trim()" :id="`${inputId}-hint`" class="field-hint">
-    请先填写上方的“默认代码仓库”绝对路径，填写后会自动加载分支和标签，无需先保存。
+  <p v-if="!repository.trim()" :id="`${inputId}-hint`" class="base-ref-hint">
+    请先填写上方的“项目代码仓库”绝对路径，填写后会自动加载分支和标签，无需先保存。
   </p>
   <p v-if="error" role="alert" class="error">引用加载失败：{{ error }}</p>
 </template>
+
+<style scoped>
+.base-ref-hint {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+</style>

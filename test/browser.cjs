@@ -65,6 +65,18 @@ async function main() {
       transition: { status: 'succeeded' },
     }),
   );
+  for (const [otherKey, title, type, progress] of [
+    ['1-3', '修复登录异常', 'bug', 'review'],
+    ['1-4', '整理项目文档', 'other', 'merge'],
+  ]) {
+    fs.mkdirSync(store.dir(otherKey));
+    fs.writeFileSync(path.join(store.dir(otherKey), 'run.json'), JSON.stringify({
+      workitem: { title, id: otherKey.slice(2), workspace_id: '1' },
+      execution: { status: 'completed' },
+      updated_at: '2025-01-01T00:00:00Z',
+    }));
+    store.writeTaskMetadata(otherKey, { type, progress });
+  }
   store.worktreeReason = () => null;
   const client = new FakeClient(),
     manager = new WebSessions({ store, client });
@@ -131,9 +143,10 @@ async function main() {
           : {}),
       headless: true,
     });
-    const page = await browser.newPage({
+    const browserContext = await browser.newContext({
       viewport: { width: 1440, height: 1000 },
     });
+    const page = await browserContext.newPage();
     const errors = [];
     const externalRequests = [];
     await page.route('https://blocked.invalid/**', async (route) => {
@@ -143,6 +156,46 @@ async function main() {
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(origin);
     await page.getByText('历史回复', { exact: true }).waitFor();
+    assert.equal(await page.getByLabel('任务类型', { exact: true }).inputValue(), 'requirement');
+    assert.equal(await page.getByLabel('任务进度', { exact: true }).inputValue(), 'in_progress');
+    assert.equal(await page.locator('.task-group > summary').count(), 3);
+    await page.getByLabel('任务分组方式').selectOption('progress');
+    await page.getByLabel('任务类型', { exact: true }).selectOption('bug');
+    await page.waitForFunction(() => document.querySelector('select[aria-label="任务类型"]').value === 'bug');
+    const peer = await page.context().newPage();
+    await peer.goto(origin);
+    await peer.getByText('历史回复', { exact: true }).waitFor();
+    await page.getByLabel('任务进度', { exact: true }).selectOption('review');
+    await peer.waitForFunction(() => document.querySelector('select[aria-label="任务进度"]').value === 'review');
+    assert.equal(await page.locator('.session-header .status').textContent(), 'Codex · 本轮结束');
+    assert.equal(await page.locator('.task-group > summary').count(), 2);
+    await page.route('**/runs/1-2/metadata', route => route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({error:'模拟进度保存失败'})}));
+    await page.getByLabel('任务进度', { exact: true }).selectOption('done');
+    await page.getByText('模拟进度保存失败', {exact:true}).waitFor();
+    assert.equal(await page.getByLabel('任务进度', {exact:true}).inputValue(), 'review');
+    assert.equal(store.readTaskMetadata(key).progress, 'review');
+    await page.unroute('**/runs/1-2/metadata');
+    for (const value of ['merge', 'done', 'on_hold']) {
+      await page.getByLabel('任务进度', { exact: true }).selectOption(value);
+      await page.waitForFunction(value => document.querySelector('select[aria-label="任务进度"]').value === value, value);
+    }
+    await peer.close();
+    await page.reload();
+    await page.getByText('历史回复', { exact: true }).waitFor();
+    assert.equal(await page.getByLabel('任务进度', { exact: true }).inputValue(), 'on_hold');
+    assert.equal(await page.getByLabel('任务分组方式').inputValue(), 'progress');
+    await page.getByLabel('任务分组方式').selectOption('type');
+    const bugSummary = page.locator('.task-group > summary').filter({hasText:'Bug'});
+    await bugSummary.click();
+    assert.equal(await page.locator('.session-link').filter({hasText:'【演示】套餐充值入口'}).isVisible(), false);
+    await bugSummary.click();
+    assert.equal(await page.locator('.session-link').filter({hasText:'【演示】套餐充值入口'}).isVisible(), true);
+    await page.getByLabel('任务分组方式').selectOption('none');
+    assert.equal(await page.locator('.session-link:visible').count(), 3);
+    await page.getByLabel('任务分组方式').selectOption('progress');
+    fs.mkdirSync(path.resolve('state/browser'), {recursive:true});
+    await page.screenshot({path:path.resolve('state/browser/task-progress-groups.png'),fullPage:true});
+
     await page.locator('.session-context > summary').click();
     await page
       .getByRole('heading', { name: '完整需求标题', exact: true })
@@ -228,6 +281,9 @@ async function main() {
     await page
       .getByRole('button', { name: '允许本次操作', exact: true })
       .click();
+    await page
+      .getByRole('button', { name: '允许本次操作', exact: true })
+      .waitFor({ state: 'hidden' });
     assert.ok(
       client.calls.some(
         (call) => call.response === 40 && call.result.decision === 'accept',
@@ -335,6 +391,9 @@ async function main() {
       fullPage: true,
     });
     await page.getByRole('textbox', { name: '需求 ID', exact: true }).fill('2');
+    await page.getByLabel('Codex 模型', { exact: true }).selectOption('fixture-model-a');
+    await page.getByLabel('思考强度', { exact: true }).selectOption('high');
+
     await page
       .getByRole('button', { name: '创建 session 并开始开发 →', exact: true })
       .click();
@@ -342,6 +401,9 @@ async function main() {
     assert.equal(submitted.developer, '魏文斌1');
     assert.equal(submitted.tester, '刘嘉辉');
     assert.equal(submitted.channel, 'tapd');
+    assert.equal(submitted.metadata.type, 'requirement');
+    assert.equal(submitted.model, 'fixture-model-a');
+    assert.equal(submitted.reasoningEffort, 'high');
     assert.ok(
       searches.some(
         (request) => request.query === 'wei' && request.workspace === '1',
@@ -413,12 +475,20 @@ async function main() {
       ),
     );
     await page.setViewportSize({ width: 1440, height: 1000 });
+    assert.equal(await page.getByLabel('Codex 模型', { exact: true }).inputValue(), '');
+    assert.equal(await page.getByLabel('思考强度', { exact: true }).inputValue(), '');
+    await page.getByLabel('任务类型', { exact: true }).selectOption('other');
+    await page.getByLabel('Codex 模型', { exact: true }).selectOption('fixture-model-b');
+    await page.getByLabel('思考强度', { exact: true }).selectOption('medium');
     await submit.click();
     await page.getByText('模拟启动失败，请重试', { exact: true }).waitFor();
     const requestId = submitted.requestId;
     await submit.click();
     await page.getByRole('textbox', { name: '发送给 Codex 的指令' }).waitFor();
     assert.equal(submitted.channel, 'manual');
+    assert.equal(submitted.metadata.type, 'other');
+    assert.equal(submitted.model, 'fixture-model-b');
+    assert.equal(submitted.reasoningEffort, 'medium');
     assert.equal(submitted.requestId, requestId);
     assert.equal(submitted.worktreeName, 'login-entry');
     assert.equal(submitted.title, '新增登录入口');
@@ -445,9 +515,9 @@ async function main() {
       '-m',
       'fixture',
     );
-    await page.getByRole('button', { name: '⚙ 执行设置', exact: true }).click();
+    await page.getByRole('button', { name: '执行设置', exact: true }).click();
     await page
-      .getByRole('textbox', { name: '默认代码仓库', exact: true })
+      .getByRole('textbox', { name: '项目代码仓库', exact: true })
       .fill(repository);
     await page
       .getByRole('textbox', { name: 'Worktree 根目录', exact: true })
@@ -472,7 +542,7 @@ async function main() {
       fullPage: true,
     });
     await page.reload();
-    await page.getByRole('button', { name: '⚙ 执行设置', exact: true }).click();
+    await page.getByRole('button', { name: '执行设置', exact: true }).click();
     await page.waitForFunction(
       (value) =>
         document.querySelector('input[aria-label="Worktree 根目录"]')?.value ===

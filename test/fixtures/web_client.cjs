@@ -2,6 +2,7 @@ const { EventEmitter } = require('node:events');
 class FakeClient extends EventEmitter {
   calls = [];
   turn = 0;
+  thread = 0;
   async connect() {}
   notify(method, params) {
     this.emit('notification', {
@@ -11,9 +12,13 @@ class FakeClient extends EventEmitter {
   }
   async request(method, params) {
     this.calls.push({ method, params });
+    if (method === 'model/list') return { data: [
+      { model: 'fixture-model-a', displayName: 'Fixture A', supportedReasoningEfforts: [{reasoningEffort:'low'},{reasoningEffort:'high'}], defaultReasoningEffort:'low' },
+      { model: 'fixture-model-b', displayName: 'Fixture B', supportedReasoningEfforts: [{reasoningEffort:'low'},{reasoningEffort:'medium'}], defaultReasoningEffort:'medium' }
+    ], nextCursor: null };
     if (method === 'thread/read')
       return { thread: { status: { type: 'idle' } } };
-    if (method === 'thread/start') return { thread: { id: 'original' } };
+    if (method === 'thread/start') return { thread: { id: ++this.thread === 1 ? 'original' : `original-${this.thread}` } };
     if (method === 'thread/items/list')
       return {
         data: [
@@ -26,8 +31,9 @@ class FakeClient extends EventEmitter {
       };
     if (method === 'turn/start') {
       const turn = { id: `turn-${++this.turn}`, status: 'inProgress' };
-      this.notify('turn/started', { turn });
+      this.notify('turn/started', { threadId: params.threadId, turn });
       this.notify('item/started', {
+        threadId: params.threadId,
         turnId: turn.id,
         item: {
           id: `user-${this.turn}`,
@@ -39,6 +45,7 @@ class FakeClient extends EventEmitter {
     }
     if (method === 'turn/interrupt')
       this.notify('turn/completed', {
+        threadId: params.threadId,
         turn: { id: params.turnId, status: 'interrupted' },
       });
     return {};
