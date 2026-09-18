@@ -5,6 +5,7 @@ const { RUN_KEY } = require("../domain/run-identity.cjs");
 const { normalizeItem } = require("../domain/session-item.cjs");
 const { readOptional, writeConfig, updateConfig } = require("./json-files.cjs");
 const { updateState } = require("./run-state.cjs");
+const { MessageImages } = require("./message-images.cjs");
 const {
   defaultTaskMetadata,
   validateTaskMetadata,
@@ -221,6 +222,11 @@ class RunStore {
     if (!relative || relative.startsWith("..") || path.isAbsolute(relative))
       throw new Error("图片不属于当前任务");
     return file;
+  }
+
+  messageImages(key) {
+    this.read(key);
+    return new MessageImages(this.dir(key));
   }
 }
 

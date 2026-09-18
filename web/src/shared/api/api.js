@@ -6,6 +6,27 @@ export function selectWorkspace(id) {
 export function apiPath(url) {
   return `/api${workspaceId ? `/workspaces/${workspaceId}` : ""}${url}`;
 }
+export async function uploadSessionImage(url, file, signal) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "content-type": file.type || "application/octet-stream",
+      "x-tapd-token": token,
+    },
+    body: file,
+    signal,
+  });
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error(`图片上传失败（HTTP ${response.status}），请重试`);
+  }
+  if (!response.ok) throw new Error(result?.error || "图片上传失败");
+  if (typeof result?.id !== "string" || !result.id.trim())
+    throw new Error("图片上传响应无效，请重试");
+  return result;
+}
 export async function uploadManualImage(file) {
   const response = await fetch(apiPath("/channels/manual/images"), {
     method: "POST",

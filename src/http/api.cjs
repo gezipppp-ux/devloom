@@ -86,12 +86,31 @@ async function serveApi(request, response, url, context, { token, events }) {
       sendFile(response, file, "private, max-age=300");
       return;
     }
-    if (request.method === "POST" && action === "messages")
+    if (request.method === "POST" && action === "message-images")
+      return json(
+        response,
+        201,
+        await sessions.uploadMessageImage(key, await imageBody(request)),
+      );
+    if (
+      request.method === "GET" &&
+      /^message-images\/[^/]+$/.test(action || "")
+    ) {
+      sendFile(
+        response,
+        sessions.messageImagePath(key, action.split("/")[1]),
+        "private, max-age=300",
+      );
+      return;
+    }
+    if (request.method === "POST" && action === "messages") {
+      const input = await body(request);
       return json(
         response,
         202,
-        await sessions.send(key, (await body(request)).text),
+        await sessions.send(key, input.text, input.images),
       );
+    }
     if (request.method === "POST" && action === "metadata")
       return json(
         response,

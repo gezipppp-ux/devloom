@@ -7,6 +7,7 @@ import SettingsPanel from "../features/settings/SettingsPanel.vue";
 import SessionItem from "../features/session/SessionItem.vue";
 import SessionRequest from "../features/session/SessionRequest.vue";
 import SessionComposer from "../features/session/SessionComposer.vue";
+import { useSessionImages } from "../features/session/use-session-images.js";
 import TaskList from "../features/tasks/TaskList.vue";
 import TaskMetadataControls from "../features/tasks/TaskMetadataControls.vue";
 import {
@@ -55,6 +56,7 @@ const {
     settingsOpen.value = false;
     creating.value = false;
     composer.text = "";
+    imageDraft.reset();
   },
   onOpened: () => scroll(),
   onItem: () => {
@@ -64,6 +66,7 @@ const {
     if (props.workspaceName) settingsOpen.value = true;
   },
 });
+const imageDraft = useSessionImages({ active, canSend });
 
 async function scroll(force = true) {
   await nextTick();
@@ -72,10 +75,19 @@ async function scroll(force = true) {
     el.scrollTop = el.scrollHeight;
 }
 async function send() {
-  if (canSend.value && composer.text.trim())
-    await action("messages", { text: composer.text }, () => {
+  if (
+    canSend.value &&
+    !imageDraft.blocked.value &&
+    (composer.text.trim() || imageDraft.images.value.length)
+  ) {
+    const data = { text: composer.text };
+    if (imageDraft.images.value.length)
+      data.images = imageDraft.images.value.map((image) => image.id);
+    await action("messages", data, () => {
       composer.text = "";
+      imageDraft.reset();
     });
+  }
 }
 </script>
 
@@ -276,6 +288,10 @@ async function send() {
         </div>
         <SessionComposer
           v-model="composer.text"
+          :images="imageDraft.images.value"
+          :images-uploading="imageDraft.uploading.value"
+          :images-blocked="imageDraft.blocked.value"
+          :images-error="imageDraft.error.value"
           :can-send="Boolean(canSend)"
           :running="running"
           :initializing="initializing"
@@ -290,6 +306,9 @@ async function send() {
           :settings-error="settingsError"
           :can-edit-settings="canEditSettings"
           @send="send"
+          @images-add="imageDraft.add"
+          @images-remove="imageDraft.remove"
+          @images-retry="imageDraft.retry"
           @stop="action('interrupt', {})"
           @settings-change="updateExecutionSettings"
         />

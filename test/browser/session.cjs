@@ -12,6 +12,7 @@ const { FakeClient } = require('../fixtures/web-client.cjs');
 const { temporary, png } = require('../support/helpers.cjs');
 const { ChannelRegistry } = require('../../src/channels/registry.cjs');
 const { createManualChannel } = require('../../src/channels/manual/adapter.cjs');
+const { verifySessionImages } = require('./session-images.cjs');
 
 async function choosePermission(page, mode) {
   await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
@@ -1045,6 +1046,7 @@ async function main() {
     await verifyActionSelection(browser, origin, key, errors);
     await verifyRefreshConsistency(browser, origin, manager, client, key, errors);
     await verifyLanManualCreation(browser, directory, errors);
+    await verifySessionImages(browser, origin, manager, client, key, errors, output);
     assert.deepEqual(errors, []);
     process.stdout.write(
       'Browser smoke passed: send, stream, steer, approval, question, interrupt, continue, reload, mobile and start form.\n',

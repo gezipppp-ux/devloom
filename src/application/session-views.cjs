@@ -1,7 +1,4 @@
-const {
-  normalizeItem,
-  initializationItem,
-} = require("../domain/session-item.cjs");
+const { initializationItem } = require("../domain/session-item.cjs");
 
 const { SessionPresenter } = require("./session-presenter.cjs");
 
@@ -38,7 +35,7 @@ class SessionViews {
     });
     return {
       items: result.data
-        .map((entry) => normalizeItem(entry.item, entry.turnId))
+        .map((entry) => this.presenter.item(key, entry.item, entry.turnId))
         .reverse(),
       nextCursor: result.nextCursor,
     };

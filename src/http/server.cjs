@@ -31,7 +31,7 @@ function createWebServer({
     response.setHeader("referrer-policy", "no-referrer");
     response.setHeader(
       "content-security-policy",
-      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'",
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'",
     );
     if (closing) return json(response, 503, { error: "服务正在关闭。" });
     const origin = requestOrigin(request);

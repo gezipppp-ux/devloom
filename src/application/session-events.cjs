@@ -1,13 +1,15 @@
-const { OUTPUT_LIMIT, normalizeItem } = require("../domain/session-item.cjs");
+const { OUTPUT_LIMIT } = require("../domain/session-item.cjs");
+const { SessionPresenter } = require("./session-presenter.cjs");
 
 // Projects Codex notifications and interactive requests into one workspace's runtime.
 class SessionEvents {
-  constructor({ store, client, sessions, settings, emit }) {
+  constructor({ store, client, sessions, settings, emit, apiPrefix }) {
     this.store = store;
     this.client = client;
     this.sessions = sessions;
     this.settings = settings;
     this.emit = emit;
+    this.presenter = new SessionPresenter({ store, settings, apiPrefix });
     this.pendingCallbacks = new Set();
     client.on("notification", (message) => this.notification(message));
     client.on("request", (message) => this.serverRequest(message));
@@ -117,12 +119,18 @@ class SessionEvents {
         });
       } else if (method === "item/started" || method === "item/completed") {
         const previous = runtime.items.get(params.item.id);
-        const item = normalizeItem(params.item, params.turnId);
+        const item = this.presenter.item(
+          runtime.key,
+          params.item,
+          params.turnId,
+        );
         item.status =
           params.item.status ||
           (method === "item/started" ? "inProgress" : "completed");
         item.output ||= previous?.output || "";
         item.text ||= previous?.text || "";
+        if (!item.images?.length && previous?.images)
+          item.images = previous.images;
         runtime.items.set(item.id, item);
         this.publish(runtime, { type: "item", item });
       } else if (

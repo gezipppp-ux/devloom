@@ -2,6 +2,7 @@ const { EventEmitter } = require("node:events");
 const { AppServer } = require("../codex/app-server.cjs");
 const { RunStore } = require("../storage/run-store.cjs");
 const { initializationItem } = require("../domain/session-item.cjs");
+const { validateSessionMessage } = require("../domain/session-message.cjs");
 const {
   worktreeReason: defaultWorktreeReason,
 } = require("../git/worktree-access.cjs");
@@ -62,6 +63,7 @@ class WebSessions extends EventEmitter {
       client: this.client,
       sessions: this.sessions,
       settings: this.settings,
+      apiPrefix,
       emit: (event) => this.emit("event", event),
     });
     this.views = new SessionViews({
@@ -169,19 +171,25 @@ class WebSessions extends EventEmitter {
     return runtime;
   }
 
-  async send(key, message) {
-    if (
-      typeof message !== "string" ||
-      !message.trim() ||
-      message.length > 60000
-    )
-      throw new Error("消息需为 1–60000 个字符。");
+  async send(key, message, images) {
+    const validated = validateSessionMessage(message, images);
     return this.exclusive(key, async () => {
+      const attachments = validated.images.map((id) =>
+        this.store.messageImages(key).read(id),
+      );
       const runtime = await this.attach(key);
       this.assertOpen();
       if (runtime.requests.size)
         throw new Error("请先处理当前等待中的问题或审批。");
-      const input = [{ type: "text", text: message.trim(), text_elements: [] }];
+      const input = [
+        ...(validated.text
+          ? [{ type: "text", text: validated.text, text_elements: [] }]
+          : []),
+        ...attachments.map((image) => ({
+          type: "localImage",
+          path: image.path,
+        })),
+      ];
       const activeTurn = runtime.turnId;
       if (activeTurn) {
         await this.client.request("turn/steer", {
@@ -237,6 +245,31 @@ class WebSessions extends EventEmitter {
       }
       return { sessionId: runtime.sessionId, turnId: runtime.turnId };
     });
+  }
+
+  uploadMessageImage(key, bytes) {
+    return this.exclusive(key, () => {
+      const state = this.store.read(key);
+      const reason = this.worktreeReason(state);
+      if (reason) throw new Error(reason);
+      const runtime = this.sessions.get(key);
+      if (
+        !state.session_id ||
+        ["preparing", "initializing", "starting"].includes(runtime?.status)
+      )
+        throw new Error("正在准备会话，请稍候再上传图片。");
+      if (runtime?.requests.size)
+        throw new Error("请先处理当前等待中的问题或审批。");
+      if (this.store.isExecutionLocked(key) && !runtime?.initial)
+        throw new Error("原 CLI 仍持有任务锁，不能上传会话图片。");
+      this.store.claim(key);
+      const image = this.store.messageImages(key).save(bytes);
+      return this.views.presenter.messageImage(key, image);
+    });
+  }
+
+  messageImagePath(key, id) {
+    return this.store.messageImages(key).read(id).path;
   }
 
   async interrupt(key) {

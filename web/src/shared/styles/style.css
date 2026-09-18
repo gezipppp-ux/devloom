@@ -934,6 +934,27 @@ main {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.message-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+.message-images a {
+  display: block;
+  max-width: 100%;
+  border-radius: var(--radius-control);
+}
+.message-images img {
+  display: block;
+  max-width: 100%;
+  width: auto;
+  max-height: 200px;
+  object-fit: contain;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
 .from-user {
   background: var(--soft);
   border: 1px solid var(--line);
@@ -1031,6 +1052,75 @@ main {
 .composer .ant-form-item {
   margin-bottom: 0;
 }
+.composer-image-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 12px;
+  max-height: 240px;
+  overflow-y: auto;
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+}
+.composer-image {
+  position: relative;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--canvas);
+}
+.composer-image > img {
+  display: block;
+  width: 100%;
+  height: 80px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+.composer-image-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  min-height: 40px;
+  padding: 0;
+}
+.composer-image-name,
+.composer-image-status {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.composer-image-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.composer-image-error {
+  color: var(--danger);
+  font-size: 12px;
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+}
+.composer-image-retry {
+  min-height: 40px;
+}
+.composer-add-images {
+  flex-shrink: 0;
+  width: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  font-size: 18px;
+}
+.composer-image-feedback {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
 .composer-footer {
   display: flex;
   align-items: center;
@@ -1050,6 +1140,9 @@ main {
   line-height: 1.7;
 }
 .composer-permissions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
 .composer-tools {

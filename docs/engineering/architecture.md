@@ -73,6 +73,7 @@ docs/engineering/  # 行为契约与架构规则
 | `codex/models.cjs`、`permissions.cjs`、`capabilities.cjs` | 模型发现与默认值解析、权限 RPC 映射、原生协议能力检查 |
 | `application/session-views.cjs`、`session-presenter.cjs` | 历史/快照查询、公开返回结构和图片 URL |
 | `storage/run-store.cjs` | 原始记录、快照、元数据、文件锁与安全附件路径；不做 Git 校验或拼 HTTP URL |
+| `storage/message-images.cjs` | 按任务保存会话图片、校验文件完整性并匹配历史图片；公开图片 URL 由应用 presenter 生成 |
 | `application/workspace-services.cjs` | 组合工作区配置、模型和渠道服务，供 HTTP 调用 |
 | `http/server.cjs`、`api.cjs` | 同源保护、工作区路由和 HTTP 输入/响应映射 |
 | `http/messages.cjs`、`assets.cjs`、`events.cjs` | 请求体/响应编码、静态与附件传输、SSE 订阅及清理 |

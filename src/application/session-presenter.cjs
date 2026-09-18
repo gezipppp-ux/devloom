@@ -1,5 +1,6 @@
 const path = require("node:path");
 const { sourceFor } = require("../domain/run-identity.cjs");
+const { normalizeItem } = require("../domain/session-item.cjs");
 
 function text(value) {
   return typeof value === "string" ? value : "";
@@ -78,6 +79,29 @@ class SessionPresenter {
     } catch {
       return [];
     }
+  }
+
+  messageImage(key, image) {
+    return {
+      id: image.id,
+      name: `image-${image.id}.${image.extension}`,
+      size: image.size,
+      contentType:
+        image.extension === "jpg" ? "image/jpeg" : `image/${image.extension}`,
+      url: `${this.apiPrefix}/runs/${key}/message-images/${image.id}`,
+    };
+  }
+
+  item(key, item, turnId) {
+    const normalized = normalizeItem(item, turnId);
+    if (normalized.type === "userMessage") {
+      const images = this.store.messageImages(key).match(item.content);
+      if (images.length)
+        normalized.images = images.map((image) =>
+          this.messageImage(key, image),
+        );
+    }
+    return normalized;
   }
 }
 

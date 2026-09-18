@@ -10,6 +10,7 @@ const { createWebServer } = require("../../src/http/server.cjs");
 const { readOptional } = require("../../src/storage/json-files.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const { temporary, png, json } = require("../support/helpers.cjs");
+const { verifyLateImageUpload } = require("./session-images.cjs");
 
 async function main() {
   const cleanup = [];
@@ -507,6 +508,18 @@ async function main() {
     await page.getByText("历史回复", { exact: true }).waitFor();
     assert.equal(workspaces.read(a.id).icon, null);
     assert.equal(await iconButton.locator("svg").count(), 0);
+    await verifyLateImageUpload(page, {
+      pattern: `**/api/workspaces/${a.id}/runs/${key}/message-images`,
+      navigation: true,
+      leave: async () => {
+        await page.getByRole("button", { name: "切换工作区：项目 B", exact: true }).click();
+        await page.getByRole("heading", { name: "项目 B · 工作区设置" }).waitFor();
+      },
+      reopen: async () => {
+        await page.getByRole("button", { name: "切换工作区：项目 A 改名", exact: true }).click();
+        await page.getByText("历史回复", { exact: true }).waitFor();
+      },
+    });
     // Long names and many workspaces must remain usable in both rail orientations.
     const longName = "客户管理系统与运营后台的超长项目名称".repeat(3);
     workspaces.save({ name: longName }, a.id);
