@@ -1,15 +1,11 @@
-const fs = require('node:fs');
 const path = require('node:path');
+const { updateConfig } = require('../../storage/json-files.cjs');
 
 function saveSession(session, file) {
   const resolved = path.resolve(file);
-  fs.mkdirSync(path.dirname(resolved), { recursive: true });
-  const previous = fs.existsSync(resolved)
-    ? JSON.parse(fs.readFileSync(resolved, 'utf8').replace(/^\uFEFF/, ''))
-    : {};
-  const config = {
+  updateConfig(resolved, (previous) => ({
     ...previous,
-    version: 1,
+    version: previous.version ?? 1,
     tapd: { ...previous.tapd, session },
     workflow: previous.workflow || {
       allow_write: false,
@@ -17,11 +13,7 @@ function saveSession(session, file) {
       fields: {},
     },
     codex: previous.codex || {},
-  };
-  fs.writeFileSync(resolved, JSON.stringify(config, null, 2), {
-    encoding: 'utf8',
-    mode: 0o600,
-  });
+  }));
   return resolved;
 }
 

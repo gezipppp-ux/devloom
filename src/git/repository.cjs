@@ -3,7 +3,7 @@ const { execFileSync } = require("node:child_process");
 const { absolutePath, samePath } = require("../shared/paths.cjs");
 
 function repositoryGit(value) {
-  const repository = fs.realpathSync(absolutePath(value, "代码仓库"));
+  const repository = fs.realpathSync.native(absolutePath(value, "代码仓库"));
   const git = (args) =>
     execFileSync("git", ["-C", repository, ...args], {
       encoding: "utf8",
@@ -11,10 +11,10 @@ function repositoryGit(value) {
       timeout: 10000,
       maxBuffer: 2 * 1024 * 1024,
       stdio: ["ignore", "pipe", "pipe"],
-    }).trim();
+    }).replace(/\r?\n$/, "");
   if (
     !samePath(
-      fs.realpathSync(git(["rev-parse", "--show-toplevel"])),
+      fs.realpathSync.native(git(["rev-parse", "--show-toplevel"])),
       repository,
     )
   )

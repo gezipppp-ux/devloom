@@ -1,6 +1,7 @@
 /* global document, window */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { chromium } = require('playwright');
@@ -15,6 +16,72 @@ const { createManualChannel } = require('../../src/channels/manual/adapter.cjs')
 async function choosePermission(page, mode) {
   await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
   await page.locator(`.permission-option[data-value="${mode}"]`).click();
+}
+
+async function verifyLanManualCreation(browser, directory, errors) {
+  const address = Object.values(os.networkInterfaces()).flat().find((entry) =>
+    entry.family === 'IPv4' && !entry.internal)?.address;
+  if (!address) {
+    process.stdout.write('LAN browser regression skipped: no non-loopback IPv4 interface.\n');
+    return;
+  }
+  const configFile = path.join(directory, 'lan-missing.json');
+  const manual = createManualChannel(configFile, { uploadDirectory: path.join(directory, 'lan-uploads') });
+  const client = new FakeClient();
+  const manager = new WebSessions({
+    store: new RunStore(path.join(directory, 'lan-runs')), client,
+    channels: new ChannelRegistry([manual]),
+  });
+  const submitted = [];
+  manager.start = async (input) => {
+    // Exercise the real manual UUID validator, but never dispatch a task.
+    const resolved = await manual.resolve(input);
+    submitted.push({ input, id: resolved.item.id });
+    throw new Error('局域网模拟请求已校验，未执行任务');
+  };
+  const application = createWebServer({ host: '0.0.0.0', manager, configFile });
+  await application.listen(0);
+  const origin = `http://${address}:${application.server.address().port}`;
+  const page = await browser.newPage();
+  page.on('pageerror', (error) => errors.push(error.message));
+  try {
+    await page.goto(origin);
+    assert.deepEqual(await page.evaluate(() => ({
+      secure: window.isSecureContext,
+      randomUUID: typeof window.crypto.randomUUID,
+      getRandomValues: typeof window.crypto.getRandomValues,
+    })), { secure: false, randomUUID: 'undefined', getRandomValues: 'function' });
+    async function openManual() {
+      await page.getByRole('button', { name: '＋ 从需求启动', exact: true }).click();
+      await page.getByLabel('需求渠道', { exact: true }).selectOption('manual');
+      await page.getByLabel('需求标题', { exact: true }).fill('LAN HTTP 手动需求');
+      await page.getByLabel('需求内容', { exact: true }).fill('仅校验请求标识，不启动真实任务。');
+    }
+    async function submit() {
+      const response = page.waitForResponse((response) =>
+        new URL(response.url()).pathname === '/api/runs' && response.request().method() === 'POST');
+      await page.getByRole('button', { name: '创建 session 并开始开发 →', exact: true }).click();
+      assert.equal((await response).status(), 400);
+      await page.getByText('局域网模拟请求已校验，未执行任务', { exact: true }).waitFor();
+    }
+    await openManual();
+    await submit();
+    await submit();
+    assert.equal(submitted.length, 2);
+    assert.match(submitted[0].id, /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);
+    assert.equal(submitted[0].id, submitted[1].id, 'retry keeps the same request identity');
+    await page.getByRole('button', { name: '取消', exact: true }).click();
+    await openManual();
+    await submit();
+    assert.equal(submitted.length, 3);
+    assert.notEqual(submitted[0].id, submitted[2].id, 'a new form receives a new request identity');
+    assert.equal(client.calls.some(({ method }) =>
+      ['thread/start', 'thread/resume', 'turn/start', 'turn/steer', 'turn/interrupt'].includes(method)), false);
+    process.stdout.write('LAN insecure-context passed: UUID creation, request validation, retry and new-form identity.\n');
+  } finally {
+    await page.close();
+    await application.close();
+  }
 }
 
 async function verifyPermissionDiscoveryFailures(browser, origin, client, errors) {
@@ -205,6 +272,75 @@ async function verifyInitialListRefresh(browser, origin, manager, key, errors) {
   }
 }
 
+async function verifyActionSelection(browser, origin, key, errors) {
+  const page = await browser.newPage();
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.addInitScript(() => {
+    const originalFetch = window.fetch;
+    window.processedMessages = [];
+    window.fetch = async (...args) => {
+      const response = await originalFetch(...args);
+      const originalJson = response.json.bind(response);
+      response.json = async () => {
+        const result = await originalJson();
+        const marker = response.headers.get('x-fixture-message');
+        if (marker) window.setTimeout(() => window.processedMessages.push(marker), 0);
+        return result;
+      };
+      return response;
+    };
+  });
+  const captures = [];
+  // Fulfill these requests locally: no turn is sent to even the fake client.
+  await page.route(`**/api/runs/${key}/messages`, (route) => captures.shift()(route));
+  const hold = () => new Promise((resolve) => captures.push(resolve));
+  async function release(route, marker, status = 202) {
+    await route.fulfill({ status, headers: { 'x-fixture-message': marker },
+      json: status === 202 ? { accepted: true } : { error: '过期会话动作错误' } });
+    await page.waitForFunction((value) => window.processedMessages.includes(value), marker);
+  }
+  async function reopen() {
+    await page.locator('.session-header').getByRole('button', { name: '刷新', exact: true }).click();
+    await page.waitForFunction(() => {
+      const input = document.querySelector('textarea[aria-label="发送给 Codex 的指令"]');
+      return input && !input.disabled;
+    });
+  }
+  try {
+    await page.goto(origin);
+    await page.getByText('历史回复', { exact: true }).waitFor();
+    const input = page.getByRole('textbox', { name: '发送给 Codex 的指令' });
+    const send = page.getByRole('button', { name: '发送 ↑', exact: true });
+    await input.fill('旧视图发送');
+    const first = hold();
+    await send.click();
+    const oldRequest = await first;
+    await reopen();
+    await input.fill('重新打开后发送的指令');
+    const second = hold();
+    await send.click();
+    const newRequest = await second;
+    await release(oldRequest, 'old-success');
+    assert.equal(await input.inputValue(), '重新打开后发送的指令');
+    assert.equal(await input.isDisabled(), true, 'old actions must not clear the new action busy state');
+    await release(newRequest, 'new-success');
+    assert.equal(await input.inputValue(), '');
+    assert.equal(await input.isEnabled(), true);
+
+    await input.fill('旧视图失败的指令');
+    const third = hold();
+    await send.click();
+    const failedRequest = await third;
+    await reopen();
+    await input.fill('保留新草稿');
+    await release(failedRequest, 'old-failure', 400);
+    assert.equal(await input.inputValue(), '保留新草稿');
+    assert.equal(await page.getByText('过期会话动作错误', { exact: true }).count(), 0);
+  } finally {
+    await page.close();
+  }
+}
+
 async function verifyRefreshConsistency(browser, origin, manager, client, key, errors) {
   const page = await browser.newPage();
   page.on('pageerror', (error) => errors.push(error.message));
@@ -334,6 +470,24 @@ async function verifyRefreshConsistency(browser, origin, manager, client, key, e
     await release(settingsSnapshot, 'settings-overlay');
     assert.equal(await page.getByLabel('Codex 模型', { exact: true }).inputValue(), 'fixture-model-b');
     assert.equal(await page.getByLabel('思考强度', { exact: true }).inputValue(), 'medium');
+    const previousMetadata = manager.store.readTaskMetadata(key);
+    const requestedType = previousMetadata.type === 'bug' ? 'other' : 'bug';
+    let captureMetadata;
+    const metadataCaptured = new Promise((resolve) => { captureMetadata = resolve; });
+    await page.route(`**/api/runs/${key}/metadata`, async (route) => {
+      const response = await route.fetch();
+      captureMetadata({ route, response, body: await response.json() });
+    });
+    await page.getByLabel('任务类型', { exact: true }).selectOption(requestedType);
+    const metadataSnapshot = await metadataCaptured;
+    manager.updateTaskMetadata(key, { type: 'requirement', progress: 'merge' });
+    await page.waitForFunction(() =>
+      document.querySelector('select[aria-label="任务进度"]')?.value === 'merge');
+    await release(metadataSnapshot, 'older-metadata-save');
+    assert.equal(await page.getByLabel('任务类型', { exact: true }).inputValue(), 'requirement');
+    assert.equal(await page.getByLabel('任务进度', { exact: true }).inputValue(), 'merge');
+    assert.equal(await page.locator('.session-link.active .task-type-tag').getAttribute('data-type'), 'requirement');
+    manager.updateTaskMetadata(key, previousMetadata);
   } finally {
     await page.close();
   }
@@ -888,7 +1042,9 @@ async function main() {
     await verifyExecutionSettings(browser, origin, manager, client, key, errors);
     await verifyPermissionDiscoveryFailures(browser, origin, client, errors);
     await verifyInitialListRefresh(browser, origin, manager, key, errors);
+    await verifyActionSelection(browser, origin, key, errors);
     await verifyRefreshConsistency(browser, origin, manager, client, key, errors);
+    await verifyLanManualCreation(browser, directory, errors);
     assert.deepEqual(errors, []);
     process.stdout.write(
       'Browser smoke passed: send, stream, steer, approval, question, interrupt, continue, reload, mobile and start form.\n',

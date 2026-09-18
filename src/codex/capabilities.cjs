@@ -3,6 +3,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
+const { childEnvironment } = require("./environment.cjs");
 const execute = promisify(execFile);
 const cache = new Map();
 
@@ -38,10 +39,7 @@ async function inspect({ command, args }) {
     path.join(os.tmpdir(), "web-coding-capabilities-"),
   );
   try {
-    const env = { ...process.env };
-    delete env.CODEX_THREAD_ID;
-    for (const key of Object.keys(env))
-      if (key.startsWith("TAPD_")) delete env[key];
+    const env = childEnvironment();
     await execute(
       command,
       [...args, "app-server", "generate-json-schema", "--out", directory],

@@ -3,6 +3,8 @@ const path = require('node:path');
 const readline = require('node:readline');
 const { spawn } = require('node:child_process');
 const { resolveCodex } = require('./command.cjs');
+const { stopProcessTree } = require('./process-tree.cjs');
+const { childEnvironment } = require('./environment.cjs');
 
 function commandFor(config, repository, directory, images) {
   const resolved = resolveCodex(config);
@@ -20,7 +22,11 @@ function commandFor(config, repository, directory, images) {
     path.join(directory, 'final.md'),
   ];
   if (config.model) args.push('--model', config.model);
-  if (config.reasoning_effort) args.push('-c', `model_reasoning_effort=${JSON.stringify(config.reasoning_effort)}`);
+  if (config.reasoning_effort)
+    args.push(
+      '-c',
+      `model_reasoning_effort=${JSON.stringify(config.reasoning_effort)}`,
+    );
   for (const image of images) args.push('--image', image.path);
   args.push('-');
   return { command: resolved.command, args };
@@ -43,17 +49,14 @@ async function startSession({
   const timeoutMs = config.startup_timeout_ms ?? 120000;
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1)
     throw new Error('codex.startup_timeout_ms must be a positive integer.');
-  const env = { ...process.env };
-  for (const key of Object.keys(env))
-    if (key.startsWith('TAPD_')) delete env[key];
-  // This is a fresh CLI session, not a continuation of the invoking Codex task.
-  delete env.CODEX_THREAD_ID;
+  const env = childEnvironment();
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: repository,
       env,
       shell: false,
       windowsHide: true,
+      detached: process.platform !== 'win32',
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     let sessionId;
@@ -67,13 +70,13 @@ async function startSession({
       startupFailure = new Error(
         'Codex did not begin execution before the startup timeout.',
       );
-      child.kill();
+      void stopProcessTree(child);
     }, timeoutMs);
     const stop = () => {
       startupFailure = new Error(
         'Runner interrupted; inspect the recorded session before retrying.',
       );
-      child.kill();
+      void stopProcessTree(child);
     };
     process.once('SIGINT', stop);
     process.once('SIGTERM', stop);
@@ -82,6 +85,7 @@ async function startSession({
     });
     child.stdin.on('error', (error) => {
       startupFailure ||= new Error(`Codex input failed: ${error.code}`);
+      void stopProcessTree(child);
     });
     const lines = readline.createInterface({ input: child.stdout });
     lines.on('line', (line) => {
@@ -114,7 +118,7 @@ async function startSession({
           failure = event.error?.message || 'Codex turn failed.';
       } catch (error) {
         startupFailure = error;
-        child.kill();
+        void stopProcessTree(child);
       }
     });
     child.stderr.on('data', (chunk) => {
@@ -124,7 +128,7 @@ async function startSession({
         });
       } catch (error) {
         startupFailure = error;
-        child.kill();
+        void stopProcessTree(child);
       }
     });
     child.once('close', async (code, signal) => {

@@ -19,12 +19,13 @@ function sameSettings(left, right) {
 
 // Desired settings live outside run.json, whose initial pipeline owns its snapshot.
 class SessionSettings {
-  constructor({ store, client, sessions, worktreeReason, emit }) {
+  constructor({ store, client, sessions, worktreeReason, emit, assertOpen }) {
     this.store = store;
     this.client = client;
     this.sessions = sessions;
     this.worktreeReason = worktreeReason;
     this.emit = emit;
+    this.assertOpen = assertOpen;
   }
 
   read(key, state = this.store.read(key)) {
@@ -112,7 +113,9 @@ class SessionSettings {
     const requested = { ...current.selection, ...input };
     const permissionMode = validatePermissionMode(requested.permissionMode);
     const model = await validateModelSelection(this.client, requested);
+    this.assertOpen();
     await assertPermissionAvailable(this.client, permissionMode);
+    this.assertOpen();
     const selection = {
       model: model.model,
       reasoningEffort: model.reasoning_effort,

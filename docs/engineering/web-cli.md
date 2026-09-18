@@ -9,9 +9,11 @@ Applies to `src/codex/app-server.cjs`, `src/application/sessions.cjs`, `src/stor
 
 Process startup lives in `src/cli/web.cjs`. The HTTP module exports an inert server factory and adapts application services. Session commands, event handling, queries and public response shapes are separated in `src/application/`; disk formats remain in `RunStore`, and repository/worktree identity checks live in `src/git/`. Shutdown stops accepting requests before closing SSE and session managers, so EventSource reconnections cannot keep the service alive.
 
+Closing a session manager fences in-flight validation/resume/start operations, drains already-started channel callbacks and transport shutdown, then releases ownership. `AppServer.close()` is terminal; accidental disconnects can reconnect. A completed first turn cannot start another turn until the execution runner finishes persisting its result and releases its lock; steering an active first turn remains supported.
+
 ## 2. Signatures
 
-- `npm run tapd:web [--config <file>] [--port 4317]` builds assets and serves loopback HTTP.
+- `npm run tapd:web -- [--host 0.0.0.0] [--port 4317]` builds assets and starts HTTP. CLI startup defaults to `0.0.0.0` for direct IPv4 LAN access; `--host 127.0.0.1` limits access to the local machine. `--config` remains CLI-only and is rejected by Web startup.
 - `GET /api/bootstrap` returns `{token,workspace,channels}`; `GET /api/runs` returns `{runs}`.
 - `GET /api/stories?workspace=&query=` and `/api/users` reuse saved TAPD credentials server-side.
 - `POST /api/runs {id,workspace,developer,tester,model?,reasoningEffort?,permissionMode?}` returns `{key,accepted:true}` after validation; preparation then proceeds asynchronously. Manual requirements use the same execution settings.
@@ -25,7 +27,7 @@ Process startup lives in `src/cli/web.cjs`. The HTTP module exports an inert ser
 ## 3. Contracts
 
 - `key` is the validated run identity: numeric workspace/story for legacy TAPD, channel-prefixed hash for other sources. Browser callers cannot submit arbitrary thread IDs. Explicit execution settings accept validated service-host paths; run/image paths remain bound to recorded runs.
-- Every POST requires `x-tapd-token` from bootstrap. Validate Host and any Origin; reject cross-site fetches. Bind to `127.0.0.1` only. JSON bodies are bounded to 256000 bytes with streaming UTF-8 decoding; messages are 1–60000 characters.
+- Every POST requires `x-tapd-token` from bootstrap. `src/cli/web.cjs` defaults to `0.0.0.0`; the `createWebServer()` HTTP factory retains `127.0.0.1` as its internal default for embedding and tests. Explicit `--host` accepts an IPv4/IPv6 literal, including wildcard binds. Validate the Host IP and port against the request socket's local address/port (normalizing IPv4-mapped IPv6), require any Origin to match the validated HTTP origin, and reject cross-site fetches. Forwarded headers never authorize a Host. JSON bodies are bounded to 256000 bytes with streaming UTF-8 decoding; messages are 1–60000 characters.
 - Transport initializes with `initialize` then `initialized`; IDs correlate concurrent RPC. Guard child-process listeners by child identity so closure of an old connection cannot kill its replacement.
 - Existing threads use `thread/read` then `thread/resume` with the recorded cwd and selected permissions. New runs inject `startSession` into `runExecution`; `thread/start` returns identity, but only `turn/started` authorizes channel transition. TAPD CLI `runRequirement` wraps this shared pipeline.
 - Permission mapping is centralized in `codex/permissions.cjs`: `ask` uses `on-request`, reviewer `user`, sandbox `workspace-write`; `auto` uses `on-request`, reviewer `auto_review`, the same sandbox; `full` uses `never`, reviewer `user`, sandbox `danger-full-access`. Each `turn/start` explicitly sets approval policy, reviewer and `sandboxPolicy`, so reducing permissions does not inherit a previous full-access turn. Limited turns use the recorded worktree as writable root and disable network access. Native Codex remains responsible for enforcement and any managed policy restrictions.

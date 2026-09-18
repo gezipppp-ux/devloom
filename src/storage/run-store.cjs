@@ -3,7 +3,7 @@ const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { RUN_KEY } = require("../domain/run-identity.cjs");
 const { normalizeItem } = require("../domain/session-item.cjs");
-const { readOptional, writeConfig } = require("./json-files.cjs");
+const { readOptional, writeConfig, updateConfig } = require("./json-files.cjs");
 const { updateState } = require("./run-state.cjs");
 const {
   defaultTaskMetadata,
@@ -136,12 +136,9 @@ class RunStore {
   }
 
   writeTaskMetadata(key, input, item) {
-    const metadata = validateTaskMetadata(
-      input,
-      this.readTaskMetadata(key, item),
+    return updateConfig(path.join(this.dir(key), "task-metadata.json"), (saved) =>
+      validateTaskMetadata(input, validateTaskMetadata(saved, defaultTaskMetadata(item))),
     );
-    writeConfig(path.join(this.dir(key), "task-metadata.json"), metadata);
-    return metadata;
   }
 
   readExecutionSettings(key) {
@@ -181,11 +178,7 @@ class RunStore {
   }
 
   writeWeb(key, data) {
-    const file = path.join(this.dir(key), "web-session.json");
-    fs.writeFileSync(`${file}.tmp`, JSON.stringify(data, null, 2), {
-      mode: 0o600,
-    });
-    fs.renameSync(`${file}.tmp`, file);
+    writeConfig(path.join(this.dir(key), "web-session.json"), data);
   }
 
   readWeb(key) {
@@ -222,8 +215,8 @@ class RunStore {
   imagePath(key, index) {
     if (!/^\d+$/.test(index)) throw new Error("无效的图片编号");
     const task = this.readTask(key);
-    const file = fs.realpathSync(task.images?.[Number(index)]?.path || "");
-    const root = fs.realpathSync(this.dir(key));
+    const file = fs.realpathSync.native(task.images?.[Number(index)]?.path || "");
+    const root = fs.realpathSync.native(this.dir(key));
     const relative = path.relative(root, file);
     if (!relative || relative.startsWith("..") || path.isAbsolute(relative))
       throw new Error("图片不属于当前任务");

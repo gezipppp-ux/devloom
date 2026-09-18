@@ -7,17 +7,23 @@ const { json, body } = require("./messages.cjs");
 const { serveApi } = require("./api.cjs");
 const { serveStatic } = require("./assets.cjs");
 const { createEventStream } = require("./events.cjs");
+const {
+  validateListenHost,
+  httpOrigin,
+  requestOrigin,
+} = require("./origin.cjs");
 
 function createWebServer({
+  host = "127.0.0.1",
   configFile,
   manager,
   channels = manager?.channels,
   workspaces = new Workspaces(),
   staticDirectory = path.join(root, "web", "dist"),
 } = {}) {
+  validateListenHost(host);
   const token = randomBytes(32).toString("hex");
   const events = createEventStream();
-  let origin;
   let closing = false;
   let closePromise;
   const server = http.createServer(async (request, response) => {
@@ -28,17 +34,15 @@ function createWebServer({
       "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'",
     );
     if (closing) return json(response, 503, { error: "服务正在关闭。" });
-    origin ||= `http://127.0.0.1:${server.address().port}`;
-    if (
-      request.headers.host !== new URL(origin).host ||
-      (request.headers.origin && request.headers.origin !== origin) ||
-      request.headers["sec-fetch-site"] === "cross-site"
-    )
+    const origin = requestOrigin(request);
+    if (!origin)
       return json(response, 403, {
-        error: "仅允许本地同源访问。请使用终端显示的地址。",
+        error: "仅允许通过服务端 IP 同源访问，请检查访问地址和端口。",
       });
     try {
       const url = new URL(request.url, origin);
+      if (url.origin !== origin)
+        return json(response, 403, { error: "请求地址必须与服务地址同源。" });
       if (
         request.method === "POST" &&
         request.headers["x-tapd-token"] !== token
@@ -89,13 +93,19 @@ function createWebServer({
       await new Promise((resolve, reject) => {
         const onError = (error) => reject(error);
         server.once("error", onError);
-        server.listen(port, "127.0.0.1", () => {
+        server.listen(port, host, () => {
           server.off("error", onError);
           resolve();
         });
       });
-      origin = `http://127.0.0.1:${server.address().port}`;
-      return origin;
+      const bound = server.address();
+      const address =
+        bound.address === "0.0.0.0"
+          ? "127.0.0.1"
+          : bound.address === "::"
+            ? "::1"
+            : bound.address;
+      return httpOrigin(address, bound.port);
     },
     close() {
       if (closePromise) return closePromise;

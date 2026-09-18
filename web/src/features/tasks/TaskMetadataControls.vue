@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from "vue";
+import { onUnmounted, ref, watch } from "vue";
 import { api } from "../../shared/api/api.js";
 import { taskTypes, taskProgresses } from "./task-metadata.js";
 const props = defineProps({
@@ -9,16 +9,30 @@ const props = defineProps({
 const emit = defineEmits(["saved"]);
 const busy = ref(false),
   error = ref("");
+let metadataRevision = 0;
+watch(
+  () => [props.taskKey, props.metadata.type, props.metadata.progress],
+  () => {
+    metadataRevision++;
+  },
+  { flush: "sync" },
+);
+onUnmounted(() => {
+  metadataRevision++;
+});
 async function update(field, event) {
   const value = event.target.value;
   event.target.value = props.metadata[field];
   busy.value = true;
   error.value = "";
+  const revision = metadataRevision;
+  const key = props.taskKey;
   try {
-    const result = await api(`/runs/${props.taskKey}/metadata`, {
+    const result = await api(`/runs/${key}/metadata`, {
       [field]: value,
     });
-    emit("saved", props.taskKey, result.metadata);
+    // A newer peer update delivered by SSE wins over a delayed save response.
+    if (revision === metadataRevision) emit("saved", key, result.metadata);
   } catch (e) {
     error.value = e.message;
   } finally {

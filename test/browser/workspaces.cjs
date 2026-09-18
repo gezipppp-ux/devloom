@@ -72,6 +72,11 @@ async function main() {
     await page.getByLabel("工作区名称", { exact: true }).fill("项目 A");
     await page.getByRole("button", { name: "创建工作区", exact: true }).click();
     await page.getByRole("heading", { name: "项目 A · 工作区设置" }).waitFor();
+    await page.waitForFunction((platform) =>
+      document.querySelector('input[aria-label="项目代码仓库"]')?.getAttribute('placeholder') ===
+        (platform === 'win32' ? 'D:\\Projects\\my-project' : '/srv/repos/my-project'), process.platform);
+    assert.equal(await page.getByLabel("Worktree 根目录", { exact: true }).getAttribute("placeholder"),
+      process.platform === "win32" ? "E:\\CodexWorktrees" : "/srv/worktrees");
     const a = workspaces.list()[0];
     const output = path.resolve("state", "browser");
     fs.mkdirSync(output, { recursive: true });

@@ -9,7 +9,7 @@ const { temporary } = require('../support/helpers.cjs');
 const { listBaseRefs } = require('../../src/git/repository.cjs');
 const { readSettings, saveSettings, executionConfig } = require('../../src/config/execution-settings.cjs');
 const { samePath, absolutePath } = require('../../src/shared/paths.cjs');
-const { worktreePlan } = require('../../src/git/worktrees.cjs');
+const { worktreePlan, createWorktree } = require('../../src/git/worktrees.cjs');
 const { repositoryFor } = require('../../src/config/repository.cjs');
 const { sourceFor, runKey } = require('../../src/domain/run-identity.cjs');
 const { ChannelRegistry } = require('../../src/channels/registry.cjs');
@@ -157,6 +157,25 @@ test('path validation respects Linux case and Windows drives; repositories are e
     ),
     repo,
   );
+});
+
+test('repository settings and continuation preserve Unicode, spaces and filesystem aliases', (t) => {
+  const directory = temporary(t);
+  const repo = path.join(directory, process.platform === 'win32' ? '项目 repo' : '项目 repo ');
+  repository(repo);
+  const alias = path.join(directory, 'repository alias');
+  fs.symlinkSync(repo, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  const configFile = path.join(directory, 'config.json');
+  const root = path.join(directory, process.platform === 'win32' ? '任务 trees' : '任务 trees ');
+  const settings = saveSettings({ repository: alias, worktreeRoot: root }, configFile);
+  assert.equal(settings.repository, fs.realpathSync(repo));
+  assert.equal(settings.worktreeRoot, fs.realpathSync(root));
+  const config = executionConfig({}, configFile);
+  assert.equal(repositoryFor(config, configFile, '1'), fs.realpathSync(repo));
+  const plan = createWorktree(worktreePlan(settings.repository, { workspace_id: '1', id: '9' }, 'HEAD', { root }));
+  assert.equal(worktreeReason({ worktree: plan }), null);
+  if (process.platform === 'win32')
+    assert.equal(worktreeReason({ worktree: { ...plan, path: path.toNamespacedPath(plan.path) } }), null);
 });
 
 test('a non-TAPD channel runs through real Git, session controller and history without TAPD credentials', async (t) => {

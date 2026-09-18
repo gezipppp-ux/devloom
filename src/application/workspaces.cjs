@@ -2,7 +2,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { dataRoot } = require("../config/runtime.cjs");
-const { readOptional, writeConfig } = require("../storage/json-files.cjs");
+const {
+  readOptional,
+  writeConfig,
+  updateConfig,
+} = require("../storage/json-files.cjs");
 const {
   defaultChannels,
   defaultChannelConfig,
@@ -70,16 +74,25 @@ class Workspaces {
       throw new Error("工作区名称已存在。");
     const key = id || randomUUID();
     const file = this.configFile(key);
-    const config = id
-      ? readOptional(file)
-      : {
+    const setWorkspace = (config) => ({
+      ...config,
+      workspace: {
+        ...config.workspace,
+        id: key,
+        name,
+        ...(icon === undefined ? {} : { icon }),
+      },
+    });
+    if (id) updateConfig(file, setWorkspace);
+    else
+      writeConfig(
+        file,
+        setWorkspace({
           version: 3,
           codex: {},
           ...defaultChannelConfig(),
-        };
-    config.workspace = { ...config.workspace, id: key, name };
-    if (icon !== undefined) config.workspace.icon = icon;
-    writeConfig(file, config);
+        }),
+      );
     return this.read(key);
   }
 

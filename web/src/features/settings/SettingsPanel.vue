@@ -98,7 +98,7 @@ async function save() {
             aria-label="项目代码仓库"
             :placeholder="
               platform === 'win32'
-                ? 'D:\Projects\my-project'
+                ? 'D:\\Projects\\my-project'
                 : '/srv/repos/my-project'
             "
             required
@@ -111,7 +111,7 @@ async function save() {
             v-model="form.worktreeRoot"
             aria-label="Worktree 根目录"
             :placeholder="
-              platform === 'win32' ? 'E:\CodexWorktrees' : '/srv/worktrees'
+              platform === 'win32' ? 'E:\\CodexWorktrees' : '/srv/worktrees'
             "
             required
         /></a-form-item>

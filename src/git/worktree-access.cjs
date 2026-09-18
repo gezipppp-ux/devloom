@@ -37,27 +37,23 @@ function worktreeReason(state) {
       "rev-parse",
       "--path-format=absolute",
       "--git-common-dir",
-    ]).trim();
-    const [common, gitDirectory, topLevel] = git(tree.path, [
-      "rev-parse",
-      "--path-format=absolute",
-      "--git-common-dir",
-      "--git-dir",
-      "--show-toplevel",
-    ])
-      .trim()
-      .split(/\r?\n/);
+    ]).replace(/\r?\n$/, "");
+    const [common, gitDirectory, topLevel] = [
+      "--git-common-dir", "--git-dir", "--show-toplevel",
+    ].map((field) => git(tree.path, [
+      "rev-parse", "--path-format=absolute", field,
+    ]).replace(/\r?\n$/, ""));
     const branch = git(tree.path, ["symbolic-ref", "--quiet", "HEAD"]).trim();
     const registeredMarker = fs
       .readFileSync(path.join(gitDirectory, "gitdir"), "utf8")
-      .trim();
+      .replace(/\r?\n$/, "");
     if (
-      !samePath(fs.realpathSync(common), fs.realpathSync(expectedCommon)) ||
-      !samePath(fs.realpathSync(topLevel), fs.realpathSync(tree.path)) ||
+      !samePath(fs.realpathSync.native(common), fs.realpathSync.native(expectedCommon)) ||
+      !samePath(fs.realpathSync.native(topLevel), fs.realpathSync.native(tree.path)) ||
       branch !== `refs/heads/${tree.branch}` ||
       !samePath(
-        fs.realpathSync(path.resolve(gitDirectory, registeredMarker)),
-        fs.realpathSync(path.join(tree.path, ".git")),
+        fs.realpathSync.native(path.resolve(gitDirectory, registeredMarker)),
+        fs.realpathSync.native(path.join(tree.path, ".git")),
       )
     )
       return "工作区已不属于原仓库或分支，此任务仅供查看";

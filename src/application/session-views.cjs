@@ -14,18 +14,22 @@ class SessionViews {
     settings,
     worktreeReason,
     apiPrefix,
+    assertOpen,
   }) {
     this.store = store;
     this.client = client;
     this.sessions = sessions;
     this.worktreeReason = worktreeReason;
+    this.assertOpen = assertOpen;
     this.presenter = new SessionPresenter({ store, settings, apiPrefix });
   }
 
   async history(key, cursor) {
+    this.assertOpen();
     const state = this.store.read(key);
     if (!state.session_id) return { items: [], nextCursor: null };
     await this.client.connect();
+    this.assertOpen();
     const result = await this.client.request("thread/items/list", {
       threadId: state.session_id,
       limit: 50,
@@ -78,7 +82,9 @@ class SessionViews {
       !runtime?.initial &&
       !["preparing", "initializing"].includes(runtime?.status)
     )
-      readOnlyReason = "任务仍由另一个 CLI 运行器持有；结束后才能在网页继续。";
+      readOnlyReason = runtime?.pipelineActive
+        ? "正在完成首轮记录，请稍候再发送。"
+        : "任务仍由另一个 CLI 运行器持有；结束后才能在网页继续。";
     if (
       runtime &&
       ["preparing", "initializing", "starting"].includes(runtime.status)

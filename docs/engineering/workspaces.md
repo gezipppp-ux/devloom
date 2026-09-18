@@ -23,7 +23,7 @@ Workspace icons come from a curated 40-icon SVG component catalog (`@antdv-next/
 - All settings, refs, requirements, users, runs, messages, interrupts, approvals, images, uploads, bootstrap and SSE use `/api/workspaces/:id/<existing route>`. This includes `execution-options` and per-run `execution-settings`; model/permission updates cannot address a run in another workspace.
 - Missing workspace context is rejected. Unknown UUIDs return 404; malformed UUIDs cannot construct paths.
 - SSE is delivered only to clients subscribed to the emitting workspace manager. Attachment URLs carry the workspace prefix; image path validation remains inside the selected RunStore.
-- Same-origin, loopback Host and POST token protection apply to creation, settings and Cookie checks as well as execution.
+- Same-origin, socket-local IP/port Host validation and POST token protection apply to creation, settings and Cookie checks as well as execution, including explicit LAN binds.
 
 The injected `manager` server option is a single-context test harness; production startup never uses it to load old records.
 

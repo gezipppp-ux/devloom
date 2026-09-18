@@ -8,7 +8,7 @@ const { validateInitCommands } = require('../../src/domain/init-commands.cjs');
 
 function setup(t) {
   const directory = temporary(t);
-  const cwd = path.join(directory, 'worktree with spaces');
+  const cwd = path.join(directory, 'worktree with spaces 工作区');
   fs.mkdirSync(cwd);
   const command = (name, script) => {
     const file = path.join(directory, `${name}.cjs`);

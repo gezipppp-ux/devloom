@@ -35,8 +35,15 @@ class ManualUploads {
     for (const name of fs.readdirSync(this.directory)) {
       if (!UPLOAD_ID.test(name)) continue;
       const file = path.join(this.directory, name);
-      if (Date.now() - fs.lstatSync(file).mtimeMs > UPLOAD_TTL)
-        fs.unlinkSync(file);
+      try {
+        const stat = fs.lstatSync(file);
+        if ((stat.isFile() || stat.isSymbolicLink()) &&
+            Date.now() - stat.mtimeMs > UPLOAD_TTL)
+          fs.unlinkSync(file);
+      } catch (error) {
+        // A second service may have removed the same expired upload already.
+        if (error.code !== 'ENOENT') throw error;
+      }
     }
   }
 

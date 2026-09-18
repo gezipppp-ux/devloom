@@ -1,5 +1,4 @@
 <script setup>
-/* global crypto */
 import { computed, reactive, ref, watch } from "vue";
 import UserSearchSelect from "./UserSearchSelect.vue";
 import ManualRequirementFields from "./ManualRequirementFields.vue";
@@ -7,6 +6,7 @@ import CodexModelSettings from "./CodexModelSettings.vue";
 import FormSection from "../../shared/components/FormSection.vue";
 import { taskTypes } from "./task-metadata.js";
 import { api } from "../../shared/api/api.js";
+import { createRequestId } from "../../shared/api/request-id.js";
 const props = defineProps({
   workspace: { type: String, default: "" },
   channels: { type: Array, default: () => [] },
@@ -18,7 +18,7 @@ const form = reactive({
   id: "",
   developer: "",
   tester: "",
-  requestId: crypto.randomUUID(),
+  requestId: createRequestId(),
   title: "",
   content: "",
   images: [],

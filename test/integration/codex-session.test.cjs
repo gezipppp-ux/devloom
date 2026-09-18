@@ -25,6 +25,8 @@ function options(t, mode = 'success') {
 
 test('new persistent session uses stdin, isolated cwd and --image; strips TAPD env', async (t) => {
   const input = options(t);
+  input.repository = path.join(input.directory, '工作区 with spaces');
+  fs.mkdirSync(input.repository);
   input.config.model = 'fixture-model';
   input.config.reasoning_effort = 'high';
   const calls = [];
@@ -47,8 +49,14 @@ test('new persistent session uses stdin, isolated cwd and --image; strips TAPD e
     input.task.images[0].path,
   );
   assert.equal(captured.args.includes('--ephemeral'), false);
-  assert.equal(captured.args[captured.args.indexOf('--model') + 1], 'fixture-model');
-  assert.equal(captured.args[captured.args.indexOf('-c') + 1], 'model_reasoning_effort="high"');
+  assert.equal(
+    captured.args[captured.args.indexOf('--model') + 1],
+    'fixture-model',
+  );
+  assert.equal(
+    captured.args[captured.args.indexOf('-c') + 1],
+    'model_reasoning_effort="high"',
+  );
   assert.equal(captured.tapdEnv, null);
 });
 
@@ -83,4 +91,48 @@ test('a failed turn remains failed after execution started', async (t) => {
   const result = await startSession(options(t, 'turn-fail'));
   assert.equal(result.completed, false);
   assert.match(result.error, /turn failure/);
+});
+
+test('startup timeout stops descendants behind a launcher in a Unicode path', async (t) => {
+  const input = options(t);
+  const script = path.join(input.directory, '模拟 launcher 空格.cjs');
+  const heartbeat = path.join(input.directory, 'heartbeat.txt');
+  const pidFile = path.join(input.directory, 'child.pid');
+  fs.writeFileSync(
+    script,
+    `
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const child = require('node:child_process').spawn(process.execPath, ['-e',
+      "const fs=require('node:fs'); const beat=()=>fs.appendFileSync(process.argv[1],'x'); beat(); setInterval(beat,30); setTimeout(()=>process.exit(),5000);",
+      path.join(__dirname,'heartbeat.txt')
+    ], {stdio:'ignore', windowsHide:true});
+    fs.writeFileSync(path.join(__dirname,'child.pid'), String(child.pid));
+    process.stdin.resume();
+    setInterval(()=>{},1000);
+  `,
+  );
+  input.config.command_args = [script];
+  input.config.startup_timeout_ms = 1000;
+  t.after(() => {
+    if (fs.existsSync(pidFile)) {
+      try {
+        process.kill(Number(fs.readFileSync(pidFile)), 'SIGKILL');
+      } catch {
+        /* already stopped */
+      }
+    }
+  });
+  await assert.rejects(startSession(input), /startup timeout/);
+  assert.ok(
+    fs.existsSync(heartbeat),
+    'descendant must start before the timeout',
+  );
+  const size = fs.statSync(heartbeat).size;
+  await new Promise((resolve) => setTimeout(resolve, 180));
+  assert.equal(
+    fs.statSync(heartbeat).size,
+    size,
+    'descendant must stop writing when its launcher is stopped',
+  );
 });

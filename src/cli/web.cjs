@@ -9,10 +9,11 @@ async function main(argv = process.argv.slice(2)) {
   const port = Number(argument("--port", null, argv) || 4317);
   if (!Number.isInteger(port) || port < 1 || port > 65535)
     throw new Error("端口需为 1–65535。");
-  const application = createWebServer();
+  const host = argument("--host", "0.0.0.0", argv);
+  const application = createWebServer({ host });
   const origin = await application.listen(port);
   process.stdout.write(
-    `TAPD Web CLI: ${origin}\n保持此进程运行；关闭浏览器不会停止 Codex。\n`,
+    `TAPD Web CLI: ${origin}\n监听地址：${host}:${port}\n保持此进程运行；关闭浏览器不会停止 Codex。\n`,
   );
   let closing = false;
   const shutdown = () => {

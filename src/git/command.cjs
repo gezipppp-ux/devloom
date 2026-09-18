@@ -6,7 +6,7 @@ function git(repository, args) {
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
     timeout: 60000,
-  }).trim();
+  }).replace(/\r?\n$/, "");
 }
 
 module.exports = { git };

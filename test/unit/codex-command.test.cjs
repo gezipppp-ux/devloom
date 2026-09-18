@@ -51,6 +51,18 @@ test('Linux PATH respects priority, skips nonexecutable files and empty/relative
   });
 });
 
+test('Linux PATH preserves significant trailing spaces in directory names', () => {
+  const options = host(
+    'linux',
+    {
+      '/tools bin /codex': {},
+      '/tools bin/codex': {},
+    },
+    { PATH: '/tools bin :/tools bin' },
+  );
+  assert.equal(resolveCodex({}, options).command, '/tools bin /codex');
+});
+
 test('Linux service without login PATH finds user installation and Node sibling npm symlink', () => {
   const options = host('linux', { '/home/runner/.local/bin/codex': {} });
   assert.equal(
@@ -137,6 +149,29 @@ test('Windows desktop version directory is found without PATH; newest installati
   assert.equal(resolveCodex({}, options).command, `${root}\\new\\codex.exe`);
 });
 
+test('Windows command discovery rejects implicit-drive paths and preserves drive and UNC paths', () => {
+  const options = host(
+    'win32',
+    {
+      '\\tools\\codex.exe': {},
+      'C:\\safe\\codex.exe': {},
+      '\\\\server\\tools\\codex.exe': {},
+    },
+    { Path: '\\tools;/tools;C:\\safe' },
+  );
+  assert.equal(resolveCodex({}, options).command, 'C:\\safe\\codex.exe');
+  for (const command of [
+    '\\tools\\codex.exe',
+    '/tools/codex.exe',
+    'C:tools\\codex.exe',
+  ])
+    assert.throws(() => resolveCodex({ command }, options), /指定的命令不可用/);
+  assert.equal(
+    resolveCodex({ command: '\\\\server\\tools\\codex.exe' }, options).command,
+    '\\\\server\\tools\\codex.exe',
+  );
+});
+
 test('missing installations and unsupported shell shims produce actionable errors', () => {
   assert.throws(
     () => resolveCodex({}, host('linux', {})),
@@ -167,4 +202,14 @@ test('native executable preserves argument arrays and failed discovery can recon
   const client = new AppServer({ command: './missing-codex' });
   await assert.rejects(client.connect(), /指定的命令不可用/);
   assert.equal(client.connection, null);
+});
+
+test('invalid executable overrides and NUL arguments fail during preflight', () => {
+  for (const command of [false, 0, null, []])
+    assert.throws(() => resolveCodex({ command }), /codex.command 必须/);
+  for (const command_args of [false, '', null, ['valid', 'bad\0argument']])
+    assert.throws(
+      () => resolveCodex({ command: process.execPath, command_args }),
+      /command_args 必须/,
+    );
 });

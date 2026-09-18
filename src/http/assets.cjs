@@ -14,7 +14,8 @@ const MIME = {
 
 function sendFile(response, file, cacheControl) {
   response.writeHead(200, {
-    "content-type": MIME[path.extname(file)] || "application/octet-stream",
+    "content-type":
+      MIME[path.extname(file).toLowerCase()] || "application/octet-stream",
     "cache-control": cacheControl,
   });
   fs.createReadStream(file)
@@ -30,13 +31,30 @@ function serveStatic(request, response, url, staticDirectory) {
       ? "index.html"
       : decodeURIComponent(url.pathname.slice(1));
   const file = path.resolve(staticDirectory, relative);
-  if (!file.startsWith(path.resolve(staticDirectory) + path.sep))
+  if (!isInside(staticDirectory, file))
     return json(response, 403, { error: "无效的文件路径" });
   if (!fs.existsSync(file) || !fs.statSync(file).isFile())
     return json(response, 404, {
       error: "页面未构建，请运行 npm run web:build。",
     });
+  if (
+    !isInside(
+      fs.realpathSync.native(staticDirectory),
+      fs.realpathSync.native(file),
+    )
+  )
+    return json(response, 403, { error: "无效的文件路径" });
   sendFile(response, file, "no-cache");
+}
+
+function isInside(directory, file) {
+  const relative = path.relative(directory, file);
+  return (
+    relative &&
+    relative !== ".." &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
+  );
 }
 
 module.exports = { sendFile, serveStatic };

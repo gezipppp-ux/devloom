@@ -1,4 +1,4 @@
-const { readOptional, writeConfig } = require("../../storage/json-files.cjs");
+const { readOptional, updateConfig } = require("../../storage/json-files.cjs");
 const { numericId } = require("./config.cjs");
 const {
   buildSession,
@@ -17,7 +17,7 @@ function readTapdSettings(file) {
   };
 }
 
-function draftConfig(file, input) {
+function draftConfig(file, input, config = readOptional(file)) {
   if (
     !input ||
     typeof input !== "object" ||
@@ -34,7 +34,6 @@ function draftConfig(file, input) {
     )
   )
     throw new Error("无效的 TAPD 配置字段。");
-  const config = readOptional(file);
   const workspaceId = numericId(input.workspaceId, "TAPD 项目 ID");
   if (
     input.cookie !== undefined &&
@@ -82,7 +81,7 @@ function draftConfig(file, input) {
 }
 
 function saveTapdSettings(file, input) {
-  writeConfig(file, draftConfig(file, input));
+  updateConfig(file, (config) => draftConfig(file, input, config));
   return readTapdSettings(file);
 }
 

@@ -8,6 +8,7 @@ class SessionEvents {
     this.sessions = sessions;
     this.settings = settings;
     this.emit = emit;
+    this.pendingCallbacks = new Set();
     client.on("notification", (message) => this.notification(message));
     client.on("request", (message) => this.serverRequest(message));
     client.on("disconnected", (error) => this.disconnected(error));
@@ -93,6 +94,10 @@ class SessionEvents {
             .catch((error) => {
               initial.callbackError = error;
             });
+          this.pendingCallbacks.add(initial.callback);
+          void initial.callback.finally(() => {
+            this.pendingCallbacks.delete(initial.callback);
+          });
         } else if (!runtime.initial) {
           this.store.update(runtime.key, {
             execution: {

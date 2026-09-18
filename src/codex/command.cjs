@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { absolutePath } = require('../shared/paths.cjs');
 
 function resolveCodex(config = {}, options = {}) {
   const platform = options.platform || process.platform;
@@ -10,6 +11,14 @@ function resolveCodex(config = {}, options = {}) {
   const io = options.fs || fs;
   const windows = platform === 'win32';
   const paths = windows ? path.win32 : path.posix;
+  const absolute = (value) => {
+    if (!windows) return paths.isAbsolute(value) ? value : null;
+    try {
+      return absolutePath(value, 'Codex 命令路径', platform);
+    } catch {
+      return null;
+    }
+  };
   const environment = (name) =>
     env[
       Object.keys(env).find((key) =>
@@ -29,11 +38,15 @@ function resolveCodex(config = {}, options = {}) {
     }
   };
   if (
-    config.command_args &&
+    config.command_args !== undefined &&
     (!Array.isArray(config.command_args) ||
-      config.command_args.some((arg) => typeof arg !== 'string'))
+      config.command_args.some(
+        (arg) => typeof arg !== 'string' || arg.includes('\0'),
+      ))
   )
     throw new Error('codex.command_args 必须是字符串数组。');
+  if (config.command !== undefined && typeof config.command !== 'string')
+    throw new Error('codex.command 必须是可执行文件路径或命令名。');
   const extra = config.command_args || [];
   const candidate = (file) => {
     if (!isFile(file)) return null;
@@ -67,9 +80,10 @@ function resolveCodex(config = {}, options = {}) {
         : [name];
     for (const directory of directories) {
       // Do not search the working directory via empty/relative PATH entries.
-      if (!paths.isAbsolute(directory)) continue;
+      const root = absolute(directory);
+      if (!root) continue;
       for (const basename of names) {
-        const result = candidate(paths.join(directory, basename));
+        const result = candidate(paths.join(root, basename));
         if (result) return result;
       }
     }
@@ -77,7 +91,7 @@ function resolveCodex(config = {}, options = {}) {
   };
   const directories = environment('PATH')
     .split(paths.delimiter)
-    .map((part) => part.trim().replace(/^"(.*)"$/, '$1'))
+    .map((part) => (windows ? part.trim().replace(/^"(.*)"$/, '$1') : part))
     .filter(Boolean);
   const explicit = config.command || environment('CODEX_BIN');
   if (explicit) {
@@ -85,8 +99,9 @@ function resolveCodex(config = {}, options = {}) {
       throw new Error(
         'codex.command / CODEX_BIN 必须是可执行文件路径或命令名。',
       );
-    const result = paths.isAbsolute(explicit)
-      ? candidate(explicit)
+    const file = absolute(explicit);
+    const result = file
+      ? candidate(file)
       : !/[\\/]/.test(explicit)
         ? search(explicit, directories)
         : null;

@@ -29,6 +29,8 @@ Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install
 
 ## Verification
 
+Windows / Linux 环境、统一 `npm run verify` 命令和 Jenkins 节点配置见 [platform-verification.md](./platform-verification.md)。
+
 Run `npm test` and `npm run lint`. Tests use Node's test runner, mocked TAPD responses, a fixture Codex process and temporary real Git worktrees. Include coverage for authenticated files/redirects, image-only requirements, failed startup, duplicate suppression and transition retry. Read-only live search/detail/task-preview is appropriate for smoke tests; selecting and executing a real requirement is a separate operation from integrating the runner.
 
 Web changes also require `npm run web:build` and `npm run test:web` (Windows Edge or Linux/macOS Playwright Chromium). Do not start real turns in an already merged requirement to validate the UI.

@@ -23,6 +23,7 @@
     "test": "node --test test/architecture/*.test.cjs test/unit/*.test.cjs test/integration/*.test.cjs",
     "test:web": "node test/browser/session.cjs && node test/browser/workspaces.cjs",
     "test:visual": "node test/browser/visual.cjs",
+    "verify": "npm run lint && npm test && npm run build && npm run test:web && npm run test:visual",
     "web:build": "vite build --config web/vite.config.mjs",
     "tapd:web": "npm run web:build && node src/cli/web.cjs",
     "build": "npm run web:build",

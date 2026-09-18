@@ -158,7 +158,9 @@ async function main() {
   });
   try {
     browser = await chromium.launch({
-      ...(process.platform === "win32" ? { channel: "msedge" } : {}),
+      ...(process.env.BROWSER_CHANNEL
+        ? { channel: process.env.BROWSER_CHANNEL }
+        : process.platform === "win32" ? { channel: "msedge" } : {}),
       headless: true,
     });
     const page = await browser.newPage({

@@ -3,6 +3,8 @@ const { spawn } = require('node:child_process');
 const readline = require('node:readline');
 const { resolveCodex } = require('./command.cjs');
 const { inspectExecutionCapabilities } = require('./capabilities.cjs');
+const { stopProcessTree } = require('./process-tree.cjs');
+const { childEnvironment } = require('./environment.cjs');
 
 class AppServer extends EventEmitter {
   constructor(config = {}) {
@@ -10,30 +12,35 @@ class AppServer extends EventEmitter {
     this.config = config;
     this.pending = new Map();
     this.nextId = 0;
+    this.closed = false;
+    this.closedChildren = new WeakSet();
+    this.stopping = new Set();
   }
 
   async connect() {
+    if (this.closed) throw new Error('Web CLI 服务已关闭。');
     if (this.connection) return this.connection;
-    this.connection = this.open();
+    const connection = this.open();
+    this.connection = connection;
     try {
-      return await this.connection;
+      return await connection;
     } catch (error) {
-      this.close();
-      this.connection = null;
+      if (this.connection === connection) {
+        this.disconnected(error);
+        if (this.connection === connection) this.connection = null;
+      }
       throw error;
     }
   }
 
   async open() {
     const { command, args } = this.validateCommand();
-    const env = { ...process.env };
-    delete env.CODEX_THREAD_ID;
-    for (const key of Object.keys(env))
-      if (key.startsWith('TAPD_')) delete env[key];
+    const env = childEnvironment();
     const child = spawn(command, [...args, 'app-server', '--stdio'], {
       env,
       shell: false,
       windowsHide: true,
+      detached: process.platform !== 'win32',
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     this.child = child;
@@ -41,10 +48,22 @@ class AppServer extends EventEmitter {
       if (this.child === child) this.disconnected(error);
     };
     child.on('error', disconnect);
-    child.once('close', () =>
-      disconnect(new Error('Codex 连接已关闭。重新连接后可继续原 session。')),
-    );
+    child.once('close', () => {
+      this.closedChildren.add(child);
+      disconnect(new Error('Codex 连接已关闭。重新连接后可继续原 session。'));
+    });
     child.stdin.on('error', disconnect);
+    child.stdout.on('error', disconnect);
+    child.stdout.once('end', () =>
+      disconnect(
+        new Error('Codex 输出连接已关闭。重新连接后可继续原 session。'),
+      ),
+    );
+    child.stdout.once('close', () =>
+      disconnect(
+        new Error('Codex 输出连接已关闭。重新连接后可继续原 session。'),
+      ),
+    );
     child.stderr.on('data', (chunk) =>
       this.emit('diagnostic', chunk.toString().slice(-4000)),
     );
@@ -56,6 +75,8 @@ class AppServer extends EventEmitter {
       } catch {
         return;
       }
+      if (!message || typeof message !== 'object' || Array.isArray(message))
+        return;
       if (message.method) {
         this.emit(
           message.id === undefined ? 'notification' : 'request',
@@ -79,10 +100,12 @@ class AppServer extends EventEmitter {
       },
       capabilities: { experimentalApi: false },
     });
+    if (this.child !== child) throw new Error('Codex 初始化连接已关闭。');
     this.write({ method: 'initialized', params: {} });
   }
 
   validateCommand() {
+    if (this.closed) throw new Error('Web CLI 服务已关闭。');
     return resolveCodex(this.config);
   }
 
@@ -134,12 +157,20 @@ class AppServer extends EventEmitter {
       pending.reject(error);
     }
     this.pending.clear();
-    child.kill();
+    const closed = this.closedChildren.has(child)
+      ? Promise.resolve()
+      : new Promise((resolve) => child.once('close', resolve));
+    const stopped = Promise.all([closed, stopProcessTree(child)]).finally(() =>
+      this.stopping.delete(stopped),
+    );
+    this.stopping.add(stopped);
     this.emit('disconnected', error);
   }
 
   close() {
+    this.closed = true;
     this.disconnected(new Error('Web CLI 服务已关闭。'));
+    return Promise.allSettled([...this.stopping]);
   }
 }
 

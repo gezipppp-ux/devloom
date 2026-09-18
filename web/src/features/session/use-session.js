@@ -88,6 +88,7 @@ export function useSession({
     expandedHistory = false;
     active.value = key;
     loading.value = true;
+    busy.value = false;
     error.value = "";
     notice.value = "";
     settingsBusy.value = false;
@@ -192,22 +193,25 @@ export function useSession({
   }
 
   async function action(route, data, after) {
+    if (busy.value || !active.value) return;
     const key = active.value;
+    const version = selection;
     busy.value = true;
     error.value = "";
     notice.value = "";
     try {
       await api(`/runs/${key}/${route}`, data);
-      if (key === active.value) await after?.();
+      if (version === selection) await after?.();
       onMutation();
     } catch (e) {
-      if (key === active.value) error.value = e.message;
+      if (version === selection) error.value = e.message;
     } finally {
-      busy.value = false;
+      if (version === selection) busy.value = false;
     }
   }
 
   async function older() {
+    if (busy.value || !session.value?.nextCursor) return;
     expandedHistory = true;
     busy.value = true;
     const key = active.value;
@@ -229,7 +233,7 @@ export function useSession({
     } catch (e) {
       if (version === selection) error.value = e.message;
     } finally {
-      busy.value = false;
+      if (version === selection) busy.value = false;
     }
   }
 

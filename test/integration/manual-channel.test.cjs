@@ -7,6 +7,7 @@ const { test } = require('node:test');
 const { EventEmitter } = require('node:events');
 const { temporary, png } = require('../support/helpers.cjs');
 const { createManualChannel } = require('../../src/channels/manual/adapter.cjs');
+const { ManualUploads } = require('../../src/channels/manual/uploads.cjs');
 const { titleSlug } = require('../../src/channels/manual/task-package.cjs');
 const { ChannelRegistry } = require('../../src/channels/registry.cjs');
 const { worktreePlan, createWorktree } = require('../../src/git/worktrees.cjs');
@@ -126,6 +127,23 @@ test('manual channel validates input, preserves full text and copies image-only 
   assert.equal(fs.existsSync(path.join(uploadDirectory, uploaded.id)), false);
   assert.equal(fs.existsSync(path.join(uploadDirectory, second.id)), true);
   assert.deepEqual(fs.readFileSync(prepared.task.images[0].path), png);
+});
+
+test('concurrent cleanup of expired uploads does not reject an unrelated new upload', (t) => {
+  const directory = temporary(t);
+  const uploads = new ManualUploads(directory);
+  const expired = uploads.upload(png);
+  const file = path.join(directory, expired.id);
+  const old = new Date(Date.now() - 25 * 60 * 60 * 1000);
+  fs.utimesSync(file, old, old);
+  const readDirectory = fs.readdirSync;
+  t.mock.method(fs, 'readdirSync', function (target, ...args) {
+    const names = readDirectory.call(this, target, ...args);
+    if (target === directory && fs.existsSync(file)) fs.unlinkSync(file);
+    return names;
+  });
+  const next = uploads.upload(png);
+  assert.deepEqual(uploads.read(next.id).bytes, png);
 });
 
 test('manual names preserve English, transliterate Chinese, isolate duplicates and keep custom names inside configured root', (t) => {

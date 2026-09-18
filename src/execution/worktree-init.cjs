@@ -3,28 +3,8 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 
 const { validateInitCommands } = require('../domain/init-commands.cjs');
-
-function stopTree(child) {
-  if (!child.pid) return;
-  if (process.platform === 'win32') {
-    const killer = spawn(
-      'taskkill.exe',
-      ['/pid', String(child.pid), '/t', '/f'],
-      {
-        windowsHide: true,
-        stdio: 'ignore',
-        shell: false,
-      },
-    );
-    killer.on('error', () => child.kill());
-  } else {
-    try {
-      process.kill(-child.pid, 'SIGKILL');
-    } catch {
-      child.kill('SIGKILL');
-    }
-  }
-}
+const { stopProcessTree } = require('../codex/process-tree.cjs');
+const { childEnvironment } = require('../codex/environment.cjs');
 
 async function initializeWorktree({
   commands,
@@ -71,11 +51,8 @@ async function initializeWorktree({
         log(`\n[${index + 1}/${commands.length}] ${entry.command}\n`);
         onUpdate(state, index);
         await new Promise((resolve, reject) => {
-          const env = { ...process.env };
+          const env = childEnvironment();
           env.INIT_CWD = cwd;
-          delete env.CODEX_THREAD_ID;
-          for (const key of Object.keys(env))
-            if (key.startsWith('TAPD_')) delete env[key];
           // Commands come only from local execution settings, never requirement text.
           const child = spawn(entry.command, {
             cwd,
@@ -91,7 +68,7 @@ async function initializeWorktree({
           let failure, publishTimer;
           const stop = (message) => {
             failure ||= new Error(message);
-            stopTree(child);
+            void stopProcessTree(child);
           };
           const interrupted = () => stop('初始化已停止。');
           const timeout = setTimeout(

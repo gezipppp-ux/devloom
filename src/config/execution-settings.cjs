@@ -5,7 +5,7 @@ const { repositoryGit } = require("../git/repository.cjs");
 const { defaultWorktreeRoot } = require("../git/worktrees.cjs");
 const { validateInitCommands } = require("../domain/init-commands.cjs");
 
-const { readOptional, writeConfig } = require("../storage/json-files.cjs");
+const { readOptional, writeConfig, updateConfig } = require("../storage/json-files.cjs");
 const { absolutePath, samePath } = require("../shared/paths.cjs");
 
 function settingsPath(configFile) {
@@ -65,7 +65,7 @@ function saveSettings(input, configFile) {
   git(["rev-parse", "--verify", "--end-of-options", `${baseRef}^{commit}`]);
   // Validate without creating a worktree or changing the selected Git branch.
   fs.mkdirSync(worktreeRoot, { recursive: true });
-  const realRoot = fs.realpathSync(worktreeRoot);
+  const realRoot = fs.realpathSync.native(worktreeRoot);
   if (samePath(realRoot, repository))
     throw new Error("worktree 根目录不能等于代码仓库根目录。");
   const probe = path.join(realRoot, `.runner-write-probe-${randomUUID()}`);
@@ -83,24 +83,24 @@ function saveSettings(input, configFile) {
     initCommands,
   };
   if (config.workspace) {
-    config.codex = {
-      ...config.codex,
-      repository,
-      worktree_root: realRoot,
-      base_ref: baseRef,
-      init_commands: initCommands,
-    };
-    delete config.codex.repositories;
-    delete config.codex.model;
-    delete config.codex.reasoning_effort;
-    writeConfig(file, config);
+    updateConfig(file, (current) => {
+      current.codex = {
+        ...current.codex,
+        repository,
+        worktree_root: realRoot,
+        base_ref: baseRef,
+        init_commands: input.initCommands === undefined
+          ? validateInitCommands(current.codex?.init_commands ?? [])
+          : initCommands,
+      };
+      delete current.codex.repositories;
+      delete current.codex.model;
+      delete current.codex.reasoning_effort;
+      return current;
+    });
     return readSettings(file);
   }
-  const temporary = `${file}.${randomUUID()}.tmp`;
-  fs.writeFileSync(temporary, JSON.stringify(settings, null, 2), {
-    mode: 0o600,
-  });
-  fs.renameSync(temporary, file);
+  writeConfig(file, settings);
   return { ...settings, platform: process.platform };
 }
 module.exports = {
