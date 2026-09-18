@@ -72,7 +72,12 @@ class SessionViews {
       initializationItem,
     );
     if (runtime) for (const [id, item] of runtime.items) items.set(id, item);
-    let readOnlyReason = this.worktreeReason(state);
+    const deletion = this.store.readWorktreeDeletion(key);
+    let readOnlyReason = deletion.worktreeRemoved || deletion.status === "deleted"
+      ? "Worktree 已删除，此会话仅供查看。"
+      : deletion.status === "deleting"
+        ? "Worktree 删除操作尚未完成，请在 Git 面板中检查。"
+      : this.worktreeReason(state);
     if (
       !readOnlyReason &&
       this.store.isExecutionLocked(key) &&

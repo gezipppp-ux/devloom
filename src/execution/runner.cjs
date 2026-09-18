@@ -4,6 +4,7 @@ const { createWorktree, worktreePlan } = require("../git/worktrees.cjs");
 const { repositoryFor } = require("../config/repository.cjs");
 const { startSession } = require("../codex/cli-session.cjs");
 const { executionConfig } = require("../config/execution-settings.cjs");
+const { assertWorktreeLocation } = require("../config/worktree-location.cjs");
 const { sourceFor, runKey } = require("../domain/run-identity.cjs");
 const { initializeWorktree } = require("./worktree-init.cjs");
 const { saveState, updateState } = require("../storage/run-state.cjs");
@@ -20,7 +21,6 @@ async function runExecution(
     initializeWorktree,
     ...dependencies,
   };
-  config = executionConfig(config, configFile);
   const source = sourceFor(channel.id, item);
   fs.mkdirSync(directory, { recursive: true });
   const lock = path.join(directory, ".lock");
@@ -69,6 +69,7 @@ async function runExecution(
       return state;
     }
     if (retry) throw new Error("No previous run exists for this requirement.");
+    config = executionConfig(config, configFile);
     channel.validate?.(config);
     const repository = services.repositoryFor(
       config,
@@ -127,6 +128,8 @@ async function runExecution(
     // Persist intent before any external side effect; an uncertain run is never redispatched.
     saveState(file, state);
     if (dependencies.signal?.aborted) throw new Error("任务准备已停止。");
+    if (config.workspace)
+      assertWorktreeLocation(config.codex.worktree_base_path, worktree.path);
     services.createWorktree(worktree);
     if (config.codex.init_commands.length) {
       state.execution = { status: "initializing" };

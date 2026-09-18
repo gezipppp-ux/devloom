@@ -14,6 +14,7 @@ const {
 const { listBaseRefs } = require("../git/repository.cjs");
 const { listModels } = require("../codex/models.cjs");
 const { permissionOptions } = require("../codex/permissions.cjs");
+const { readRepository, mutateRepository } = require("./repository-services.cjs");
 const {
   readTapdSettings,
   saveTapdSettings,
@@ -48,6 +49,12 @@ class WorkspaceServices {
 
   readSettings() {
     return readSettings(this.configFile);
+  }
+  readRepository() {
+    return readRepository(this.configFile);
+  }
+  mutateRepository(action, input) {
+    return mutateRepository(this.configFile, action, input);
   }
   saveSettings(input) {
     return saveSettings(input, this.configFile);

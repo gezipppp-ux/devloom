@@ -13,6 +13,8 @@ const { temporary, png, json } = require("../support/helpers.cjs");
 const { verifyLateImageUpload } = require("./session-images.cjs");
 const { verifyPromptSettings } = require("./prompt-settings.cjs");
 const { verifyWorkspaceNavigation } = require("./workspace-navigation.cjs");
+const { verifySystemSettings } = require("./system-settings.cjs");
+const { verifyGit } = require("./git.cjs");
 
 async function main() {
   const cleanup = [];
@@ -72,15 +74,21 @@ async function main() {
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(origin);
+    const bootstrap = await (await page.request.get(`${origin}/api/bootstrap`)).json();
+    const systemSettings = await page.request.post(`${origin}/api/system/settings`, {
+      headers: { origin, "x-tapd-token": bootstrap.token },
+      data: { worktreeBasePath: path.join(directory, "trees") },
+    });
+    assert.equal(systemSettings.status(), 200);
     await page.getByLabel("工作区名称", { exact: true }).fill("项目 A");
     await page.getByRole("button", { name: "创建工作区", exact: true }).click();
     await page.getByRole("heading", { name: "项目 A · 工作区设置" }).waitFor();
     await page.waitForFunction((platform) =>
       document.querySelector('input[aria-label="项目代码仓库"]')?.getAttribute('placeholder') ===
         (platform === 'win32' ? 'D:\\Projects\\my-project' : '/srv/repos/my-project'), process.platform);
-    assert.equal(await page.getByLabel("Worktree 根目录", { exact: true }).getAttribute("placeholder"),
-      process.platform === "win32" ? "E:\\CodexWorktrees" : "/srv/worktrees");
     const a = workspaces.list()[0];
+    await page.waitForFunction((value) =>
+      document.querySelector('input[aria-label="工作区 Worktree 目录"]')?.value === value, `w-${a.id.slice(0, 8)}`);
     const output = path.resolve("state", "browser");
     fs.mkdirSync(output, { recursive: true });
     for (const width of [390, 1440]) {
@@ -118,8 +126,8 @@ async function main() {
     assert.equal(workspaces.list().length, 1);
     await page.getByLabel("项目代码仓库", { exact: true }).fill(repository);
     await page
-      .getByLabel("Worktree 根目录", { exact: true })
-      .fill(path.join(directory, "trees"));
+      .getByLabel("工作区 Worktree 目录", { exact: true })
+      .fill("workspace-a");
     assert.equal(
       await page.getByLabel("Codex 模型", { exact: true }).count(),
       0,
@@ -575,9 +583,14 @@ async function main() {
     await verifyPromptSettings(browser, {
       origin, output, errors, workspaceA: promptWorkspaceA, workspaceB: promptWorkspaceB,
     });
+    const systemWorkspace = workspaces.save({ name: "Worktree 目录配置" });
+    await verifySystemSettings(browser, {
+      origin, output, errors, directory, repository, workspace: systemWorkspace,
+    });
+    await verifyGit(browser, { origin, output, errors, directory, workspaces });
     assert.deepEqual(errors, []);
     process.stdout.write(
-      "Workspace browser passed: create, switch, rename, reload, scoped settings, Cookie draft/check/failure, manual run, attachments, background execution and mobile.\n",
+      "Workspace browser passed: create, switch, rename, scoped settings, manual runs, attachments, Git fetch/fast-forward/divergence, unpublished/ahead/dirty status, confirmed worktree deletion, read-only history and mobile.\n",
     );
   } finally {
     await browser?.close();

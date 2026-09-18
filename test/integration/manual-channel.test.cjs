@@ -165,7 +165,7 @@ test('manual names preserve English, transliterate Chinese, isolate duplicates a
     'two\\names',
     '.git',
     '-option',
-    'a'.repeat(65),
+    'a'.repeat(17),
   ])
     assert.throws(() => validateWorktreeName(value));
   const item = { id: randomUUID(), workspace_id: 'local' };
@@ -177,7 +177,7 @@ test('manual names preserve English, transliterate Chinese, isolate duplicates a
   const plan = worktreePlan(repo, item, 'main', options);
   assert.match(
     path.basename(plan.path),
-    /^manual-xin-zeng-deng-lu-ru-kou-[a-f0-9]{12}$/,
+    /^xin-zeng-deng-lu-[a-f0-9]{12}$/,
   );
   assert.deepEqual(worktreePlan(repo, item, 'main', options), plan);
   assert.notEqual(
@@ -191,7 +191,7 @@ test('manual names preserve English, transliterate Chinese, isolate duplicates a
     ...options,
     name: 'login-entry',
   });
-  assert.equal(path.basename(custom.path), 'login-entry');
+  assert.match(path.basename(custom.path), /^login-entry-[a-f0-9]{12}$/);
   assert.equal(path.dirname(custom.path), path.dirname(plan.path));
   assert.equal(custom.branch, plan.branch);
   fs.mkdirSync(custom.path, { recursive: true });
@@ -199,11 +199,11 @@ test('manual names preserve English, transliterate Chinese, isolate duplicates a
   assert.throws(() =>
     worktreePlan(repo, item, 'main', { ...options, name: '../../escape' }),
   );
-  assert.equal(
+  assert.match(
     path.basename(
       worktreePlan(repo, { id: '2', workspace_id: '1' }, 'main', { root }).path,
     ),
-    'tapd-1-2',
+    /^tapd-[a-f0-9]{12}$/,
   );
 });
 
@@ -297,7 +297,7 @@ test(
     });
     await runtime.operation;
     const state = manager.store.read(started.key);
-    assert.equal(path.basename(state.worktree.path), 'login-entry');
+    assert.match(path.basename(state.worktree.path), /^login-entry-[a-f0-9]{12}$/);
     assert.equal(state.transition.status, 'skipped');
     assert.equal(git('branch', '--show-current'), 'main');
     const sent = client.calls.find((call) => call.method === 'turn/start')

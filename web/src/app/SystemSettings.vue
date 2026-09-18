@@ -1,5 +1,6 @@
 <script setup>
 import { BellOutlined, SettingOutlined } from "@antdv-next/icons";
+import WorktreeStorageSettings from "../features/settings/WorktreeStorageSettings.vue";
 
 const props = defineProps({
   notificationAvailable: Boolean,
@@ -21,14 +22,16 @@ function notificationLabel() {
     <slot name="workspace-rail" />
     <main class="system-settings-main">
       <div class="page-breadcrumb" aria-label="当前位置">
-        <span>系统</span><span aria-hidden="true">/</span><strong>系统设置</strong>
+        <span>系统</span><span aria-hidden="true">/</span
+        ><strong>系统设置</strong>
       </div>
       <section class="system-settings-panel">
         <div class="page-heading">
           <div class="eyebrow">SYSTEM</div>
           <h1><SettingOutlined aria-hidden="true" /> 系统设置</h1>
-          <p>管理此浏览器上的工作台提醒偏好。</p>
+          <p>管理服务器上的 Worktree 存储路径与此浏览器的提醒偏好。</p>
         </div>
+        <WorktreeStorageSettings />
         <section
           class="system-setting-row"
           aria-labelledby="desktop-notifications-title"
@@ -36,7 +39,8 @@ function notificationLabel() {
           <div>
             <h2 id="desktop-notifications-title">桌面通知</h2>
             <p>
-              Codex 返回未读结果时发送系统通知。此项默认开启；首次使用时浏览器会请求授权。
+              Codex
+              返回未读结果时发送系统通知。此项默认开启；首次使用时浏览器会请求授权。
             </p>
           </div>
           <button

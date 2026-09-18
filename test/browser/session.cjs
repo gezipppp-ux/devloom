@@ -585,7 +585,7 @@ async function main() {
       session_id: 'original',
       worktree: {
         path: directory,
-        branch: 'codex/tapd-1-2',
+        branch: 'codex/a1b2c3d4e5f6',
       },
       execution: { status: 'completed' },
       initialization: {
@@ -796,9 +796,20 @@ async function main() {
     await page.getByText('工作区初始化', { exact: true }).click();
     await page.getByText('初始化依赖安装完成', { exact: true }).waitFor();
     const input = page.getByRole('textbox', { name: '发送给 Codex 的指令' });
-    await input.fill('检查充值入口，并补充测试');
-    await page.getByRole('button', { name: '发送 ↑', exact: true }).click();
+    await input.fill('检查充值入口');
+    await input.press('Shift+Enter');
+    await input.pressSequentially('并补充测试');
+    assert.equal(await input.inputValue(), '检查充值入口\n并补充测试');
+    for (const guard of [{ isComposing: true }, { keyCode: 229 }, { repeat: true }])
+      await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', ...guard });
+    assert.equal(client.calls.filter((call) => call.method === 'turn/start').length, 0,
+      'newlines, IME confirmation and held Enter must not send');
+    assert.equal(await input.inputValue(), '检查充值入口\n并补充测试');
+    await input.press('Enter');
     await page.getByRole('button', { name: '■ 停止', exact: true }).waitFor();
+    const keyboardTurns = client.calls.filter((call) => call.method === 'turn/start');
+    assert.equal(keyboardTurns.length, 1, 'Enter sends exactly one message');
+    assert.equal(keyboardTurns[0].params.input[0].text, '检查充值入口\n并补充测试');
     client.notify('item/agentMessage/delta', {
       turnId: 'turn-1',
       itemId: 'reply',
@@ -815,7 +826,7 @@ async function main() {
       })
       .waitFor();
     await input.fill('保留现有支付流程');
-    await page.getByRole('button', { name: '补充指令 ↑', exact: true }).click();
+    await input.press('Enter');
     await page
       .getByText('补充指令已发送至当前一轮。', { exact: true })
       .waitFor();
@@ -1050,9 +1061,14 @@ async function main() {
       .waitFor();
     await page.getByRole('button', { name: '移除图片 1', exact: true }).click();
     assert.equal(await page.locator('.manual-images img').count(), 1);
-    await page
-      .getByRole('textbox', { name: 'worktree 目录名称（可选）', exact: true })
-      .fill('login-entry');
+    const worktreePrefix = page.getByRole('textbox', {
+      name: 'Worktree 目录前缀（可选）', exact: true,
+    });
+    assert.equal(await worktreePrefix.getAttribute('maxlength'), '16');
+    await worktreePrefix.fill('../outside');
+    assert.equal(await worktreePrefix.evaluate((element) => element.validity.patternMismatch), true);
+    await worktreePrefix.fill('login-entry');
+    assert.equal(await worktreePrefix.evaluate((element) => element.validity.valid), true);
     await page.screenshot({
       path: path.join(output, 'manual-desktop.png'),
       fullPage: true,

@@ -74,6 +74,7 @@ export function useSession({
       "sessionId",
       "requests",
       "error",
+      "readOnlyReason",
       "executionSettings",
       "activeExecutionSettings",
       "settingsPending",

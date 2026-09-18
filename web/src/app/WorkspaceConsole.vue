@@ -13,6 +13,8 @@ import { statusLabel } from "../shared/api/api.js";
 import { useWorkspaceConsole } from "./use-workspace-console.js";
 import StartTask from "../features/tasks/StartTask.vue";
 import SettingsPanel from "../features/settings/SettingsPanel.vue";
+import RepositoryGitPanel from "../features/settings/RepositoryGitPanel.vue";
+import SessionGitPanel from "../features/session/SessionGitPanel.vue";
 import SessionItem from "../features/session/SessionItem.vue";
 import SessionRequest from "../features/session/SessionRequest.vue";
 import SessionComposer from "../features/session/SessionComposer.vue";
@@ -23,6 +25,7 @@ import {
   SettingOutlined,
   ReloadOutlined,
   FolderOpenOutlined,
+  BranchesOutlined,
 } from "@antdv-next/icons";
 const RequirementDetails = defineAsyncComponent(
   () => import("../features/session/RequirementDetails.vue"),
@@ -32,9 +35,14 @@ const props = defineProps({
   workspaceName: { type: String, default: "" },
   notifyUnreadResult: { type: Function, default: () => {} },
 });
-const emit = defineEmits(["rename-workspace", "unread-results-change"]);
+const emit = defineEmits([
+  "rename-workspace",
+  "unread-results-change",
+  "system-settings",
+]);
 const settingsOpen = ref(false),
-  creating = ref(false);
+  creating = ref(false),
+  repositoryOpen = ref(false);
 const composer = reactive({ text: "" });
 const timeline = ref();
 const {
@@ -53,6 +61,7 @@ const {
   initializing,
   canSend,
   refreshList,
+  refreshSession,
   open,
   action,
   older,
@@ -70,6 +79,7 @@ const {
   onOpen: () => {
     settingsOpen.value = false;
     creating.value = false;
+    repositoryOpen.value = false;
     composer.text = "";
     imageDraft.reset();
   },
@@ -87,6 +97,7 @@ const {
     active.value === key &&
     !settingsOpen.value &&
     !creating.value &&
+    !repositoryOpen.value &&
     document.visibilityState === "visible",
   onUnreadResult: (result) => props.notifyUnreadResult(result),
 });
@@ -97,18 +108,21 @@ function readVisibleSession() {
     document.visibilityState === "visible" &&
     !settingsOpen.value &&
     !creating.value &&
+    !repositoryOpen.value &&
     active.value
   )
     markResultRead(active.value);
 }
 
-watch([settingsOpen, creating], readVisibleSession);
+watch([settingsOpen, creating, repositoryOpen], readVisibleSession);
 watch(
   unreadResultKeys,
   (keys) => emit("unread-results-change", keys.length > 0),
   { immediate: true },
 );
-onMounted(() => document.addEventListener("visibilitychange", readVisibleSession));
+onMounted(() =>
+  document.addEventListener("visibilitychange", readVisibleSession),
+);
 onUnmounted(() =>
   document.removeEventListener("visibilitychange", readVisibleSession),
 );
@@ -134,6 +148,14 @@ async function send() {
     });
   }
 }
+async function worktreeDeleted() {
+  if (session.value)
+    session.value.readOnlyReason =
+      "Worktree 文件与本地分支已删除，会话历史只读。";
+  await Promise.all([refreshSession(), refreshList()]).catch((e) => {
+    error.value = e.message;
+  });
+}
 </script>
 
 <template>
@@ -157,7 +179,10 @@ async function send() {
           :aria-pressed="settingsOpen"
           aria-label="工作区设置"
           title="工作区设置"
-          @click="settingsOpen = true"
+          @click="
+            settingsOpen = true;
+            repositoryOpen = false;
+          "
         >
           <SettingOutlined aria-hidden="true" />
         </button>
@@ -167,10 +192,27 @@ async function send() {
         class="settings-link"
         :class="{ active: settingsOpen }"
         :disabled="workspaceLoading"
-        @click="settingsOpen = true"
+        @click="
+          settingsOpen = true;
+          repositoryOpen = false;
+        "
       >
         <SettingOutlined aria-hidden="true" />
         执行设置
+      </button>
+      <button
+        type="button"
+        class="settings-link repository-link"
+        :class="{ active: repositoryOpen }"
+        :disabled="workspaceLoading"
+        :aria-pressed="repositoryOpen"
+        @click="
+          repositoryOpen = true;
+          settingsOpen = false;
+          creating = false;
+        "
+      >
+        <BranchesOutlined aria-hidden="true" />代码仓库
       </button>
       <button
         class="new-task"
@@ -178,13 +220,14 @@ async function send() {
         @click="
           creating = true;
           settingsOpen = false;
+          repositoryOpen = false;
         "
       >
         ＋ 从需求启动
       </button>
       <TaskList
         :runs="runs"
-        :active="!creating && !settingsOpen ? active : null"
+        :active="!creating && !settingsOpen && !repositoryOpen ? active : null"
         :unread-result-keys="unreadResultKeys"
         @open="open"
       />
@@ -202,15 +245,18 @@ async function send() {
         <strong>{{
           settingsOpen
             ? "工作区设置"
-            : creating
-              ? "新需求"
-              : session
-                ? "需求会话"
-                : "工作台"
+            : repositoryOpen
+              ? "代码仓库"
+              : creating
+                ? "新需求"
+                : session
+                  ? "需求会话"
+                  : "工作台"
         }}</strong>
       </div>
       <SettingsPanel
         v-if="settingsOpen"
+        @system-settings="emit('system-settings')"
         :workspace-name="props.workspaceName"
         @saved="reloadChannels"
         @rename-workspace="emit('rename-workspace')"
@@ -227,6 +273,7 @@ async function send() {
           }
         "
       />
+      <RepositoryGitPanel v-else-if="repositoryOpen" />
       <template v-else-if="session">
         <header class="session-header" aria-label="会话工具栏">
           <span
@@ -249,6 +296,23 @@ async function send() {
             <ReloadOutlined aria-hidden="true" /> 刷新
           </button>
         </header>
+        <SessionGitPanel
+          v-if="session.worktree?.path"
+          :key="session.key"
+          :task-key="session.key"
+          :worktree="session.worktree"
+          :deletion="session.worktreeDeletion"
+          :status="session.status"
+          :active="
+            Boolean(
+              running ||
+              initializing ||
+              ['preparing', 'starting'].includes(session.status) ||
+              session.requests?.length,
+            )
+          "
+          @deleted="worktreeDeleted"
+        />
         <details class="session-context">
           <summary>
             会话信息与需求资料
@@ -358,7 +422,11 @@ async function send() {
           @settings-change="updateExecutionSettings"
         />
       </template>
-      <section v-else class="empty-state" :aria-busy="workspaceLoading || loading">
+      <section
+        v-else
+        class="empty-state"
+        :aria-busy="workspaceLoading || loading"
+      >
         <div class="empty-mark"><FolderOpenOutlined aria-hidden="true" /></div>
         <div class="eyebrow">需求 × CODEX</div>
         <h1>
@@ -378,6 +446,7 @@ async function send() {
           @click="
             creating = true;
             settingsOpen = false;
+            repositoryOpen = false;
           "
         >
           从需求启动 →

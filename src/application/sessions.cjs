@@ -9,6 +9,7 @@ const {
 const { SessionEvents } = require("./session-events.cjs");
 const { SessionViews } = require("./session-views.cjs");
 const { SessionSettings } = require("./session-settings.cjs");
+const { SessionGit } = require("./session-git.cjs");
 const { runExecution } = require("../execution/runner.cjs");
 const { defaultChannels } = require("../channels/registry.cjs");
 const { executionConfig } = require("../config/execution-settings.cjs");
@@ -50,6 +51,7 @@ class WebSessions extends EventEmitter {
     this.operations = new Map();
     this.closing = false;
     this.worktreeReason = worktreeReason;
+    this.git = new SessionGit(this);
     this.settings = new SessionSettings({
       store: this.store,
       client: this.client,
@@ -109,6 +111,14 @@ class WebSessions extends EventEmitter {
     return this.views.history(key, cursor);
   }
 
+  readGit(key) {
+    return this.git.read(key);
+  }
+
+  deleteWorktree(key, input) {
+    return this.git.remove(key, input);
+  }
+
   view(key) {
     return this.views.view(key);
   }
@@ -130,6 +140,7 @@ class WebSessions extends EventEmitter {
   async attach(key) {
     this.assertOpen();
     const state = this.store.read(key);
+    this.assertWorktreeRetained(key);
     const reason = this.worktreeReason(state);
     if (reason) throw new Error(reason);
     const runtime = this.runtime(key, state.session_id);
@@ -250,6 +261,7 @@ class WebSessions extends EventEmitter {
   uploadMessageImage(key, bytes) {
     return this.exclusive(key, () => {
       const state = this.store.read(key);
+      this.assertWorktreeRetained(key);
       const reason = this.worktreeReason(state);
       if (reason) throw new Error(reason);
       const runtime = this.sessions.get(key);
@@ -502,7 +514,18 @@ class WebSessions extends EventEmitter {
   }
 
   updateExecutionSettings(key, input) {
-    return this.exclusive(key, () => this.settings.update(key, input));
+    return this.exclusive(key, () => {
+      this.assertWorktreeRetained(key);
+      return this.settings.update(key, input);
+    });
+  }
+
+  assertWorktreeRetained(key) {
+    const deletion = this.store.readWorktreeDeletion(key);
+    if (deletion.worktreeRemoved || deletion.status === "deleted")
+      throw new Error("Worktree 已删除，此会话仅供查看。");
+    if (deletion.status === "deleting")
+      throw new Error("Worktree 删除操作尚未完成，请在 Git 面板中检查。");
   }
 
   assertOpen() {

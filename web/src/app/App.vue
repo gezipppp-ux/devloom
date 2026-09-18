@@ -7,8 +7,15 @@ import SystemSettings from "./SystemSettings.vue";
 import WorkspacePicker from "../features/workspaces/WorkspacePicker.vue";
 
 const picker = ref();
-const { workspaces, current, ready, error, standalone, navigate, workspaceSaved } =
-  useWorkspaceSelection();
+const {
+  workspaces,
+  current,
+  ready,
+  error,
+  standalone,
+  navigate,
+  workspaceSaved,
+} = useWorkspaceSelection();
 const unreadWorkspaceIds = ref([]);
 const systemSettingsOpen = ref(false);
 const desktopNotifications = useDesktopNotifications();
@@ -56,6 +63,7 @@ function selectWorkspace(id) {
     :notify-unread-result="desktopNotifications.notifyResult"
     @rename-workspace="picker?.edit(true)"
     @unread-results-change="updateWorkspaceUnread"
+    @system-settings="systemSettingsOpen = true"
   >
     <template v-if="!standalone" #workspace-rail>
       <WorkspacePicker
@@ -84,5 +92,13 @@ function selectWorkspace(id) {
       @select="navigate"
       @saved="workspaceSaved"
     />
+    <button
+      v-if="ready && !standalone"
+      type="button"
+      class="welcome-system-settings"
+      @click="systemSettingsOpen = true"
+    >
+      系统设置
+    </button>
   </section>
 </template>

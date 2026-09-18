@@ -22,6 +22,8 @@ The approved workspace rail (prototype C) is the shared shell for every page. Th
 6. Expanded session context, requirement body/table/attachments, original prompt.
 7. Approval and clarification requests, empty, disconnected, read-only and error states.
 8. Desktop, tablet, narrow mobile and long content.
+9. System Worktree base directory settings and server directory picker: editable absolute path, drive/root selection, parent/child navigation, pagination, loading/error recovery, and responsive keyboard-accessible modal. Workspace settings show the relative directory and composed full path before saving.
+10. Workspace repository page and per-task Git status: fetch and fast-forward update feedback, unpublished/unknown states, and a destructive Worktree deletion dialog with branch-name confirmation, local-content acknowledgement, stale-state recovery and read-only history. No merge/conflict controls are exposed.
 
 ## Verification
 

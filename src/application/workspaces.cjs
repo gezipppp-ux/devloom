@@ -13,6 +13,7 @@ const {
 } = require("../channels/registry.cjs");
 const { WebSessions } = require("./sessions.cjs");
 const { validateWorkspaceIcon } = require("../domain/workspace-icon.cjs");
+const { defaultWorktreeDirectory } = require("../domain/worktree-directory.cjs");
 
 const WORKSPACE_ID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -89,7 +90,7 @@ class Workspaces {
         file,
         setWorkspace({
           version: 3,
-          codex: {},
+          codex: { worktree_directory: defaultWorktreeDirectory(key) },
           ...defaultChannelConfig(),
         }),
       );

@@ -146,6 +146,14 @@ class RunStore {
     return readOptional(path.join(this.dir(key), "execution-settings.json"));
   }
 
+  readWorktreeDeletion(key) {
+    return readOptional(path.join(this.dir(key), "worktree-deletion.json"));
+  }
+
+  writeWorktreeDeletion(key, value) {
+    writeConfig(path.join(this.dir(key), "worktree-deletion.json"), value);
+  }
+
   writeExecutionSettings(key, settings) {
     writeConfig(path.join(this.dir(key), "execution-settings.json"), settings);
   }

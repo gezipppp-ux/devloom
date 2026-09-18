@@ -125,6 +125,7 @@ async function main() {
             ]
           : [],
     readOnlyReason:
+      scenario === "git-deleted" ? "Worktree 文件与本地分支已删除，当前会话仅供查看。" :
       scenario === "readonly" ? "原 worktree 已不可用，当前会话仅供查看。" : "",
     codex: { model: "", reasoningEffort: "" },
     executionSettings: scenario === "pending" || scenario === "long-model"
@@ -135,8 +136,9 @@ async function main() {
       : null,
     settingsPending: scenario === "pending",
     worktree: {
-      path: "/srv/worktrees/customer-search",
-      branch: "codex/customer-search",
+      path: "/srv/wt/customer-system/customer-search-a1b2c3d4e5f6",
+      branch: "codex/a1b2c3d4e5f6",
+      deleted: scenario === "git-deleted",
     },
     transition: { status: "skipped" },
     requirement: {
@@ -191,14 +193,55 @@ async function main() {
         return send({ token: "visual-fixture", channels, workspace: "123456" });
       if (endpoint === "/runs")
         return send({ runs: scenario === "empty" ? [] : runs });
+      if (/^\/runs\/[^/]+\/git$/.test(endpoint))
+        return send({
+          path: "/srv/wt/customer-system/customer-search-a1b2c3d4e5f6",
+          branch: "codex/a1b2c3d4e5f6",
+          head: "a".repeat(40),
+          upstream: scenario === "git-unpublished" ? null : "origin/codex/a1b2c3d4e5f6",
+          unpublished: scenario === "git-unpublished",
+          ahead: scenario === "git-unpublished" ? null : 2,
+          behind: scenario === "git-unpublished" ? null : 1,
+          changedFiles: 3, untrackedFiles: 1, ignoredFiles: 2,
+          clean: false, statusToken: "visual-fixture",
+          canDelete: !["pending", "readonly", "git-deleted"].includes(scenario),
+          deleteReason: scenario === "readonly" ? "原 Worktree 已不可用。" : "",
+          deleted: scenario === "git-deleted",
+        });
+      if (endpoint === "/repository/git")
+        return send({
+          repository: "/srv/repos/customer-management-system",
+          baseRef: "main", branch: "main", upstream: "origin/main",
+          remote: "origin", remotes: [{ name: "origin" }, { name: "upstream" }],
+          canUpdate: true, updateReason: null,
+          lastFetchedAt: "2026-09-18T02:35:00Z",
+        });
       if (/^\/runs\/[^/]+$/.test(endpoint))
         return send(detail(endpoint.split("/").at(-1)));
       if (endpoint.endsWith("/images/0"))
         return route.fulfill({ contentType: "image/png", body: png });
+      if (endpoint === "/system/settings")
+        return send({ worktreeBasePath: "/srv/wt", platform: "linux" });
+      if (endpoint === "/system/directories") {
+        const directory = url.searchParams.get("path") || "/srv/wt";
+        return send({
+          path: directory,
+          parentPath: directory === "/" ? null : path.posix.dirname(directory),
+          roots: [{ name: "/", path: "/" }],
+          directories: [
+            { name: "客户管理系统", path: path.posix.join(directory, "客户管理系统") },
+            { name: "运营后台与共享服务的开发工作区目录", path: path.posix.join(directory, "运营后台与共享服务的开发工作区目录") },
+          ],
+          offset: 0,
+          hasMore: false,
+        });
+      }
       if (endpoint === "/settings")
         return send({
           repository: "/srv/repos/customer",
-          worktreeRoot: "/srv/worktrees",
+          worktreeRoot: "/srv/wt/customer-system",
+          worktreeBasePath: "/srv/wt",
+          worktreeDirectory: "customer-system",
           baseRef: "main",
           platform: "linux",
           initCommands: ["pnpm install", "pnpm build"],
@@ -259,7 +302,7 @@ async function main() {
       const issues = await page.evaluate(() => {
         const issues = [];
         for (const el of document.querySelectorAll(
-          "body, main, .sidebar, .form-section, .workspace-dialog[open]",
+          "body, main, .sidebar, .form-section, dialog[open]",
         )) {
           if (el.clientWidth && el.scrollWidth > el.clientWidth + 2)
             issues.push(el.className || el.tagName);
@@ -299,8 +342,35 @@ async function main() {
       if (mode !== "welcome" && mode !== "empty")
         await page.locator(".session-header").waitFor();
     }
+    async function captureSystemSettings(suffix) {
+      await page.getByRole("button", { name: "系统设置", exact: true }).click();
+      await page.getByRole("textbox", { name: "Worktree 基础目录", exact: true }).waitFor();
+      await capture("03-system-settings-" + suffix);
+      await page.getByRole("button", { name: "浏览服务器目录", exact: true }).click();
+      await page.getByRole("dialog", { name: "选择服务器目录", exact: true }).waitFor();
+      await page.getByRole("button", { name: "打开目录：客户管理系统", exact: true }).waitFor();
+      await capture("03-system-directory-picker-" + suffix);
+      await page.keyboard.press("Escape");
+    }
+    async function captureGitViews(suffix) {
+      await page.getByLabel("Worktree Git 状态", { exact: true }).click();
+      await page.getByRole("button", { name: "删除 Worktree…", exact: true }).waitFor();
+      await page.locator(".session-git").scrollIntoViewIfNeeded();
+      await capture("09-worktree-git-" + suffix);
+      await page.getByRole("button", { name: "删除 Worktree…", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "删除 Worktree", exact: true });
+      await dialog.getByRole("textbox", { name: "确认删除的本地分支", exact: true }).waitFor();
+      await dialog.getByRole("button", { name: "删除文件与本地分支", exact: true }).scrollIntoViewIfNeeded();
+      await capture("09-delete-worktree-" + suffix);
+      await page.keyboard.press("Escape");
+      await page.getByRole("button", { name: "代码仓库", exact: true }).click();
+      await page.getByRole("button", { name: "获取远端更新", exact: true }).waitFor();
+      await capture("09-repository-git-" + suffix);
+      await load();
+    }
     await load();
     await capture("05-session-desktop");
+    await captureGitViews("desktop");
     await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
     await page.getByRole('listbox', { name: '执行权限选项' }).waitFor();
     await capture('05-permission-menu-desktop');
@@ -357,6 +427,7 @@ async function main() {
     await page.getByRole("button", { name: "重命名", exact: true }).click();
     await capture("07-workspace-edit");
     await page.keyboard.press("Escape");
+    await captureSystemSettings("desktop");
     await load("approval");
     await page
       .getByRole("button", { name: "允许本次操作", exact: true })
@@ -372,6 +443,12 @@ async function main() {
     await capture("08-clarification");
     await load("readonly");
     await capture("08-readonly");
+    await load("git-deleted");
+    await page.getByLabel("Worktree Git 状态", { exact: true }).click();
+    await capture("09-worktree-deleted");
+    await load("git-unpublished");
+    await page.locator(".session-git").getByText("分支尚未发布", { exact: true }).waitFor();
+    await capture("09-worktree-unpublished");
     await load('pending');
     await page.getByText(/下一轮生效/).first().waitFor();
     await capture('08-settings-pending');
@@ -408,6 +485,7 @@ async function main() {
       await page.setViewportSize({ width, height: 1000 });
       await load();
       await capture("05-session-" + width);
+      await captureGitViews(width);
       const composer = page.locator('.composer-toolbar');
       await composer.scrollIntoViewIfNeeded();
       await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
@@ -432,6 +510,9 @@ async function main() {
         el.scrollTop = 0;
       });
       await capture("03-settings-" + width);
+      await captureSystemSettings(width);
+      await page.getByRole("button", { name: "切换工作区：客户管理系统", exact: true }).click();
+      await page.getByRole("button", { name: "工作区设置", exact: true }).click();
       await page.getByRole("link", { name: "提示词模板", exact: true }).click();
       await page.getByRole("textbox", { name: "提示词模板内容", exact: true }).waitFor();
       await capture("04-workspace-prompt-settings-" + width);

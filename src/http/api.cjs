@@ -6,6 +6,10 @@ const { sendFile } = require("./assets.cjs");
 async function serveApi(request, response, url, context, { token, events }) {
   const { sessions } = context;
   const services = new WorkspaceServices(context);
+  if (request.method === "GET" && url.pathname === "/api/repository/git")
+    return json(response, 200, services.readRepository());
+  if (request.method === "POST" && ["/api/repository/git/fetch", "/api/repository/git/update"].includes(url.pathname))
+    return json(response, 200, await services.mutateRepository(url.pathname.endsWith("/fetch") ? "fetch" : "update", await body(request)));
   if (request.method === "GET" && url.pathname === "/api/bootstrap")
     return json(response, 200, { token, ...services.describe() });
   if (request.method === "GET" && url.pathname === "/api/settings/tapd")
@@ -77,6 +81,10 @@ async function serveApi(request, response, url, context, { token, events }) {
   const route = /^\/api\/runs\/([^/]+)(?:\/(.*))?$/.exec(url.pathname);
   if (route && RUN_KEY.test(route[1])) {
     const [, key, action] = route;
+    if (request.method === "GET" && action === "git")
+      return json(response, 200, sessions.readGit(key));
+    if (request.method === "POST" && action === "worktree/delete")
+      return json(response, 200, await sessions.deleteWorktree(key, await body(request)));
     if (request.method === "GET" && !action)
       return json(response, 200, await sessions.view(key));
     if (request.method === "GET" && action === "history")

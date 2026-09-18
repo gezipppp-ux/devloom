@@ -69,6 +69,12 @@ function chooseImages(event) {
 function submit() {
   if (canSubmit.value) formRef.value?.submit();
 }
+function onEnter(event) {
+  // IME confirmation must keep its native behavior, including legacy keyCode 229.
+  if (event.shiftKey || event.isComposing || event.keyCode === 229) return;
+  event.preventDefault();
+  if (!event.repeat) submit();
+}
 function send() {
   if (canSubmit.value) emit("send");
 }
@@ -100,7 +106,7 @@ function send() {
           maxlength="60000"
           @input="emit('update:modelValue', $event.target.value)"
           @paste="paste"
-          @keydown.ctrl.enter.prevent="submit"
+          @keydown.enter="onEnter"
         />
       </a-form-item>
       <ul
@@ -273,6 +279,6 @@ function send() {
         刷新权限选项
       </button>
     </p>
-    <div class="composer-note">Ctrl + V 粘贴图片 · Ctrl + Enter 发送</div>
+    <div class="composer-note">Enter 发送 · Shift + Enter 换行 · Ctrl + V 粘贴图片</div>
   </section>
 </template>

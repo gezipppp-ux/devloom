@@ -159,6 +159,7 @@ export function useWorkspaceConsole({
     action,
     older,
     refreshList: tasks.refresh,
+    refreshSession: conversation.refresh,
     reloadChannels,
     metadataSaved,
   };

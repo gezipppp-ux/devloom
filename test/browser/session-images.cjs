@@ -159,8 +159,8 @@ async function verifySessionImages(browser, origin, manager, client, key, errors
     const pendingUpload = await captured;
     await input.fill('上传中仍可编辑文字');
     assert.equal(await send.isDisabled(), true);
-    await input.press('Control+Enter');
-    assert.equal(messageRequests.length, 0, 'Ctrl+Enter must not send while an image is uploading');
+    await input.press('Enter');
+    assert.equal(messageRequests.length, 0, 'Enter must not send while an image is uploading');
     assert.equal(await input.inputValue(), '上传中仍可编辑文字');
     await pendingUpload.continue();
     await imagesReady(page, 3);
@@ -197,7 +197,7 @@ async function verifySessionImages(browser, origin, manager, client, key, errors
     assert.equal(await input.inputValue(), '上传中仍可编辑文字');
     await imagesReady(page, 2);
     await input.fill('');
-    await send.click();
+    await input.press('Enter');
     await page.getByRole('button', { name: '■ 停止', exact: true }).waitFor();
     await page.waitForFunction(() => document.querySelectorAll('.composer-image-list img').length === 0);
     const first = client.calls.findLast((call) => call.method === 'turn/start');

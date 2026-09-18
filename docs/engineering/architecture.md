@@ -70,11 +70,17 @@ docs/engineering/  # 行为契约与架构规则
 | `application/sessions.cjs` | 启动、继续、停止、操作互斥及生命周期协调 |
 | `application/session-events.cjs` | Codex 事件、审批与执行完成状态处理 |
 | `application/session-settings.cjs` | 会话执行设置校验、当前轮与下一轮选择、变更事件 |
+| `application/session-git.cjs`、`repository-services.cjs` | Git 状态及操作用例、运行与所有权门禁、删除进度和只读会话 |
+| `git/repository-operations.cjs`、`task-operations.cjs` | 远端获取/快进更新、任务 Git 状态、Worktree 身份校验和目录/本地分支删除 |
+| `storage/git-operations.cjs` | 按共享 Git 目录的操作互斥及最近获取记录；任务删除进度由 RunStore 保存 |
 | `codex/models.cjs`、`permissions.cjs`、`capabilities.cjs` | 模型发现与默认值解析、权限 RPC 映射、原生协议能力检查 |
 | `application/session-views.cjs`、`session-presenter.cjs` | 历史/快照查询、公开返回结构和图片 URL |
 | `storage/run-store.cjs` | 原始记录、快照、元数据、文件锁与安全附件路径；不做 Git 校验或拼 HTTP URL |
 | `storage/message-images.cjs` | 按任务保存会话图片、校验文件完整性并匹配历史图片；公开图片 URL 由应用 presenter 生成 |
 | `application/workspace-services.cjs` | 组合工作区配置、模型和渠道服务，供 HTTP 调用 |
+| `application/system-services.cjs` | 组合系统 Worktree 基础目录设置及服务端目录浏览，供全局 HTTP 路由调用 |
+| `config/system-settings.cjs`、`worktree-location.cjs` | 系统目录配置与写权限校验、工作区相对路径的实际落盘边界校验 |
+| `storage/directories.cjs`、`domain/worktree-directory.cjs` | 分别负责服务端目录枚举及不含 I/O 的相对目录校验与路径拼接 |
 | `http/server.cjs`、`api.cjs` | 同源保护、工作区路由和 HTTP 输入/响应映射 |
 | `http/messages.cjs`、`assets.cjs`、`events.cjs` | 请求体/响应编码、静态与附件传输、SSE 订阅及清理 |
 

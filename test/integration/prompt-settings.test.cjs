@@ -15,7 +15,7 @@ const {
   savePromptSettings,
 } = require("../../src/config/prompt-settings.cjs");
 const { saveTapdSettings } = require("../../src/channels/tapd/settings.cjs");
-const { readOptional } = require("../../src/storage/json-files.cjs");
+const { readOptional, writeConfig } = require("../../src/storage/json-files.cjs");
 
 const manualTemplate = "自定义手动模板\n{{title}}\n{{content}}\n{{images}}";
 const tapdTemplate = "自定义 TAPD 模板\n{{title}}\n{{content}}\n{{supplement}}\n{{images}}";
@@ -30,6 +30,10 @@ function workspaceCatalog(directory) {
 
 function fixture(t) {
   const directory = temporary(t);
+  writeConfig(path.join(directory, "system-settings.json"), {
+    version: 1,
+    worktreeBasePath: path.join(directory, "trees"),
+  });
   const workspaces = workspaceCatalog(path.join(directory, "workspaces"));
   const a = workspaces.save({ name: "模板项目 A" });
   const b = workspaces.save({ name: "模板项目 B" });
@@ -76,7 +80,7 @@ function configureRepository(directory, configFile) {
   );
   const settings = {
     repository,
-    worktreeRoot: path.join(directory, "trees"),
+    worktreeDirectory: "project",
     baseRef: "main",
     initCommands: [],
   };

@@ -9,4 +9,5 @@ work/
 __pycache__/
 *.pyc
 /workspaces/
+/system-settings.json
 tmp/

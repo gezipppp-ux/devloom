@@ -35,6 +35,7 @@ class SessionPresenter {
       updatedAt: state.updated_at,
       imageCount: state.image_count,
       worktree: state.worktree,
+      worktreeDeletion: this.store.readWorktreeDeletion(key),
     };
   }
 

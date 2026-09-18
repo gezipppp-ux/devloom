@@ -323,7 +323,7 @@ test('full pipeline uses one real Git worktree, image attachment and simulated C
   const final = JSON.parse(fs.readFileSync(path.join(directory, 'final.md')));
   assert.equal(final.cwd, state.worktree.path);
   assert.ok(final.args.includes('--image'));
-  assert.match(state.worktree.branch, /^codex\/tapd-/);
+  assert.match(state.worktree.branch, /^codex\/[a-f0-9]{12}$/);
   const otherPath = path.join(
     temporaryRoot,
     'changed-worktree-root',

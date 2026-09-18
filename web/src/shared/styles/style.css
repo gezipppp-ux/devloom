@@ -264,6 +264,141 @@ pre {
 .system-setting-row > button {
   flex-shrink: 0;
 }
+.storage-field-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.directory-path-row {
+  display: flex;
+  gap: 8px;
+}
+.directory-path-row > input {
+  flex: 1;
+}
+.directory-path-row > button {
+  flex-shrink: 0;
+}
+.worktree-path-example,
+.worktree-path-preview {
+  padding: 16px;
+  margin-bottom: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--canvas);
+}
+.worktree-path-example strong,
+.worktree-path-preview > span {
+  display: block;
+  font-size: 12px;
+  font-weight: 550;
+}
+.worktree-path-example code,
+.worktree-path-preview output,
+.worktree-base-summary code {
+  display: block;
+  margin-top: 8px;
+  font: 12px/1.8 var(--font-code);
+  overflow-wrap: anywhere;
+}
+.worktree-path-example p,
+.worktree-path-preview p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.worktree-base-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.worktree-base-summary > div {
+  min-width: 0;
+}
+.worktree-base-summary > div > span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.worktree-base-summary > button {
+  flex-shrink: 0;
+}
+.welcome-system-settings {
+  margin-top: 16px;
+  width: 100%;
+}
+.workspace-dialog.directory-picker {
+  width: min(600px, calc(100vw - 32px));
+}
+.directory-roots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
+.directory-roots > button {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.directory-current {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 12px;
+  background: var(--canvas);
+  border-radius: var(--radius-control);
+}
+.directory-current > span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.directory-current > code {
+  grid-column: 1;
+  font: 12px/1.8 var(--font-code);
+  overflow-wrap: anywhere;
+}
+.directory-current > button {
+  grid-row: 1 / 3;
+  grid-column: 2;
+}
+.directory-list {
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.directory-list li + li {
+  margin-top: 4px;
+}
+.directory-list button {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 10px 12px;
+  text-align: left;
+  border-color: transparent;
+}
+.directory-list button > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.directory-list .anticon {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.directory-empty {
+  padding: 16px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.directory-load-more {
+  width: 100%;
+  margin-top: 12px;
+}
 .workspace-rail {
   display: flex;
   flex-direction: column;
@@ -344,10 +479,11 @@ pre {
 }
 .workspace-unread-result {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 8px;
-  height: 8px;
+  z-index: 1;
+  top: -5px;
+  right: -5px;
+  width: 14px;
+  height: 14px;
   border: 2px solid var(--rail);
   border-radius: 50%;
   background: var(--danger);
@@ -882,6 +1018,143 @@ main {
 .config-badge.configured {
   background: var(--success-soft);
   color: var(--success);
+}
+
+/* Git status, repository operations and deletion confirmation */
+.repository-link {
+  flex-shrink: 0;
+}
+.git-facts {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 12px 16px;
+  margin: 0 0 20px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.git-facts dt {
+  color: var(--muted);
+}
+.git-facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.git-facts code {
+  font-family: var(--font-code);
+  font-size: 12px;
+}
+.git-field-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.git-hint {
+  margin: 8px 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.git-repository-actions,
+.git-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.git-feedback {
+  padding: 12px 16px;
+  margin: 16px 0;
+  border-radius: var(--radius-control);
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.git-feedback p {
+  margin-bottom: 8px;
+}
+.git-feedback p:last-child {
+  margin-bottom: 0;
+}
+.session-git {
+  flex-shrink: 0;
+  padding: 0 32px;
+  max-height: 50vh;
+  overflow: auto;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.session-git > summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 48px;
+  padding: 8px 0;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+}
+.session-git > summary::-webkit-details-marker {
+  display: none;
+}
+.session-git > summary::after {
+  content: "展开";
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+.session-git[open] > summary::after {
+  content: "收起";
+}
+.git-summary-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  margin-right: 4px;
+}
+.git-state-chip {
+  padding: 3px 8px;
+  border-radius: 5px;
+  color: var(--muted);
+  background: var(--canvas);
+  font-size: 11px;
+}
+.git-stale {
+  color: var(--warning);
+  font-size: 11px;
+}
+.session-git-body {
+  padding: 12px 0 20px;
+}
+.git-panel-actions .git-delete-button {
+  margin-left: auto;
+  color: var(--danger);
+}
+.danger-button {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--surface);
+}
+.danger-button:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+.delete-worktree-dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+.workspace-dialog .git-risk-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 16px 0 0;
+  color: var(--danger);
+  line-height: 1.8;
+}
+.git-risk-confirm input {
+  margin-top: 4px;
 }
 
 /* Conversation, artifacts and decisions */
@@ -1763,6 +2036,7 @@ main {
   .page-breadcrumb,
   .session-header,
   .session-context,
+  .session-git,
   .banner {
     padding-left: 24px;
     padding-right: 24px;
@@ -1851,6 +2125,11 @@ main {
     flex-direction: column;
     gap: 16px;
     padding: 20px;
+  }
+  .directory-path-row,
+  .worktree-base-summary {
+    align-items: stretch;
+    flex-direction: column;
   }
   .brand {
     grid-column: 1 / -1;
@@ -1954,6 +2233,15 @@ main {
   .session-context {
     padding-inline: 20px;
     max-height: 65dvh;
+  }
+  .session-git {
+    padding-inline: 20px;
+    max-height: 65dvh;
+  }
+  .git-facts {
+    grid-template-columns: 80px minmax(0, 1fr);
+    gap: 10px;
+    font-size: 12px;
   }
   .session-context dl {
     grid-template-columns: 74px minmax(0, 1fr);

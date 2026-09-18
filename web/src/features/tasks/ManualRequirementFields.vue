@@ -108,18 +108,19 @@ function remove(index) {
         </figure>
       </div>
     </a-form-item>
-    <a-form-item label="worktree 目录名称（可选）" name="worktreeName">
+    <a-form-item label="Worktree 目录前缀（可选）" name="worktreeName">
       <input
         :value="form.worktreeName"
         @input="emit('change', { worktreeName: $event.target.value })"
-        aria-label="worktree 目录名称（可选）"
-        maxlength="64"
-        pattern="[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}"
+        aria-label="Worktree 目录前缀（可选）"
+        aria-describedby="worktree-prefix-hint"
+        maxlength="16"
+        pattern="[a-zA-Z0-9][a-zA-Z0-9_\-]{0,15}"
         :disabled="disabled"
         placeholder="例如 login-entry；留空按标题自动生成"
       />
-      <p class="field-hint">
-        留空按标题生成。支持英文、数字、短横线和下划线；已有同名目录时会报错。
+      <p id="worktree-prefix-hint" class="field-hint">
+        最多 16 位英文字母、数字、短横线或下划线，以字母或数字开头。留空时按标题生成短前缀，中文转拼音；系统自动追加 12 位短标识，例如 login-entry-a1b2c3d4e5f6。
       </p>
     </a-form-item>
   </div>

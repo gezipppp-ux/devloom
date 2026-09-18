@@ -1,8 +1,9 @@
 const path = require("node:path");
 const http = require("node:http");
 const { randomBytes } = require("node:crypto");
-const { root } = require("../config/runtime.cjs");
+const { root, dataRoot } = require("../config/runtime.cjs");
 const { Workspaces } = require("../application/workspaces.cjs");
+const { SystemServices } = require("../application/system-services.cjs");
 const { json, body } = require("./messages.cjs");
 const { serveApi } = require("./api.cjs");
 const { serveStatic } = require("./assets.cjs");
@@ -26,6 +27,9 @@ function createWebServer({
   validateListenHost(host);
   const token = randomBytes(32).toString("hex");
   const events = createEventStream();
+  const systemServices = new SystemServices(
+    workspaces.directory ? path.dirname(workspaces.directory) : dataRoot,
+  );
   let closing = false;
   let closePromise;
   const server = http.createServer(async (request, response) => {
@@ -62,6 +66,18 @@ function createWebServer({
         if (request.method === "POST")
           return json(response, 201, workspaces.save(await body(request)));
       }
+      if (url.pathname === "/api/system/settings") {
+        if (request.method === "GET")
+          return json(response, 200, systemServices.readSettings());
+        if (request.method === "POST")
+          return json(response, 200, systemServices.saveSettings(await body(request)));
+      }
+      if (request.method === "GET" && url.pathname === "/api/system/directories")
+        return json(response, 200, await systemServices.listDirectories({
+          path: url.searchParams.get("path"),
+          offset: url.searchParams.get("offset"),
+          limit: url.searchParams.get("limit"),
+        }));
       const scoped = /^\/api\/workspaces\/([^/]+)(\/.*)?$/.exec(url.pathname);
       let context;
       if (scoped) {

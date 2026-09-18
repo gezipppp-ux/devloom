@@ -11,6 +11,9 @@ const { WebSessions } = require("../../src/application/sessions.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { writeConfig, readOptional } = require("../../src/storage/json-files.cjs");
 const { readSettings, saveSettings } = require("../../src/config/execution-settings.cjs");
+const { saveSystemSettings } = require("../../src/config/system-settings.cjs");
+const { worktreePlan } = require("../../src/git/worktrees.cjs");
+const { sourceFor } = require("../../src/domain/run-identity.cjs");
 const { runsPath } = require("../../src/config/runtime.cjs");
 const {
   saveTapdSettings,
@@ -20,6 +23,10 @@ const {
 
 function fixtures(t) {
   const directory = temporary(t);
+  writeConfig(path.join(directory, "system-settings.json"), {
+    version: 1,
+    worktreeBasePath: path.join(directory, "trees"),
+  });
   const workspaces = new Workspaces({
     directory: path.join(directory, "workspaces"),
     createManager: (options) =>
@@ -51,7 +58,7 @@ function fixtures(t) {
   );
   const settings = {
     repository,
-    worktreeRoot: path.join(directory, "trees"),
+    worktreeDirectory: "project",
     baseRef: "main",
     initCommands: [],
   };
@@ -104,6 +111,96 @@ test("workspaces isolate settings, credentials and restart state; names never be
     path.join(directory, "workspaces", a.id, "runs"),
   );
   assert.equal(fs.existsSync(path.join(directory, "runner.local.json")), false);
+});
+
+test("workspace directories compose system base paths and validate before changing configuration", async (t) => {
+  const { workspaces, a, b, settings, directory } = fixtures(t);
+  t.after(() => workspaces.close());
+  const file = workspaces.configFile(a.id);
+  const initial = readSettings(file);
+  assert.equal(initial.worktreeDirectory, `w-${a.id.slice(0, 8)}`);
+  assert.equal(initial.worktreePathMode, "relative");
+  assert.equal(initial.worktreeRoot, path.join(directory, "trees", `w-${a.id.slice(0, 8)}`));
+  assert.equal(readSettings(workspaces.configFile(b.id)).worktreeDirectory, `w-${b.id.slice(0, 8)}`);
+  const saved = saveSettings({ ...settings, worktreeDirectory: "team\\项目 123" }, file);
+  assert.equal(saved.worktreeDirectory, "team/项目 123");
+  assert.equal(saved.worktreeRoot, path.join(directory, "trees", "team", "项目 123"));
+  assert.equal(readOptional(file).codex.worktree_directory, "team/项目 123");
+  assert.equal(readOptional(file).codex.worktree_root, undefined);
+  const before = fs.readFileSync(file, "utf8");
+  for (const worktreeDirectory of ["", "..", "../outside", "a/../b", "/outside", "C:\\outside", "C:outside", "a/NUL", "a//b", "a "])
+    assert.throws(() => saveSettings({ ...settings, worktreeDirectory }, file), /目录/);
+  assert.throws(() => saveSettings({ ...settings, worktreeRoot: path.join(directory, "old-root") }, file), /仅允许/);
+  assert.equal(fs.readFileSync(file, "utf8"), before);
+  const changedBase = path.join(directory, "new-base");
+  saveSystemSettings({ worktreeBasePath: changedBase }, directory);
+  assert.equal(readSettings(file).worktreeRoot, path.join(changedBase, "team", "项目 123"));
+  assert.equal(readSettings(workspaces.configFile(b.id)).worktreeRoot, path.join(changedBase, `w-${b.id.slice(0, 8)}`));
+  assert.equal(fs.readFileSync(file, "utf8"), before);
+});
+
+test("workspace settings and full execution paths reject symlink escapes without creating outside worktrees", async (t) => {
+  const { workspaces, a, settings, directory } = fixtures(t);
+  t.after(() => workspaces.close());
+  const file = workspaces.configFile(a.id);
+  const base = path.join(directory, "trees");
+  const outside = path.join(directory, "outside");
+  fs.mkdirSync(base);
+  fs.mkdirSync(outside);
+  fs.symlinkSync(outside, path.join(base, "escape"), process.platform === "win32" ? "junction" : "dir");
+  const before = fs.readFileSync(file, "utf8");
+  assert.throws(() => saveSettings({ ...settings, worktreeDirectory: "escape/new-directory" }, file), /符号链接/);
+  assert.equal(fs.existsSync(path.join(outside, "new-directory")), false);
+  assert.equal(fs.readFileSync(file, "utf8"), before);
+
+  const saved = saveSettings(settings, file);
+  const context = workspaces.get(a.id);
+  const input = { channel: "manual", requestId: randomUUID(), title: "拒绝越界", content: "模拟需求" };
+  const item = { id: input.requestId, workspace_id: "local" };
+  const plan = worktreePlan(settings.repository, item, "main", {
+    root: saved.worktreeRoot,
+    source: sourceFor("manual", item),
+    workspaceId: a.id,
+    name: "escape-task",
+  });
+  fs.symlinkSync(outside, plan.path, process.platform === "win32" ? "junction" : "dir");
+  const { key } = await context.sessions.start({ ...input, worktreeName: "escape-task" });
+  await context.sessions.sessions.get(key).operation;
+  assert.equal(context.sessions.store.read(key).execution.status, "failed");
+  assert.match(context.sessions.store.read(key).execution.error, /符号链接/);
+  assert.equal(context.sessions.client.calls.some((call) => call.method === "thread/start"), false);
+  assert.deepEqual(fs.readdirSync(outside), []);
+});
+
+test("new tasks use changed system bases while recorded sessions retain their original paths", async (t) => {
+  const { workspaces, a, settings, directory } = fixtures(t);
+  t.after(() => workspaces.close());
+  const context = workspaces.get(a.id);
+  saveSettings({ ...settings, worktreeDirectory: "123" }, context.configFile);
+  const manager = context.sessions;
+  const start = async () => {
+    const { key } = await manager.start({ channel: "manual", requestId: randomUUID(), title: "路径保存", content: "模拟需求" });
+    for (let attempt = 0; !manager.sessions.get(key).turnId && attempt < 100; attempt++)
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.ok(manager.sessions.get(key).turnId, manager.sessions.get(key).error);
+    await manager.interrupt(key);
+    await manager.sessions.get(key).operation;
+    return { key, state: manager.store.read(key) };
+  };
+  const original = await start();
+  assert.ok(original.state.worktree.path.startsWith(path.join(directory, "trees", "123") + path.sep));
+  const changedBase = path.join(directory, "another-base");
+  saveSystemSettings({ worktreeBasePath: changedBase }, directory);
+  const created = await start();
+  assert.ok(created.state.worktree.path.startsWith(path.join(changedBase, "123") + path.sep));
+  assert.notEqual(created.state.worktree.path, original.state.worktree.path);
+  manager.client.close();
+  await manager.send(original.key, "继续原来的任务");
+  const resumed = manager.client.calls.filter((call) => call.method === "thread/resume").at(-1).params;
+  assert.equal(resumed.cwd, original.state.worktree.path);
+  assert.equal(resumed.threadId, original.state.session_id);
+  assert.equal(manager.store.read(original.key).worktree.path, original.state.worktree.path);
+  await manager.interrupt(original.key);
 });
 
 test("Cookie maintenance preserves secrets, checks drafts without saving, and sanitizes failures", async (t) => {

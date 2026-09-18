@@ -63,7 +63,7 @@ async function save() {
 }
 defineExpose({ edit });
 onMounted(() => {
-  if (!props.workspaces.length) edit();
+  if (!props.workspaces.length && !props.rail) edit();
 });
 </script>
 
@@ -80,16 +80,14 @@ onMounted(() => {
         type="button"
         class="workspace-icon"
         :class="{ active: current?.id === entry.id }"
-        :aria-label="
-          `切换工作区：${entry.name}${
-            unreadWorkspaceIds.includes(entry.id) ? '，有未读 Codex 回复' : ''
-          }`
-        "
+        :aria-label="`切换工作区：${entry.name}${
+          unreadWorkspaceIds.includes(entry.id) ? '，有未读 Codex 回复' : ''
+        }`"
         :aria-current="current?.id === entry.id ? 'true' : undefined"
         :title="entry.name"
         @click="
           (current?.id !== entry.id || systemSettingsOpen) &&
-            emit('select', entry.id)
+          emit('select', entry.id)
         "
       >
         <component
