@@ -17,12 +17,14 @@ test('requirement snapshots preserve complete body/prompt and support legacy tas
   };
   const description = '<p>' + '完整正文'.repeat(30000) + '正文末尾</p>';
   const prompt = '完整提示词'.repeat(30000) + '提示词末尾';
+  const supplementaryInstructions = '补充说明与指导意见\n'.repeat(5000);
   const snapshot = {
     generated_at: '2026-09-17T01:00:00Z',
     workitem: {
       id: '2',
       title: '需求标题',
       description,
+      supplementary_instructions: supplementaryInstructions,
       detail_url: 'https://example.com/story/2',
     },
     codex_prompt: prompt,
@@ -41,6 +43,7 @@ test('requirement snapshots preserve complete body/prompt and support legacy tas
   const result = presenter.requirement(key, state);
   assert.equal(result.description, description);
   assert.equal(result.prompt, prompt);
+  assert.equal(result.supplementaryInstructions, supplementaryInstructions);
   assert.equal(result.capturedAt, snapshot.generated_at);
   assert.deepEqual(result.images, [
     {
@@ -63,6 +66,10 @@ test('requirement snapshots preserve complete body/prompt and support legacy tas
     }),
   );
   assert.equal(presenter.requirement(key, state).markdown, '# Markdown 正文');
+  assert.equal(
+    presenter.requirement(key, state).supplementaryInstructions,
+    supplementaryInstructions,
+  );
 });
 
 test('missing or corrupt snapshot falls back to saved requirement without failing the session', (t) => {
@@ -79,4 +86,10 @@ test('missing or corrupt snapshot falls back to saved requirement without failin
   fs.writeFileSync(path.join(store.dir(key), 'requirement.json'), 'bad json');
   assert.match(presenter.requirement(key, state).warning, /无法读取/);
   assert.deepEqual(presenter.requirement(key, state).images, []);
+  assert.equal(presenter.requirement(key, state).supplementaryInstructions, '');
+  state.workitem.supplementary_instructions = '保留记录中的补充说明\n第二行';
+  assert.equal(
+    presenter.requirement(key, state).supplementaryInstructions,
+    state.workitem.supplementary_instructions,
+  );
 });

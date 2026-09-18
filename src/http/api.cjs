@@ -12,6 +12,10 @@ async function serveApi(request, response, url, context, { token, events }) {
     return json(response, 200, services.readTapdSettings());
   if (request.method === "POST" && url.pathname === "/api/settings/tapd")
     return json(response, 200, services.saveTapdSettings(await body(request)));
+  if (request.method === "GET" && url.pathname === "/api/settings/prompts")
+    return json(response, 200, services.readPromptSettings());
+  if (request.method === "POST" && url.pathname === "/api/settings/prompts")
+    return json(response, 200, services.savePromptSettings(await body(request)));
   if (request.method === "POST" && url.pathname === "/api/settings/tapd/check")
     return json(
       response,

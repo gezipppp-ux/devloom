@@ -1,0 +1,332 @@
+/* global document, window */
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const net = require("node:net");
+const os = require("node:os");
+const path = require("node:path");
+const { fork, execFileSync } = require("node:child_process");
+const { chromium } = require("playwright");
+
+const root = path.resolve(__dirname, "../..");
+
+async function availablePort(requestedPort = 0) {
+  const server = net.createServer();
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(requestedPort, "127.0.0.1", resolve);
+  });
+  const port = server.address().port;
+  await new Promise((resolve) => server.close(resolve));
+  return port;
+}
+
+async function until(check, message, timeout = 30000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if (await check()) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(message);
+}
+
+function alive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (error.code === "ESRCH") return false;
+    throw error;
+  }
+}
+
+function createFixture(directory) {
+  // Copy only source files: never read credentials, runs, uploads or dist.
+  for (const name of ["src", "shared"])
+    fs.cpSync(path.join(root, name), path.join(directory, name), {
+      recursive: true,
+    });
+  fs.cpSync(path.join(root, "web", "src"), path.join(directory, "web", "src"), {
+    recursive: true,
+  });
+  fs.copyFileSync(
+    path.join(root, "package.json"),
+    path.join(directory, "package.json"),
+  );
+  const dependencies = path.join(root, "node_modules");
+  fs.symlinkSync(
+    dependencies,
+    path.join(directory, "node_modules"),
+    "junction",
+  );
+  const config = fs.readFileSync(
+    path.join(root, "web", "vite.config.mjs"),
+    "utf8",
+  );
+  fs.writeFileSync(
+    path.join(directory, "web", "vite.config.mjs"),
+    config.replace(
+      "defineConfig({",
+      `defineConfig({
+  cacheDir: fileURLToPath(new URL('./.vite/', import.meta.url)),
+  server: { fs: { allow: [${JSON.stringify(dependencies)}] } },`,
+    ),
+  );
+  fs.writeFileSync(
+    path.join(directory, "web", "index.html"),
+    '<!doctype html><html><head><title>Development fixture</title></head><body><div id="app"></div><script type="module" src="/src/main.js"></script></body></html>',
+  );
+  fs.writeFileSync(
+    path.join(directory, "web", "src", "main.js"),
+    'import { createApp } from "vue";\nimport Fixture from "./DevFixture.vue";\ncreateApp(Fixture).mount("#app");\n',
+  );
+  fs.writeFileSync(
+    path.join(directory, "web", "src", "DevFixture.vue"),
+    `<script setup>
+import { onMounted, ref } from 'vue';
+const token = ref('');
+onMounted(async () => {
+  const response = await fetch('/api/bootstrap');
+  token.value = (await response.json()).token;
+});
+</script>
+<template><h1>Before hot update</h1><output id="token">{{ token }}</output></template>
+`,
+  );
+  // Child startup/exit records prove both dev instances and their supervisor
+  // exit naturally. The instrumentation exists only in this temporary copy.
+  fs.writeFileSync(
+    path.join(directory, "preload.cjs"),
+    `const fs = require('node:fs');
+const file = ${JSON.stringify(path.join(directory, "processes.jsonl"))};
+const record = (event) => fs.appendFileSync(file, JSON.stringify({ event, pid: process.pid }) + '\\n');
+record('start');
+process.on('exit', () => record('exit'));
+`,
+  );
+}
+
+async function main() {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "web-coding-dev-"));
+  const processFile = path.join(directory, "processes.jsonl");
+  const records = () =>
+    fs.existsSync(processFile)
+      ? fs
+          .readFileSync(processFile, "utf8")
+          .trim()
+          .split("\n")
+          .filter(Boolean)
+          .map(JSON.parse)
+      : [];
+  let child;
+  let browser;
+  let output = "";
+  let exited = false;
+  let exitCode;
+  try {
+    createFixture(directory);
+    const port = await availablePort();
+    const origin = `http://127.0.0.1:${port}`;
+    child = fork(
+      path.join(directory, "src", "cli", "dev-watch.cjs"),
+      ["--host", "127.0.0.1", "--port", String(port)],
+      {
+        cwd: directory,
+        windowsHide: true,
+        env: {
+          ...process.env,
+          RUNNER_DATA_DIR: path.join(directory, "data"),
+          NODE_OPTIONS: `--require ${JSON.stringify(path.join(directory, "preload.cjs"))}`,
+        },
+        stdio: ["ignore", "pipe", "pipe", "ipc"],
+      },
+    );
+    child.stdout.on("data", (chunk) => {
+      output += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      output += chunk;
+    });
+    child.once("close", (code) => {
+      exited = true;
+      exitCode = code;
+    });
+    await until(
+      () => output.includes(`Web Coding Dev: ${origin}`),
+      "The development server did not start.",
+    );
+    browser = await chromium.launch({
+      ...(process.env.BROWSER_CHANNEL
+        ? { channel: process.env.BROWSER_CHANNEL }
+        : process.platform === "win32"
+          ? { channel: "msedge" }
+          : {}),
+      headless: true,
+    });
+    const page = await browser.newPage();
+    const errors = [];
+    let documents = 0;
+    page.on("pageerror", (error) => errors.push(error.message));
+    page.on("request", (request) => {
+      if (request.resourceType() === "document") documents++;
+    });
+    await page.goto(origin);
+    await page.getByRole("heading", { name: "Before hot update" }).waitFor();
+    await page.waitForFunction(
+      () => document.querySelector("#token")?.textContent.length === 64,
+    );
+    const originalToken = await page.locator("#token").textContent();
+    await page.evaluate(() => {
+      window.devFixtureMarker = "retained";
+    });
+    const component = path.join(directory, "web", "src", "DevFixture.vue");
+    fs.writeFileSync(
+      component,
+      fs
+        .readFileSync(component, "utf8")
+        .replace("Before hot update", "After hot update"),
+    );
+    await page.getByRole("heading", { name: "After hot update" }).waitFor();
+    assert.equal(
+      await page.evaluate(() => window.devFixtureMarker),
+      "retained",
+    );
+    assert.equal(
+      documents,
+      1,
+      "Vue template changes must update without a document reload.",
+    );
+    assert.equal(await page.locator("#token").textContent(), originalToken);
+    assert.equal(
+      (await (await fetch(`${origin}/api/bootstrap`)).json()).token,
+      originalToken,
+      "Frontend HMR must leave the backend running.",
+    );
+
+    fs.appendFileSync(
+      path.join(directory, "src", "config", "runtime.cjs"),
+      "\n// Temporary browser fixture: trigger the backend watcher.\n",
+    );
+    await page.waitForFunction(
+      (previous) => {
+        const token = document.querySelector("#token")?.textContent;
+        return token?.length === 64 && token !== previous;
+      },
+      originalToken,
+      { timeout: 30000 },
+    );
+    assert.equal(await page.evaluate(() => window.devFixtureMarker), undefined);
+    assert.equal(
+      documents,
+      2,
+      "Backend restart must reload the document once.",
+    );
+    await page.getByRole("heading", { name: "After hot update" }).waitFor();
+    const created = await page.evaluate(async () => {
+      const response = await fetch("/api/workspaces", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-tapd-token": document.querySelector("#token").textContent,
+        },
+        body: JSON.stringify({ name: "Temporary development workspace" }),
+      });
+      return { status: response.status, workspace: await response.json() };
+    });
+    assert.equal(
+      created.status,
+      201,
+      "The refreshed page must use the replacement token for POST.",
+    );
+    assert.equal(created.workspace.name, "Temporary development workspace");
+    assert.ok(
+      fs.existsSync(
+        path.join(
+          directory,
+          "data",
+          "workspaces",
+          created.workspace.id,
+          "config.json",
+        ),
+      ),
+    );
+    assert.deepEqual(errors, []);
+    assert.equal(output.match(/后端代码已修改/g)?.length, 1);
+    assert.equal(output.match(/Web Coding Dev:/g)?.length, 2);
+
+    await browser.close();
+    browser = undefined;
+    child.send({ type: "dev:shutdown" });
+    await until(() => exited, "The development supervisor did not shut down.");
+    assert.equal(exitCode, 0);
+    const started = records().filter((entry) => entry.event === "start");
+    assert.equal(
+      started.length,
+      3,
+      "One supervisor and two development server instances must run.",
+    );
+    for (const entry of started) {
+      assert.ok(
+        records().some(
+          (record) => record.event === "exit" && record.pid === entry.pid,
+        ),
+      );
+      assert.equal(
+        alive(entry.pid),
+        false,
+        `Development process ${entry.pid} must exit.`,
+      );
+    }
+    assert.equal(
+      await availablePort(port),
+      port,
+      "Shutdown must release the development port.",
+    );
+    process.stdout.write(
+      "Development browser checks passed: Vue HMR, backend restart, token refresh and process cleanup.\n",
+    );
+  } catch (error) {
+    throw new Error(`${error.message}\nDevelopment server output:\n${output}`, {
+      cause: error,
+    });
+  } finally {
+    await browser?.close();
+    if (child && !exited) {
+      if (child.connected) child.send({ type: "dev:shutdown" }, () => {});
+      try {
+        await until(() => exited, "Development cleanup timed out.", 10000);
+      } catch {
+        // Failure cleanup is limited to PIDs started by this temporary fixture.
+        for (const entry of records()
+          .filter((record) => record.event === "start")
+          .reverse()) {
+          if (!alive(entry.pid)) continue;
+          if (process.platform === "win32")
+            execFileSync("taskkill", ["/PID", String(entry.pid), "/T", "/F"], {
+              windowsHide: true,
+              stdio: "ignore",
+            });
+          else process.kill(entry.pid, "SIGKILL");
+        }
+        await until(
+          () => exited,
+          "Development processes could not be stopped.",
+          5000,
+        );
+      }
+    }
+    const resolved = path.resolve(directory);
+    assert.equal(path.dirname(resolved), path.resolve(os.tmpdir()));
+    assert.ok(path.basename(resolved).startsWith("web-coding-dev-"));
+    const junction = path.join(resolved, "node_modules");
+    if (fs.existsSync(junction)) {
+      assert.ok(fs.lstatSync(junction).isSymbolicLink());
+      fs.unlinkSync(junction);
+    }
+    fs.rmSync(resolved, { recursive: true, force: true, maxRetries: 3 });
+  }
+}
+
+main().catch((error) => {
+  process.stderr.write(`${error.stack}\n`);
+  process.exitCode = 1;
+});

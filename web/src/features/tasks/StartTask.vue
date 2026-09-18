@@ -18,6 +18,7 @@ const form = reactive({
   id: "",
   developer: "",
   tester: "",
+  supplementaryInstructions: "",
   requestId: createRequestId(),
   title: "",
   content: "",
@@ -75,6 +76,12 @@ watch(
 );
 let searchRevision = 0;
 watch(
+  () => [form.channel, form.workspace, form.id],
+  () => {
+    form.supplementaryInstructions = "";
+  },
+);
+watch(
   () => [form.workspace, form.channel],
   () => {
     searchRevision++;
@@ -129,6 +136,9 @@ async function start() {
             id: form.id,
             developer: form.developer,
             tester: form.tester,
+            ...(form.channel === "tapd"
+              ? { supplementaryInstructions: form.supplementaryInstructions }
+              : {}),
             model: form.model,
             reasoningEffort: form.reasoningEffort,
             permissionMode: form.permissionMode,
@@ -249,6 +259,25 @@ async function start() {
         <a-form-item v-if="!manualInput" label="需求 ID" name="id"
           ><input v-model="form.id" aria-label="需求 ID" required
         /></a-form-item>
+        <a-form-item
+          v-if="form.channel === 'tapd'"
+          label="补充说明（可选）"
+          name="supplementaryInstructions"
+        >
+          <textarea
+            id="tapd-supplementary-instructions"
+            v-model="form.supplementaryInstructions"
+            aria-label="补充说明"
+            aria-describedby="tapd-supplementary-hint"
+            placeholder="可补充需求细节、验收标准、实现建议或注意事项"
+            rows="4"
+            maxlength="60000"
+            :disabled="busy || uploading"
+          />
+          <p id="tapd-supplementary-hint" class="field-hint">
+            将与 TAPD 需求一起发送给 Codex，不修改 TAPD 原需求；留空即可。
+          </p>
+        </a-form-item>
         <div v-if="needsAssignees" class="form-columns">
           <a-form-item label="开发人员" name="developer"
             ><UserSearchSelect

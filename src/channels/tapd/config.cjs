@@ -10,12 +10,15 @@ function defaultTapdConfig() {
   };
 }
 
-function loadSession(value) {
-  const config = loadConfig(value);
+function sessionFromConfig(config) {
   const session = config.tapd?.session || config;
   if (!session.cookie_header || !session.request_body?.dsc_token)
     throw new Error("TAPD session is incomplete. Refresh the local session.");
   return session;
+}
+
+function loadSession(value) {
+  return sessionFromConfig(loadConfig(value));
 }
 
 function workspaceId(session, value) {
@@ -36,4 +39,4 @@ function numericId(value, label) {
   return String(value);
 }
 
-module.exports = { defaultTapdConfig, loadSession, workspaceId, numericId };
+module.exports = { defaultTapdConfig, loadSession, sessionFromConfig, workspaceId, numericId };

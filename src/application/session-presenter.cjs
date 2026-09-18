@@ -57,6 +57,7 @@ class SessionPresenter {
       capturedAt: text(task.generated_at || state.created_at),
       description: text(item.description),
       markdown: text(item.markdown_description),
+      supplementaryInstructions: text(item.supplementary_instructions),
       prompt: text(task.codex_prompt),
       warning,
       images: (task.images || []).map((image, index) => ({

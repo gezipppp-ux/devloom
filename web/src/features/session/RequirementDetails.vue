@@ -41,10 +41,18 @@ const capturedAt = computed(() => {
     <p v-else class="muted">
       {{
         requirement
-          ? '该需求没有文字描述，请查看图片附件。'
+          ? '该需求没有原始文字描述，请查看补充说明或图片附件。'
           : '需求资料尚未准备完成。'
       }}
     </p>
+    <section
+      v-if="requirement?.supplementaryInstructions"
+      class="requirement-supplement"
+      aria-label="补充说明与指导意见"
+    >
+      <h3>补充说明与指导意见</h3>
+      <pre>{{ requirement.supplementaryInstructions }}</pre>
+    </section>
     <div v-if="requirement?.images?.length" class="requirement-attachments">
       <h3>图片附件 · {{ requirement.images.length }}</h3>
       <div class="image-strip">
@@ -124,12 +132,16 @@ a {
   padding: 8px 12px;
 }
 .requirement-body :deep(pre),
+.requirement-supplement pre,
 .requirement-prompt pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   background: var(--surface);
   padding: 14px;
   line-height: 1.7;
+}
+.requirement-supplement pre {
+  font: inherit;
 }
 .requirement-body :deep(blockquote) {
   margin-left: 0;

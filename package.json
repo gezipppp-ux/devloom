@@ -21,10 +21,12 @@
     "tapd:status": "node src/cli/tapd/run.cjs --status",
     "lint": "eslint src test web/src web/vite.config.mjs",
     "test": "node --test test/architecture/*.test.cjs test/unit/*.test.cjs test/integration/*.test.cjs",
-    "test:web": "node test/browser/session.cjs && node test/browser/workspaces.cjs",
+    "test:web": "node test/browser/session.cjs && node test/browser/workspaces.cjs && node test/browser/dev.cjs",
     "test:visual": "node test/browser/visual.cjs",
     "verify": "npm run lint && npm test && npm run build && npm run test:web && npm run test:visual",
     "web:build": "vite build --config web/vite.config.mjs",
+    "dev": "node src/cli/dev.cjs",
+    "dev:watch": "node src/cli/dev-watch.cjs",
     "tapd:web": "npm run web:build && node src/cli/web.cjs",
     "build": "npm run web:build",
     "start": "node src/cli/web.cjs"

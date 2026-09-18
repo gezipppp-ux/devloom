@@ -1,8 +1,11 @@
 import { onUnmounted, ref } from "vue";
 import { api } from "../../shared/api/api.js";
+import { useUnreadResults } from "./use-unread-results.js";
 
 export function useTaskList() {
   const runs = ref([]);
+  const { unreadResultKeys, markUnread, markRead, retainRuns } =
+    useUnreadResults();
   let pendingList;
 
   async function refresh() {
@@ -15,6 +18,7 @@ export function useTaskList() {
           ? { ...run, metadata: request.metadata.get(run.key) }
           : run,
       );
+      retainRuns(runs.value);
     } catch (e) {
       if (pendingList === request) throw e;
     } finally {
@@ -32,5 +36,12 @@ export function useTaskList() {
     pendingList = null;
   });
 
-  return { runs, refresh, updateMetadata };
+  return {
+    runs,
+    unreadResultKeys,
+    markUnread,
+    markRead,
+    refresh,
+    updateMetadata,
+  };
 }

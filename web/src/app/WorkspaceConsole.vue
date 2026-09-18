@@ -1,5 +1,14 @@
 <script setup>
-import { defineAsyncComponent, nextTick, reactive, ref } from "vue";
+/* global document */
+import {
+  defineAsyncComponent,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  reactive,
+  ref,
+  watch,
+} from "vue";
 import { statusLabel } from "../shared/api/api.js";
 import { useWorkspaceConsole } from "./use-workspace-console.js";
 import StartTask from "../features/tasks/StartTask.vue";
@@ -19,8 +28,11 @@ const RequirementDetails = defineAsyncComponent(
   () => import("../features/session/RequirementDetails.vue"),
 );
 
-const props = defineProps({ workspaceName: { type: String, default: "" } });
-const emit = defineEmits(["rename-workspace"]);
+const props = defineProps({
+  workspaceName: { type: String, default: "" },
+  notifyUnreadResult: { type: Function, default: () => {} },
+});
+const emit = defineEmits(["rename-workspace", "unread-results-change"]);
 const settingsOpen = ref(false),
   creating = ref(false);
 const composer = reactive({ text: "" });
@@ -28,6 +40,7 @@ const timeline = ref();
 const {
   channels,
   workspace,
+  workspaceLoading,
   runs,
   active,
   session,
@@ -50,6 +63,8 @@ const {
   settingsBusy,
   settingsError,
   updateExecutionSettings,
+  unreadResultKeys,
+  markResultRead,
 } = useWorkspaceConsole({
   canRefresh: () => !creating.value,
   onOpen: () => {
@@ -58,15 +73,45 @@ const {
     composer.text = "";
     imageDraft.reset();
   },
-  onOpened: () => scroll(),
+  onOpened: () => {
+    markResultRead(active.value);
+    return scroll();
+  },
   onItem: () => {
     void scroll(false);
   },
   onEmpty: () => {
     if (props.workspaceName) settingsOpen.value = true;
   },
+  onResultRead: ({ key }) =>
+    active.value === key &&
+    !settingsOpen.value &&
+    !creating.value &&
+    document.visibilityState === "visible",
+  onUnreadResult: (result) => props.notifyUnreadResult(result),
 });
 const imageDraft = useSessionImages({ active, canSend });
+
+function readVisibleSession() {
+  if (
+    document.visibilityState === "visible" &&
+    !settingsOpen.value &&
+    !creating.value &&
+    active.value
+  )
+    markResultRead(active.value);
+}
+
+watch([settingsOpen, creating], readVisibleSession);
+watch(
+  unreadResultKeys,
+  (keys) => emit("unread-results-change", keys.length > 0),
+  { immediate: true },
+);
+onMounted(() => document.addEventListener("visibilitychange", readVisibleSession));
+onUnmounted(() =>
+  document.removeEventListener("visibilitychange", readVisibleSession),
+);
 
 async function scroll(force = true) {
   await nextTick();
@@ -105,24 +150,31 @@ async function send() {
       <div v-if="props.workspaceName" class="workspace-heading">
         <h2 :title="props.workspaceName">{{ props.workspaceName }}</h2>
         <button
-          class="workspace-menu"
-          aria-label="编辑工作区"
-          title="修改工作区名称和图标"
-          @click="emit('rename-workspace')"
+          type="button"
+          class="workspace-menu workspace-settings-button"
+          :class="{ active: settingsOpen }"
+          :disabled="workspaceLoading"
+          :aria-pressed="settingsOpen"
+          aria-label="工作区设置"
+          title="工作区设置"
+          @click="settingsOpen = true"
         >
-          <span aria-hidden="true">···</span>
+          <SettingOutlined aria-hidden="true" />
         </button>
       </div>
       <button
+        v-if="!props.workspaceName"
         class="settings-link"
         :class="{ active: settingsOpen }"
+        :disabled="workspaceLoading"
         @click="settingsOpen = true"
       >
         <SettingOutlined aria-hidden="true" />
-        {{ props.workspaceName ? "工作区设置" : "执行设置" }}
+        执行设置
       </button>
       <button
         class="new-task"
+        :disabled="workspaceLoading"
         @click="
           creating = true;
           settingsOpen = false;
@@ -133,6 +185,7 @@ async function send() {
       <TaskList
         :runs="runs"
         :active="!creating && !settingsOpen ? active : null"
+        :unread-result-keys="unreadResultKeys"
         @open="open"
       />
       <div class="sidebar-footer">
@@ -159,8 +212,8 @@ async function send() {
       <SettingsPanel
         v-if="settingsOpen"
         :workspace-name="props.workspaceName"
-        @cancel="settingsOpen = false"
         @saved="reloadChannels"
+        @rename-workspace="emit('rename-workspace')"
       />
       <StartTask
         v-else-if="creating"
@@ -175,35 +228,27 @@ async function send() {
         "
       />
       <template v-else-if="session">
-        <header class="session-header">
-          <div>
-            <div class="eyebrow">
-              CONVERSATION
-              <span
-                class="status"
-                :data-status="
-                  session.requests?.length ? 'waiting' : session.status
-                "
-                >Codex ·
-                {{
-                  session.requests?.length
-                    ? "等待你的输入"
-                    : statusLabel(session.status)
-                }}</span
-              >
-            </div>
-            <h1>{{ session.title }}</h1>
-          </div>
+        <header class="session-header" aria-label="会话工具栏">
+          <span
+            class="status"
+            :data-status="session.requests?.length ? 'waiting' : session.status"
+            >Codex ·
+            {{
+              session.requests?.length
+                ? "等待你的输入"
+                : statusLabel(session.status)
+            }}</span
+          >
+          <TaskMetadataControls
+            :key="session.key"
+            :task-key="session.key"
+            :metadata="session.metadata"
+            @saved="metadataSaved"
+          />
           <button :disabled="loading" @click="open(active)">
             <ReloadOutlined aria-hidden="true" /> 刷新
           </button>
         </header>
-        <TaskMetadataControls
-          :key="session.key"
-          :task-key="session.key"
-          :metadata="session.metadata"
-          @saved="metadataSaved"
-        />
         <details class="session-context">
           <summary>
             会话信息与需求资料
@@ -313,16 +358,22 @@ async function send() {
           @settings-change="updateExecutionSettings"
         />
       </template>
-      <section v-else class="empty-state">
+      <section v-else class="empty-state" :aria-busy="workspaceLoading || loading">
         <div class="empty-mark"><FolderOpenOutlined aria-hidden="true" /></div>
         <div class="eyebrow">需求 × CODEX</div>
         <h1>
-          {{ loading ? "正在加载会话…" : "让需求与开发，在这里连起来。" }}
+          {{
+            workspaceLoading
+              ? "正在加载工作区…"
+              : loading
+                ? "正在加载会话…"
+                : "让需求与开发，在这里连起来。"
+          }}
         </h1>
         <p>查看执行过程、与 Codex 对话，随时调整下一步。</p>
         <p v-if="error" role="alert" class="error">{{ error }}</p>
         <button
-          v-if="!loading"
+          v-if="!workspaceLoading && !loading"
           class="primary"
           @click="
             creating = true;

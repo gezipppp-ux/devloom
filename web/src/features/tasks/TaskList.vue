@@ -16,6 +16,7 @@ import {
 const props = defineProps({
   runs: { type: Array, default: () => [] },
   active: { type: String, default: null },
+  unreadResultKeys: { type: Array, default: () => [] },
 });
 const emit = defineEmits(["open"]);
 const preferenceKey = `task-grouping:${apiPath("/runs")}`;
@@ -93,7 +94,13 @@ const groups = computed(() => {
                   : FileTextOutlined
             "
             aria-hidden="true"
-          /><span class="session-title">{{ run.title }}</span></span
+          /><span class="session-title">{{ run.title }}</span
+          ><span
+            v-if="props.unreadResultKeys.includes(run.key)"
+            class="unread-result"
+            role="img"
+            aria-label="有未读 Codex 回复"
+          ></span></span
         >
         <span class="task-tags"
           ><span

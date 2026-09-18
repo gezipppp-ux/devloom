@@ -11,6 +11,8 @@ const { readOptional } = require("../../src/storage/json-files.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const { temporary, png, json } = require("../support/helpers.cjs");
 const { verifyLateImageUpload } = require("./session-images.cjs");
+const { verifyPromptSettings } = require("./prompt-settings.cjs");
+const { verifyWorkspaceNavigation } = require("./workspace-navigation.cjs");
 
 async function main() {
   const cleanup = [];
@@ -103,6 +105,10 @@ async function main() {
       exact: true,
     });
     assert.equal(await selectedWorkspace.getAttribute("aria-current"), "true");
+    await page.getByRole("button", { name: "系统设置", exact: true }).click();
+    await page.getByRole("heading", { name: "系统设置", exact: true }).waitFor();
+    await selectedWorkspace.click();
+    await page.getByRole("heading", { name: "项目 A · 工作区设置" }).waitFor();
     await page
       .getByRole("button", { name: "＋ 新建工作区", exact: true })
       .click();
@@ -219,6 +225,9 @@ async function main() {
       assert.equal(defaultUrl.hash, "#keep-fragment");
       assert.equal(await defaultPage.evaluate(() => window.history.state.fixture), "keep-state");
       assert.equal(documentRequests, 1, "canonical workspace URL must not navigate again");
+      await verifyWorkspaceNavigation(defaultPage, {
+        workspaceA: a, workspaceB: b, repository, output,
+      });
       workspaces.save({ name: "0 排序在前的工作区" }, b.id);
       assert.equal(workspaces.list()[0].id, b.id);
       await defaultPage.reload();
@@ -242,7 +251,8 @@ async function main() {
       await page.getByLabel("TAPD Cookie", { exact: true }).inputValue(),
       "",
     );
-    await page.getByRole("button", { name: "编辑工作区", exact: true }).click();
+    await page.getByRole("button", { name: "工作区设置", exact: true }).click();
+    await page.getByRole("button", { name: "重命名", exact: true }).click();
     assert.equal(
       await page.getByLabel("工作区名称", { exact: true }).inputValue(),
       "项目 A",
@@ -444,7 +454,12 @@ async function main() {
       await page.getByLabel("任务进度", { exact: true }).inputValue(),
       "review",
     );
-    assert.equal(await page.getByLabel("Codex 模型", { exact: true }).inputValue(), "fixture-model-a");
+    assert.equal(
+      await page
+        .getByRole("combobox", { name: "Codex 模型", exact: true })
+        .getAttribute("data-model"),
+      "fixture-model-a",
+    );
     await page.getByRole("combobox", { name: "权限模式", exact: true }).click();
     assert.equal(await page.locator('.permission-option[data-value="auto"]').getAttribute('aria-selected'), 'true');
     await page.keyboard.press("Escape");
@@ -486,7 +501,8 @@ async function main() {
         () => document.documentElement.scrollWidth <= window.innerWidth,
       ),
     );
-    await page.getByRole("button", { name: "编辑工作区", exact: true }).click();
+    await page.getByRole("button", { name: "工作区设置", exact: true }).click();
+    await page.getByRole("button", { name: "重命名", exact: true }).click();
     await page.getByRole("dialog").waitFor();
     await page.getByRole("button", { name: "恢复默认", exact: true }).click();
     await page.screenshot({
@@ -502,15 +518,17 @@ async function main() {
       "rocket",
       "cancel must preserve saved icon",
     );
-    await page.getByRole("button", { name: "编辑工作区", exact: true }).click();
+    await page.getByRole("button", { name: "重命名", exact: true }).click();
     await page.getByRole("button", { name: "恢复默认", exact: true }).click();
     await page.getByRole("button", { name: "保存工作区", exact: true }).click();
-    await page.getByText("历史回复", { exact: true }).waitFor();
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
+    await page.getByRole("heading", { name: "项目 A 改名 · 工作区设置", exact: true }).waitFor();
     assert.equal(workspaces.read(a.id).icon, null);
     assert.equal(await iconButton.locator("svg").count(), 0);
+    await page.locator(".session-link").filter({ hasText: "工作区 A 的独立任务" }).click();
+    await page.getByText("历史回复", { exact: true }).waitFor();
     await verifyLateImageUpload(page, {
       pattern: `**/api/workspaces/${a.id}/runs/${key}/message-images`,
-      navigation: true,
       leave: async () => {
         await page.getByRole("button", { name: "切换工作区：项目 B", exact: true }).click();
         await page.getByRole("heading", { name: "项目 B · 工作区设置" }).waitFor();
@@ -552,6 +570,11 @@ async function main() {
       .getByRole("heading", { name: "额外项目 15 · 工作区设置" })
       .waitFor();
     assert.equal(checks, 3);
+    const promptWorkspaceA = workspaces.save({ name: "提示词配置 A" });
+    const promptWorkspaceB = workspaces.save({ name: "提示词配置 B" });
+    await verifyPromptSettings(browser, {
+      origin, output, errors, workspaceA: promptWorkspaceA, workspaceB: promptWorkspaceB,
+    });
     assert.deepEqual(errors, []);
     process.stdout.write(
       "Workspace browser passed: create, switch, rename, reload, scoped settings, Cookie draft/check/failure, manual run, attachments, background execution and mobile.\n",

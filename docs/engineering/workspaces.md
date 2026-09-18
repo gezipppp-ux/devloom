@@ -4,13 +4,15 @@
 
 One application workspace owns one repository and one configuration. Application UUIDs are distinct from TAPD numeric project IDs and task worktrees. The production Web server never imports the old global config/runs/uploads. No migration is required.
 
-`<dataRoot>/workspaces/<UUID>/config.json` contains `version:3`, `workspace:{id,name,icon?}`, `codex`, `tapd`, `workflow`. Runs and staged uploads live in sibling `runs/` and `uploads/`. Workspace IDs are server-generated UUID v4 values; names are display text, never paths. Names must be nonempty, at most 80 characters and unique. Renaming retains UUID, config, runs and sessions. JSON mutations use temporary files and atomic rename. Workspaces are Git-ignored.
+`<dataRoot>/workspaces/<UUID>/config.json` contains `version:3`, `workspace:{id,name,icon?}`, `codex`, `tapd`, `workflow` and optional `prompt_templates`. Runs and staged uploads live in sibling `runs/` and `uploads/`. Workspace IDs are server-generated UUID v4 values; names are display text, never paths. Names must be nonempty, at most 80 characters and unique. Renaming retains UUID, config, runs and sessions. JSON mutations use temporary files and atomic rename. Workspaces are Git-ignored.
 
 Each context owns its channels, RunStore, WebSessions and lazy Codex client. Switching clients/pages does not close contexts or stop background execution. Shutdown closes every instantiated manager. Workspace selection is carried in URLs, never mutable server-global active state. Independent tabs must remain independent.
 
 When opening the root URL without a workspace parameter, persist the automatically selected workspace with `history.replaceState`, retaining other query parameters and the fragment. Later catalog additions or renames must not change that tab's workspace on refresh.
 
-The Web shell uses an icon rail for workspace selection next to the project/session pane. Icons expose full names through accessible labels and titles, mark the current workspace, and disambiguate repeated initials with a small index. Create and rename use a keyboard-accessible modal; Escape cancels without saving. The rail scrolls vertically on desktop and horizontally on narrow screens. Long project names truncate visually while retaining the full title. Navigation changes must preserve workspace URLs, session identity and background execution.
+Switch workspaces in place with `history.pushState`; do not navigate or reload the document. Preserve other query parameters, the fragment and history state, and synchronize selection on `popstate`. Recreate the workspace console by UUID so drafts, requests and SSE subscriptions are scoped to that selection; ignore late responses and stop queued uploads after unmount. Keep the workspace shell visible with a loading state until bootstrap and the initial session list finish, and allow another workspace switch while loading. Saving a name/icon updates the catalog in place and closes the editor without resetting the current console.
+
+The Web shell uses an icon rail for workspace selection next to the project/session pane. Icons expose full names through accessible labels and titles, mark the current workspace, and disambiguate repeated initials with a small index. A gear button beside the project name opens workspace settings; the Basic information section contains the rename action for editing the name and icon. Create and rename use a keyboard-accessible modal; Escape cancels without saving. The rail scrolls vertically on desktop and horizontally on narrow screens. Long project names truncate visually while retaining the full title. Navigation changes must preserve workspace URLs, session identity and background execution.
 
 Workspace icons come from a curated 40-icon SVG component catalog (`@antdv-next/icons`). `shared/workspace-icons.json` defines IDs and Chinese/English search metadata shared by server validation and the Web picker. Persist only an allowed string ID, or null for the default name initial; omitted icon preserves the current selection. Arbitrary SVG, URLs and unknown IDs are rejected before writing. The edit/create dialog provides search, preview and reset. Icon changes do not modify credentials, project settings or session identities.
 
@@ -28,6 +30,18 @@ Workspace icons come from a curated 40-icon SVG component catalog (`@antdv-next/
 The injected `manager` server option is a single-context test harness; production startup never uses it to load old records.
 
 ## Configuration and execution
+
+### Workspace prompt settings
+
+Prompt templates belong to the selected workspace and are edited in its settings page. `GET/POST /api/workspaces/:id/settings/prompts` use the standard origin and POST token protection. Production requests without workspace context are rejected; no system settings page or root-level prompt configuration is exposed.
+
+GET returns `{templates:{manual,tapd},catalog,maxLength:20000}`. Each catalog entry has label, defaultTemplate and placeholders (`name`, `label`, `required`, `example`). POST accepts a partial `{manual:string|null,tapd:string|null}` and returns the same shape; null removes the corresponding override. Store overrides under `prompt_templates` in the selected workspace's `config.json` using atomic read-modify-write. Preserve omitted channels, workspace metadata, credentials and execution configuration; responses never expose credentials. Unconfigured channels use built-in templates. Other workspaces remain unchanged.
+
+Templates use literal `{{name}}` placeholders. Both channels require title/content/images; TAPD additionally requires supplement. Optional image_count/image_list expose the count and ordered list; TAPD also offers id/workspace_id/url. The images value is the full channel-specific explanation/list; supplement is its complete delimited block or empty text. Reject unknown settings keys, invalid types, blank/oversized templates, unknown/malformed placeholders and missing required placeholders before writing. Render once without expression evaluation or expansion of substituted requirement text.
+
+`shared/prompt-templates.json` owns the catalog, domain owns pure validation/rendering, config owns configuration operations, and channel adapters capture effective workspace templates at resolution. Task packages supply channel-specific values from that captured configuration. Workspace application services present the settings API. Saving affects only new tasks in that workspace; persisted prompts, images, identities, paths and follow-up messages remain unchanged. CLI execution and task previews use templates from the selected configuration, including `--app-workspace`. Preview shows fixture text; restoring defaults changes the draft until explicitly saved.
+
+### Workspace execution settings
 
 `GET/POST .../settings` expose validated repository, worktreeRoot, baseRef, initCommands and read-only platform. Workspace settings update `config.json` and preserve TAPD credentials and metadata. All channels use this one repository; per-channel repository maps are ignored for workspace configurations. Existing sessions and recorded paths remain authoritative.
 

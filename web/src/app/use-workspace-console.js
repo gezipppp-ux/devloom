@@ -9,10 +9,13 @@ export function useWorkspaceConsole({
   onOpened,
   onItem,
   onEmpty,
+  onResultRead = () => false,
+  onUnreadResult = () => {},
 }) {
   const channels = ref([]),
     workspace = ref(""),
-    online = ref(false);
+    online = ref(false),
+    workspaceLoading = ref(true);
   const tasks = useTaskList();
   const conversation = useSession({
     online,
@@ -25,14 +28,13 @@ export function useWorkspaceConsole({
   let events,
     refreshTimer,
     disposed = false,
-    bootstrapping = true,
     refreshQueued = false;
 
   function scheduleRefresh() {
     if (disposed) return;
     // Subscribe before loading snapshots, but let the initial list decide the
     // default session before an SSE refresh can supersede that list request.
-    if (bootstrapping) {
+    if (workspaceLoading.value) {
       refreshQueued = true;
       return;
     }
@@ -52,15 +54,26 @@ export function useWorkspaceConsole({
   }
 
   function eventReceived(event) {
+    if (disposed) return;
     if (event.type === "metadata") {
       metadataSaved(event.key, event.metadata);
       return;
     }
     conversation.receiveEvent(event);
+    if (event.type === "state" && event.status === "completed") {
+      if (!onResultRead(event)) {
+        tasks.markUnread(event.key);
+        onUnreadResult({
+          key: event.key,
+          title: tasks.runs.value.find((run) => run.key === event.key)?.title,
+        });
+      }
+    }
     if (event.type !== "item") scheduleRefresh();
   }
 
   async function reloadChannels() {
+    if (disposed) return;
     const initial = await bootstrap();
     if (disposed) return;
     workspace.value = initial.workspace;
@@ -88,7 +101,7 @@ export function useWorkspaceConsole({
     } catch (e) {
       if (!disposed) conversation.error.value = e.message;
     } finally {
-      bootstrapping = false;
+      workspaceLoading.value = false;
       if (refreshQueued) {
         refreshQueued = false;
         scheduleRefresh();
@@ -123,8 +136,11 @@ export function useWorkspaceConsole({
   return {
     channels,
     workspace,
+    workspaceLoading,
     online,
     runs: tasks.runs,
+    unreadResultKeys: tasks.unreadResultKeys,
+    markResultRead: tasks.markRead,
     active,
     session,
     loading,

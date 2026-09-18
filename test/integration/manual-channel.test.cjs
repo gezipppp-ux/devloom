@@ -26,7 +26,9 @@ function fixture(t) {
     directory,
     configFile,
     uploadDirectory,
-    channel: createManualChannel(configFile, { uploadDirectory }),
+    channel: createManualChannel(configFile, {
+      uploadDirectory,
+    }),
   };
 }
 function repository(directory) {
@@ -62,7 +64,7 @@ test('manual channel validates input, preserves full text and copies image-only 
     content: '完整内容\n' + '测试'.repeat(10000),
   };
   const resolved = await channel.resolve(base);
-  assert.deepEqual(resolved.config, {});
+  assert.match(resolved.config.prompt_templates.manual, /\{\{content\}\}/);
   const text = await channel.prepare({ ...resolved, directory });
   assert.ok(text.task.codex_prompt.includes(base.content));
   assert.equal(text.worktreeSlug, 'xin-zeng-deng-lu-ru-kou');

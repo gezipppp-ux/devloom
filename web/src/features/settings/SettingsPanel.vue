@@ -1,17 +1,31 @@
 <script setup>
-import { nextTick, onMounted, reactive, ref } from "vue";
+import { computed, nextTick, onMounted, reactive, ref } from "vue";
 import { api } from "../../shared/api/api.js";
 import TapdSettings from "./TapdSettings.vue";
+import PromptSettings from "./PromptSettings.vue";
 import BaseRefSelect from "./BaseRefSelect.vue";
 import FormSection from "../../shared/components/FormSection.vue";
 const props = defineProps({ workspaceName: { type: String, default: "" } });
-const emit = defineEmits(["cancel", "saved"]);
+const emit = defineEmits(["saved", "rename-workspace"]);
 const form = reactive({
   repository: "",
   worktreeRoot: "",
   baseRef: "HEAD",
 });
 const initCommandsText = ref("");
+const savedSettings = ref(null);
+const settings = computed(() => ({
+  ...form,
+  initCommands: initCommandsText.value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean),
+}));
+const dirty = computed(
+  () =>
+    savedSettings.value !== null &&
+    JSON.stringify(settings.value) !== savedSettings.value,
+);
 const platform = ref(""),
   busy = ref(true),
   error = ref(""),
@@ -28,6 +42,7 @@ onMounted(async () => {
     for (const key of Object.keys(form)) form[key] = result[key] ?? "";
     platform.value = result.platform;
     initCommandsText.value = (result.initCommands || []).join("\n");
+    savedSettings.value = JSON.stringify(settings.value);
   } catch (e) {
     error.value = e.message;
   } finally {
@@ -35,21 +50,17 @@ onMounted(async () => {
   }
 });
 async function save() {
+  if (busy.value || !dirty.value) return;
   busy.value = true;
   error.value = "";
   saved.value = false;
   try {
-    const result = await api("/settings", {
-      ...form,
-      initCommands: initCommandsText.value
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean),
-    });
+    const result = await api("/settings", settings.value);
     initCommandsText.value = result.initCommands.join("\n");
     for (const key of Object.keys(form)) form[key] = result[key] ?? "";
     await nextTick();
     form.baseRef = result.baseRef;
+    savedSettings.value = JSON.stringify(settings.value);
     saved.value = true;
     emit("saved");
   } catch (e) {
@@ -83,9 +94,25 @@ async function save() {
       </p>
     </header>
     <nav v-if="props.workspaceName" class="section-nav" aria-label="设置分区">
+      <a href="#workspace-settings">基本信息</a>
       <a href="#project-settings">项目环境</a>
       <a href="#tapd-settings">TAPD 渠道</a>
+      <a href="#prompt-settings">提示词模板</a>
     </nav>
+    <FormSection
+      v-if="props.workspaceName"
+      id="workspace-settings"
+      title="基本信息"
+      description="修改工作区名称和图标。"
+    >
+      <template #action>
+        <button type="button" @click="emit('rename-workspace')">重命名</button>
+      </template>
+      <dl class="workspace-profile">
+        <dt>工作区名称</dt>
+        <dd>{{ props.workspaceName }}</dd>
+      </dl>
+    </FormSection>
     <FormSection
       id="project-settings"
       title="项目环境"
@@ -140,17 +167,17 @@ async function save() {
           留空跳过初始化，保存仅影响新任务。
         </p>
         <p v-if="error" role="alert" class="error">{{ error }}</p>
-        <p v-if="saved" role="status" class="notice">
+        <p v-if="saved && !dirty" role="status" class="notice">
           设置已保存，新任务将使用此配置。
         </p>
         <div class="actions">
-          <button type="button" @click="emit('cancel')">返回会话</button
-          ><button class="primary" type="submit" :disabled="busy">
+          <button class="primary" type="submit" :disabled="busy || !dirty">
             {{ busy ? "正在处理…" : "保存执行设置" }}
           </button>
         </div>
       </a-form>
     </FormSection>
     <TapdSettings v-if="props.workspaceName" @saved="emit('saved')" />
+    <PromptSettings v-if="props.workspaceName" />
   </section>
 </template>

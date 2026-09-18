@@ -1,14 +1,17 @@
 <script setup>
 import { nextTick, onMounted, ref } from "vue";
+import { SettingOutlined } from "@antdv-next/icons";
 import { appApi } from "../../shared/api/api.js";
 import WorkspaceIconEditor from "./WorkspaceIconEditor.vue";
 import { workspaceIcon } from "./workspace-icons.js";
 const props = defineProps({
   workspaces: { type: Array, default: () => [] },
   current: { type: Object, default: null },
+  unreadWorkspaceIds: { type: Array, default: () => [] },
   rail: Boolean,
+  systemSettingsOpen: Boolean,
 });
-const emit = defineEmits(["select"]);
+const emit = defineEmits(["select", "saved", "system-settings"]);
 const dialog = ref(),
   nameInput = ref();
 const renaming = ref(false),
@@ -50,7 +53,8 @@ async function save() {
       `/workspaces${renaming.value ? `/${props.current.id}` : ""}`,
       { name: name.value, icon: icon.value },
     );
-    emit("select", result.id);
+    dialog.value?.close();
+    emit("saved", result);
   } catch (e) {
     error.value = e.message;
   } finally {
@@ -76,10 +80,17 @@ onMounted(() => {
         type="button"
         class="workspace-icon"
         :class="{ active: current?.id === entry.id }"
-        :aria-label="`切换工作区：${entry.name}`"
+        :aria-label="
+          `切换工作区：${entry.name}${
+            unreadWorkspaceIds.includes(entry.id) ? '，有未读 Codex 回复' : ''
+          }`
+        "
         :aria-current="current?.id === entry.id ? 'true' : undefined"
         :title="entry.name"
-        @click="current?.id !== entry.id && emit('select', entry.id)"
+        @click="
+          (current?.id !== entry.id || systemSettingsOpen) &&
+            emit('select', entry.id)
+        "
       >
         <component
           :is="workspaceIcon(entry.icon)"
@@ -92,6 +103,11 @@ onMounted(() => {
         <small v-if="rail && duplicateInitial(entry)" aria-hidden="true">{{
           index + 1
         }}</small>
+        <span
+          v-if="unreadWorkspaceIds.includes(entry.id)"
+          class="workspace-unread-result"
+          aria-hidden="true"
+        ></span>
       </button>
     </div>
     <button
@@ -102,6 +118,17 @@ onMounted(() => {
       @click="edit()"
     >
       <span aria-hidden="true">＋</span><span v-if="!rail">新建工作区</span>
+    </button>
+    <button
+      v-if="rail"
+      type="button"
+      class="workspace-icon workspace-system-settings"
+      :class="{ active: systemSettingsOpen }"
+      aria-label="系统设置"
+      title="系统设置"
+      @click="emit('system-settings')"
+    >
+      <SettingOutlined aria-hidden="true" />
     </button>
   </nav>
   <Teleport to="body">

@@ -1,6 +1,9 @@
 const { readOptional } = require('../../storage/json-files.cjs');
 const { validateWorktreeName } = require('../../domain/worktree-name.cjs');
 const { MAX_IMAGES } = require('../../domain/image-format.cjs');
+const {
+  getPromptTemplates,
+} = require('../../domain/prompt-templates.cjs');
 const { ManualUploads } = require('./uploads.cjs');
 const { buildManualTaskPackage } = require('./task-package.cjs');
 
@@ -46,6 +49,7 @@ function createManualChannel(configFile, { uploadDirectory } = {}) {
         throw new Error('请填写需求内容或上传图片。');
       for (const id of images) uploads.read(id);
       const directoryName = validateWorktreeName(worktreeName);
+      const config = readOptional(configFile);
       return {
         item: {
           id: requestId,
@@ -56,14 +60,18 @@ function createManualChannel(configFile, { uploadDirectory } = {}) {
           image_ids: images,
           worktree_name: directoryName,
         },
-        config: readOptional(configFile),
+        config: {
+          ...config,
+          prompt_templates: getPromptTemplates(config),
+        },
         session: null,
       };
     },
-    async prepare({ item, directory }) {
+    async prepare({ item, directory, config }) {
       return buildManualTaskPackage({
         item,
         directory,
+        config,
         readImage: (id) => uploads.read(id),
       });
     },

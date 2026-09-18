@@ -9,6 +9,7 @@ const { WebSessions } = require("../../src/application/sessions.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const { temporary, png } = require("../support/helpers.cjs");
+const { promptTemplateCatalog, MAX_PROMPT_TEMPLATE_LENGTH } = require("../../src/domain/prompt-templates.cjs");
 
 async function main() {
   const cleanup = [];
@@ -146,6 +147,8 @@ async function main() {
         "## 客户搜索体验\n\n在客户列表中增加搜索框，帮助用户快速定位客户。\n\n### 验收标准\n\n1. 支持姓名与手机号关键词匹配。\n2. 无结果时显示清晰提示。\n3. 清空关键词后恢复完整列表。\n\n| 场景 | 预期行为 |\n| --- | --- |\n| 输入姓名 | 展示匹配客户 |\n| 清空搜索 | 恢复完整列表 |",
       prompt:
         "实现客户搜索需求，保持现有会话、接口与数据行为。完成后验证搜索与空结果。",
+      supplementaryInstructions:
+        "补充验收：支持姓名和手机号组合筛选。\n指导意见：沿用现有表格交互，并覆盖清空与空结果场景。",
       images: [
         {
           index: 0,
@@ -202,6 +205,12 @@ async function main() {
         });
       if (endpoint === "/settings/refs")
         return send({ refs: [{ value: "main", label: "main · 本地分支" }] });
+      if (endpoint === "/settings/prompts")
+        return send({
+          templates: Object.fromEntries(Object.entries(promptTemplateCatalog).map(([name, entry]) => [name, entry.defaultTemplate])),
+          catalog: promptTemplateCatalog,
+          maxLength: MAX_PROMPT_TEMPLATE_LENGTH,
+        });
       if (endpoint === "/settings/tapd")
         return send({
           workspaceId: "123456",
@@ -326,6 +335,9 @@ async function main() {
     await page.getByPlaceholder("输入需求标题关键词").fill("客户");
     await page.getByRole("button", { name: "检索", exact: true }).click();
     await page.getByRole("button", { name: /修复客户导出异常/ }).click();
+    await page.getByLabel("补充说明", { exact: true }).fill(
+      "补充验收：导出结果应与当前筛选条件一致。\n指导意见：沿用现有下载流程，并补充空结果提示。",
+    );
     await capture("02-new-tapd");
     await page.getByRole("button", { name: "工作区设置", exact: true }).click();
     await page.getByLabel("项目代码仓库", { exact: true }).waitFor();
@@ -335,7 +347,14 @@ async function main() {
     await capture("03-project-settings");
     await page.getByRole("link", { name: "TAPD 渠道", exact: true }).click();
     await capture("04-tapd-settings");
-    await page.getByRole("button", { name: "编辑工作区", exact: true }).click();
+    await page.getByRole("link", { name: "提示词模板", exact: true }).click();
+    await page.getByRole("textbox", { name: "提示词模板内容", exact: true }).waitFor();
+    await capture("04-workspace-prompt-settings");
+    await page.getByRole("button", { name: "TAPD 需求", exact: true }).click();
+    await page.locator(".prompt-preview > summary").click();
+    await page.locator(".prompt-preview").scrollIntoViewIfNeeded();
+    await capture("04-workspace-prompt-preview");
+    await page.getByRole("button", { name: "重命名", exact: true }).click();
     await capture("07-workspace-edit");
     await page.keyboard.press("Escape");
     await load("approval");
@@ -362,7 +381,8 @@ async function main() {
     await capture('08-permission-unavailable');
     await page.keyboard.press('Escape');
     await load('settings-error');
-    await page.getByLabel('Codex 模型', { exact: true }).selectOption('example-model');
+    await page.getByRole('combobox', { name: 'Codex 模型', exact: true }).click();
+    await page.locator('.model-option[data-model="example-model"]').click();
     await page.getByText(/模拟执行设置保存失败，请重试。/).waitFor();
     await capture('08-settings-save-error');
     await load("error");
@@ -376,7 +396,8 @@ async function main() {
       .click();
     await capture("08-form-error");
     await load("empty");
-    await page.getByRole("button", { name: "返回会话", exact: true }).click();
+    await page.getByRole("button", { name: "＋ 从需求启动", exact: true }).click();
+    await page.getByRole("button", { name: "取消", exact: true }).click();
     await capture("08-empty");
     await load("welcome");
     await page.getByRole("dialog").waitFor();
@@ -395,6 +416,14 @@ async function main() {
       await page.keyboard.press('Escape');
       await load('long-model');
       await capture('05-long-model-' + width);
+      await page.getByRole('combobox', { name: 'Codex 模型', exact: true }).click();
+      await page.getByRole('listbox', { name: 'Codex 模型选项' }).waitFor();
+      await capture('05-model-menu-' + width);
+      await page.keyboard.press('Escape');
+      await page.getByRole('combobox', { name: '思考强度', exact: true }).click();
+      await page.getByRole('listbox', { name: '思考强度选项' }).waitFor();
+      await capture('05-effort-menu-' + width);
+      await page.keyboard.press('Escape');
       await page
         .getByRole("button", { name: "工作区设置", exact: true })
         .click();
@@ -403,14 +432,27 @@ async function main() {
         el.scrollTop = 0;
       });
       await capture("03-settings-" + width);
+      await page.getByRole("link", { name: "提示词模板", exact: true }).click();
+      await page.getByRole("textbox", { name: "提示词模板内容", exact: true }).waitFor();
+      await capture("04-workspace-prompt-settings-" + width);
+      await page.locator(".prompt-preview > summary").click();
+      await page.locator(".prompt-preview").scrollIntoViewIfNeeded();
+      await capture("04-workspace-prompt-preview-" + width);
       await page
         .getByRole("button", { name: "＋ 从需求启动", exact: true })
         .click();
       await page.getByLabel("需求渠道", { exact: true }).selectOption("manual");
       await capture("01-manual-" + width);
+      await page.getByLabel("需求渠道", { exact: true }).selectOption("tapd");
+      await page.getByLabel("需求 ID", { exact: true }).fill("1024");
+      await page.getByLabel("补充说明", { exact: true }).fill(
+        "补充验收：导出结果应与当前筛选条件一致。\n指导意见：保留现有下载流程，补充移动端和空结果提示。",
+      );
+      await capture("02-tapd-" + width);
       await page
-        .getByRole("button", { name: "编辑工作区", exact: true })
+        .getByRole("button", { name: "工作区设置", exact: true })
         .click();
+      await page.getByRole("button", { name: "重命名", exact: true }).click();
       await page
         .getByLabel("工作区名称", { exact: true })
         .fill("这是一个用于验证窄屏布局和名称截断的很长工作区名称");

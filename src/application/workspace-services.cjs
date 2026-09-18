@@ -3,6 +3,14 @@ const {
   readSettings,
   saveSettings,
 } = require("../config/execution-settings.cjs");
+const {
+  readPromptSettings,
+  savePromptSettings,
+} = require("../config/prompt-settings.cjs");
+const {
+  promptTemplateCatalog,
+  MAX_PROMPT_TEMPLATE_LENGTH,
+} = require("../domain/prompt-templates.cjs");
 const { listBaseRefs } = require("../git/repository.cjs");
 const { listModels } = require("../codex/models.cjs");
 const { permissionOptions } = require("../codex/permissions.cjs");
@@ -11,6 +19,14 @@ const {
   saveTapdSettings,
   checkTapdSettings,
 } = require("../channels/tapd/settings.cjs");
+
+function presentPromptSettings(templates) {
+  return {
+    templates,
+    catalog: promptTemplateCatalog,
+    maxLength: MAX_PROMPT_TEMPLATE_LENGTH,
+  };
+}
 
 // Application operations shared by HTTP routes. Channel payload validation
 // remains inside each channel; this layer selects and composes capabilities.
@@ -35,6 +51,12 @@ class WorkspaceServices {
   }
   saveSettings(input) {
     return saveSettings(input, this.configFile);
+  }
+  readPromptSettings() {
+    return presentPromptSettings(readPromptSettings(this.configFile));
+  }
+  savePromptSettings(input) {
+    return presentPromptSettings(savePromptSettings(this.configFile, input));
   }
   listBaseRefs(repository) {
     return listBaseRefs(repository);

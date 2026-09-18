@@ -1,6 +1,6 @@
 <script setup>
 /* global FileReader */
-import { ref } from "vue";
+import { onUnmounted, ref } from "vue";
 import { uploadManualImage } from "../../shared/api/api.js";
 const props = defineProps({
   form: { type: Object, required: true },
@@ -10,6 +10,10 @@ const emit = defineEmits(["uploading", "change"]);
 const uploading = ref(false);
 const error = ref("");
 const previews = ref([]);
+let disposed = false;
+onUnmounted(() => {
+  disposed = true;
+});
 async function upload(event) {
   const files = [...event.target.files];
   event.target.value = "";
@@ -22,15 +26,19 @@ async function upload(event) {
   emit("uploading", true);
   try {
     for (const file of files) {
+      // A workspace switch must not send queued files to the next workspace.
+      if (disposed) return;
       if (file.size > 10 * 1024 * 1024)
         throw new Error(`${file.name} 超过 10 MiB。`);
       const result = await uploadManualImage(file);
+      if (disposed) return;
       const preview = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
         reader.onerror = () => reject(new Error("无法读取图片预览。"));
         reader.readAsDataURL(file);
       });
+      if (disposed) return;
       previews.value.push({ id: result.id, name: file.name, preview });
       emit("change", { images: [...props.form.images, result.id] });
     }

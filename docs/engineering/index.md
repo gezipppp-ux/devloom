@@ -15,6 +15,7 @@ Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install
 - For source integration, settings or portability changes, read [channels-and-settings.md](./channels-and-settings.md).
 - Preserve `tapd.session` and `workflow` settings during authentication refresh. Never commit local credentials, browser state, requirement snapshots or execution logs.
 - `npm run tapd:web` builds and starts the service; `npm start` uses built assets. Other CLI scripts use `npm run <script> -- <arguments>`. Resolve explicit input paths against INIT_CWD when available; repository mappings are relative to the configuration file.
+- `npm run dev` serves Vite HMR and the API on one development port; `npm run dev:watch` also restarts the backend after source changes. The watch supervisor must shut down its child over IPC and wait for exit before replacement, including on Windows. Neither command automatically resumes interrupted requirements.
 
 ## Behavioral invariants
 

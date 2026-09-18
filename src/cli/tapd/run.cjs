@@ -1,6 +1,9 @@
 const path = require('node:path');
 const { loadConfig, runsPath } = require('../../config/runtime.cjs');
 const {
+  getPromptTemplates,
+} = require('../../domain/prompt-templates.cjs');
+const {
   loadSession,
   numericId,
   workspaceId,
@@ -16,6 +19,7 @@ async function main(
 ) {
   const services = {
     loadConfig,
+    getPromptTemplates,
     loadSession,
     runRequirement,
     readRunStatus,
@@ -51,14 +55,21 @@ async function main(
     services.stdout.write(`${JSON.stringify(state, null, 2)}\n`);
     return;
   }
+  const retry = argv.includes('--retry-transition');
+  const runConfig = retry
+    ? config
+    : {
+        ...config,
+        prompt_templates: services.getPromptTemplates(config),
+      };
   const state = await services.runRequirement(
     {
-      config,
+      config: runConfig,
       configFile: file,
       session: services.loadSession(file),
       item,
       directory,
-      retry: argv.includes('--retry-transition'),
+      retry,
     },
     {
       onSession(sessionId, worktree) {

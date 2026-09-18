@@ -1,5 +1,8 @@
 const path = require('node:path');
 const { inputPath, loadConfig, runsPath } = require('../../config/runtime.cjs');
+const {
+  getPromptTemplates,
+} = require('../../domain/prompt-templates.cjs');
 const { loadSession } = require('../../channels/tapd/config.cjs');
 const { detail, selectItem } = require('../../channels/tapd/detail.cjs');
 const { buildTask } = require('../../channels/tapd/task-package.cjs');
@@ -14,6 +17,7 @@ async function main(
 ) {
   const services = {
     loadConfig,
+    getPromptTemplates,
     loadSession,
     detail,
     selectItem,
@@ -22,7 +26,11 @@ async function main(
     ...dependencies,
   };
   const file = configPath(undefined, argv, env);
-  const config = services.loadConfig(file);
+  const loaded = services.loadConfig(file);
+  const config = {
+    ...loaded,
+    prompt_templates: services.getPromptTemplates(loaded),
+  };
   const session = services.loadSession(file);
   const item = await services.detail(
     session,

@@ -19,6 +19,28 @@ async function choosePermission(page, mode) {
   await page.locator(`.permission-option[data-value="${mode}"]`).click();
 }
 
+async function chooseSessionModel(page, model) {
+  await page.getByRole('combobox', { name: 'Codex 模型', exact: true }).click();
+  await page.locator(`.model-option[data-model="${model}"]`).click();
+}
+
+async function chooseSessionEffort(page, effort) {
+  await page.getByRole('combobox', { name: '思考强度', exact: true }).click();
+  await page.locator(`.effort-option[data-effort="${effort}"]`).click();
+}
+
+async function sessionModel(page) {
+  return page
+    .getByRole('combobox', { name: 'Codex 模型', exact: true })
+    .getAttribute('data-model');
+}
+
+async function sessionEffort(page) {
+  return page
+    .getByRole('combobox', { name: '思考强度', exact: true })
+    .getAttribute('data-effort');
+}
+
 async function verifyLanManualCreation(browser, directory, errors) {
   const address = Object.values(os.networkInterfaces()).flat().find((entry) =>
     entry.family === 'IPv4' && !entry.internal)?.address;
@@ -168,12 +190,12 @@ async function verifyExecutionSettings(browser, origin, manager, client, key, er
   try {
     await page.goto(origin);
     await page.getByText('历史回复', { exact: true }).waitFor();
-    await save(() => page.getByLabel('Codex 模型', { exact: true }).selectOption('fixture-model-a'));
-    await save(() => page.getByLabel('思考强度', { exact: true }).selectOption('high'));
+    await save(() => chooseSessionModel(page, 'fixture-model-a'));
+    await save(() => chooseSessionEffort(page, 'high'));
     await save(() => choosePermission(page, 'auto'));
     await peer.goto(origin);
     await peer.getByText('历史回复', { exact: true }).waitFor();
-    assert.equal(await peer.getByLabel('Codex 模型', { exact: true }).inputValue(), 'fixture-model-a');
+    assert.equal(await sessionModel(peer), 'fixture-model-a');
     const input = page.getByRole('textbox', { name: '发送给 Codex 的指令' });
     await input.fill('设置浏览器回归第一轮');
     await page.getByRole('button', { name: '发送 ↑', exact: true }).click();
@@ -183,12 +205,12 @@ async function verifyExecutionSettings(browser, origin, manager, client, key, er
     assert.equal(first.params.effort, 'high');
     assert.equal(first.params.approvalsReviewer, 'auto_review');
     await input.fill('保留尚未发送的草稿');
-    await save(() => page.getByLabel('Codex 模型', { exact: true }).selectOption('fixture-model-b'));
-    await save(() => page.getByLabel('思考强度', { exact: true }).selectOption('medium'));
+    await save(() => chooseSessionModel(page, 'fixture-model-b'));
+    await save(() => chooseSessionEffort(page, 'medium'));
     await save(() => choosePermission(page, 'full'));
     await page.getByText(/下一轮生效/).first().waitFor();
     await peer.waitForFunction(() =>
-      document.querySelector('select[aria-label="Codex 模型"]')?.value === 'fixture-model-b');
+      document.querySelector('[role="combobox"][aria-label="Codex 模型"]')?.dataset.model === 'fixture-model-b');
     assert.equal(await input.inputValue(), '保留尚未发送的草稿');
     assert.deepEqual(client.calls.find((call) => call.method === 'turn/start' && call.params.input[0].text === '设置浏览器回归第一轮'), first);
     await page.getByRole('button', { name: '补充指令 ↑', exact: true }).click();
@@ -198,14 +220,14 @@ async function verifyExecutionSettings(browser, origin, manager, client, key, er
     await page.route(`**${endpoint}`, (route) => route.fulfill({
       status: 400, contentType: 'application/json', body: JSON.stringify({ error: '模拟执行设置保存失败' }),
     }));
-    await page.getByLabel('Codex 模型', { exact: true }).selectOption('fixture-model-a');
+    await chooseSessionModel(page, 'fixture-model-a');
     await page.getByText(/模拟执行设置保存失败/).waitFor();
-    assert.equal(await page.getByLabel('Codex 模型', { exact: true }).inputValue(), 'fixture-model-b');
-    assert.equal(await page.getByLabel('思考强度', { exact: true }).inputValue(), 'medium');
+    assert.equal(await sessionModel(page), 'fixture-model-b');
+    assert.equal(await sessionEffort(page), 'medium');
     await page.unroute(`**${endpoint}`);
     await page.reload();
     await page.getByText('历史回复', { exact: true }).waitFor();
-    assert.equal(await page.getByLabel('Codex 模型', { exact: true }).inputValue(), 'fixture-model-b');
+    assert.equal(await sessionModel(page), 'fixture-model-b');
     await page.getByText(/下一轮生效/).first().waitFor();
     await page.getByRole('button', { name: '■ 停止', exact: true }).click();
     await page.getByRole('button', { name: '■ 停止', exact: true }).waitFor({ state: 'hidden' });
@@ -270,6 +292,38 @@ async function verifyInitialListRefresh(browser, origin, manager, key, errors) {
   } finally {
     await page.close();
     manager.updateTaskMetadata(key, previousMetadata);
+  }
+}
+
+async function verifyUnreadResults(browser, origin, manager, key, errors) {
+  const page = await browser.newPage();
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.context().grantPermissions(['notifications'], { origin });
+  try {
+    await page.goto(origin);
+    await page.getByText('历史回复', { exact: true }).waitFor();
+
+    await page.locator('.session-link').filter({
+      hasText: '修复登录异常',
+    }).click();
+    await page.locator('.session-link.active').filter({
+      hasText: '修复登录异常',
+    }).waitFor();
+    const runtime = manager.runtime(key, 'original');
+    runtime.status = 'completed';
+    runtime.turnId = null;
+    manager.publish(runtime, { type: 'state' });
+
+    const completedTask = page.locator('.session-link').filter({
+      hasText: '【演示】套餐充值入口',
+    });
+    await completedTask.locator('.unread-result').waitFor();
+
+    await completedTask.click();
+    await page.getByText('历史回复', { exact: true }).waitFor();
+    await completedTask.locator('.unread-result').waitFor({ state: 'hidden' });
+  } finally {
+    await page.close();
   }
 }
 
@@ -436,9 +490,8 @@ async function verifyRefreshConsistency(browser, origin, manager, client, key, e
     await page.getByText('旧流式消息，保留最新内容', { exact: true }).waitFor();
     await page.waitForFunction(() =>
       document.querySelector('select[aria-label="任务进度"]').value === 'review');
-    streamSnapshot.body.title = '已应用最新 HTTP 快照';
     await release(streamSnapshot, 'stream-overlay');
-    assert.equal(await page.locator('.session-header h1').textContent(), '已应用最新 HTTP 快照');
+    assert.equal(await page.locator('.session-header h1').count(), 0);
     assert.equal(await page.getByText('旧流式消息，保留最新内容', { exact: true }).count(), 1);
     assert.equal(await page.getByText('请求期间新增的消息', { exact: true }).count(), 1);
     assert.equal(await page.getByLabel('任务进度', { exact: true }).inputValue(), 'review');
@@ -467,10 +520,10 @@ async function verifyRefreshConsistency(browser, origin, manager, client, key, e
       model: 'fixture-model-b', reasoningEffort: 'medium', permissionMode: 'full',
     });
     await page.waitForFunction(() =>
-      document.querySelector('select[aria-label="Codex 模型"]')?.value === 'fixture-model-b');
+      document.querySelector('[role="combobox"][aria-label="Codex 模型"]')?.dataset.model === 'fixture-model-b');
     await release(settingsSnapshot, 'settings-overlay');
-    assert.equal(await page.getByLabel('Codex 模型', { exact: true }).inputValue(), 'fixture-model-b');
-    assert.equal(await page.getByLabel('思考强度', { exact: true }).inputValue(), 'medium');
+    assert.equal(await sessionModel(page), 'fixture-model-b');
+    assert.equal(await sessionEffort(page), 'medium');
     const previousMetadata = manager.store.readTaskMetadata(key);
     const requestedType = previousMetadata.type === 'bug' ? 'other' : 'bug';
     let captureMetadata;
@@ -508,6 +561,8 @@ async function main() {
       detail_url: 'https://example.com/requirements/2',
       description:
         '<h2>完整需求标题</h2><p>第一段完整需求文字</p><ul><li>验收标准一</li></ul><table><tr><td>表格内容</td></tr></table><img src="https://blocked.invalid/download.png" onerror="window.requirementXss=1"><img src="https://blocked.invalid/unknown.png"><a href="javascript:window.requirementXss=1">危险链接</a><script>window.requirementXss=1</script><iframe src="https://blocked.invalid/frame"></iframe><p>正文末尾</p>',
+      supplementary_instructions:
+        '补充需求说明：保留现有支付流程。\n指导意见：先检查边界情况。\n<script>window.supplementXss=1</script>\n<img src="https://blocked.invalid/supplement.png" onerror="window.supplementXss=1">',
     },
     images: [
       {
@@ -597,9 +652,14 @@ async function main() {
     manualChannel,
   ]);
   let submitted;
+  let tapdFailure = true;
   let manualFailure = true;
   manager.start = async (input) => {
     submitted = input;
+    if (input.channel === 'tapd' && tapdFailure) {
+      tapdFailure = false;
+      throw new Error('模拟 TAPD 启动失败，请重试');
+    }
     if (input.channel === 'manual') {
       await manualChannel.resolve(input);
       if (manualFailure) {
@@ -695,6 +755,12 @@ async function main() {
       0,
     );
     assert.equal(await page.evaluate(() => window.requirementXss), undefined);
+    assert.equal(
+      await page.locator('.requirement-supplement pre').textContent(),
+      requirementFixture.workitem.supplementary_instructions,
+    );
+    assert.equal(await page.locator('.requirement-supplement script, .requirement-supplement img').count(), 0);
+    assert.equal(await page.evaluate(() => window.supplementXss), undefined);
     await page.getByText('发送给 Codex 的完整内容', { exact: true }).click();
     assert.equal(
       await page.locator('.requirement-prompt pre').textContent(),
@@ -717,6 +783,10 @@ async function main() {
       .getByRole('heading', { name: 'Markdown 需求', exact: true })
       .waitFor();
     await page.getByText('Markdown 正文末尾', { exact: true }).waitFor();
+    assert.equal(
+      await page.locator('.requirement-supplement pre').textContent(),
+      requirementFixture.workitem.supplementary_instructions,
+    );
     assert.equal(
       await page.locator('.requirement-body img').getAttribute('src'),
       '/api/runs/1-2/images/0',
@@ -872,10 +942,23 @@ async function main() {
       fullPage: true,
     });
     await page.getByRole('textbox', { name: '需求 ID', exact: true }).fill('2');
+    const supplement = page.getByRole('textbox', { name: '补充说明', exact: true });
+    const supplementaryInstructions = '  补充说明：保留现有支付流程。\n指导意见：覆盖空数据和网络错误。  ';
+    assert.equal(await supplement.getAttribute('maxlength'), '60000');
+    assert.equal(await supplement.getAttribute('id'), 'tapd-supplementary-instructions');
+    assert.equal(await supplement.getAttribute('required'), null);
+    await page.getByText('补充说明（可选）', { exact: true }).waitFor();
+    await supplement.fill(supplementaryInstructions);
     await page.getByLabel('Codex 模型', { exact: true }).selectOption('fixture-model-a');
     await page.getByLabel('思考强度', { exact: true }).selectOption('high');
     await choosePermission(page, 'auto');
 
+    await page
+      .getByRole('button', { name: '创建 session 并开始开发 →', exact: true })
+      .click();
+    await page.getByText('模拟 TAPD 启动失败，请重试', { exact: true }).waitFor();
+    assert.equal(submitted.supplementaryInstructions, supplementaryInstructions);
+    assert.equal(await supplement.inputValue(), supplementaryInstructions, 'failed creation preserves the supplement draft');
     await page
       .getByRole('button', { name: '创建 session 并开始开发 →', exact: true })
       .click();
@@ -887,6 +970,7 @@ async function main() {
     assert.equal(submitted.model, 'fixture-model-a');
     assert.equal(submitted.reasoningEffort, 'high');
     assert.equal(submitted.permissionMode, 'auto');
+    assert.equal(submitted.supplementaryInstructions, supplementaryInstructions);
     assert.ok(
       searches.some(
         (request) => request.query === 'wei' && request.workspace === '1',
@@ -895,11 +979,31 @@ async function main() {
     await page
       .getByRole('button', { name: '＋ 从需求启动', exact: true })
       .click();
+    assert.equal(await supplement.inputValue(), '', 'a new task starts without the previous supplement');
+    await page.getByRole('textbox', { name: '需求 ID', exact: true }).fill('2');
     await developer.fill('wei');
     await page.getByTitle('魏文斌1（开发）', { exact: true }).click();
+    await tester.fill('liu');
+    await page.getByTitle('刘嘉辉（测试）', { exact: true }).click();
+    await page
+      .getByRole('button', { name: '创建 session 并开始开发 →', exact: true })
+      .click();
+    await page.getByRole('textbox', { name: '发送给 Codex 的指令' }).waitFor();
+    assert.equal(submitted.channel, 'tapd');
+    assert.equal(submitted.supplementaryInstructions, '', 'the TAPD supplement is optional');
+    await page
+      .getByRole('button', { name: '＋ 从需求启动', exact: true })
+      .click();
+    await developer.fill('wei');
+    await page.getByTitle('魏文斌1（开发）', { exact: true }).click();
+    await supplement.fill('这个补充仅属于当前项目。');
     await page
       .getByRole('textbox', { name: 'TAPD 工作区 ID', exact: true })
       .fill('9');
+    assert.equal(await supplement.inputValue(), '', 'changing TAPD project clears the supplement');
+    await supplement.fill('这个补充仅属于当前需求。');
+    await page.getByRole('textbox', { name: '需求 ID', exact: true }).fill('3');
+    assert.equal(await supplement.inputValue(), '', 'changing requirement ID clears the supplement');
     assert.equal(
       await page
         .locator('.user-search')
@@ -912,10 +1016,16 @@ async function main() {
     await page.getByTitle('魏文斌1（开发）', { exact: true }).waitFor();
     assert.equal(searches.at(-1).workspace, '9');
     await page.keyboard.press('Escape');
+    await supplement.fill('切换渠道后不应保留这段补充。');
     await page
       .getByRole('combobox', { name: '需求渠道', exact: true })
       .selectOption('manual');
     assert.equal(await developer.isVisible(), false);
+    assert.equal(await supplement.isVisible(), false);
+    await page.getByLabel('需求渠道', { exact: true }).selectOption('tapd');
+    assert.equal(await supplement.inputValue(), '', 'switching channels clears the TAPD supplement');
+    await supplement.fill('手动需求不应提交这个 TAPD 补充。');
+    await page.getByLabel('需求渠道', { exact: true }).selectOption('manual');
     await page
       .getByRole('textbox', { name: '需求标题', exact: true })
       .fill('新增登录入口');
@@ -970,6 +1080,7 @@ async function main() {
     await submit.click();
     await page.getByRole('textbox', { name: '发送给 Codex 的指令' }).waitFor();
     assert.equal(submitted.channel, 'manual');
+    assert.equal(Object.hasOwn(submitted, 'supplementaryInstructions'), false);
     assert.equal(submitted.metadata.type, 'other');
     assert.equal(submitted.model, 'fixture-model-b');
     assert.equal(submitted.reasoningEffort, 'medium');
@@ -1043,6 +1154,7 @@ async function main() {
     await verifyExecutionSettings(browser, origin, manager, client, key, errors);
     await verifyPermissionDiscoveryFailures(browser, origin, client, errors);
     await verifyInitialListRefresh(browser, origin, manager, key, errors);
+    await verifyUnreadResults(browser, origin, manager, key, errors);
     await verifyActionSelection(browser, origin, key, errors);
     await verifyRefreshConsistency(browser, origin, manager, client, key, errors);
     await verifyLanManualCreation(browser, directory, errors);

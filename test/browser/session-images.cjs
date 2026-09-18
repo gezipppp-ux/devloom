@@ -26,7 +26,7 @@ async function imagesReady(page, count) {
   'a draft with ready images must not display a stale required-field error');
 }
 
-async function verifyLateImageUpload(page, { pattern, leave, reopen, navigation = false }) {
+async function verifyLateImageUpload(page, { pattern, leave, reopen }) {
   const input = page.getByRole('textbox', { name: '发送给 Codex 的指令' });
   await page.evaluate(() => {
     const originalFetch = window.fetch;
@@ -60,24 +60,17 @@ async function verifyLateImageUpload(page, { pattern, leave, reopen, navigation 
   await pasteImages(page, ['旧会话上传.png']);
   const oldUpload = await captured;
   await leave();
-  if (navigation) {
-    // Workspace selection reloads the document, so its pending fetch no longer
-    // has a live receiver. Complete it before creating the new document's draft.
-    await oldUpload.route.fulfill({ response: oldUpload.response });
-  }
   await reopen();
   await input.fill('保留切换后的新草稿');
   assert.equal(await page.locator('.composer-image-list img').count(), 0);
   const freshUpload = page.waitForRequest((request) =>
     request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/message-images'));
   await pasteImages(page, ['新会话图片.png']);
-  if (!navigation) {
-    await oldUpload.route.fulfill({
-      response: oldUpload.response,
-      headers: { ...oldUpload.response.headers(), 'x-fixture-image': 'old-upload' },
-    });
-    await page.waitForFunction(() => window.processedImageUploads.includes('old-upload'));
-  }
+  await oldUpload.route.fulfill({
+    response: oldUpload.response,
+    headers: { ...oldUpload.response.headers(), 'x-fixture-image': 'old-upload' },
+  });
+  await page.waitForFunction(() => window.processedImageUploads.includes('old-upload'));
   assert.equal((await freshUpload).url(), oldUpload.response.url(),
     'returning to a session keeps uploads scoped to the same workspace and run');
   await imagesReady(page, 1);
@@ -235,7 +228,7 @@ async function verifySessionImages(browser, origin, manager, client, key, errors
       pattern: uploads,
       leave: async () => {
         await page.locator('.session-link').filter({ hasText: '修复登录异常' }).click();
-        await page.getByRole('heading', { name: '修复登录异常', exact: true }).waitFor();
+        await page.locator('.session-link.active').filter({ hasText: '修复登录异常' }).waitFor();
       },
       reopen: async () => {
         await page.locator('.session-link').filter({ hasText: '【演示】套餐充值入口' }).click();

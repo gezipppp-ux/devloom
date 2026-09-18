@@ -94,6 +94,8 @@ app 中的 `use-workspace-selection` 管理工作区与 URL，`use-workspace-con
 
 - 对外命令仍使用 `npm run tapd:*`、`npm start`，实际文件入口由 package.json 维护。systemd 的源码入口使用 `src/cli/web.cjs`，`src/http/server.cjs` 仅导出服务工厂。
 - 安装根由 `src/config/runtime.cjs` 定位；静态资源始终来自安装根 `web/dist`。`RUNNER_DATA_DIR` 只选择数据根。
+- 开发入口 `src/cli/dev.cjs` 可以向 HTTP 工厂注入非 API 页面处理器，以同端口 Vite 中间件替代静态页面；正式入口仍固定使用 `web/dist`。仅开发页面增加 HMR 所需的同源 WebSocket 和 blob worker CSP，HTTP 与 WebSocket 均校验 Host/Origin，Vite 源码访问只允许 `web/`、`shared/` 和依赖目录。
+- `src/cli/dev-watch.cjs` 拥有开发文件监听和子进程生命周期；变更合并后通过 IPC 请求关闭并等待旧进程退出，再启动替代进程。不能用 Windows 强制终止进程代替会话清理，也不能因热更新自动重跑需求。
 - 目录调整不迁移运行数据，不改 API、渠道 ID、session ID、source、run key、记录中的 worktree 路径或历史素材文件名。
 - `npm test` 显式运行 architecture、unit、integration 的 `*.test.cjs`；browser 和 fixtures 不参与自动单测发现，避免意外启动进程。
 - 完整验证：`npm run lint`、`npm test`、`npm run build`、`npm run test:web`。界面和样式迁移还运行 `npm run test:visual`。所有验证使用模拟数据和临时仓库。

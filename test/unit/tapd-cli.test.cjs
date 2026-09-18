@@ -6,6 +6,9 @@ const { test } = require('node:test');
 const { argument, configPath } = require('../../src/cli/arguments.cjs');
 const { dataRoot } = require('../../src/config/runtime.cjs');
 const {
+  getPromptTemplates,
+} = require('../../src/domain/prompt-templates.cjs');
+const {
   captureSession,
 } = require('../../src/channels/tapd/capture-session.cjs');
 const search = require('../../src/cli/tapd/search.cjs');
@@ -160,13 +163,23 @@ test('search, detail, task preview and user commands preserve payloads and safe 
   });
   assert.deepEqual(JSON.parse(stdout.text), item);
   stdout.text = '';
+  const templates = {
+    manual: '{{title}}\n{{content}}\n{{images}}',
+    tapd: 'CLI 预览模板 {{title}}\n{{content}}\n{{supplement}}{{images}}',
+  };
+  const previewConfig = { workspace: { id: workspace }, prompt_templates: templates };
   await task.main([...argv, '--id', item.id], env, {
     loadSession,
-    loadConfig: () => ({ workspace: { id: workspace } }),
+    loadConfig: () => previewConfig,
+    getPromptTemplates: (config) => {
+      assert.equal(config, previewConfig);
+      return getPromptTemplates(config);
+    },
     selectItem,
     detail: async () => item,
     stdout,
-    buildTask: async (_item, _session, target) => {
+    buildTask: async (_item, _session, target, config) => {
+      assert.deepEqual(config.prompt_templates, templates);
       assert.equal(
         target,
         path.join(
@@ -243,6 +256,7 @@ test('run CLI preserves status-only reads, retry flags, stderr callbacks and res
   };
   const dependencies = {
     loadConfig: () => config,
+    getPromptTemplates: () => assert.fail('Status and transition retry must not resolve prompt templates'),
     loadSession: () => session,
     stdout,
     stderr,
@@ -285,6 +299,49 @@ test('run CLI preserves status-only reads, retry flags, stderr callbacks and res
     },
   );
   assert.deepEqual(JSON.parse(stdout.text), state);
+});
+
+test('new run CLI captures templates from the selected workspace configuration before execution', async (t) => {
+  const directory = temporary(t);
+  const file = path.join(directory, 'config.json');
+  const templates = getPromptTemplates({
+    prompt_templates: {
+      tapd: '工作区执行模板 {{title}}\n{{content}}\n{{supplement}}{{images}}',
+    },
+  });
+  const config = {
+    workspace: { id: workspace },
+    tapd: { session },
+    workflow: { allow_write: true },
+    prompt_templates: { tapd: templates.tapd },
+  };
+  const events = [];
+  const result = await run.main(['--config', file, '--id', item.id], {}, {
+    loadConfig: () => config,
+    getPromptTemplates: (loaded) => {
+      assert.equal(loaded, config);
+      events.push('resolve-workspace-prompts');
+      return getPromptTemplates(loaded);
+    },
+    loadSession: () => session,
+    stdout: output(),
+    stderr: output(),
+    runRequirement: async (input) => {
+      events.push('execute');
+      assert.equal(input.retry, false);
+      assert.equal(input.configFile, file);
+      assert.deepEqual(input.config.prompt_templates, templates);
+      assert.equal(input.config.tapd, config.tapd);
+      assert.equal(input.config.workflow, config.workflow);
+      return {
+        execution: { status: 'completed' },
+        transition: { status: 'succeeded' },
+      };
+    },
+  });
+  assert.equal(result, 0);
+  assert.deepEqual(events, ['resolve-workspace-prompts', 'execute']);
+  assert.deepEqual(config.prompt_templates, { tapd: templates.tapd });
 });
 
 test('authentication CLI uses explicit settings and capture endpoint without leaking secrets', async (t) => {

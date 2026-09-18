@@ -20,6 +20,8 @@ function createWebServer({
   channels = manager?.channels,
   workspaces = new Workspaces(),
   staticDirectory = path.join(root, "web", "dist"),
+  pageHandler = (request, response, url) =>
+    serveStatic(request, response, url, staticDirectory),
 } = {}) {
   validateListenHost(host);
   const token = randomBytes(32).toString("hex");
@@ -76,7 +78,7 @@ function createWebServer({
           token,
           events,
         });
-      return serveStatic(request, response, url, staticDirectory);
+      return await pageHandler(request, response, url);
     } catch (error) {
       if (!response.headersSent)
         json(response, error.code === "ENOENT" ? 404 : 400, {
