@@ -34,6 +34,7 @@ const RequirementDetails = defineAsyncComponent(
 const props = defineProps({
   workspaceName: { type: String, default: "" },
   notifyUnreadResult: { type: Function, default: () => {} },
+  canManageSystem: Boolean,
 });
 const emit = defineEmits([
   "rename-workspace",
@@ -73,6 +74,7 @@ const {
   settingsError,
   updateExecutionSettings,
   unreadResultKeys,
+  preferenceError,
   markResultRead,
 } = useWorkspaceConsole({
   canRefresh: () => !creating.value,
@@ -232,6 +234,7 @@ async function worktreeDeleted() {
         @open="open"
       />
       <div class="sidebar-footer">
+        <p v-if="preferenceError" class="error" role="alert">未读状态同步失败：{{ preferenceError }}</p>
         <span :class="['connection', { online }]"></span
         >{{ online ? "服务已连接" : "正在重连服务" }}
       </div>
@@ -256,6 +259,7 @@ async function worktreeDeleted() {
       </div>
       <SettingsPanel
         v-if="settingsOpen"
+        :can-manage-system="canManageSystem"
         @system-settings="emit('system-settings')"
         :workspace-name="props.workspaceName"
         @saved="reloadChannels"

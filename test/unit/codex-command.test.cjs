@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { test } = require('node:test');
 const { resolveCodex } = require('../../src/codex/command.cjs');
-const { AppServer } = require('../../src/codex/app-server.cjs');
+const { AppServerClient } = require('../../src/codex/app-server-client.cjs');
 
 function host(platform, files, env = {}) {
   return {
@@ -199,7 +199,7 @@ test('native executable preserves argument arrays and failed discovery can recon
     }),
     { command: process.execPath, args: ['file with spaces.js'] },
   );
-  const client = new AppServer({ command: './missing-codex' });
+  const client = new AppServerClient({ command: './missing-codex' });
   await assert.rejects(client.connect(), /指定的命令不可用/);
   assert.equal(client.connection, null);
 });

@@ -5,11 +5,11 @@ const http = require('node:http');
 const { EventEmitter, once } = require('node:events');
 const { execFileSync } = require('node:child_process');
 const { test } = require('node:test');
-const { AppServer } = require('../../src/codex/app-server.cjs');
+const { AppServerClient } = require('../../src/codex/app-server-client.cjs');
 const { RunStore } = require('../../src/storage/run-store.cjs');
 const { normalizeItem } = require('../../src/domain/session-item.cjs');
 const { worktreeReason } = require('../../src/git/worktree-access.cjs');
-const { WebSessions } = require('../../src/application/sessions.cjs');
+const { SessionManager } = require('../../src/application/session-manager.cjs');
 const { createWebServer } = require('../../src/http/server.cjs');
 const { temporary } = require('../support/helpers.cjs');
 
@@ -32,7 +32,7 @@ function setup(t) {
     JSON.stringify(state),
   );
   const client = new FakeClient();
-  const manager = new WebSessions({
+  const manager = new SessionManager({
     store,
     client,
     configFile: path.join(directory, 'config.json'),
@@ -43,7 +43,7 @@ function setup(t) {
 }
 
 test('app-server correlates parallel RPC, notifications, server requests, errors and reconnect', async (t) => {
-  const client = new AppServer({
+  const client = new AppServerClient({
     command: process.execPath,
     command_args: [path.join(__dirname, '../fixtures/app-server.cjs')],
   });
@@ -372,7 +372,7 @@ test('HTTP validates origin/token/body, preserves Chinese chunking and streams e
   manager.list = () => [];
   manager.close = async () => {};
   manager.send = async (key, text) => ({ key, text });
-  const application = createWebServer({
+  const application = createWebServer({ testIdentity: true,
     manager,
     staticDirectory: directory,
     configFile: path.join(directory, 'missing.json'),

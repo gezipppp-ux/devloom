@@ -1,6 +1,16 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { readOptional, writeConfig } = require("./json-files.cjs");
+const { createHash } = require("node:crypto");
+const { databaseForPath } = require("./database-registry.cjs");
+
+function fetchStateFile(commonDirectory, configFile) {
+  const database = databaseForPath(configFile);
+  if (!database) return path.join(commonDirectory, "web-coding-fetch.json");
+  const identity = process.platform === "win32" ? commonDirectory.toLowerCase() : commonDirectory;
+  const hash = createHash("sha256").update(identity).digest("hex");
+  return path.join(database.dataRoot, "cache", "repository-records", `${hash}.json`);
+}
 
 async function withRepositoryOperation(commonDirectory, operation) {
   const lock = path.join(commonDirectory, "web-coding-operation.lock");
@@ -19,13 +29,13 @@ async function withRepositoryOperation(commonDirectory, operation) {
   }
 }
 
-function readFetchState(commonDirectory) {
-  return readOptional(path.join(commonDirectory, "web-coding-fetch.json"));
+function readFetchState(commonDirectory, configFile) {
+  return readOptional(fetchStateFile(commonDirectory, configFile));
 }
 
-function writeFetchState(commonDirectory, remote) {
+function writeFetchState(commonDirectory, remote, configFile) {
   const value = { remote, fetchedAt: new Date().toISOString() };
-  writeConfig(path.join(commonDirectory, "web-coding-fetch.json"), value);
+  writeConfig(fetchStateFile(commonDirectory, configFile), value);
   return value;
 }
 

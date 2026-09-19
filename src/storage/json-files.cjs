@@ -1,9 +1,12 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
-const pause = new Int32Array(new SharedArrayBuffer(4));
+const { withFileLock } = require("./file-lock.cjs");
+const { databaseForPath } = require("./database-registry.cjs");
 
 function readOptional(file) {
+  const database = databaseForPath(file);
+  if (database) return database.readDocument(file) ?? {};
   try {
     return JSON.parse(fs.readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
   } catch (error) {
@@ -13,6 +16,8 @@ function readOptional(file) {
 }
 
 function writeConfig(file, value) {
+  const database = databaseForPath(file);
+  if (database) return database.writeDocument(file, value);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const temporary = `${file}.${randomUUID()}.tmp`;
   try {
@@ -28,27 +33,13 @@ function writeConfig(file, value) {
 // Serialize read-modify-write across service processes without holding a lock
 // during network or Git operations. A crashed writer's lock fails closed.
 function updateConfig(file, update) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const lock = `${file}.lock`;
-  const deadline = Date.now() + 5000;
-  for (;;) {
-    try {
-      fs.mkdirSync(lock);
-      break;
-    } catch (error) {
-      if (error.code !== "EEXIST") throw error;
-      if (Date.now() >= deadline)
-        throw new Error(`JSON configuration is locked: ${lock}. Check that all writers have stopped before removing an abandoned lock.`);
-      Atomics.wait(pause, 0, 0, 10);
-    }
-  }
-  try {
+  const database = databaseForPath(file);
+  if (database) return database.updateDocument(file, update);
+  return withFileLock(file, () => {
     const value = update(readOptional(file));
     writeConfig(file, value);
     return value;
-  } finally {
-    fs.rmdirSync(lock);
-  }
+  });
 }
 
 module.exports = { readOptional, writeConfig, updateConfig };

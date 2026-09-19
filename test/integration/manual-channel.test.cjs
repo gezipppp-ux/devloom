@@ -7,14 +7,14 @@ const { test } = require('node:test');
 const { EventEmitter } = require('node:events');
 const { temporary, png } = require('../support/helpers.cjs');
 const { createManualChannel } = require('../../src/channels/manual/adapter.cjs');
-const { ManualUploads } = require('../../src/channels/manual/uploads.cjs');
+const { ManualUploadStore } = require('../../src/channels/manual/manual-upload-store.cjs');
 const { titleSlug } = require('../../src/channels/manual/task-package.cjs');
-const { ChannelRegistry } = require('../../src/channels/registry.cjs');
+const { ChannelRegistry } = require('../../src/channels/channel-registry.cjs');
 const { worktreePlan, createWorktree } = require('../../src/git/worktrees.cjs');
 const { validateWorktreeName } = require('../../src/domain/worktree-name.cjs');
 const { sourceFor } = require('../../src/domain/run-identity.cjs');
 const { createWebServer } = require('../../src/http/server.cjs');
-const { WebSessions } = require('../../src/application/sessions.cjs');
+const { SessionManager } = require('../../src/application/session-manager.cjs');
 const { saveSettings } = require('../../src/config/execution-settings.cjs');
 const { FakeClient } = require('../fixtures/web-client.cjs');
 
@@ -133,7 +133,7 @@ test('manual channel validates input, preserves full text and copies image-only 
 
 test('concurrent cleanup of expired uploads does not reject an unrelated new upload', (t) => {
   const directory = temporary(t);
-  const uploads = new ManualUploads(directory);
+  const uploads = new ManualUploadStore(directory);
   const expired = uploads.upload(png);
   const file = path.join(directory, expired.id);
   const old = new Date(Date.now() - 25 * 60 * 60 * 1000);
@@ -211,7 +211,7 @@ test('manual upload HTTP requires same origin and token, checks bytes, and keeps
   const { channel, configFile } = fixture(t);
   const manager = new EventEmitter();
   manager.close = async () => {};
-  const server = createWebServer({
+  const server = createWebServer({ testIdentity: true,
     configFile,
     manager,
     channels: new ChannelRegistry([channel]),
@@ -271,7 +271,7 @@ test(
       configFile,
     );
     const client = new FakeClient();
-    const manager = new WebSessions({
+    const manager = new SessionManager({
       configFile,
       runsDirectory: path.join(directory, 'runs'),
       client,

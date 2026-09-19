@@ -2,11 +2,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { test } = require('node:test');
-const { AppServer } = require('../../src/codex/app-server.cjs');
+const { AppServerClient } = require('../../src/codex/app-server-client.cjs');
 const { temporary } = require('../support/helpers.cjs');
 
 test('explicit shutdown is terminal and cannot launch another transport', async () => {
-  const client = new AppServer({ command: process.execPath });
+  const client = new AppServerClient({ command: process.execPath });
   client.close();
   client.open = () => assert.fail('closed transport must not spawn');
   await assert.rejects(client.connect(), /服务已关闭/);
@@ -31,7 +31,7 @@ test('failed initialization cannot close a replacement connection started by dis
     });
   `,
   );
-  const client = new AppServer({
+  const client = new AppServerClient({
     command: process.execPath,
     command_args: [failed],
   });
@@ -59,7 +59,7 @@ test('closed stdout rejects pending RPC promptly even when the process remains a
     setInterval(()=>{},1000);
   `,
   );
-  const client = new AppServer({
+  const client = new AppServerClient({
     command: process.execPath,
     command_args: [script],
   });

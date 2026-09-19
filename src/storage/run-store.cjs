@@ -4,8 +4,11 @@ const { randomUUID } = require("node:crypto");
 const { RUN_KEY } = require("../domain/run-identity.cjs");
 const { normalizeItem } = require("../domain/session-item.cjs");
 const { readOptional, writeConfig, updateConfig } = require("./json-files.cjs");
-const { updateState } = require("./run-state.cjs");
-const { MessageImages } = require("./message-images.cjs");
+const { readState, updateState } = require("./run-state.cjs");
+const { MessageImageStore } = require("./message-image-store.cjs");
+const { databaseForPath } = require("./database-registry.cjs");
+const { writeArtifact, materializeArtifact, appendArtifact } = require("./artifact-store.cjs");
+const { SessionHistoryStore } = require("./session-history-store.cjs");
 const {
   defaultTaskMetadata,
   validateTaskMetadata,
@@ -16,6 +19,7 @@ class RunStore {
     this.directory = path.resolve(directory);
     this.owned = new Set();
     this.ownerToken = randomUUID();
+    this.database = databaseForPath(this.directory);
   }
 
   claim(key) {
@@ -94,12 +98,11 @@ class RunStore {
   }
 
   read(key) {
-    return JSON.parse(
-      fs.readFileSync(path.join(this.dir(key), "run.json"), "utf8"),
-    );
+    return readState(path.join(this.dir(key), "run.json"));
   }
 
   hasRun(key) {
+    if (this.database) return this.database.readDocument(path.join(this.dir(key), "run.json")) !== undefined;
     return fs.existsSync(path.join(this.dir(key), "run.json"));
   }
 
@@ -112,12 +115,13 @@ class RunStore {
   }
 
   writeFinal(key, text) {
-    fs.writeFileSync(path.join(this.dir(key), "final.md"), text, {
-      mode: 0o600,
-    });
+    writeArtifact(path.join(this.dir(key), "final.md"), text, { mimeType: "text/markdown" });
   }
 
   list() {
+    if (this.database) return this.database.listDocuments(this.directory)
+      .filter(({ path: file }) => path.basename(file) === "run.json")
+      .map(({ path: file, value }) => ({ key: path.basename(path.dirname(file)), state: value }));
     if (!fs.existsSync(this.directory)) return [];
     return fs
       .readdirSync(this.directory)
@@ -159,6 +163,7 @@ class RunStore {
   }
 
   legacyHistory(key) {
+    if (this.database) return this.savedHistory(key).items;
     const file = path.join(this.dir(key), "events.jsonl");
     if (!fs.existsSync(file)) return [];
     const fd = fs.openSync(file, "r");
@@ -191,6 +196,7 @@ class RunStore {
   }
 
   readWeb(key) {
+    if (this.database) return readOptional(path.join(this.dir(key), "web-session.json"));
     try {
       return JSON.parse(
         fs.readFileSync(path.join(this.dir(key), "web-session.json"), "utf8"),
@@ -202,28 +208,57 @@ class RunStore {
   }
 
   log(key, event) {
-    fs.mkdirSync(this.dir(key), { recursive: true });
-    fs.appendFileSync(
+    appendArtifact(
       path.join(this.dir(key), "web-events.jsonl"),
       `${JSON.stringify({ at: new Date().toISOString(), ...event })}\n`,
-      { mode: 0o600 },
     );
+  }
+
+  saveHistoryItem(key, item) {
+    new SessionHistoryStore(this.dir(key)).save(item);
+  }
+
+  recordNotification(key, notification) {
+    if (this.database) appendArtifact(path.join(this.dir(key), "codex-events.jsonl"),
+      `${JSON.stringify(notification)}\n`);
+  }
+
+  savedHistory(key, cursor) {
+    return new SessionHistoryStore(this.dir(key)).list(cursor);
+  }
+
+  reconcileHistory(key, items, startedAt) {
+    new SessionHistoryStore(this.dir(key)).reconcile(items, startedAt);
   }
 
   taskFile(key) {
     const current = path.join(this.dir(key), "requirement.json");
+    if (this.database) return current;
     return fs.existsSync(current)
       ? current
       : path.join(this.dir(key), "tapd-task.json");
   }
 
   readTask(key) {
+    if (this.database) {
+      const value = this.database.readDocument(this.taskFile(key));
+      if (!value) throw Object.assign(new Error("任务资料不存在。"), { code: "ENOENT" });
+      return value;
+    }
     return JSON.parse(fs.readFileSync(this.taskFile(key), "utf8"));
   }
 
   imagePath(key, index) {
     if (!/^\d+$/.test(index)) throw new Error("无效的图片编号");
     const task = this.readTask(key);
+    if (this.database) {
+      const recorded = task.images?.[Number(index)]?.path;
+      if (!recorded) throw Object.assign(new Error("任务图片不存在。"), { code: "ENOENT" });
+      const relative = path.relative(this.dir(key), recorded);
+      if (!relative || relative.startsWith("..") || path.isAbsolute(relative))
+        throw new Error("图片不属于当前任务。");
+      return materializeArtifact(recorded);
+    }
     const file = fs.realpathSync.native(task.images?.[Number(index)]?.path || "");
     const root = fs.realpathSync.native(this.dir(key));
     const relative = path.relative(root, file);
@@ -234,7 +269,7 @@ class RunStore {
 
   messageImages(key) {
     this.read(key);
-    return new MessageImages(this.dir(key));
+    return new MessageImageStore(this.dir(key));
   }
 }
 

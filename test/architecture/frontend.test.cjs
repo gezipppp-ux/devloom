@@ -2,11 +2,13 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { test } = require("node:test");
+const { Linter } = require("eslint");
+const { parse } = require("vue/compiler-sfc");
 
 const root = path.resolve(__dirname, "../..");
 const sourceRoot = path.join(root, "web/src");
 const catalogRoot = path.join(root, "shared");
-const features = new Set(["workspaces", "tasks", "session", "settings"]);
+const features = new Set(["accounts", "workspaces", "tasks", "session", "settings"]);
 const sharedGroups = new Set(["api", "components", "styles"]);
 
 function filesIn(directory) {
@@ -24,38 +26,41 @@ function isInside(directory, file) {
 
 function scriptSource(file, source) {
   if (!file.endsWith(".vue")) return source;
-  return [...source.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/g)]
-    .map((match) => match[1]).join("\n");
+  const { descriptor, errors } = parse(source, { filename: file });
+  assert.deepEqual(errors, [], `${file}: Vue components must parse`);
+  return [descriptor.script, descriptor.scriptSetup]
+    .filter(Boolean).map((script) => script.content).join("\n");
 }
 
 function moduleImports(source, name) {
-  // Tokenize only the literal imports used in this project. Comments and string
-  // contents are opaque; Vue templates/styles never reach this scanner.
-  const tokens = [...source.matchAll(
-    /\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|[\w$]+|[^\s]/g,
-  )].map((match) => match[0]).filter((token) =>
-    !token.startsWith("//") && !token.startsWith("/*"));
   const imports = [];
-  const literal = (token) => token && /^["']/.test(token);
-  for (let index = 0; index < tokens.length; index++) {
-    if (tokens[index] !== "import" || tokens[index - 1] === ".") continue;
-    const next = tokens[index + 1];
-    if (next === ".") continue; // import.meta is not a module dependency.
-    if (next === "(") {
-      assert.ok(literal(tokens[index + 2]) && tokens[index + 3] === ")",
-        `${name}: dynamic imports must use a literal path`);
-      imports.push(tokens[index + 2].slice(1, -1));
-    } else if (literal(next)) {
-      imports.push(next.slice(1, -1));
-    } else {
-      let end = index + 1;
-      while (end < tokens.length && !["from", ";"].includes(tokens[end])) end++;
-      assert.ok(tokens[end] === "from" && literal(tokens[end + 1]),
-        `${name}: unsupported static import; update the architecture scanner`);
-      imports.push(tokens[end + 1].slice(1, -1));
-      index = end + 1;
-    }
-  }
+  const messages = new Linter().verify(source, [{
+    languageOptions: { sourceType: "module", ecmaVersion: "latest" },
+    plugins: {
+      architecture: {
+        rules: {
+          inspect: {
+            create(context) {
+              function collect(node) {
+                if (!node.source) return;
+                if (node.source.type !== "Literal" || typeof node.source.value !== "string")
+                  context.report({ node, message: "Module imports must use a literal path." });
+                else imports.push(node.source.value);
+              }
+              return {
+                ImportDeclaration: collect,
+                ImportExpression: collect,
+                ExportNamedDeclaration: collect,
+                ExportAllDeclaration: collect,
+              };
+            },
+          },
+        },
+      },
+    },
+    rules: { "architecture/inspect": "error" },
+  }]);
+  assert.deepEqual(messages, [], `${name}: imports must parse and use a literal path`);
   return imports;
 }
 
@@ -79,6 +84,8 @@ test("frontend files stay in declared feature directories with consistent names"
     const parts = path.relative(sourceRoot, file).split(path.sep);
     const name = parts.join("/");
     const basename = parts.at(-1);
+    assert.ok(parts.slice(0, -1).every((part) => /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(part)),
+      `${name}: directories must use kebab-case`);
     if (["main.js", "README.md"].includes(name)) continue;
     assert.ok(
       (parts[0] === "app" && parts.length >= 2) ||
@@ -96,11 +103,16 @@ test("frontend files stay in declared feature directories with consistent names"
 
 test("frontend relative static and dynamic imports resolve within allowed layers", () => {
   let checked = 0;
+  const graph = new Map();
   for (const file of filesIn(sourceRoot).filter((entry) => /\.(?:js|vue)$/.test(entry))) {
     const name = path.relative(sourceRoot, file).split(path.sep).join("/");
     const source = scriptSource(file, fs.readFileSync(file, "utf8"));
+    const targets = [];
+    graph.set(file, targets);
     for (const specifier of moduleImports(source, name).filter((entry) => entry.startsWith("."))) {
+      assert.match(specifier, /\.(?:js|vue|css|json)$/, `${name}: local imports need explicit extensions`);
       const target = path.resolve(path.dirname(file), specifier);
+      targets.push(target);
       assert.ok(fs.existsSync(target) && fs.statSync(target).isFile(),
         `${name}: unresolved relative import ${specifier}`);
       if (isInside(sourceRoot, target)) {
@@ -117,6 +129,17 @@ test("frontend relative static and dynamic imports resolve within allowed layers
     }
   }
   assert.ok(checked > 0, "frontend import checks must inspect actual dependencies");
+  const completed = new Set();
+  const active = new Set();
+  function visit(file) {
+    assert.ok(!active.has(file), `Frontend dependency cycle at ${path.relative(sourceRoot, file)}`);
+    if (completed.has(file)) return;
+    active.add(file);
+    for (const target of graph.get(file) || []) visit(target);
+    active.delete(file);
+    completed.add(file);
+  }
+  for (const file of graph.keys()) visit(file);
 });
 
 test("frontend scanner distinguishes imports from comments, strings and Vue styles", () => {
@@ -137,6 +160,10 @@ test("frontend scanner distinguishes imports from comments, strings and Vue styl
     "../../shared/api/api.js", "./theme.css", "./Details.vue",
   ]);
   assert.throws(() => moduleImports("import(dynamicPath)", "Fixture.js"), /literal path/);
+  assert.deepEqual(moduleImports(`export { api } from './api.js'; export * from './shared.js';
+    const text = \`result: \${import('./lazy.js')}\`;`, "fixture.js"), [
+    "./api.js", "./shared.js", "./lazy.js",
+  ]);
   assert.equal(canImport("features/tasks", "features/session"), false);
   assert.equal(canImport("features/tasks", "app"), false);
   assert.equal(canImport("shared", "features/tasks"), false);

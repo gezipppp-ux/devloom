@@ -76,7 +76,7 @@ function inspectModules() {
       const name = path.relative(sourceRoot, file).split(path.sep).join("/");
       const group = name.split("/")[0];
       const source = fs.readFileSync(file, "utf8");
-      const { imports, commandAccess } = inspectSource(source);
+      const { imports, commandAccess, classes } = inspectSource(source);
       const resolve = createRequire(file).resolve;
       const local = imports
         .filter((specifier) => specifier.startsWith("."))
@@ -91,13 +91,14 @@ function inspectModules() {
           }
           return { target, specifier };
         });
-      return { file, name, group, local, imports, commandAccess };
+      return { file, name, group, local, imports, commandAccess, classes };
     });
 }
 
 function inspectSource(source) {
   const imports = [];
   const commandAccess = [];
+  const classes = [];
   const propertyName = (node) =>
     node.computed ? node.property.value : node.property.name;
   const messages = new Linter().verify(source, [
@@ -109,6 +110,14 @@ function inspectSource(source) {
             inspect: {
               create(context) {
                 return {
+                  ClassDeclaration(node) {
+                    classes.push(node.id.name);
+                  },
+                  ImportExpression(node) {
+                    if (node.source.type !== "Literal" || typeof node.source.value !== "string")
+                      context.report({ node, message: "Use literal imports so module boundaries can be checked." });
+                    else imports.push(node.source.value);
+                  },
                   CallExpression(node) {
                     if (
                       node.callee.type !== "Identifier" ||
@@ -159,8 +168,40 @@ function inspectSource(source) {
     [],
     "Architecture source parsing must succeed with literal imports.",
   );
-  return { imports, commandAccess };
+  return { imports, commandAccess, classes };
 }
+
+test("backend directories, modules and classes use matching responsibility names", () => {
+  for (const file of filesIn(sourceRoot)) {
+    const parts = path.relative(sourceRoot, file).split(path.sep);
+    assert.ok(parts.slice(0, -1).every((part) => /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(part)),
+      `${file}: directories must use kebab-case`);
+    assert.ok(parts.at(-1) === "README.md" || /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.cjs$/.test(parts.at(-1)),
+      `${file}: backend modules must use kebab-case .cjs names`);
+  }
+  for (const module of inspectModules()) {
+    for (const name of module.classes) {
+      assert.match(name, /^[A-Z][A-Za-z0-9]*$/, `${module.name}: classes must use PascalCase`);
+      const filename = name.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+      assert.equal(path.basename(module.file, ".cjs"), filename,
+        `${module.name}: give each class its own corresponding kebab-case module`);
+    }
+    for (const { specifier } of module.local)
+      assert.match(specifier, /\.(?:cjs|json)$/, `${module.name}: local imports need explicit extensions`);
+  }
+});
+
+test("tests and fixtures stay in their declared directories with kebab-case names", () => {
+  const testRoot = path.join(root, "test");
+  for (const file of filesIn(testRoot)) {
+    const parts = path.relative(testRoot, file).split(path.sep);
+    assert.ok(["architecture", "unit", "integration", "browser", "fixtures", "support"].includes(parts[0]),
+      `${file}: select a declared test category`);
+    assert.ok(parts.slice(0, -1).every((part) => /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(part)));
+    const suffix = ["architecture", "unit", "integration"].includes(parts[0]) ? "\\.test\\.cjs" : "\\.cjs";
+    assert.match(parts.at(-1), new RegExp(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*${suffix}$`));
+  }
+});
 
 test("backend modules resolve within their declared layers and shared catalogs", () => {
   const modules = inspectModules();
@@ -197,6 +238,9 @@ test("backend modules resolve within their declared layers and shared catalogs",
             path.join(sourceRoot, "config/runtime.cjs"),
             `${module.name}: settings operations belong to application services`,
           );
+        if (module.group === "application" && targetGroup === "git")
+          assert.notEqual(target, path.join(sourceRoot, "git/command.cjs"),
+            `${module.name}: use Git operation APIs instead of composing commands in application services`);
       } else {
         assert.ok(
           module.group === "domain" &&
@@ -229,6 +273,15 @@ test("only CLI adapters access command arguments, terminal output and process ex
         ),
         `${module.name}: Git/process operations must have their own infrastructure module`,
       );
+    if (module.group === "application")
+      assert.ok(!module.imports.some((specifier) => /^(?:node:)?fs(?:\/|$)/.test(specifier)),
+        `${module.name}: application services use storage APIs instead of owning disk formats`);
+    if (module.group !== "storage")
+      assert.ok(!module.imports.some((specifier) => /^(?:better-sqlite3|knex)(?:\/|$)/.test(specifier)),
+        `${module.name}: database drivers and migrations belong to storage`);
+    if (module.name === "execution/runner.cjs")
+      assert.ok(!module.imports.some((specifier) => /^(?:node:)?fs(?:\/|$)/.test(specifier)),
+        `${module.name}: execution persistence belongs in ExecutionStore`);
   }
 });
 
@@ -237,16 +290,21 @@ test("architecture inspection recognizes real dependencies and ignores example t
     inspectSource(
       `// require('bad'); process.argv\nconst example = "process.exit(1)";`,
     ),
-    { imports: [], commandAccess: [] },
+    { imports: [], commandAccess: [], classes: [] },
   );
   assert.deepEqual(
     inspectSource(`require('./task.cjs'); process['argv']; require.main;`),
     {
       imports: ["./task.cjs"],
       commandAccess: ["process.argv", "require.main"],
+      classes: [],
     },
   );
   assert.throws(() => inspectSource("require(variable)"), /literal imports/);
+  assert.throws(() => inspectSource("import(variable)"), /literal imports/);
+  assert.deepEqual(inspectSource("class ExampleClient {} import('vite');"), {
+    imports: ["vite"], commandAccess: [], classes: ["ExampleClient"],
+  });
 });
 
 test("backend module dependencies do not contain cycles", () => {

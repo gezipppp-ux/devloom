@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { test } = require("node:test");
 const { setImmediate } = require("node:timers");
-const { WebSessions } = require("../../src/application/sessions.cjs");
+const { SessionManager } = require("../../src/application/session-manager.cjs");
 const { RunStore } = require("../../src/storage/run-store.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const { temporary } = require("../support/helpers.cjs");
@@ -27,7 +27,7 @@ function setup(t, { onStarted, onFinishing } = {}) {
     worktree: { path: directory },
     execution: { status: "starting" },
   };
-  const manager = new WebSessions({
+  const manager = new SessionManager({
     store,
     client,
     configFile: path.join(directory, "config.json"),

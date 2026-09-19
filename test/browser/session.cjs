@@ -6,13 +6,14 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { chromium } = require('playwright');
 const { RunStore } = require('../../src/storage/run-store.cjs');
-const { WebSessions } = require('../../src/application/sessions.cjs');
+const { SessionManager } = require('../../src/application/session-manager.cjs');
 const { createWebServer } = require('../../src/http/server.cjs');
 const { FakeClient } = require('../fixtures/web-client.cjs');
 const { temporary, png } = require('../support/helpers.cjs');
-const { ChannelRegistry } = require('../../src/channels/registry.cjs');
+const { ChannelRegistry } = require('../../src/channels/channel-registry.cjs');
 const { createManualChannel } = require('../../src/channels/manual/adapter.cjs');
 const { verifySessionImages } = require('./session-images.cjs');
+const { verifyStartTaskLock } = require('./start-task.cjs');
 
 async function choosePermission(page, mode) {
   await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
@@ -51,7 +52,7 @@ async function verifyLanManualCreation(browser, directory, errors) {
   const configFile = path.join(directory, 'lan-missing.json');
   const manual = createManualChannel(configFile, { uploadDirectory: path.join(directory, 'lan-uploads') });
   const client = new FakeClient();
-  const manager = new WebSessions({
+  const manager = new SessionManager({
     store: new RunStore(path.join(directory, 'lan-runs')), client,
     channels: new ChannelRegistry([manual]),
   });
@@ -62,7 +63,7 @@ async function verifyLanManualCreation(browser, directory, errors) {
     submitted.push({ input, id: resolved.item.id });
     throw new Error('局域网模拟请求已校验，未执行任务');
   };
-  const application = createWebServer({ host: '0.0.0.0', manager, configFile });
+  const application = createWebServer({ host: '0.0.0.0', manager, configFile, testIdentity: true });
   await application.listen(0);
   const origin = `http://${address}:${application.server.address().port}`;
   const page = await browser.newPage();
@@ -615,7 +616,7 @@ async function main() {
     store.writeTaskMetadata(otherKey, { type, progress });
   }
   const client = new FakeClient(),
-    manager = new WebSessions({ store, client, worktreeReason: () => null });
+    manager = new SessionManager({ store, client, worktreeReason: () => null });
   const searches = [];
   const manualChannel = createManualChannel(
     path.join(directory, 'missing.json'),
@@ -670,6 +671,7 @@ async function main() {
     return { key, accepted: true };
   };
   const application = createWebServer({
+    testIdentity: true,
     manager,
     configFile: path.join(directory, 'missing.json'),
   });
@@ -964,9 +966,7 @@ async function main() {
     await page.getByLabel('思考强度', { exact: true }).selectOption('high');
     await choosePermission(page, 'auto');
 
-    await page
-      .getByRole('button', { name: '创建 session 并开始开发 →', exact: true })
-      .click();
+    await verifyStartTaskLock(page);
     await page.getByText('模拟 TAPD 启动失败，请重试', { exact: true }).waitFor();
     assert.equal(submitted.supplementaryInstructions, supplementaryInstructions);
     assert.equal(await supplement.inputValue(), supplementaryInstructions, 'failed creation preserves the supplement draft');

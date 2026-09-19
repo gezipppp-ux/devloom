@@ -124,6 +124,13 @@ async function main() {
   let exitCode;
   try {
     createFixture(directory);
+    execFileSync(process.execPath, [path.join(directory, "src", "cli", "accounts.cjs"), "init", "--username", "admin"], {
+      cwd: directory,
+      windowsHide: true,
+      env: { ...process.env, RUNNER_DATA_DIR: path.join(directory, "data") },
+      input: "development-fixture-password\ndevelopment-fixture-password\n",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
     const port = await availablePort();
     const origin = `http://127.0.0.1:${port}`;
     child = fork(
@@ -163,6 +170,12 @@ async function main() {
       headless: true,
     });
     const page = await browser.newPage();
+    const preAuth = await (await page.request.get(`${origin}/api/auth/session`)).json();
+    const login = await page.request.post(`${origin}/api/auth/login`, {
+      headers: { origin, "x-tapd-token": preAuth.token },
+      data: { username: "admin", password: "development-fixture-password" },
+    });
+    assert.equal(login.status(), 200);
     const errors = [];
     let documents = 0;
     page.on("pageerror", (error) => errors.push(error.message));
@@ -172,7 +185,7 @@ async function main() {
     await page.goto(origin);
     await page.getByRole("heading", { name: "Before hot update" }).waitFor();
     await page.waitForFunction(
-      () => document.querySelector("#token")?.textContent.length === 64,
+      () => document.querySelector("#token")?.textContent.length > 20,
     );
     const originalToken = await page.locator("#token").textContent();
     await page.evaluate(() => {
@@ -196,11 +209,8 @@ async function main() {
       "Vue template changes must update without a document reload.",
     );
     assert.equal(await page.locator("#token").textContent(), originalToken);
-    assert.equal(
-      (await (await fetch(`${origin}/api/bootstrap`)).json()).token,
-      originalToken,
-      "Frontend HMR must leave the backend running.",
-    );
+    assert.equal((await page.request.get(`${origin}/api/bootstrap`)).status(), 200,
+      "Frontend HMR must retain the authenticated session.");
 
     fs.appendFileSync(
       path.join(directory, "src", "config", "runtime.cjs"),
@@ -209,7 +219,7 @@ async function main() {
     await page.waitForFunction(
       (previous) => {
         const token = document.querySelector("#token")?.textContent;
-        return token?.length === 64 && token !== previous;
+        return token?.length > 20 && token !== previous && !window.devFixtureMarker;
       },
       originalToken,
       { timeout: 30000 },
@@ -243,12 +253,13 @@ async function main() {
         path.join(
           directory,
           "data",
-          "workspaces",
-          created.workspace.id,
-          "config.json",
+          "db",
+          "web-coding.sqlite",
         ),
       ),
     );
+    const storedWorkspaces = await (await page.request.get(`${origin}/api/workspaces`)).json();
+    assert.ok(storedWorkspaces.workspaces.some((workspace) => workspace.id === created.workspace.id));
     assert.deepEqual(errors, []);
     assert.equal(output.match(/后端代码已修改/g)?.length, 1);
     assert.equal(output.match(/Web Coding Dev:/g)?.length, 2);

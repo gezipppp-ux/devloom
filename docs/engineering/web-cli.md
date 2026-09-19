@@ -1,15 +1,17 @@
 # TAPD Web CLI contracts
 
+> Production HTTP now uses authenticated Fastify sessions and private workspace authorization; history reads SQLite. See [accounts-and-database.md](./accounts-and-database.md). Historical JSON/JSONL references below name logical record types or explicit fixtures. The execution, Git identity and channel transition invariants continue to apply.
+
 > 工作区版：参见 [workspaces.md](./workspaces.md)。生产 Web 的 API 均在 `/api/workspaces/:workspaceId` 下，配置/运行/上传/事件独立。本文旧全局路径仅对应单管理器测试及显式 CLI 配置，不是数据迁移约定。
 
 
 ## 1. Scope / trigger
 
-Applies to `src/codex/app-server.cjs`, `src/application/sessions.cjs`, `src/storage/run-store.cjs`, `src/http/server.cjs` and `web`. The standalone local Vue console uses Codex app-server JSON-RPC, not a PTY or a deployed NestJS service.
+Applies to `src/codex/app-server-client.cjs`, `src/application/session-manager.cjs`, `src/storage/run-store.cjs`, `src/http/server.cjs` and `web`. The standalone local Vue console uses Codex app-server JSON-RPC, not a PTY or a deployed NestJS service.
 
 Process startup lives in `src/cli/web.cjs`. The HTTP module exports an inert server factory and adapts application services. Session commands, event handling, queries and public response shapes are separated in `src/application/`; disk formats remain in `RunStore`, and repository/worktree identity checks live in `src/git/`. Shutdown stops accepting requests before closing SSE and session managers, so EventSource reconnections cannot keep the service alive.
 
-Closing a session manager fences in-flight validation/resume/start operations, drains already-started channel callbacks and transport shutdown, then releases ownership. `AppServer.close()` is terminal; accidental disconnects can reconnect. A completed first turn cannot start another turn until the execution runner finishes persisting its result and releases its lock; steering an active first turn remains supported.
+Closing a session manager fences in-flight validation/resume/start operations, drains already-started channel callbacks and transport shutdown, then releases ownership. `AppServerClient.close()` is terminal; accidental disconnects can reconnect. A completed first turn cannot start another turn until the execution runner finishes persisting its result and releases its lock; steering an active first turn remains supported.
 
 ## 2. Signatures
 

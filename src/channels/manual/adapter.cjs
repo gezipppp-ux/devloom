@@ -4,14 +4,14 @@ const { MAX_IMAGES } = require('../../domain/image-format.cjs');
 const {
   getPromptTemplates,
 } = require('../../domain/prompt-templates.cjs');
-const { ManualUploads } = require('./uploads.cjs');
+const { ManualUploadStore } = require('./manual-upload-store.cjs');
 const { buildManualTaskPackage } = require('./task-package.cjs');
 
 const REQUEST_ID =
   /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
 function createManualChannel(configFile, { uploadDirectory } = {}) {
-  const uploads = new ManualUploads(uploadDirectory);
+  const uploads = new ManualUploadStore(uploadDirectory);
   return {
     id: 'manual',
     label: '手动输入',

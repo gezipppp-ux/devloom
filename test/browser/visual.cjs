@@ -4,8 +4,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("playwright");
-const { Workspaces } = require("../../src/application/workspaces.cjs");
-const { WebSessions } = require("../../src/application/sessions.cjs");
+const { WorkspaceManager } = require("../../src/application/workspace-manager.cjs");
+const { SessionManager } = require("../../src/application/session-manager.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const { temporary, png } = require("../support/helpers.cjs");
@@ -15,13 +15,13 @@ async function main() {
   const cleanup = [];
   const directory = temporary({ after: (fn) => cleanup.push(fn) });
   const client = new FakeClient();
-  const workspaces = new Workspaces({
+  const workspaces = new WorkspaceManager({
     directory: path.join(directory, "workspaces"),
-    createManager: (options) => new WebSessions({ ...options, client }),
+    createManager: (options) => new SessionManager({ ...options, client }),
   });
   const workspace = workspaces.save({ name: "客户管理系统", icon: "folder" });
   workspaces.save({ name: "运营后台", icon: "appstore" });
-  const application = createWebServer({ workspaces });
+  const application = createWebServer({ workspaces, testIdentity: true });
   const origin = await application.listen(0);
   const output = path.resolve("state/browser/unified");
   fs.mkdirSync(output, { recursive: true });
@@ -184,6 +184,9 @@ async function main() {
           body: JSON.stringify(data),
         });
       if (endpoint === "/events") return route.continue();
+      if (endpoint === "/auth/session")
+        return send({ user: { id: "visual-admin", username: "演示管理员", role: "admin", status: "active", mustChangePassword: false }, token: "visual-fixture", settings: { model: null, reasoningEffort: null, permissionMode: "ask", notificationsEnabled: true, grouping: "type" } });
+      if (endpoint === "/account/preferences") return send({ preferences: { unreadRunKeys: [] } });
       if (url.pathname === "/api/bootstrap")
         return send({
           token: "visual-fixture",

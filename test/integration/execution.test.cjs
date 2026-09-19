@@ -6,7 +6,7 @@ const { test } = require('node:test');
 const { runRequirement } = require('../../src/application/tapd-run.cjs');
 const { runExecution } = require('../../src/execution/runner.cjs');
 const { saveState } = require('../../src/storage/run-state.cjs');
-const { WebSessions } = require('../../src/application/sessions.cjs');
+const { SessionManager } = require('../../src/application/session-manager.cjs');
 const { FakeClient } = require('../fixtures/web-client.cjs');
 const { item, png, session, temporary, workflow } = require('../support/helpers.cjs');
 
@@ -61,6 +61,7 @@ test('session execution precedes status write, persists results and prevents dup
   const state = await runRequirement(input, dependencies);
   assert.equal(state.execution.status, 'completed');
   assert.equal(state.transition.status, 'succeeded');
+  assert.equal(fs.existsSync(path.join(input.directory, '.lock')), false);
   assert.deepEqual(calls, ['worktree', 'session', 'transition']);
   assert.equal((await runRequirement(input, dependencies)).reused, true);
   assert.equal(
@@ -149,7 +150,7 @@ test('transition retry preserves a concurrent Web followup on success and failur
     const root = temporary(t);
     const configFile = path.join(root, 'config.json');
     const client = new FakeClient();
-    const manager = new WebSessions({
+    const manager = new SessionManager({
       runsDirectory: path.join(root, 'runs'),
       configFile,
       client,
@@ -214,6 +215,7 @@ test('missing images or required fields fail before worktree, session or TAPD mu
     throw new Error('image download failed');
   };
   await assert.rejects(runRequirement(input, dependencies), /image download/);
+  assert.equal(fs.existsSync(path.join(input.directory, '.lock')), false);
   dependencies.buildTask = async () => ({ images: [], execution_ready: true });
   dependencies.workflowInfo = async () => ({
     ...workflow,
@@ -233,6 +235,8 @@ test('exclusive lock blocks concurrent dispatch; uncertain state is not redispat
   const { calls, input, dependencies } = setup(t);
   fs.mkdirSync(path.join(input.directory, '.lock'));
   await assert.rejects(runRequirement(input, dependencies), /locked/);
+  assert.equal(fs.existsSync(path.join(input.directory, '.lock')), true,
+    'a rejected runner must preserve the existing owner lock');
   fs.rmdirSync(path.join(input.directory, '.lock'));
   fs.writeFileSync(
     path.join(input.directory, 'run.json'),

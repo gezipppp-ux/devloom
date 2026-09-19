@@ -161,6 +161,63 @@ test("a removed remote upstream allows cleanup only after confirming unknown pus
   assert.throws(() => command(repository, "show-ref", "--verify", `refs/heads/${state.worktree.branch}`));
 });
 
+test("edits inside ignored directories invalidate a previous deletion confirmation", async (t) => {
+  const { state } = fixture(t, false);
+  const ignored = path.join(state.worktree.path, "ignored");
+  const nested = path.join(ignored, "nested");
+  fs.mkdirSync(nested, { recursive: true });
+  const file = path.join(nested, "local-data.txt");
+  fs.writeFileSync(file, "original local data");
+  const snapshot = readTaskGit(state);
+  assert.equal(snapshot.canDelete, true);
+  const directoryBefore = fs.statSync(ignored, { bigint: true });
+  fs.writeFileSync(file, "new local data written after confirmation");
+  assert.equal(fs.statSync(ignored, { bigint: true }).mtimeNs, directoryBefore.mtimeNs);
+  await assert.rejects(deleteTaskWorktree(state, confirmation(state, snapshot)), /状态已变化/);
+  assert.equal(fs.readFileSync(file, "utf8"), "new local data written after confirmation");
+});
+
+test("oversized ignored directories cannot authorize deletion with an incomplete fingerprint", async (t) => {
+  const { state } = fixture(t);
+  command(state.worktree.path, "push", "-u", "origin", state.worktree.branch);
+  fs.writeFileSync(path.join(state.worktree.path, "local-commit.txt"), "local commit");
+  commit(state.worktree.path);
+  fs.writeFileSync(path.join(state.worktree.path, "file.txt"), "tracked change");
+  fs.writeFileSync(path.join(state.worktree.path, "untracked.txt"), "untracked change");
+  const ignored = path.join(state.worktree.path, "ignored");
+  fs.mkdirSync(ignored);
+  fs.writeFileSync(path.join(ignored, "preserved.txt"), "preserve local content");
+  const snapshot = readTaskGit(state);
+  const openDirectory = fs.opendirSync;
+  let visited = 0;
+  let closed = false;
+  t.mock.method(fs, "opendirSync", function (directory, ...args) {
+    if (path.resolve(directory) !== path.resolve(ignored)) return openDirectory.call(this, directory, ...args);
+    return {
+      readSync() { visited += 1; return { name: `file-${visited}` }; },
+      closeSync() { closed = true; },
+    };
+  });
+  const status = readTaskGit(state);
+  assert.equal(status.canDelete, false);
+  assert.equal(status.statusToken, null);
+  assert.equal(status.head, snapshot.head);
+  assert.equal(status.upstream, `origin/${state.worktree.branch}`);
+  assert.equal(status.unpublished, false);
+  assert.equal(status.upstreamMissing, false);
+  assert.equal(status.ahead, 1);
+  assert.equal(status.behind, 0);
+  assert.equal(status.changedFiles, 1);
+  assert.equal(status.untrackedFiles, 1);
+  assert.equal(status.ignoredFiles, 1);
+  assert.equal(status.clean, false);
+  assert.match(status.deleteReason, /文件过多|耗时过长/);
+  assert.ok(visited <= 10000);
+  assert.equal(closed, true);
+  await assert.rejects(deleteTaskWorktree(state, confirmation(state, snapshot)), /文件过多|耗时过长/);
+  assert.equal(fs.readFileSync(path.join(ignored, "preserved.txt"), "utf8"), "preserve local content");
+});
+
 test("a locally tracked branch is unpublished and never reports remote push counts", async (t) => {
   const { state } = fixture(t);
   command(state.worktree.path, "branch", "--set-upstream-to=main");

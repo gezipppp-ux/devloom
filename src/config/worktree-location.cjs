@@ -1,6 +1,11 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const os = require("node:os");
 const { samePath } = require("../shared/paths.cjs");
+
+function defaultWorktreeRoot() {
+  return path.join(os.homedir(), ".codex-workspaces");
+}
 
 function inside(base, target) {
   const relative = path.relative(base, target);
@@ -45,4 +50,4 @@ function assertWorktreeLocation(base, target) {
   }
 }
 
-module.exports = { assertWorktreeLocation };
+module.exports = { assertWorktreeLocation, defaultWorktreeRoot };

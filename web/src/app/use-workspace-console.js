@@ -1,5 +1,6 @@
 import { onMounted, onUnmounted, ref } from "vue";
-import { bootstrap, apiPath } from "../shared/api/api.js";
+import { bootstrap, apiPath, expireAuthentication } from "../shared/api/api.js";
+import { revalidateAccountSession } from "../shared/api/account-session.js";
 import { useTaskList } from "../features/tasks/use-task-list.js";
 import { useSession } from "../features/session/use-session.js";
 
@@ -27,6 +28,7 @@ export function useWorkspaceConsole({
   });
   let events,
     refreshTimer,
+    checkingAuthentication = false,
     disposed = false,
     refreshQueued = false;
 
@@ -85,12 +87,23 @@ export function useWorkspaceConsole({
       await reloadChannels();
       if (disposed) return;
       events = new EventSource(apiPath("/events"));
+      events.addEventListener("auth-expired", () => {
+        events.close();
+        online.value = false;
+        expireAuthentication();
+      });
       events.onopen = () => {
         online.value = true;
         scheduleRefresh();
       };
       events.onerror = () => {
         online.value = false;
+        if (!checkingAuthentication && !disposed) {
+          checkingAuthentication = true;
+          void revalidateAccountSession().catch(() => {
+            // Network outages retain the disconnected view; 401 clears it centrally.
+          }).finally(() => { checkingAuthentication = false; });
+        }
       };
       events.onmessage = (event) => eventReceived(JSON.parse(event.data));
       await tasks.refresh();
@@ -140,6 +153,7 @@ export function useWorkspaceConsole({
     online,
     runs: tasks.runs,
     unreadResultKeys: tasks.unreadResultKeys,
+    preferenceError: tasks.preferenceError,
     markResultRead: tasks.markRead,
     active,
     session,

@@ -33,6 +33,7 @@ test("event transport isolates workspaces and releases subscriptions on shutdown
   assert.equal(sibling.response.frames.length, 2);
   assert.equal(b.response.frames.length, 1);
   a.request.emit("close");
+  assert.equal(first.listenerCount("event"), 1);
   first.emit("event", { key: "first", type: "state" });
   assert.equal(a.response.frames.length, 2);
   assert.equal(sibling.response.frames.length, 3);
@@ -40,6 +41,14 @@ test("event transport isolates workspaces and releases subscriptions on shutdown
   first.emit("event", { key: "first", type: "state" });
   first.emit("event", { key: "first", type: "state" });
   assert.equal(sibling.response.frames.length, 3);
+  assert.equal(first.listenerCount("event"), 0);
+  assert.equal(a.request.listenerCount("close"), 0);
+  assert.equal(a.response.listenerCount("close"), 0);
+  const reconnected = connection();
+  stream.connect(reconnected.request, reconnected.response, first);
+  assert.equal(first.listenerCount("event"), 1);
+  first.emit("event", { key: "first", type: "state" });
+  assert.equal(reconnected.response.frames.length, 2);
   stream.close();
   assert.equal(first.listenerCount("event"), 0);
   assert.equal(second.listenerCount("event"), 0);
@@ -57,7 +66,7 @@ test("server shutdown rejects SSE reconnections while session shutdown is pendin
     closing.resolve();
     await release.promise;
   };
-  const app = createWebServer({
+  const app = createWebServer({ testIdentity: true,
     manager,
     channels: {},
     workspaces: { close: async () => {} },

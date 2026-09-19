@@ -5,7 +5,7 @@ const { once } = require("node:events");
 const { execFileSync, fork, spawnSync } = require("node:child_process");
 const { test } = require("node:test");
 const { RunStore } = require("../../src/storage/run-store.cjs");
-const { WebSessions } = require("../../src/application/sessions.cjs");
+const { SessionManager } = require("../../src/application/session-manager.cjs");
 const { worktreeReason } = require("../../src/git/worktree-access.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const { temporary } = require("../support/helpers.cjs");
@@ -157,7 +157,7 @@ test("delayed first-turn completion cannot overwrite a newer turn after reconnec
     }),
   );
   const client = new FakeClient();
-  const manager = new WebSessions({ store, client, worktreeReason: () => null });
+  const manager = new SessionManager({ store, client, worktreeReason: () => null });
   t.after(() => manager.close());
   let finishTransition;
   const runtime = manager.runtime(key, "original");

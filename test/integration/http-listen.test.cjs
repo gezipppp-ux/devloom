@@ -11,7 +11,7 @@ function fixture(t, host) {
   const directory = temporary(t);
   fs.writeFileSync(path.join(directory, "index.html"), "LAN fixture");
   const writes = [];
-  const app = createWebServer({
+  const app = createWebServer({ testIdentity: true,
     host,
     staticDirectory: directory,
     workspaces: {

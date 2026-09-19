@@ -1,5 +1,5 @@
 const { EventEmitter } = require("node:events");
-const { AppServer } = require("../codex/app-server.cjs");
+const { AppServerClient } = require("../codex/app-server-client.cjs");
 const { RunStore } = require("../storage/run-store.cjs");
 const { initializationItem } = require("../domain/session-item.cjs");
 const { validateSessionMessage } = require("../domain/session-message.cjs");
@@ -11,7 +11,7 @@ const { SessionViews } = require("./session-views.cjs");
 const { SessionSettings } = require("./session-settings.cjs");
 const { SessionGit } = require("./session-git.cjs");
 const { runExecution } = require("../execution/runner.cjs");
-const { defaultChannels } = require("../channels/registry.cjs");
+const { defaultChannels } = require("../channels/channel-registry.cjs");
 const { executionConfig } = require("../config/execution-settings.cjs");
 const { readOptional } = require("../storage/json-files.cjs");
 const { sourceFor, runKey } = require("../domain/run-identity.cjs");
@@ -30,7 +30,7 @@ const {
   defaultTaskMetadata,
 } = require("../domain/task-metadata.cjs");
 
-class WebSessions extends EventEmitter {
+class SessionManager extends EventEmitter {
   constructor({
     runsDirectory,
     configFile,
@@ -44,7 +44,7 @@ class WebSessions extends EventEmitter {
     super();
     this.configFile = configFile;
     this.store = store || new RunStore(runsDirectory);
-    this.client = client || new AppServer(readOptional(configFile).codex);
+    this.client = client || new AppServerClient(readOptional(configFile).codex);
     this.channels = channels || defaultChannels(configFile);
     this.run = run;
     this.sessions = new Map();
@@ -67,6 +67,7 @@ class WebSessions extends EventEmitter {
       settings: this.settings,
       apiPrefix,
       emit: (event) => this.emit("event", event),
+      synchronizeHistory: (key) => this.views.synchronizeHistory(key),
     });
     this.views = new SessionViews({
       store: this.store,
@@ -176,6 +177,8 @@ class WebSessions extends EventEmitter {
     });
     this.assertOpen();
     runtime.connected = true;
+    try { await this.views.synchronizeHistory(key); }
+    catch (error) { runtime.error = `历史补齐失败：${error.message}`; }
     runtime.turnId = null;
     runtime.status = "idle";
     this.publish(runtime, { type: "state" });
@@ -556,6 +559,7 @@ class WebSessions extends EventEmitter {
       }
     }
     await this.client.close();
+    for (const runtime of this.sessions.values()) this.events.flushHistory(runtime.key);
     await Promise.allSettled(
       [
         ...this.events.pendingCallbacks,
@@ -567,4 +571,4 @@ class WebSessions extends EventEmitter {
   }
 }
 
-module.exports = { WebSessions };
+module.exports = { SessionManager };

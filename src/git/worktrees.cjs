@@ -1,17 +1,16 @@
 const fs = require("node:fs");
 const path = require("node:path");
-const os = require("node:os");
 const { git } = require("./command.cjs");
+const { resolveCommit } = require("./repository.cjs");
 const { createHash } = require("node:crypto");
 const { runKey, sourceFor } = require("../domain/run-identity.cjs");
 const { validateWorktreeName } = require("../domain/worktree-name.cjs");
 const { assertWorktreeCheckoutPaths } = require("./worktree-checkout.cjs");
-
-function defaultWorktreeRoot() {
-  return path.join(os.homedir(), ".codex-workspaces");
-}
+const { validateWorkspaceId } = require("../domain/workspace.cjs");
+const { absolutePath } = require("../shared/paths.cjs");
 
 function worktreePlan(repository, item, baseRef = "HEAD", options = {}) {
+  const root = absolutePath(options.root, "Worktree 根目录");
   const source = options.source || sourceFor("tapd", item);
   runKey(source);
   if (
@@ -20,8 +19,7 @@ function worktreePlan(repository, item, baseRef = "HEAD", options = {}) {
   )
     throw new Error("Invalid worktree title slug.");
   const namespace = options.workspaceId || "";
-  if (namespace && !/^[a-f0-9-]{36}$/.test(namespace))
-    throw new Error("Invalid application workspace ID.");
+  if (namespace) validateWorkspaceId(namespace);
   const prefix =
     validateWorktreeName(options.name ?? "") ||
     (options.slug || source.channel).slice(0, 16).replace(/-+$/, "");
@@ -40,19 +38,12 @@ function worktreePlan(repository, item, baseRef = "HEAD", options = {}) {
     ]))
     .digest("hex")
     .slice(0, 12);
-  const commit = git(repository, [
-    "rev-parse",
-    "--verify",
-    "--end-of-options",
-    `${baseRef}^{commit}`,
-  ]);
-  if (!/^[a-f\d]{40,64}$/i.test(commit))
-    throw new Error("Git did not return a valid base commit.");
+  const commit = resolveCommit(repository, baseRef);
   return {
     repository,
     branch: `codex/${taskId}`,
     path: path.join(
-      options.root || defaultWorktreeRoot(),
+      root,
       `${prefix}-${taskId}`,
     ),
     base_commit: commit,
@@ -100,4 +91,4 @@ function createWorktree(plan) {
   return plan;
 }
 
-module.exports = { createWorktree, worktreePlan, defaultWorktreeRoot };
+module.exports = { createWorktree, worktreePlan };

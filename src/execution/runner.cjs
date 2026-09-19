@@ -1,4 +1,3 @@
-const fs = require("node:fs");
 const path = require("node:path");
 const { createWorktree, worktreePlan } = require("../git/worktrees.cjs");
 const { repositoryFor } = require("../config/repository.cjs");
@@ -7,7 +6,7 @@ const { executionConfig } = require("../config/execution-settings.cjs");
 const { assertWorktreeLocation } = require("../config/worktree-location.cjs");
 const { sourceFor, runKey } = require("../domain/run-identity.cjs");
 const { initializeWorktree } = require("./worktree-init.cjs");
-const { saveState, updateState } = require("../storage/run-state.cjs");
+const { ExecutionStore } = require("../storage/execution-store.cjs");
 
 async function runExecution(
   { config, configFile, session, item, directory, channel, retry = false },
@@ -22,21 +21,11 @@ async function runExecution(
     ...dependencies,
   };
   const source = sourceFor(channel.id, item);
-  fs.mkdirSync(directory, { recursive: true });
-  const lock = path.join(directory, ".lock");
-  try {
-    fs.mkdirSync(lock);
-  } catch (error) {
-    if (error.code === "EEXIST")
-      throw new Error(
-        `This requirement is locked: ${lock}. Check whether its runner is still active.`,
-      );
-    throw error;
-  }
-  const file = path.join(directory, "run.json");
+  const store = new ExecutionStore(directory);
+  store.lock();
   let state;
   async function transition() {
-    state = updateState(file, { transition: { status: "pending" } });
+    state = store.update({ transition: { status: "pending" } });
     let transition;
     try {
       const result = await channel.transition({ session, state, config });
@@ -44,11 +33,11 @@ async function runExecution(
     } catch (error) {
       transition = { status: "failed", error: error.message };
     }
-    state = updateState(file, { transition });
+    state = store.update({ transition });
   }
   try {
-    if (fs.existsSync(file)) {
-      state = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (store.exists()) {
+      state = store.read();
       if (
         (state.source?.channel || "tapd") !== channel.id ||
         String(state.workitem.id) !== String(item.id) ||
@@ -87,11 +76,7 @@ async function runExecution(
     if (!task.execution_ready) throw new Error(task.blocked_reason);
     if (runKey(sourceFor(channel.id, workitem)) !== runKey(source))
       throw new Error("Channel returned a different requirement identity.");
-    fs.writeFileSync(
-      path.join(directory, "requirement.json"),
-      JSON.stringify(task, null, 2),
-      { mode: 0o600 },
-    );
+    store.writeTask(task);
     const worktree = services.worktreePlan(
       repository,
       workitem,
@@ -126,14 +111,14 @@ async function runExecution(
       image_count: task.images.length,
     };
     // Persist intent before any external side effect; an uncertain run is never redispatched.
-    saveState(file, state);
+    store.save(state);
     if (dependencies.signal?.aborted) throw new Error("任务准备已停止。");
     if (config.workspace)
       assertWorktreeLocation(config.codex.worktree_base_path, worktree.path);
     services.createWorktree(worktree);
     if (config.codex.init_commands.length) {
       state.execution = { status: "initializing" };
-      saveState(file, state);
+      store.save(state);
       await services.initializeWorktree({
         commands: config.codex.init_commands,
         cwd: worktree.path,
@@ -141,29 +126,32 @@ async function runExecution(
         signal: dependencies.signal,
         onUpdate(initialization, index) {
           state.initialization = initialization;
-          saveState(file, state);
+          store.save(state);
           dependencies.onInitialization?.(initialization, index);
         },
       });
     }
     if (dependencies.signal?.aborted) throw new Error("任务准备已停止。");
     state.execution = { status: "starting" };
-    saveState(file, state);
+    store.save(state);
     try {
       const execution = await services.startSession({
         config: config.codex || {},
         repository: worktree.path,
         directory,
         task,
+        onEvent: (line) => store.append("events.jsonl", line),
+        onStderr: (chunk) => store.append("stderr.log", chunk),
+        onFinal: () => store.captureFinal(),
         onSession(sessionId) {
           state.session_id = sessionId;
-          saveState(file, state);
+          store.save(state);
           dependencies.onSession?.(sessionId, worktree);
         },
         async onStarted() {
           state.execution_started_at = new Date().toISOString();
           state.execution = { status: "running" };
-          saveState(file, state);
+          store.save(state);
           await transition();
           dependencies.onTransition?.(state.transition);
         },
@@ -175,7 +163,7 @@ async function runExecution(
     } catch (error) {
       state.execution = { status: "failed", error: error.message };
     }
-    saveState(file, state);
+    store.save(state);
     return state;
   } catch (error) {
     if (
@@ -184,11 +172,11 @@ async function runExecution(
       ["preparing", "initializing"].includes(state.execution.status)
     ) {
       state.execution = { status: "failed", error: error.message };
-      saveState(file, state);
+      store.save(state);
     }
     throw error;
   } finally {
-    fs.rmdirSync(lock);
+    store.release();
   }
 }
 

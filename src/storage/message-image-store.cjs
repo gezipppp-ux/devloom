@@ -8,17 +8,20 @@ const {
 const { MESSAGE_IMAGE_ID } = require("../domain/session-message.cjs");
 const { samePath } = require("../shared/paths.cjs");
 const { readOptional, updateConfig } = require("./json-files.cjs");
+const { databaseForPath } = require("./database-registry.cjs");
+const { writeArtifact, materializeArtifact } = require("./artifact-store.cjs");
 
 function digest(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
 // Stored filenames are generated here. Neither HTTP nor Codex paths authorize reads.
-class MessageImages {
+class MessageImageStore {
   constructor(runDirectory) {
     this.runDirectory = runDirectory;
     this.directory = path.join(runDirectory, "message-images");
     this.indexFile = path.join(this.directory, "index.json");
+    this.database = databaseForPath(this.directory);
   }
 
   assertDirectory() {
@@ -29,10 +32,10 @@ class MessageImages {
   }
 
   list() {
-    if (!fs.existsSync(this.directory)) return [];
-    this.assertDirectory();
+    if (!this.database && !fs.existsSync(this.directory)) return [];
+    if (!this.database) this.assertDirectory();
     if (
-      fs.existsSync(this.indexFile) &&
+      !this.database && fs.existsSync(this.indexFile) &&
       !samePath(
         path.dirname(fs.realpathSync.native(this.indexFile)),
         fs.realpathSync.native(this.directory),
@@ -66,6 +69,14 @@ class MessageImages {
     )
       throw new Error("单张图片必须为 1 字节至 10 MiB。");
     const extension = imageExtension(bytes);
+    if (this.database) {
+      const image = { id: randomUUID(), extension, size: bytes.length, sha256: digest(bytes), createdAt: new Date().toISOString() };
+      this.database.handle.transaction(() => {
+        writeArtifact(this.filename(image), bytes, { mimeType: extension === "jpg" ? "image/jpeg" : `image/${extension}` });
+        updateConfig(this.indexFile, (saved) => ({ images: [...(saved.images || []), image] }));
+      })();
+      return image;
+    }
     fs.mkdirSync(this.directory, { recursive: true });
     this.assertDirectory();
     this.list();
@@ -99,6 +110,7 @@ class MessageImages {
       throw Object.assign(new Error("当前任务中不存在该会话图片。"), {
         code: "ENOENT",
       });
+    if (this.database) materializeArtifact(this.filename(image));
     const file = fs.realpathSync.native(this.filename(image));
     if (!samePath(path.dirname(file), fs.realpathSync.native(this.directory)))
       throw new Error("图片不属于当前任务。");
@@ -152,4 +164,4 @@ class MessageImages {
   }
 }
 
-module.exports = { MessageImages };
+module.exports = { MessageImageStore };

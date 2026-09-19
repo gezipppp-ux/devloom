@@ -1,4 +1,4 @@
-const { defaultChannels } = require("../channels/registry.cjs");
+const { defaultChannels } = require("../channels/channel-registry.cjs");
 const {
   readSettings,
   saveSettings,
@@ -101,6 +101,16 @@ class WorkspaceServices {
 
   uploadImage(bytes) {
     return this.channels.get("manual").uploadImage(bytes);
+  }
+  startRun(input, accountSettings) {
+    const selected = { ...input };
+    if (accountSettings)
+      for (const key of ["model", "reasoningEffort", "permissionMode"])
+        if (!Object.hasOwn(selected, key))
+          selected[key] = key === "permissionMode"
+            ? accountSettings[key]
+            : accountSettings[key] ?? "";
+    return this.sessions.start(selected);
   }
   imagePath(key, index) {
     return this.sessions.store.imagePath(key, index);

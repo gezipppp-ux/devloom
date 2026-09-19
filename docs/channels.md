@@ -1,15 +1,15 @@
 # 需求渠道扩展契约
 
-`src/channels/registry.cjs` 是显式注册入口；当前渠道为 TAPD 和手动输入。新增渠道时实现适配器并加入注册表，不需要修改 Codex 传输、会话控制或执行核心。模拟第二渠道的完整验证见 `test/integration/channel-isolation.test.cjs`，手动渠道验证见 `test/integration/manual-channel.test.cjs`。
+`src/channels/channel-registry.cjs` 是显式注册入口；当前渠道为 TAPD 和手动输入。新增渠道时实现适配器并加入注册表，不需要修改 Codex 传输、会话控制或执行核心。模拟第二渠道的完整验证见 `test/integration/channel-isolation.test.cjs`，手动渠道验证见 `test/integration/manual-channel.test.cjs`。
 
 ## 分层
 
 - `src/channels/tapd/adapter.cjs`：TAPD 登录读取、需求检索、人员验证、图文任务包和状态流转。复用现有 TAPD HTTP 模块。
-- `src/channels/manual/adapter.cjs`：手动输入验证与渠道组合；图片暂存/过期清理由 `uploads.cjs` 管理，标题命名与任务包由 `task-package.cjs` 管理；渠道同步返回 skipped。
+- `src/channels/manual/adapter.cjs`：手动输入验证与渠道组合；图片暂存/过期清理由 `manual-upload-store.cjs` 管理，标题命名与任务包由 `task-package.cjs` 管理；渠道同步返回 skipped。
 - `src/execution/runner.cjs`：幂等、锁、Git worktree、session 启动次序与记录持久化；通过适配器回调同步渠道状态。
-- `src/application/sessions.cjs`：原 session 续聊、中断和生命周期；事件/审批、查询、公开数据分别由 `session-events.cjs`、`session-views.cjs`、`session-presenter.cjs` 管理。
+- `src/application/session-manager.cjs`：原 session 续聊、中断和生命周期；事件/审批、查询、公开数据分别由 `session-events.cjs`、`session-views.cjs`、`session-presenter.cjs` 管理。
 - `src/http/`：同源保护、请求适配、HTTP/SSE 与静态资源传输；业务组合由 `application/workspace-services.cjs` 提供。
-- `src/application/workspaces.cjs`：应用工作区目录、配置与各工作区独立的渠道/会话管理器。
+- `src/application/workspace-manager.cjs`：组合工作区默认配置与各工作区独立的渠道/会话管理器；目录布局和磁盘记录由 `src/storage/workspace-store.cjs` 管理，输入校验由 `src/domain/workspace.cjs` 管理。
 - `src/config/execution-settings.cjs`：验证并保存执行位置、基准引用和初始化命令，保留同文件中的渠道凭据。
 - `src/channels/tapd/settings.cjs`：TAPD 项目绑定、Cookie 维护和只读连接检测。
 - `src/cli/tapd/`：TAPD 命令输入/输出适配；`src/application/tapd-run.cjs` 组合渠道与通用执行核心。

@@ -6,8 +6,8 @@ const { randomUUID } = require("node:crypto");
 const { execFileSync } = require("node:child_process");
 const { temporary, png, json } = require("../support/helpers.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
-const { Workspaces } = require("../../src/application/workspaces.cjs");
-const { WebSessions } = require("../../src/application/sessions.cjs");
+const { WorkspaceManager } = require("../../src/application/workspace-manager.cjs");
+const { SessionManager } = require("../../src/application/session-manager.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { writeConfig, readOptional } = require("../../src/storage/json-files.cjs");
 const { readSettings, saveSettings } = require("../../src/config/execution-settings.cjs");
@@ -27,10 +27,10 @@ function fixtures(t) {
     version: 1,
     worktreeBasePath: path.join(directory, "trees"),
   });
-  const workspaces = new Workspaces({
+  const workspaces = new WorkspaceManager({
     directory: path.join(directory, "workspaces"),
     createManager: (options) =>
-      new WebSessions({ ...options, client: new FakeClient() }),
+      new SessionManager({ ...options, client: new FakeClient() }),
   });
   const a = workspaces.save({ name: "项目 A" }),
     b = workspaces.save({ name: "项目 B" });
@@ -101,7 +101,7 @@ test("workspaces isolate settings, credentials and restart state; names never be
   assert.throws(() => workspaces.get("../outside"), /无效/);
   assert.throws(() => workspaces.get(randomUUID()), /不存在/);
   assert.throws(() => workspaces.save({ name: "x", repository: "x" }), /名称/);
-  const restarted = new Workspaces({ directory: workspaces.directory });
+  const restarted = new WorkspaceManager({ directory: workspaces.directory });
   assert.deepEqual(restarted.list(), workspaces.list());
   assert.equal(
     runsPath(
@@ -385,7 +385,7 @@ test("same requirement runs independently in two workspaces with isolated upload
 
 test("HTTP requires explicit workspace context and isolates lists, images, SSE and bound TAPD projects", async (t) => {
   const { workspaces, a, b } = fixtures(t);
-  const app = createWebServer({ workspaces });
+  const app = createWebServer({ testIdentity: true, workspaces });
   const origin = await app.listen(0);
   t.after(() => app.close());
   const boot = await (await fetch(`${origin}/api/bootstrap`)).json();
@@ -607,7 +607,7 @@ test("workspace icon IDs persist independently, validate before saving and prese
   const saved = readOptional(file);
   assert.deepEqual(saved.codex, before.codex);
   assert.deepEqual(saved.tapd, before.tapd);
-  const restarted = new Workspaces({ directory: workspaces.directory });
+  const restarted = new WorkspaceManager({ directory: workspaces.directory });
   assert.equal(restarted.read(a.id).icon, "rocket");
   workspaces.save({ name: "新名称" }, a.id);
   assert.equal(workspaces.read(a.id).icon, "rocket");
@@ -631,7 +631,7 @@ test("workspace icon IDs persist independently, validate before saving and prese
   }
   workspaces.save({ name: "新名称", icon: null }, a.id);
   assert.equal(restarted.read(a.id).icon, null);
-  const app = createWebServer({ workspaces });
+  const app = createWebServer({ testIdentity: true, workspaces });
   const origin = await app.listen(0);
   t.after(() => app.close());
   const boot = await (await fetch(`${origin}/api/bootstrap`)).json();

@@ -5,7 +5,7 @@ import TapdSettings from "./TapdSettings.vue";
 import PromptSettings from "./PromptSettings.vue";
 import BaseRefSelect from "./BaseRefSelect.vue";
 import FormSection from "../../shared/components/FormSection.vue";
-const props = defineProps({ workspaceName: { type: String, default: "" } });
+const props = defineProps({ workspaceName: { type: String, default: "" }, canManageSystem: Boolean });
 const emit = defineEmits(["saved", "rename-workspace", "system-settings"]);
 const form = reactive({
   repository: "",
@@ -15,6 +15,7 @@ const form = reactive({
 });
 const initCommandsText = ref("");
 const worktreeBasePath = ref("");
+const worktreeMemberPath = ref("");
 let disposed = false;
 const savedSettings = ref(null);
 const settings = computed(() => ({
@@ -38,15 +39,16 @@ const platform = ref(""),
   error = ref(""),
   saved = ref(false);
 const worktreePreview = computed(() => {
+  const basePath = worktreeMemberPath.value || worktreeBasePath.value;
   if (
-    !worktreeBasePath.value ||
+    !basePath ||
     !form.worktreeDirectory.trim() ||
     directoryError.value
   )
     return "";
   const separator = platform.value === "win32" ? "\\" : "/";
   return (
-    worktreeBasePath.value.replace(/[\\/]+$/, "") +
+    basePath.replace(/[\\/]+$/, "") +
     separator +
     form.worktreeDirectory.trim().split(/[\\/]/).join(separator)
   );
@@ -91,6 +93,7 @@ onMounted(async () => {
     for (const key of Object.keys(form)) form[key] = result[key] ?? "";
     platform.value = result.platform;
     worktreeBasePath.value = result.worktreeBasePath || "";
+    worktreeMemberPath.value = result.worktreeMemberPath || "";
     initCommandsText.value = (result.initCommands || []).join("\n");
     savedSettings.value = JSON.stringify(settings.value);
   } catch (e) {
@@ -113,6 +116,7 @@ async function save() {
     initCommandsText.value = result.initCommands.join("\n");
     for (const key of Object.keys(form)) form[key] = result[key] ?? "";
     worktreeBasePath.value = result.worktreeBasePath || "";
+    worktreeMemberPath.value = result.worktreeMemberPath || "";
     await nextTick();
     if (disposed) return;
     form.baseRef = result.baseRef;
@@ -198,6 +202,7 @@ async function save() {
               }}</code>
             </div>
             <button
+              v-if="canManageSystem"
               type="button"
               class="text-button"
               @click="emit('system-settings')"

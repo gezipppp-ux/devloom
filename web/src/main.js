@@ -2,6 +2,7 @@
 import { createApp, h } from "vue";
 import { ConfigProvider, Form, FormItem } from "antdv-next";
 import App from "./app/App.vue";
+import { router } from "./app/router.js";
 import "./shared/styles/style.css";
 
 const tokens = getComputedStyle(document.documentElement);
@@ -24,6 +25,7 @@ const theme = {
 createApp({
   render: () => h(ConfigProvider, { theme }, { default: () => h(App) }),
 })
+  .use(router)
   .component("AForm", Form)
   .component("AFormItem", FormItem)
   .mount("#app");

@@ -25,6 +25,7 @@ class SessionViews {
     this.assertOpen();
     const state = this.store.read(key);
     if (!state.session_id) return { items: [], nextCursor: null };
+    if (this.store.database) return this.store.savedHistory(key, cursor);
     await this.client.connect();
     this.assertOpen();
     const result = await this.client.request("thread/items/list", {
@@ -39,6 +40,31 @@ class SessionViews {
         .reverse(),
       nextCursor: result.nextCursor,
     };
+  }
+
+  async synchronizeHistory(key) {
+    if (!this.store.database) return;
+    const state = this.store.read(key);
+    if (!state.session_id) return;
+    let cursor;
+    const startedAt = new Date().toISOString();
+    const seen = new Set();
+    const pages = [];
+    do {
+      const result = await this.client.request("thread/items/list", {
+        threadId: state.session_id, limit: 50, sortDirection: "desc", ...(cursor ? { cursor } : {}),
+      });
+      pages.push(result.data || []);
+      cursor = result.nextCursor;
+      if (cursor && seen.has(cursor)) throw new Error("会话历史分页重复，补齐已停止。");
+      if (cursor) seen.add(cursor);
+    } while (cursor);
+    const items = [];
+    for (const page of pages.reverse()) for (const entry of [...page].reverse()) {
+      this.store.recordNotification(key, { method: "history/item", params: entry });
+      items.push(this.presenter.item(key, entry.item, entry.turnId));
+    }
+    this.store.reconcileHistory(key, items, startedAt);
   }
 
   async view(key) {

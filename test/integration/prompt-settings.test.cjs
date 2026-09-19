@@ -6,8 +6,8 @@ const { randomUUID } = require("node:crypto");
 const { execFileSync } = require("node:child_process");
 const { temporary, png } = require("../support/helpers.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
-const { Workspaces } = require("../../src/application/workspaces.cjs");
-const { WebSessions } = require("../../src/application/sessions.cjs");
+const { WorkspaceManager } = require("../../src/application/workspace-manager.cjs");
+const { SessionManager } = require("../../src/application/session-manager.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { saveSettings } = require("../../src/config/execution-settings.cjs");
 const {
@@ -21,10 +21,10 @@ const manualTemplate = "自定义手动模板\n{{title}}\n{{content}}\n{{images}
 const tapdTemplate = "自定义 TAPD 模板\n{{title}}\n{{content}}\n{{supplement}}\n{{images}}";
 
 function workspaceCatalog(directory) {
-  return new Workspaces({
+  return new WorkspaceManager({
     directory,
     createManager: (options) =>
-      new WebSessions({ ...options, client: new FakeClient() }),
+      new SessionManager({ ...options, client: new FakeClient() }),
   });
 }
 
@@ -41,7 +41,7 @@ function fixture(t) {
 }
 
 async function httpFixture(t, workspaces) {
-  const app = createWebServer({ workspaces });
+  const app = createWebServer({ testIdentity: true, workspaces });
   const origin = await app.listen(0);
   t.after(() => app.close());
   const boot = await (await fetch(`${origin}/api/bootstrap`)).json();

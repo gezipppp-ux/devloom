@@ -30,17 +30,17 @@ Windows 也支持上述 npm 命令。`npm run tapd:web` 会先构建再启动，
 | 业务 Git 仓库   | `/srv/repos/product`          |
 | Worktree 根目录 | `/srv/worktrees`              |
 
-启动前设置 `RUNNER_DATA_DIR` 为运行数据目录。每个工作区的数据在 `workspaces/<UUID>/`：`config.json` 保存该项目执行配置和 TAPD 凭据，`runs/` 保存任务，`uploads/` 保存暂存图片。未设置变量时在应用目录下创建 `workspaces/`。静态页面始终取自安装包的 `web/dist`。
+启动前设置 `RUNNER_DATA_DIR` 为独立运行数据目录。业务数据保存在 `db/web-coding.sqlite`，独立凭据主密钥位于 `secrets/database.key`。`workspaces/` 仅保留执行图片缓存和必要锁。未设置变量时使用应用目录；静态页面始终取自安装包的 `web/dist`。账号与升级完整约定见 [账号与数据库](engineering/accounts-and-database.md)。
 
-首次进入页面创建工作区，再配置项目仓库和 TAPD。Cookie 可以直接在 Web 保存、替换、清除及检测，无需 Linux 图形桌面。检测只读且不保存草稿。旧的全局配置、runs 和 uploads 不迁移、不被新版 Web 读取，可以停止旧服务后清理。不要删除业务仓库。
+先运行 `npm run accounts:init -- --username admin` 交互创建管理员，再启动和登录页面。管理员创建成员，成员各自创建私有工作区并配置仓库和 TAPD。Cookie 加密入库，不回显。旧配置和运行文件不迁移、不自动清理；业务仓库和 Worktree 保留原位。
 
 Web 不再接受 `--config`。CLI 使用 `--app-workspace <UUID>` 或 `RUNNER_WORKSPACE` 选择同一工作区；CLI 显式 `--config` 仍可用于独立排查。不要将凭据写入 service 文件或版本控制。
 
-登录 Codex 的用户必须与运行服务的用户一致。在 Web「执行设置」中选择服务端的代码仓库、worktree 根目录和基准分支。Linux 路径区分大小写，不接受 Windows 盘符路径。
+登录 Codex 的用户必须与运行服务的用户一致。管理员在「系统设置」维护 Worktree 基础目录；成员在自己的「工作区设置」中选择服务端代码仓库、Worktree 相对目录和基准分支。Linux 路径区分大小写，不接受 Windows 盘符路径。
 
 Windows 路径需带完整盘符（例如 `D:\repos\project`）或使用 UNC 共享路径；`\repos\project`、`/repos/project` 依赖当前磁盘，不能作为明确的服务端绝对路径。中文、空格和 Windows 扩展路径可用于仓库及 worktree。Linux 保留路径中的空格并按大小写匹配。
 
-配置和任务元数据采用读取最新值后原子替换的短锁更新，认证刷新保留现有工作区字段与配置版本。若进程异常退出留下 `config.json.lock`、`task-metadata.json.lock` 或 `run.json.lock`，应确认所有写入者已停止后再清理对应锁目录；不要删除任务数据或业务 worktree。
+配置、任务和工作区名称使用 SQLite 事务及唯一约束更新。服务启动时执行未运行的 Knex 升级，再补齐缺失的生产默认设置；升级前停掉旧服务及 CLI，存在运行进程时拒绝改表。有升级时在 `db/backups/` 建立一致性备份。异常留下的 `db/.upgrade.lock` 应在确认相关进程均停止后再处理；不自动移除未知所有权锁，不删除业务 Worktree。
 
 Web 与 CLI 自动定位 Codex 的顺序：
 
@@ -53,7 +53,7 @@ Linux 候选必须具有执行权限；npm 的 `codex.js` 入口通过当前 Nod
 
 迁移到 Linux 时删除旧的 Windows `codex.command`（以及与旧安装绑定的 `command_args`），再启用自动查找。systemd 不会自动读取 `.bashrc` 或 nvm 初始化脚本；如果 Codex 安装在另一套 Node 或自定义目录中，需要在 service 中添加该目录到 `PATH`，或设置 `Environment=CODEX_BIN=/absolute/path/to/codex`。修改 service 后执行 `systemctl daemon-reload` 并重启服务；Web 中保存工作区配置无需重启；手动修改 Codex 启动程序路径后需要重启。
 
-现有 session 不会因为设置改动而迁移。跨主机迁移还需要对应的 Codex 用户数据、业务仓库与 worktree 的 Git 元数据；仅复制 `run.json` 不足以恢复执行，路径不一致的历史会话保持只读。
+现有 session 不会因为设置改动而迁移。备份 SQLite 还应单独保管凭据主密钥。恢复执行需要对应的 Codex 用户数据、业务仓库与 Worktree Git 元数据；仅恢复数据库不足以恢复执行，路径不一致的历史会话保持只读。
 
 ## Linux 常驻服务
 
@@ -98,9 +98,9 @@ systemd 部署时可在 `ExecStart` 的 Node 命令后追加 `--host 127.0.0.1`�
 ssh -N -L 4317:127.0.0.1:4317 runner@your-server
 ```
 
-然后打开 `http://127.0.0.1:4317`。这与现有 Host/Origin 验证兼容。当前版本是单用户执行服务，不提供远程登录体系，公网部署需要另行设计鉴权。
+然后打开 `http://127.0.0.1:4317` 登录。远程正式部署使用 HTTPS 反代：设置 `PUBLIC_ORIGIN=https://coding.example.com`，应用绑定 `127.0.0.1`，代理保留公开 Host 并发送 `X-Forwarded-Proto: https`。该模式仅接受本机代理连接，Cookie 设置 Secure；不能信任任意客户端提供的转发头。账号隔离是应用访问控制，执行仍共享主机身份，适合受信任成员。
 
-`--host` 接受 IPv4/IPv6 地址字面量。服务校验 Host 中的 IP、端口与连接实际到达的本机地址一致，并保持 Origin、跨站请求及 POST 令牌校验；不从 `Forwarded` 或 `X-Forwarded-*` 推断访问来源。
+`--host` 接受 IPv4/IPv6 地址字面量。未配置 `PUBLIC_ORIGIN` 时，服务校验 Host 中的 IP、端口与连接实际到达的本机地址一致，不从转发头推断访问来源。配置公开来源时采用前述本机反代校验；两种模式均保留 Origin、跨站请求及 POST 令牌校验。
 
 直接嵌入或测试 `createWebServer()` 时，HTTP 工厂内部仍默认监听 `127.0.0.1`；CLI 入口负责传入默认值 `0.0.0.0`。
 

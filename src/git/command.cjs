@@ -1,11 +1,12 @@
 const { execFile, execFileSync } = require("node:child_process");
 
-function git(repository, args) {
+function git(repository, args, { timeout = 60000, maxBuffer = 2 * 1024 * 1024 } = {}) {
   return execFileSync("git", ["-C", repository, ...args], {
     encoding: "utf8",
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
-    timeout: 60000,
+    timeout,
+    maxBuffer,
   }).replace(/\r?\n$/, "");
 }
 

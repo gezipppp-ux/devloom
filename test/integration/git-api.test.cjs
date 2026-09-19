@@ -5,8 +5,8 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { temporary } = require("../support/helpers.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
-const { Workspaces } = require("../../src/application/workspaces.cjs");
-const { WebSessions } = require("../../src/application/sessions.cjs");
+const { WorkspaceManager } = require("../../src/application/workspace-manager.cjs");
+const { SessionManager } = require("../../src/application/session-manager.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { saveSystemSettings } = require("../../src/config/system-settings.cjs");
 const { saveSettings } = require("../../src/config/execution-settings.cjs");
@@ -41,10 +41,10 @@ async function fixture(t) {
   fs.writeFileSync(path.join(repository, "README.md"), "fixture");
   git("add", ".");
   git("commit", "-m", "fixture");
-  const workspaces = new Workspaces({
+  const workspaces = new WorkspaceManager({
     directory: path.join(directory, "workspaces"),
     createManager: (options) =>
-      new WebSessions({ ...options, client: new FakeClient() }),
+      new SessionManager({ ...options, client: new FakeClient() }),
   });
   saveSystemSettings(
     { worktreeBasePath: path.join(directory, "trees") },
@@ -75,7 +75,7 @@ async function fixture(t) {
     transition: { status: "succeeded" },
   };
   writeConfig(path.join(manager.store.dir(key), "run.json"), state);
-  const app = createWebServer({ workspaces });
+  const app = createWebServer({ testIdentity: true, workspaces });
   t.after(() => app.close());
   const origin = await app.listen(0);
   const { token } = await (await fixtureFetch(`${origin}/api/bootstrap`)).json();

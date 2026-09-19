@@ -3,14 +3,17 @@ const { SessionPresenter } = require("./session-presenter.cjs");
 
 // Projects Codex notifications and interactive requests into one workspace's runtime.
 class SessionEvents {
-  constructor({ store, client, sessions, settings, emit, apiPrefix }) {
+  constructor({ store, client, sessions, settings, emit, apiPrefix, synchronizeHistory }) {
     this.store = store;
     this.client = client;
     this.sessions = sessions;
     this.settings = settings;
+    this.synchronizeHistory = synchronizeHistory;
     this.emit = emit;
     this.presenter = new SessionPresenter({ store, settings, apiPrefix });
     this.pendingCallbacks = new Set();
+    this.pendingHistory = new Map();
+    this.historyTimers = new Map();
     client.on("notification", (message) => this.notification(message));
     client.on("request", (message) => this.serverRequest(message));
     client.on("disconnected", (error) => this.disconnected(error));
@@ -18,6 +21,7 @@ class SessionEvents {
 
   disconnected(error) {
     for (const runtime of this.sessions.values()) {
+      this.flushHistory(runtime.key);
       runtime.connected = false;
       runtime.requests.clear();
       if (runtime.turnId) {
@@ -31,7 +35,31 @@ class SessionEvents {
     }
   }
 
-  publish(runtime, event) {
+  flushHistory(key) {
+    clearTimeout(this.historyTimers.get(key));
+    this.historyTimers.delete(key);
+    const pending = this.pendingHistory.get(key);
+    if (!pending) return;
+    this.pendingHistory.delete(key);
+    for (const item of pending.values()) this.store.saveHistoryItem(key, item);
+  }
+
+  bufferHistory(runtime, item) {
+    let pending = this.pendingHistory.get(runtime.key);
+    if (!pending) this.pendingHistory.set(runtime.key, pending = new Map());
+    pending.set(item.id, structuredClone(item));
+    if (this.historyTimers.has(runtime.key)) return;
+    this.historyTimers.set(runtime.key, setTimeout(() => {
+      try { this.flushHistory(runtime.key); }
+      catch (error) {
+        runtime.error = error.message;
+        this.emit({ key: runtime.key, type: "error", error: `会话历史保存失败：${error.message}` });
+        if (runtime.turnId) void this.client.request("turn/interrupt", { threadId: runtime.sessionId, turnId: runtime.turnId }).catch(() => {});
+      }
+    }, 150));
+  }
+
+  publish(runtime, event, deferHistory = false) {
     runtime.lastActivity = new Date().toISOString();
     const data = {
       key: runtime.key,
@@ -46,6 +74,13 @@ class SessionEvents {
         : {}),
       ...event,
     };
+    if (event.type === "item") {
+      if (deferHistory && this.store.database) this.bufferHistory(runtime, event.item);
+      else {
+        this.flushHistory(runtime.key);
+        this.store.saveHistoryItem?.(runtime.key, event.item);
+      }
+    }
     this.store.log(
       runtime.key,
       event.type === "item"
@@ -76,12 +111,14 @@ class SessionEvents {
   notification({ method, params = {} }) {
     const runtime = [...this.sessions.values()].find(
       (entry) =>
-        entry.sessionId === params.threadId ||
+        (typeof params.threadId === "string" &&
+          entry.sessionId === params.threadId) ||
         (method === "serverRequest/resolved" &&
           entry.requests.has(String(params.requestId))),
     );
     if (!runtime) return;
     try {
+      this.store.recordNotification?.(runtime.key, { method, params });
       if (method === "turn/started") {
         runtime.turnId = params.turn.id;
         runtime.status = "running";
@@ -151,7 +188,7 @@ class SessionEvents {
           -OUTPUT_LIMIT,
         );
         runtime.items.set(item.id, item);
-        this.publish(runtime, { type: "item", item });
+        this.publish(runtime, { type: "item", item }, true);
       } else if (method === "serverRequest/resolved") {
         runtime.requests.delete(String(params.requestId));
         this.publish(runtime, {
@@ -174,6 +211,7 @@ class SessionEvents {
   async completed(runtime, turn) {
     if (runtime.turnId && runtime.turnId !== turn.id) return;
     const initial = runtime.initial;
+    this.flushHistory(runtime.key);
     runtime.completedTurns.add(turn.id);
     if (runtime.completedTurns.size > 500)
       runtime.completedTurns.delete(
@@ -192,6 +230,7 @@ class SessionEvents {
     for (const item of runtime.items.values()) {
       if (item.turnId === turn.id && item.status === "inProgress")
         item.status = turn.status;
+      this.store.saveHistoryItem?.(runtime.key, item);
     }
     this.store.update(runtime.key, {
       execution: {
@@ -207,6 +246,10 @@ class SessionEvents {
       requests: [],
     });
     this.persist(runtime);
+    if (this.store.database && this.synchronizeHistory) {
+      try { await this.synchronizeHistory(runtime.key); }
+      catch (error) { this.publish(runtime, { type: "error", error: `历史补齐失败：${error.message}` }); }
+    }
     const lastMessage = [...runtime.items.values()]
       .filter((item) => item.turnId === turn.id && item.type === "agentMessage")
       .at(-1);
@@ -227,7 +270,9 @@ class SessionEvents {
 
   serverRequest(message) {
     const runtime = [...this.sessions.values()].find(
-      (entry) => entry.sessionId === message.params?.threadId,
+      (entry) =>
+        typeof message.params?.threadId === "string" &&
+        entry.sessionId === message.params.threadId,
     );
     const supported = [
       "item/commandExecution/requestApproval",

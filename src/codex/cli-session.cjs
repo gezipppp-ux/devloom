@@ -39,6 +39,9 @@ async function startSession({
   task,
   onSession,
   onStarted,
+  onEvent,
+  onStderr,
+  onFinal,
 }) {
   const { command, args } = commandFor(
     config,
@@ -90,7 +93,8 @@ async function startSession({
     const lines = readline.createInterface({ input: child.stdout });
     lines.on('line', (line) => {
       try {
-        fs.appendFileSync(path.join(directory, 'events.jsonl'), `${line}\n`, {
+        if (onEvent) onEvent(`${line}\n`);
+        else fs.appendFileSync(path.join(directory, 'events.jsonl'), `${line}\n`, {
           mode: 0o600,
         });
         let event;
@@ -123,7 +127,8 @@ async function startSession({
     });
     child.stderr.on('data', (chunk) => {
       try {
-        fs.appendFileSync(path.join(directory, 'stderr.log'), chunk, {
+        if (onStderr) onStderr(chunk);
+        else fs.appendFileSync(path.join(directory, 'stderr.log'), chunk, {
           mode: 0o600,
         });
       } catch (error) {
@@ -136,6 +141,7 @@ async function startSession({
       process.removeListener('SIGINT', stop);
       process.removeListener('SIGTERM', stop);
       await startCallback;
+      try { onFinal?.(); } catch (error) { startupFailure ||= error; }
       if (startupFailure) return reject(startupFailure);
       if (callbackError) return reject(callbackError);
       if (!started)

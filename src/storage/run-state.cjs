@@ -1,54 +1,37 @@
 const fs = require("node:fs");
-const { randomUUID } = require("node:crypto");
+const { withFileLock } = require("./file-lock.cjs");
+const { writeConfig } = require("./json-files.cjs");
+const { databaseForPath } = require("./database-registry.cjs");
 
-const pause = new Int32Array(new SharedArrayBuffer(4));
-
-function withStateLock(file, operation) {
-  const lock = `${file}.lock`;
-  const deadline = Date.now() + 5000;
-  for (;;) {
-    try {
-      fs.mkdirSync(lock);
-      break;
-    } catch (error) {
-      if (error.code !== "EEXIST") throw error;
-      if (Date.now() >= deadline)
-        throw new Error(
-          `Run state is locked: ${lock}. Check that no service is writing before removing an abandoned lock.`,
-        );
-      Atomics.wait(pause, 0, 0, 10);
-    }
+function readState(file) {
+  const database = databaseForPath(file);
+  if (database) {
+    const value = database.readDocument(file);
+    if (value === undefined) throw Object.assign(new Error("运行记录不存在。"), { code: "ENOENT" });
+    return value;
   }
-  try {
-    return operation();
-  } finally {
-    fs.rmdirSync(lock);
-  }
+  return JSON.parse(fs.readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
 }
 
 function writeState(file, state) {
   state.updated_at = new Date().toISOString();
-  const temporary = `${file}.${randomUUID()}.tmp`;
-  try {
-    fs.writeFileSync(temporary, JSON.stringify(state, null, 2), {
-      mode: 0o600,
-    });
-    fs.renameSync(temporary, file);
-  } finally {
-    if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
-  }
+  writeConfig(file, state);
   return state;
 }
 
 function saveState(file, state) {
-  return withStateLock(file, () => writeState(file, state));
+  const database = databaseForPath(file);
+  if (database) return database.transaction(() => writeState(file, state));
+  return withFileLock(file, () => writeState(file, state), "Run state");
 }
 
 function updateState(file, patch) {
-  return withStateLock(file, () => {
-    const current = JSON.parse(fs.readFileSync(file, "utf8"));
+  const database = databaseForPath(file);
+  if (database) return database.transaction(() => writeState(file, { ...readState(file), ...patch }));
+  return withFileLock(file, () => {
+    const current = readState(file);
     return writeState(file, { ...current, ...patch });
-  });
+  }, "Run state");
 }
 
-module.exports = { saveState, updateState };
+module.exports = { readState, saveState, updateState };

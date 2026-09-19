@@ -1,7 +1,7 @@
 import { onMounted, onUnmounted, ref } from "vue";
 import { api } from "./api.js";
 
-export function useModelCatalog() {
+export function useModelCatalog(request = api) {
   const models = ref([]),
     loading = ref(false),
     error = ref("");
@@ -11,7 +11,7 @@ export function useModelCatalog() {
     loading.value = true;
     error.value = "";
     try {
-      const result = await api("/models");
+      const result = await request("/models");
       if (current === revision) models.value = result.models;
     } catch (e) {
       if (current === revision) error.value = e.message;

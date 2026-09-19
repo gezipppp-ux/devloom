@@ -16,6 +16,8 @@ async function main(argv = process.argv.slice(2)) {
   const application = createWebServer({
     host,
     pageHandler(request, response, url) {
+      if (["/login", "/password", "/personal", "/system", "/accounts"].includes(url.pathname))
+        request.url = `/index.html${url.search}`;
       // Only development pages need Vite's HMR socket and reconnect worker.
       // The HTTP adapter has already validated this request's host and origin.
       const socketOrigin = url.origin.replace(/^http:/, "ws:");
@@ -50,8 +52,8 @@ async function main(argv = process.argv.slice(2)) {
     const { createServer } = await import("vite");
     vite = await createServer({
       configFile: path.join(root, "web", "vite.config.mjs"),
-      // Workspace selection uses query parameters, not client-side path routes.
-      // Unknown file URLs must not fall back to (and pretransform) index.html.
+      // Only the explicit application routes above use the SPA entry.
+      // Unknown files must not fall back to (and pretransform) index.html.
       appType: "mpa",
       // This .mjs config can be loaded directly without temporary build files.
       configLoader: "native",

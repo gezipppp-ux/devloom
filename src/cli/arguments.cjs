@@ -1,5 +1,6 @@
 const path = require('node:path');
 const { dataRoot, inputPath } = require('../config/runtime.cjs');
+const { WORKSPACE_ID } = require('../domain/workspace.cjs');
 
 function argument(name, fallback = null, argv = process.argv.slice(2)) {
   const index = argv.indexOf(name);
@@ -16,11 +17,7 @@ function configPath(value, argv = process.argv.slice(2), env = process.env) {
   const workspace =
     argument('--app-workspace', null, argv) || env.RUNNER_WORKSPACE;
   if (workspace && !explicit) {
-    if (
-      !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(
-        workspace,
-      )
-    )
+    if (typeof workspace !== 'string' || !WORKSPACE_ID.test(workspace))
       throw new Error('Invalid --app-workspace ID.');
     return path.join(dataRoot, 'workspaces', workspace, 'config.json');
   }

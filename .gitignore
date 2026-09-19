@@ -10,4 +10,7 @@ __pycache__/
 *.pyc
 /workspaces/
 /system-settings.json
+/db/
+/cache/
+/secrets/
 tmp/

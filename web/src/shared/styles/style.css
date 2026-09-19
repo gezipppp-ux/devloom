@@ -1,6 +1,38 @@
 @import "antdv-next/dist/reset.css";
 @import "./design-tokens.css";
 
+/* Account pages share the existing workbench surfaces and form scale. */
+.authenticated-app { --account-bar-height: 56px; min-height: 100dvh; }
+.account-bar { min-height: var(--account-bar-height); display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 20px; border-bottom: 1px solid var(--line); background: var(--sidebar); }
+.account-identity { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-bar nav { display: flex; gap: 8px; flex-shrink: 0; }
+.account-bar button { background: transparent; border-color: transparent; padding: 4px 10px; }
+.account-bar button.active { background: var(--soft); border-color: var(--line); }
+.authenticated-app > .workspace { height: calc(100dvh - var(--account-bar-height)); }
+.authenticated-app > .system-settings-view { min-height: calc(100dvh - var(--account-bar-height)); }
+.account-page-view:not(:has(.workspace-rail)) { grid-template-columns: minmax(0, 1fr); }
+.authentication-page { min-height: 100dvh; display: grid; place-items: center; padding: 24px; }
+.authentication-card { width: min(100%, 440px); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 32px; }
+.authentication-card h1 { font-size: 28px; margin: 16px 0 8px; }
+.authentication-card > .muted { margin-bottom: 24px; }
+.authentication-card form > button.primary { width: 100%; }
+.account-list { list-style: none; margin: 0; padding: 0; }
+.account-list-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; padding: 20px 0; border-bottom: 1px solid var(--line); }
+.account-list-row:first-child { padding-top: 0; }
+.account-list-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.account-list-identity { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.account-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.account-reset-form { display: grid; gap: 8px; flex-basis: 100%; }
+@media (max-width: 600px) {
+  .authenticated-app { --account-bar-height: 104px; }
+  .account-bar { flex-wrap: wrap; gap: 4px; padding: 8px 16px; }
+  .account-bar nav { width: 100%; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; }
+  .account-bar button { padding: 4px; font-size: 12px; flex-direction: column; gap: 2px; white-space: nowrap; }
+  .authenticated-app > .workspace { height: auto; min-height: calc(100dvh - var(--account-bar-height)); }
+  .authentication-page { padding: 16px; }
+  .authentication-card { padding: 24px; }
+}
+
 /* Shared foundations */
 :root {
   font-family: var(--font-ui);

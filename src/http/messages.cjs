@@ -9,15 +9,21 @@ function json(response, status, data) {
 }
 
 async function body(request) {
-  if (!request.headers["content-type"]?.startsWith("application/json"))
+  const contentType = request.headers["content-type"]?.split(";", 1)[0].trim().toLowerCase();
+  if (contentType !== "application/json")
     throw new Error("请求必须使用 application/json");
-  let data = "";
+  const chunks = [];
+  let size = 0;
   request.setEncoding("utf8");
   for await (const chunk of request) {
-    data += chunk.toString("utf8");
-    if (Buffer.byteLength(data) > 256000) throw new Error("请求内容过大");
+    size += Buffer.byteLength(chunk);
+    if (size > 256000) throw new Error("请求内容过大");
+    chunks.push(chunk);
   }
-  return JSON.parse(data || "{}");
+  const input = JSON.parse(chunks.join("") || "{}");
+  if (!input || typeof input !== "object" || Array.isArray(input))
+    throw new Error("请求内容必须是 JSON 对象。");
+  return input;
 }
 
 async function imageBody(request) {

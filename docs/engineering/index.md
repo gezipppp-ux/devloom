@@ -6,6 +6,10 @@ Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install
 
 ## Before development
 
+- 项目级 Skills 位于 [工程规范](../../.agents/skills/web-coding-engineering/SKILL.md) 和 [界面规范](../../.agents/skills/web-coding-ui/SKILL.md)，由根目录 AGENTS.md 引用。Skill 提供实施与审查流程，本文所列契约维护详细业务约定；两者随实现同步更新。
+
+- Read [accounts-and-database.md](./accounts-and-database.md) for current account ownership, setting scopes, SQLite persistence, authentication and schema/seed lifecycle. It supersedes historical production JSON/JSONL storage and anonymous HTTP descriptions in the older contracts; native execution/Git locks and session identity rules remain in force.
+
 - Read [architecture.md](./architecture.md) for module ownership, dependency direction, directory layout and test placement before adding or moving code.
 
 - For visual changes, read [ui-design.md](./ui-design.md). Use shared design tokens and form sections across pages; validate responsive screenshots with fixture data.

@@ -5,8 +5,8 @@ const path = require("node:path");
 const { temporary } = require("../support/helpers.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const { RunStore } = require("../../src/storage/run-store.cjs");
-const { WebSessions } = require("../../src/application/sessions.cjs");
-const { Workspaces } = require("../../src/application/workspaces.cjs");
+const { SessionManager } = require("../../src/application/session-manager.cjs");
+const { WorkspaceManager } = require("../../src/application/workspace-manager.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { validateTaskMetadata } = require("../../src/domain/task-metadata.cjs");
 
@@ -37,7 +37,7 @@ test("classification defaults do not infer human progress from execution; update
   const file = path.join(store.dir("1-2"), "run.json");
   const raw = fs.readFileSync(file, "utf8");
   const client = new FakeClient();
-  const manager = new WebSessions({ store, client });
+  const manager = new SessionManager({ store, client });
   t.after(() => manager.close());
   assert.deepEqual(manager.list().find((entry) => entry.key === "1-2").metadata, {
     type: "requirement",
@@ -76,7 +76,7 @@ test("classification defaults do not infer human progress from execution; update
 
 test("task metadata rejects unsupported keys and values before resolving a source", async (t) => {
   const directory = temporary(t);
-  const manager = new WebSessions({
+  const manager = new SessionManager({
     runsDirectory: directory,
     client: new FakeClient(),
   });
@@ -101,10 +101,10 @@ test("task metadata rejects unsupported keys and values before resolving a sourc
 });
 
 test("metadata HTTP writes require token/origin, remain workspace scoped and emit metadata-only SSE", async (t) => {
-  const workspaces = new Workspaces({
+  const workspaces = new WorkspaceManager({
     directory: temporary(t),
     createManager: (opts) =>
-      new WebSessions({ ...opts, client: new FakeClient() }),
+      new SessionManager({ ...opts, client: new FakeClient() }),
   });
   const a = workspaces.save({ name: "A" }),
     b = workspaces.save({ name: "B" });
@@ -112,7 +112,7 @@ test("metadata HTTP writes require token/origin, remain workspace scoped and emi
     second = workspaces.get(b.id).sessions;
   seed(first.store, "1-2");
   seed(second.store, "1-2");
-  const app = createWebServer({ workspaces });
+  const app = createWebServer({ testIdentity: true, workspaces });
   const origin = await app.listen(0);
   t.after(() => app.close());
   const boot = await (await fetch(`${origin}/api/bootstrap`)).json();

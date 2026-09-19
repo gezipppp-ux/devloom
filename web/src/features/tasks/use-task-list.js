@@ -4,7 +4,7 @@ import { useUnreadResults } from "./use-unread-results.js";
 
 export function useTaskList() {
   const runs = ref([]);
-  const { unreadResultKeys, markUnread, markRead, retainRuns } =
+  const { unreadResultKeys, preferenceError, markUnread, markRead, retainRuns } =
     useUnreadResults();
   let pendingList;
 
@@ -39,6 +39,7 @@ export function useTaskList() {
   return {
     runs,
     unreadResultKeys,
+    preferenceError,
     markUnread,
     markRead,
     refresh,

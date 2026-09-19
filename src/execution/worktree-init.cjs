@@ -1,5 +1,5 @@
-const fs = require('node:fs');
 const path = require('node:path');
+const { appendArtifact } = require('../storage/artifact-store.cjs');
 const { spawn } = require('node:child_process');
 
 const { validateInitCommands } = require('../domain/init-commands.cjs');
@@ -37,10 +37,10 @@ async function initializeWorktree({
     const limit = 5 * 1024 * 1024;
     if (logBytes >= limit) return;
     const chunk = Buffer.from(text).subarray(0, limit - logBytes);
-    fs.appendFileSync(logFile, chunk, { mode: 0o600 });
+    appendArtifact(logFile, chunk);
     logBytes += chunk.length;
     if (logBytes >= limit)
-      fs.appendFileSync(logFile, '\n[日志已达到 5 MiB 上限]\n');
+      appendArtifact(logFile, '\n[日志已达到 5 MiB 上限]\n');
   };
   try {
     for (const [index, entry] of state.commands.entries()) {

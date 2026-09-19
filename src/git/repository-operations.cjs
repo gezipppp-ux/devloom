@@ -1,5 +1,5 @@
 const { git, gitAsync } = require("./command.cjs");
-const { repositoryGit } = require("./repository.cjs");
+const { repositoryGit, resolveCommit } = require("./repository.cjs");
 const { samePath } = require("../shared/paths.cjs");
 const { operationReason, registeredWorktrees } = require("./operation-state.cjs");
 
@@ -71,7 +71,7 @@ async function updateBaseBranch(value, baseRef = "HEAD", remote) {
       git(before.repository, ["rev-parse", "--verify", "HEAD"]) !== head)
     throw new Error("获取更新期间仓库分支已发生变化，请刷新后重试。");
   const upstream = localBranches(before.repository).find((branch) => branch.name === current.branch).upstream;
-  const commit = git(before.repository, ["rev-parse", "--verify", "--end-of-options", `${upstream}^{commit}`]);
+  const commit = resolveCommit(before.repository, upstream);
   try {
     await gitAsync(before.repository, ["merge", "--ff-only", "--no-edit", "--no-overwrite-ignore", "--", commit]);
   } catch {

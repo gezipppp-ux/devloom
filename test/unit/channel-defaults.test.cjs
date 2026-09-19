@@ -2,15 +2,15 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { test } = require('node:test');
-const { Workspaces } = require('../../src/application/workspaces.cjs');
-const { defaultChannelConfig } = require('../../src/channels/registry.cjs');
+const { WorkspaceManager } = require('../../src/application/workspace-manager.cjs');
+const { defaultChannelConfig } = require('../../src/channels/channel-registry.cjs');
 const { temporary } = require('../support/helpers.cjs');
 
 test('workspace creation receives independent channel defaults and renaming preserves configured workflow', (t) => {
   const changedDefaults = defaultChannelConfig();
   changedDefaults.workflow.allow_write = true;
   changedDefaults.workflow.fields.owner = 'other-workspace';
-  const workspaces = new Workspaces({
+  const workspaces = new WorkspaceManager({
     directory: path.join(temporary(t), 'workspaces'),
   });
   const workspace = workspaces.save({ name: '默认配置' });

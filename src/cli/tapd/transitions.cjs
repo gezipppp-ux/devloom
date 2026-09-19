@@ -51,5 +51,5 @@ async function main(
   services.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 
-if (require.main === module) execute(main);
+if (require.main === module) execute(main, '', { database: true });
 module.exports = { main };

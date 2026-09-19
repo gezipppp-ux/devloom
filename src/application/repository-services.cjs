@@ -1,5 +1,5 @@
 const { readSettings } = require("../config/execution-settings.cjs");
-const { git } = require("../git/command.cjs");
+const { repositoryCommonDirectory } = require("../git/repository.cjs");
 const {
   readRepositoryStatus,
   fetchRepository,
@@ -14,18 +14,14 @@ const {
 function repositoryContext(configFile) {
   const { repository, baseRef } = readSettings(configFile);
   if (!repository) throw new Error("请先在工作区设置中配置项目代码仓库。");
-  const commonDirectory = git(repository, [
-    "rev-parse",
-    "--path-format=absolute",
-    "--git-common-dir",
-  ]);
+  const commonDirectory = repositoryCommonDirectory(repository);
   return { repository, baseRef, commonDirectory };
 }
 
 function readRepository(configFile) {
   const context = repositoryContext(configFile);
   const status = readRepositoryStatus(context.repository, context.baseRef);
-  const fetched = readFetchState(context.commonDirectory);
+  const fetched = readFetchState(context.commonDirectory, configFile);
   return {
     ...status,
     lastFetchedAt: fetched.fetchedAt || null,
@@ -56,9 +52,9 @@ async function mutateRepository(configFile, action, input) {
         input.remote,
       );
     else throw new Error("不支持的 Git 操作。");
-    writeFetchState(context.commonDirectory, result.remote);
+    writeFetchState(context.commonDirectory, result.remote, configFile);
     const status = readRepositoryStatus(context.repository, context.baseRef);
-    const fetched = readFetchState(context.commonDirectory);
+    const fetched = readFetchState(context.commonDirectory, configFile);
     return {
       ...status,
       lastFetchedAt: fetched.fetchedAt,

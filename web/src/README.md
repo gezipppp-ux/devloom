@@ -5,6 +5,7 @@
 | 目录 | 职责 |
 | --- | --- |
 | `app/` | 导航壳层与应用 composable：工作区 URL 选择，以及跨功能的启动、刷新和 SSE 生命周期协调。 |
+| `features/accounts/` | 登录、首次改密、账号管理、个人设置和成员桌面通知偏好。 |
 | `features/workspaces/` | 工作区创建、编辑、切换入口和图标目录。 |
 | `features/tasks/` | 需求启动表单、执行偏好与人员选择、任务列表快照、类型及人工进度。 |
 | `features/session/` | 会话详情状态、历史分页、输入卡片和下一轮设置；消息、工具输出、审批与澄清、需求快照的安全渲染。 |
@@ -19,11 +20,15 @@
 
 Vue 组件使用 PascalCase 文件名；JavaScript 辅助模块使用 kebab-case，例如 `workspace-icons.js`、`task-metadata.js`、`requirement-content.js`。入口 `main.js` 与请求模块 `api.js` 保持简短命名。
 
-应用组件只组合界面和处理界面状态：`App.vue` 持有工作区弹窗引用；`WorkspaceConsole.vue` 持有页面切换、输入草稿和滚动位置。数据生命周期按职责分离：
+应用组件只组合界面和处理界面状态：`App.vue` 控制受保护页面的渲染边界；`WorkbenchApp.vue` 组合账号导航、设置页面与工作区，并持有工作区弹窗引用；`WorkspaceConsole.vue` 持有页面切换、输入草稿和滚动位置。数据生命周期按职责分离：
 
-- `app/use-workspace-selection.js` 负责首次 bootstrap、工作区选择和 URL 更新；默认选择通过 `replaceState` 固定，页内切换使用 `pushState` 并监听 `popstate`，保留查询参数、锚点和 history state。`App.vue` 按工作区 UUID 重建 console，隔离草稿及异步生命周期；重命名仅更新目录和标题，不重建 console。
-- `app/SystemSettings.vue` 组合全局存储设置与浏览器通知偏好。`features/settings/WorktreeStorageSettings.vue` 使用全局 `appApi` 独立加载和保存基础目录；`ServerDirectoryPicker.vue` 仅浏览服务器目录并返回选择，表单保存才生效。工作区设置只提交相对目录，前端完整路径用于预览，实际校验与拼接由服务端负责。
-- Worktree 路径采用「基础目录 / 工作区相对目录 / 任务前缀-短标识」，任务只增加一层目录。`features/tasks/ManualRequirementFields.vue` 的可选目录前缀最多 16 位；留空按标题生成，12 位短标识由服务端统一追加。系统设置提示使用较短基础目录，例如 Windows 的 `D:\wt`。
+- `app/use-workspace-selection.js` 负责首次 bootstrap、工作区选择和 Vue Router query 更新；默认选择使用 replace 固定，页内切换使用 push，浏览器前进和后退同步恢复选择。`WorkbenchApp.vue` 按工作区 UUID 重建 console，隔离草稿及异步生命周期；重命名仅更新目录和标题，不重建 console。
+- `app/router.js` 使用 Vue Router 管理登录、首次改密、工作台、个人设置、系统设置和账号管理；工作区仍由 query 参数选择。`App.vue` 在账号身份变化时重建整个受保护页面，`WorkbenchApp.vue` 在工作区变化时重建 console。导航保留其他 query、hash 和用户 history state。
+- `shared/api/account-session.js` 保存当前账号和个人设置的内存投影，数据由数据库 API 持久化。401、SSE 身份失效以及跨标签退出清空投影；HTTP 请求带账号代际，迟到响应不能进入新账号。LocalStorage 只用作无业务内容的身份变化通知。
+- `app/SystemSettings.vue` 仅组合管理员的全局存储设置；账号业务页面属于 `features/accounts/`：`LoginPage.vue` 负责登录，`PasswordPage.vue` 组合首次改密入口，两类改密入口复用 `PasswordForm.vue`；`PersonalSettings.vue` 管理账号默认模型、强度、权限、分组、通知和改密；`AccountManagement.vue` 管理账号身份，不提供读取他人工作区的入口。工作区配置仍由所有者在 `features/settings` 管理。
+- `features/accounts/use-desktop-notifications.js` 拥有浏览器通知授权、个人通知偏好保存与通知投递；应用壳层将其设置状态传给个人设置页，并把投递回调传给工作区。账号功能不反向依赖应用壳层或其他功能目录。
+- `features/settings/WorktreeStorageSettings.vue` 使用全局 `appApi` 独立加载和保存基础目录；`ServerDirectoryPicker.vue` 仅浏览服务器目录并返回选择，表单保存才生效。工作区设置只提交相对目录，前端完整路径用于预览，实际校验与拼接由服务端负责。
+- Worktree 路径采用「基础目录 / 稳定成员目录 / 工作区相对目录 / 任务前缀-短标识」，任务只增加一层目录；成员目录由服务端身份生成，修改用户名不影响路径。`features/tasks/ManualRequirementFields.vue` 的可选目录前缀最多 16 位；留空按标题生成，12 位短标识由服务端统一追加。系统设置提示使用较短基础目录，例如 Windows 的 `D:\wt`。
 - `app/use-workspace-console.js` 负责渠道 bootstrap、SSE 建连/关闭与防抖刷新，将事件分发给任务列表和会话状态，不处理 DOM 或表单草稿。
 - `features/tasks/use-task-list.js` 负责列表刷新、请求乱序保护和请求期间的人工进度覆盖。
 - `features/session/use-session.js` 负责详情快照、请求期间的 SSE 覆盖、会话动作和历史分页；执行偏好拥有独立保存状态和错误反馈，迟到响应不能覆盖较新的设置/当前轮状态。打开会话、收到消息和完成动作通过回调交给应用/界面层处理，不导入任务列表或界面组件。

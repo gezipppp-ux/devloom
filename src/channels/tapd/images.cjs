@@ -1,4 +1,4 @@
-const fs = require('node:fs');
+const { writeArtifact } = require('../../storage/artifact-store.cjs');
 const path = require('node:path');
 const { marked } = require('marked');
 
@@ -158,8 +158,7 @@ async function collectImages(workitem, session, directory, options = {}) {
       'images',
       `${String(index + 1).padStart(2, '0')}.${extension}`,
     );
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, bytes, { mode: 0o600 });
+    writeArtifact(file, bytes, { materialize: true, mimeType: extension === 'jpg' ? 'image/jpeg' : `image/${extension}` });
     images.push({
       index: index + 1,
       source: source.startsWith('data:') ? '(embedded image)' : source,

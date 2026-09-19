@@ -31,5 +31,5 @@ async function main(
   services.stdout.write(`Saved local TAPD configuration to ${saved}\n`);
 }
 
-if (require.main === module) execute(main, 'Cookie session setup failed: ');
+if (require.main === module) execute(main, 'Cookie session setup failed: ', { database: true });
 module.exports = { main };

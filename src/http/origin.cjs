@@ -29,13 +29,49 @@ function normalizedAddress(address) {
     .join(".");
 }
 
-function requestOrigin(request) {
+function publicOrigin(value) {
+  if (!value) return null;
+  const url = new URL(value);
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash
+  )
+    throw new Error(
+      "PUBLIC_ORIGIN 必须是 HTTPS 公开源地址，不包含路径或凭据。",
+    );
+  return url.origin;
+}
+
+function isLoopback(address) {
+  const value = normalizedAddress(address);
+  return value === "::1" || value?.startsWith("127.") === true;
+}
+
+function requestOrigin(request, configuredOrigin = null) {
   const host = request.headers.host;
   if (
     typeof host !== "string" ||
     request.headers["sec-fetch-site"] === "cross-site"
   )
     return null;
+  if (configuredOrigin) {
+    const expected = new URL(configuredOrigin);
+    // Only a local reverse proxy may assert TLS; forwarded Host never grants access.
+    if (
+      !isLoopback(request.socket.remoteAddress) ||
+      host !== expected.host ||
+      request.headers["x-forwarded-proto"] !== "https"
+    )
+      return null;
+    return request.headers.origin === undefined ||
+      request.headers.origin === expected.origin
+      ? expected.origin
+      : null;
+  }
   // Parse IP literals strictly before URL normalization, which otherwise also
   // accepts hostnames, credentials and alternate numeric IPv4 spellings.
   const match = /^(?:\[([\da-f:.]+)\]|([^:\[\]\s]+))(?::(\d+))?$/i.exec(host);
@@ -63,4 +99,10 @@ function requestOrigin(request) {
     : null;
 }
 
-module.exports = { validateListenHost, httpOrigin, requestOrigin };
+module.exports = {
+  validateListenHost,
+  httpOrigin,
+  requestOrigin,
+  publicOrigin,
+  isLoopback,
+};

@@ -1,26 +1,29 @@
 /* global window */
-import { onMounted, onUnmounted, ref } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { bootstrap, selectWorkspace } from "../shared/api/api.js";
 
 export function useWorkspaceSelection() {
+  const route = useRoute();
+  const router = useRouter();
   const workspaces = ref([]),
     current = ref(null),
     ready = ref(false),
     error = ref(""),
     standalone = ref(false);
   let disposed = false;
+  function navigationState() {
+    return Object.fromEntries(Object.entries(window.history.state || {}).filter(([key]) =>
+      !["back", "current", "forward", "replaced", "position", "scroll"].includes(key)));
+  }
 
   function navigate(id) {
-    if (disposed || current.value?.id === id) return;
-    const url = new URL(window.location.href);
-    url.searchParams.set("workspace", id);
-    window.history.pushState(window.history.state, "", url.href);
-    restoreSelection();
+    if (disposed) return;
+    void router.push({ name: "workspace", query: { ...route.query, workspace: id }, hash: route.hash, state: navigationState() });
   }
 
   function restoreSelection() {
-    const url = new URL(window.location.href);
-    const requested = url.searchParams.get("workspace");
+    const requested = route.query.workspace;
     const selected = requested
       ? workspaces.value.find((entry) => entry.id === requested)
       : workspaces.value[0];
@@ -31,8 +34,7 @@ export function useWorkspaceSelection() {
     selectWorkspace(selected?.id || "");
     current.value = selected || null;
     if (selected && !requested) {
-      url.searchParams.set("workspace", selected.id);
-      window.history.replaceState(window.history.state, "", url.href);
+      void router.replace({ query: { ...route.query, workspace: selected.id }, hash: route.hash, state: navigationState() });
     }
   }
 
@@ -47,12 +49,12 @@ export function useWorkspaceSelection() {
 
   onMounted(async () => {
     try {
+      selectWorkspace("");
       const initial = await bootstrap();
       if (disposed) return;
       standalone.value = !initial.workspaces;
       workspaces.value = initial.workspaces || [];
       restoreSelection();
-      window.addEventListener("popstate", restoreSelection);
       ready.value = true;
     } catch (e) {
       if (!disposed) error.value = e.message;
@@ -60,8 +62,9 @@ export function useWorkspaceSelection() {
   });
   onUnmounted(() => {
     disposed = true;
-    window.removeEventListener("popstate", restoreSelection);
+    selectWorkspace("");
   });
+  watch(() => route.query.workspace, () => { if (ready.value) restoreSelection(); });
 
   return { workspaces, current, ready, error, standalone, navigate, workspaceSaved };
 }

@@ -6,7 +6,7 @@
 
 | 位置 | 职责 |
 | --- | --- |
-| `registry.cjs` | 校验渠道接口，显式注册适配器并组合渠道默认配置；浏览器输入只能选择已注册的渠道 ID |
+| `channel-registry.cjs` | ChannelRegistry 校验渠道接口，显式注册适配器并组合渠道默认配置；浏览器输入只能选择已注册的渠道 ID |
 | `tapd/adapter.cjs` | TAPD 工作区绑定、人员验证，以及读取、准备和状态同步的组合入口 |
 | `tapd/config.cjs` | TAPD 默认配置、session 读取、来源项目 ID 选择和数字 ID 校验；通过通用配置模块读取文件 |
 | `tapd/settings.cjs` | TAPD 配置的白名单校验、Cookie 保存和只读连接检测 |
@@ -17,14 +17,14 @@
 | `tapd/images.cjs`、`tapd/task-package.cjs` | 图片解析与下载、需求快照和 Codex 提示词 |
 | `tapd/workflow.cjs` | 流转预检、必填字段映射、状态修改和结果复查 |
 | `manual/adapter.cjs` | 手动需求输入校验与渠道组合；无需 TAPD 登录 |
-| `manual/uploads.cjs` | 工作区图片暂存、读取、大小/格式验证与过期清理 |
+| `manual/manual-upload-store.cjs` | ManualUploadStore 管理工作区图片暂存、读取、大小/格式验证与过期清理 |
 | `manual/task-package.cjs` | 标题命名、按顺序复制图片与构建任务包 |
 | [src/application/tapd-run.cjs](../../src/application/tapd-run.cjs) | 将 TAPD 适配器与通用执行流水线组合为 `runRequirement` 用例，并提供已有运行状态查询 |
 | [src/cli/tapd/](../../src/cli/tapd) | TAPD 查询、预览、人员、状态、执行和认证命令入口 |
 
 ## 依赖与扩展
 
-新增渠道应放在独立子目录中，由 `registry.cjs` 显式注册适配器。适配器实现 `describe`、`resolve`、`prepare`、`transition`，按需提供查询能力和执行前校验。`describe` 返回界面所需的公开信息，不能包含 Cookie、令牌或其他凭据。
+新增渠道应放在独立子目录中，由 `channel-registry.cjs` 显式注册适配器。适配器实现 `describe`、`resolve`、`prepare`、`transition`，按需提供查询能力和执行前校验。`describe` 返回界面所需的公开信息，不能包含 Cookie、令牌或其他凭据。
 
 `resolve` 校验渠道输入并返回 `{item, config, session}`；这里的 `session` 是来源访问上下文。`prepare` 返回 `{workitem, task, target}`，在 Codex 执行前准备完整文本和本地图片，并完成流转预检。`transition` 只处理来源状态；手动渠道返回 `{status: 'skipped'}`。通用执行器确认 Codex 实际开始执行后才调用状态同步，执行状态与渠道状态分别保存。
 

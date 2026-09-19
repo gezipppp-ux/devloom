@@ -77,18 +77,19 @@ async function verifyWorkspaceNavigation(page, { workspaceA, workspaceB, reposit
     await select(workspaceA);
     assert.equal(await page.evaluate(() => window.history.length), initialHistoryLength);
     await page.getByLabel("TAPD Cookie", { exact: true }).fill("dsc-token=private-unsaved-draft");
-    await page.evaluate(({ a, b }) => {
-      window.localStorage.setItem(`unread-codex-results:/api/workspaces/${a}/runs`, '["workspace-a-unread"]');
-      window.localStorage.setItem(`unread-codex-results:/api/workspaces/${b}/runs`, '["expired-b-unread"]');
-    }, { a: workspaceA.id, b: workspaceB.id });
+    const origin = new URL(page.url()).origin;
+    const auth = await (await page.request.get(`${origin}/api/auth/session`)).json();
+    for (const [workspaceId, unreadRunKeys] of [[workspaceA.id, ["workspace-a-unread"]], [workspaceB.id, ["expired-b-unread"]]])
+      await page.request.post(`${origin}/api/account/preferences`, { headers: { origin, "x-tapd-token": auth.token }, data: { workspaceId, unreadRunKeys } });
+    const prunedPreference = page.waitForResponse((response) => response.url().endsWith("/api/account/preferences") && response.request().method() === "POST");
     await select(workspaceB);
     await settingsReady(page, workspaceB, "", "");
     await checkUrl(workspaceB);
     assert.equal(await page.getByLabel("TAPD Cookie", { exact: true }).inputValue(), "");
-    assert.deepEqual(await page.evaluate(({ a, b }) => [
-      JSON.parse(window.localStorage.getItem(`unread-codex-results:/api/workspaces/${a}/runs`)),
-      JSON.parse(window.localStorage.getItem(`unread-codex-results:/api/workspaces/${b}/runs`)),
-    ], { a: workspaceA.id, b: workspaceB.id }), [["workspace-a-unread"], []],
+    await prunedPreference;
+    const unread = await Promise.all([workspaceA, workspaceB].map(async (workspace) =>
+      (await (await page.request.get(`${origin}/api/account/preferences?workspaceId=${workspace.id}`)).json()).preferences.unreadRunKeys));
+    assert.deepEqual(unread, [["workspace-a-unread"], []],
     "refreshing B must clear only B's obsolete unread results");
     assert.equal(await page.evaluate(() => window.history.length), initialHistoryLength + 1);
     await page.goBack();

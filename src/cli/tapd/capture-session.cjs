@@ -26,5 +26,5 @@ async function main(
   services.stdout.write(`Saved local TAPD configuration to ${saved}\n`);
 }
 
-if (require.main === module) execute(main, 'TAPD session bootstrap failed: ');
+if (require.main === module) execute(main, 'TAPD session bootstrap failed: ', { database: true });
 module.exports = { main };

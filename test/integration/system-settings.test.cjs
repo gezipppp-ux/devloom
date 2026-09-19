@@ -13,7 +13,7 @@ const {
   saveSystemSettings,
 } = require("../../src/config/system-settings.cjs");
 const { listDirectories } = require("../../src/storage/directories.cjs");
-const { Workspaces } = require("../../src/application/workspaces.cjs");
+const { WorkspaceManager } = require("../../src/application/workspace-manager.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 
 test("system base directory is canonical, persisted separately and validated before saving", (t) => {
@@ -118,10 +118,10 @@ test("server directory browser lists only directories with pagination and parent
 
 test("global system endpoints work before workspace creation and enforce origin and page token", async (t) => {
   const directory = temporary(t);
-  const workspaces = new Workspaces({
+  const workspaces = new WorkspaceManager({
     directory: path.join(directory, "workspaces"),
   });
-  const app = createWebServer({ workspaces });
+  const app = createWebServer({ testIdentity: true, workspaces });
   t.after(() => app.close());
   const origin = await app.listen(0);
   const bootstrap = await (await fetch(`${origin}/api/bootstrap`)).json();

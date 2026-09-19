@@ -1,0 +1,4 @@
+interface:
+  display_name: "Web Coding 界面规范"
+  short_description: "复用仓库浅绿工作台主题，统一页面交互状态并验证桌面与移动布局"
+  default_prompt: "使用 $web-coding-ui 完成本次界面调整，复用设计变量与组件，并验证响应式和异步状态。"

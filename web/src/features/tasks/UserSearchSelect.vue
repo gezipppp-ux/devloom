@@ -8,6 +8,7 @@ const props = defineProps({
   workspace: { type: String, default: '' },
   channel: { type: String, required: true },
   label: { type: String, required: true },
+  disabled: Boolean,
 });
 const emit = defineEmits(['update:modelValue']);
 const inputId = `assignee-${useId()}`;
@@ -88,7 +89,7 @@ onUnmounted(() => {
       :filter-option="false"
       :default-active-first-option="false"
       :loading="loading"
-      :disabled="!workspace"
+      :disabled="disabled || !workspace"
       :not-found-content="emptyText"
       placeholder="输入姓名或拼音搜索"
       style="width: 100%"

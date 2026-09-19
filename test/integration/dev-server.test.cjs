@@ -159,6 +159,23 @@ test("importing the development entrypoint is inert from a separate data directo
 
 test("development CLI serves Vite and workspace APIs on one guarded origin", async (t) => {
   const directory = temporary(t);
+  const accountPassword = "development-fixture-password";
+  execFileSync(
+    process.execPath,
+    [
+      path.join(root, "src", "cli", "accounts.cjs"),
+      "init",
+      "--username",
+      "admin",
+    ],
+    {
+      cwd: directory,
+      env: { ...process.env, RUNNER_DATA_DIR: directory },
+      input: `${accountPassword}\n${accountPassword}\n`,
+      encoding: "utf8",
+      windowsHide: true,
+    },
+  );
   const privateFile = path.join(directory, "private-fixture.json");
   const secret = "development-test-private-data-must-not-be-served";
   fs.writeFileSync(privateFile, JSON.stringify({ secret }));
@@ -203,7 +220,24 @@ test("development CLI serves Vite and workspace APIs on one guarded origin", asy
     assert.equal(shared.status, 200, shared.text);
     assert.match(shared.text, /in_progress/);
 
-    const bootstrap = await send(`${origin}/api/bootstrap`);
+    assert.equal((await send(`${origin}/api/bootstrap`)).status, 401);
+    const initial = await send(`${origin}/api/auth/session`);
+    const initialCookie = initial.headers["set-cookie"][0].split(";", 1)[0];
+    const login = await send(`${origin}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        cookie: initialCookie,
+        origin,
+        "content-type": "application/json",
+        "x-tapd-token": JSON.parse(initial.text).token,
+      },
+      body: JSON.stringify({ username: "admin", password: accountPassword }),
+    });
+    assert.equal(login.status, 200, login.text);
+    const cookie = login.headers["set-cookie"][0].split(";", 1)[0];
+    const bootstrap = await send(`${origin}/api/bootstrap`, {
+      headers: { cookie },
+    });
     assert.equal(bootstrap.status, 200);
     const { token, workspaces } = JSON.parse(bootstrap.text);
     assert.equal(typeof token, "string");
@@ -213,6 +247,7 @@ test("development CLI serves Vite and workspace APIs on one guarded origin", asy
       false,
     );
     const headers = {
+      cookie,
       origin,
       "content-type": "application/json",
       "x-tapd-token": token,
@@ -226,16 +261,18 @@ test("development CLI serves Vite and workspace APIs on one guarded origin", asy
     assert.equal(created.status, 201, created.text);
     const workspace = JSON.parse(created.text);
     assert.equal(workspace.name, "开发服务隔离测试");
-    const configFile = path.join(
-      directory,
-      "workspaces",
-      workspace.id,
-      "config.json",
-    );
-    assert.equal(
-      JSON.parse(fs.readFileSync(configFile, "utf8")).workspace.id,
-      workspace.id,
-    );
+    const configFile = path.join(directory, "db", "web-coding.sqlite");
+    const database = require("better-sqlite3")(configFile, { readonly: true });
+    try {
+      assert.equal(
+        database
+          .prepare("SELECT id FROM workspaces WHERE id=?")
+          .get(workspace.id).id,
+        workspace.id,
+      );
+    } finally {
+      database.close();
+    }
 
     for (const pathname of [
       "/",
@@ -278,7 +315,9 @@ test("development CLI serves Vite and workspace APIs on one guarded origin", asy
       ).status,
       403,
     );
-    const catalog = JSON.parse((await send(`${origin}/api/workspaces`)).text);
+    const catalog = JSON.parse(
+      (await send(`${origin}/api/workspaces`, { headers: { cookie } })).text,
+    );
     assert.deepEqual(catalog.workspaces, [workspace]);
 
     for (const file of [

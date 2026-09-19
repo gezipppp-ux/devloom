@@ -2,7 +2,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import catalog from "../../../../shared/codex-permissions.json";
 import { api } from "./api.js";
 
-export function usePermissionModes() {
+export function usePermissionModes(request = api) {
   const discovered = ref(null),
     loading = ref(false),
     error = ref(""),
@@ -28,7 +28,7 @@ export function usePermissionModes() {
     error.value = "";
     errorHint.value = "";
     try {
-      const result = await api("/execution-options");
+      const result = await request("/execution-options");
       if (
         !Array.isArray(result?.permissionModes) ||
         !result.permissionModes.every(

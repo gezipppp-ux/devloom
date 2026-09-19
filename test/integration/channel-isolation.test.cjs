@@ -12,8 +12,8 @@ const { samePath, absolutePath } = require('../../src/shared/paths.cjs');
 const { worktreePlan, createWorktree } = require('../../src/git/worktrees.cjs');
 const { repositoryFor } = require('../../src/config/repository.cjs');
 const { sourceFor, runKey } = require('../../src/domain/run-identity.cjs');
-const { ChannelRegistry } = require('../../src/channels/registry.cjs');
-const { WebSessions } = require('../../src/application/sessions.cjs');
+const { ChannelRegistry } = require('../../src/channels/channel-registry.cjs');
+const { SessionManager } = require('../../src/application/session-manager.cjs');
 const { RunStore } = require('../../src/storage/run-store.cjs');
 const { SessionPresenter } = require('../../src/application/session-presenter.cjs');
 const { createWebServer } = require('../../src/http/server.cjs');
@@ -221,7 +221,7 @@ test('a non-TAPD channel runs through real Git, session controller and history w
   };
   const channels = new ChannelRegistry([channel]),
     client = new FakeClient();
-  const manager = new WebSessions({
+  const manager = new SessionManager({
     runsDirectory: path.join(directory, 'runs'),
     configFile,
     channels,
@@ -316,7 +316,7 @@ test('HTTP dispatches source searches and protects persisted settings with same-
   };
   const manager = new EventEmitter();
   manager.close = async () => {};
-  const application = createWebServer({
+  const application = createWebServer({ testIdentity: true,
     configFile,
     manager,
     channels: new ChannelRegistry([channel]),

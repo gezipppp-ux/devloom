@@ -6,7 +6,7 @@ const { createWebServer } = require("../../src/http/server.cjs");
 const { temporary, png } = require("../support/helpers.cjs");
 
 async function serve(t, staticDirectory) {
-  const application = createWebServer({
+  const application = createWebServer({ testIdentity: true,
     staticDirectory,
     workspaces: { close: async () => {} },
   });

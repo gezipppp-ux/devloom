@@ -4,8 +4,8 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { test } = require("node:test");
 const { createTapdChannel } = require("../../src/channels/tapd/adapter.cjs");
-const { ChannelRegistry } = require("../../src/channels/registry.cjs");
-const { WebSessions } = require("../../src/application/sessions.cjs");
+const { ChannelRegistry } = require("../../src/channels/channel-registry.cjs");
+const { SessionManager } = require("../../src/application/session-manager.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const {
@@ -152,13 +152,13 @@ test("HTTP TAPD supplements reach the first Codex prompt and persist in task and
   );
   const channels = new ChannelRegistry([channel]);
   const client = new FakeClient();
-  const manager = new WebSessions({
+  const manager = new SessionManager({
     runsDirectory: path.join(directory, "runs"),
     configFile,
     channels,
     client,
   });
-  const application = createWebServer({ configFile, manager, channels });
+  const application = createWebServer({ testIdentity: true, configFile, manager, channels });
   const url = await application.listen(0);
   t.after(() => application.close());
   const { token } = await (await fetch(`${url}/api/bootstrap`)).json();

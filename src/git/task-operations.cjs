@@ -2,7 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
 const { git, gitAsync } = require("./command.cjs");
-const { repositoryGit } = require("./repository.cjs");
+const { repositoryGit, repositoryCommonDirectory } = require("./repository.cjs");
 const { samePath } = require("../shared/paths.cjs");
 const { operationReason, registeredWorktrees } = require("./operation-state.cjs");
 
@@ -25,11 +25,11 @@ function verifyWorktree(state) {
   if (entry.locked) throw new Error("Worktree 已被 Git 锁定，请先解除锁定。");
   if (fs.lstatSync(tree.path).isSymbolicLink() || !fs.lstatSync(path.join(tree.path, ".git")).isFile())
     throw new Error("Worktree 路径或 Git 标记已变化，不能删除。");
-  const common = git(tree.repository, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
-  const actualCommon = git(tree.path, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+  const common = repositoryCommonDirectory(tree.repository);
+  const actualCommon = repositoryCommonDirectory(tree.path);
   const directory = git(tree.path, ["rev-parse", "--path-format=absolute", "--git-dir"]);
   const topLevel = git(tree.path, ["rev-parse", "--show-toplevel"]);
-  const backlink = fs.readFileSync(path.join(directory, "gitdir"), "utf8").trim();
+  const backlink = fs.readFileSync(path.join(directory, "gitdir"), "utf8").replace(/\r?\n$/, "");
   const real = (value) => fs.realpathSync.native(value);
   if (!samePath(real(common), real(actualCommon)) ||
       !samePath(real(topLevel), real(tree.path)) ||
@@ -63,16 +63,52 @@ function statusEntries(output) {
 function statusToken(tree, head, upstream, entries) {
   const hash = createHash("sha256").update(JSON.stringify({ path: tree.path, branch: tree.branch, head, upstream, entries }));
   hash.update(git(tree.path, ["diff", "--cached", "--raw", "--abbrev=64", "--no-renames", "--no-ext-diff", "HEAD", "--"]));
+  const budget = { remaining: 10000, deadline: Date.now() + 250 };
   for (const { file } of entries) {
+    hashFileMetadata(hash, path.join(tree.path, file), budget);
+  }
+  return hash.digest("hex");
+}
+
+function assertMetadataBudget(budget, pendingCount) {
+  if (pendingCount > budget.remaining)
+    throw new Error("本地文件过多，无法完整验证删除确认。请先在本地清理忽略内容后刷新；系统未删除任何文件。");
+  if (Date.now() > budget.deadline)
+    throw new Error("本地文件验证耗时过长，无法完整验证删除确认。请先在本地清理忽略内容后刷新；系统未删除任何文件。");
+}
+
+function hashFileMetadata(hash, file, budget) {
+  const pending = [file];
+  while (pending.length) {
+    assertMetadataBudget(budget, pending.length);
+    budget.remaining -= 1;
+    const current = pending.pop();
+    hash.update(JSON.stringify(current));
     try {
-      const stat = fs.lstatSync(path.join(tree.path, file), { bigint: true });
+      const stat = fs.lstatSync(current, { bigint: true });
       hash.update(`${stat.mode}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`);
+      // Git collapses ignored directories into one status entry. Their own
+      // timestamps do not change when an existing descendant file is edited.
+      // lstat deliberately avoids following links outside the task worktree.
+      if (stat.isDirectory()) {
+        const directory = fs.opendirSync(current);
+        const names = [];
+        try {
+          let entry;
+          while ((entry = directory.readSync())) {
+            assertMetadataBudget(budget, pending.length + names.length + 1);
+            names.push(entry.name);
+          }
+        } finally {
+          directory.closeSync();
+        }
+        for (const name of names.sort().reverse()) pending.push(path.join(current, name));
+      }
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
       hash.update("removed");
     }
   }
-  return hash.digest("hex");
 }
 
 function branchHead(tree) {
@@ -151,14 +187,24 @@ function readTaskGit(state, deletion = {}) {
     const changedFiles = entries.filter(({ code }) => code !== "??" && code !== "!!").length;
     const untrackedFiles = entries.filter(({ code }) => code === "??").length;
     const ignoredFiles = entries.filter(({ code }) => code === "!!").length;
-    return {
+    const status = {
       ...empty, path: tree.path, branch: tree.branch, head, upstream,
       unpublished: !upstream, ahead, behind, changedFiles, untrackedFiles, ignoredFiles,
       upstreamMissing,
       warning: upstreamMissing ? "远端上游已不存在，无法计算待推送数量。" : null,
       clean: changedFiles + untrackedFiles === 0,
-      statusToken: statusToken(tree, head, { ref: upstreamRef, ahead, behind }, entries), canDelete: true,
     };
+    try {
+      status.statusToken = statusToken(tree, head, { ref: upstreamRef, ahead, behind }, entries);
+      status.canDelete = true;
+    } catch (error) {
+      // Deletion requires a complete fingerprint; an incomplete fingerprint
+      // does not invalidate Git metrics already read successfully.
+      status.deleteReason = error.message?.startsWith("Command failed")
+        ? "无法完整验证删除确认，请在本地检查仓库。"
+        : error.message;
+    }
+    return status;
   } catch (error) {
     return { ...empty, deleteReason: error.message?.startsWith("Command failed") ? "无法验证原 Worktree 的 Git 状态，请在本地检查仓库。" : error.message };
   }

@@ -1,4 +1,4 @@
-const { git } = require("../git/command.cjs");
+const { repositoryCommonDirectory } = require("../git/repository.cjs");
 const {
   readTaskGit,
   deleteTaskWorktree,
@@ -113,11 +113,7 @@ class SessionGit {
       this.manager.assertOpen();
       const afterRead = this.activeReason(key);
       if (afterRead) throw new Error(afterRead);
-      const common = git(state.worktree.repository, [
-        "rev-parse",
-        "--path-format=absolute",
-        "--git-common-dir",
-      ]);
+      const common = repositoryCommonDirectory(state.worktree.repository);
       return withRepositoryOperation(common, async () => {
         // Validate a fresh snapshot before persisting deletion intent. A later
         // Git operation revalidates it again immediately before removing files.

@@ -1,16 +1,16 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
-const { repositoryGit } = require("../git/repository.cjs");
-const { defaultWorktreeRoot } = require("../git/worktrees.cjs");
+const { repositoryGit, resolveCommit } = require("../git/repository.cjs");
 const { validateInitCommands } = require("../domain/init-commands.cjs");
 const {
   defaultWorktreeDirectory,
+  memberWorktreeDirectory,
   normalizeWorktreeDirectory,
   resolveWorktreeDirectory,
 } = require("../domain/worktree-directory.cjs");
 const { readSystemSettings } = require("./system-settings.cjs");
-const { assertWorktreeLocation } = require("./worktree-location.cjs");
+const { assertWorktreeLocation, defaultWorktreeRoot } = require("./worktree-location.cjs");
 
 const { readOptional, writeConfig, updateConfig } = require("../storage/json-files.cjs");
 const { absolutePath, samePath } = require("../shared/paths.cjs");
@@ -30,8 +30,11 @@ function executionConfig(config, configFile) {
     );
     const dataDirectory = path.dirname(path.dirname(path.dirname(configFile)));
     codex.worktree_base_path = readSystemSettings(dataDirectory).worktreeBasePath;
+    const memberRoot = config.workspace.owner_user_id
+      ? path.join(codex.worktree_base_path, memberWorktreeDirectory(config.workspace.owner_user_id))
+      : codex.worktree_base_path;
     codex.worktree_root = resolveWorktreeDirectory(
-      codex.worktree_base_path,
+      memberRoot,
       codex.worktree_directory,
     );
     assertWorktreeLocation(codex.worktree_base_path, codex.worktree_root);
@@ -62,6 +65,9 @@ function readSettings(configFile) {
       ? {
           worktreeDirectory: config.codex.worktree_directory,
           worktreeBasePath: config.codex.worktree_base_path,
+          worktreeMemberPath: config.workspace.owner_user_id
+            ? path.join(config.codex.worktree_base_path, memberWorktreeDirectory(config.workspace.owner_user_id))
+            : config.codex.worktree_base_path,
           worktreePathMode: "relative",
         }
       : {}),
@@ -88,7 +94,7 @@ function saveSettings(input, configFile) {
         ? config.codex?.init_commands ?? []
         : readSettings(configFile).initCommands),
   );
-  const { repository, git } = repositoryGit(input.repository);
+  const { repository } = repositoryGit(input.repository);
   const worktreeDirectory = config.workspace
     ? normalizeWorktreeDirectory(input.worktreeDirectory)
     : undefined;
@@ -103,7 +109,7 @@ function saveSettings(input, configFile) {
   const baseRef = input.baseRef?.trim() || "HEAD";
   if (baseRef.length > 200 || /[\r\n\0]/.test(baseRef))
     throw new Error("无效的基准引用。");
-  git(["rev-parse", "--verify", "--end-of-options", `${baseRef}^{commit}`]);
+  resolveCommit(repository, baseRef);
   // Validate without creating a worktree or changing the selected Git branch.
   fs.mkdirSync(worktreeRoot, { recursive: true });
   if (location) assertWorktreeLocation(location.worktree_base_path, worktreeRoot);

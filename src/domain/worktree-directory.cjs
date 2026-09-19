@@ -5,6 +5,12 @@ function defaultWorktreeDirectory(workspaceId) {
   return `w-${workspaceId.slice(0, 8)}`;
 }
 
+function memberWorktreeDirectory(ownerId) {
+  if (typeof ownerId !== "string" || !/^[a-zA-Z0-9-]{1,80}$/.test(ownerId))
+    throw new Error("工作区所有者标识无效。");
+  return "u-" + ownerId;
+}
+
 function normalizeWorktreeDirectory(value) {
   if (typeof value !== "string" || !value || value.length > 240)
     throw new Error("工作区 Worktree 目录必填，最多 240 个字符。");
@@ -44,4 +50,4 @@ function resolveWorktreeDirectory(base, directory, platform = process.platform) 
   return resolved;
 }
 
-module.exports = { defaultWorktreeDirectory, normalizeWorktreeDirectory, resolveWorktreeDirectory };
+module.exports = { defaultWorktreeDirectory, memberWorktreeDirectory, normalizeWorktreeDirectory, resolveWorktreeDirectory };

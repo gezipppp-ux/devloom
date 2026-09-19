@@ -3,13 +3,31 @@ const { WorkspaceServices } = require("../application/workspace-services.cjs");
 const { json, body, imageBody } = require("./messages.cjs");
 const { sendFile } = require("./assets.cjs");
 
-async function serveApi(request, response, url, context, { token, events }) {
+async function serveApi(
+  request,
+  response,
+  url,
+  context,
+  { token, events, authorization, accountSettings },
+) {
   const { sessions } = context;
   const services = new WorkspaceServices(context);
   if (request.method === "GET" && url.pathname === "/api/repository/git")
     return json(response, 200, services.readRepository());
-  if (request.method === "POST" && ["/api/repository/git/fetch", "/api/repository/git/update"].includes(url.pathname))
-    return json(response, 200, await services.mutateRepository(url.pathname.endsWith("/fetch") ? "fetch" : "update", await body(request)));
+  if (
+    request.method === "POST" &&
+    ["/api/repository/git/fetch", "/api/repository/git/update"].includes(
+      url.pathname,
+    )
+  )
+    return json(
+      response,
+      200,
+      await services.mutateRepository(
+        url.pathname.endsWith("/fetch") ? "fetch" : "update",
+        await body(request),
+      ),
+    );
   if (request.method === "GET" && url.pathname === "/api/bootstrap")
     return json(response, 200, { token, ...services.describe() });
   if (request.method === "GET" && url.pathname === "/api/settings/tapd")
@@ -19,7 +37,11 @@ async function serveApi(request, response, url, context, { token, events }) {
   if (request.method === "GET" && url.pathname === "/api/settings/prompts")
     return json(response, 200, services.readPromptSettings());
   if (request.method === "POST" && url.pathname === "/api/settings/prompts")
-    return json(response, 200, services.savePromptSettings(await body(request)));
+    return json(
+      response,
+      200,
+      services.savePromptSettings(await body(request)),
+    );
   if (request.method === "POST" && url.pathname === "/api/settings/tapd/check")
     return json(
       response,
@@ -43,7 +65,7 @@ async function serveApi(request, response, url, context, { token, events }) {
     return json(response, 200, services.saveSettings(input));
   }
   if (request.method === "GET" && url.pathname === "/api/events")
-    return events.connect(request, response, sessions);
+    return events.connect(request, response, sessions, authorization);
   if (request.method === "GET" && url.pathname === "/api/runs")
     return json(response, 200, { runs: sessions.list() });
   if (
@@ -76,15 +98,20 @@ async function serveApi(request, response, url, context, { token, events }) {
     url.pathname === "/api/channels/manual/images"
   )
     return json(response, 201, services.uploadImage(await imageBody(request)));
-  if (request.method === "POST" && url.pathname === "/api/runs")
-    return json(response, 202, await sessions.start(await body(request)));
+  if (request.method === "POST" && url.pathname === "/api/runs") {
+    return json(response, 202, await services.startRun(await body(request), accountSettings));
+  }
   const route = /^\/api\/runs\/([^/]+)(?:\/(.*))?$/.exec(url.pathname);
   if (route && RUN_KEY.test(route[1])) {
     const [, key, action] = route;
     if (request.method === "GET" && action === "git")
       return json(response, 200, sessions.readGit(key));
     if (request.method === "POST" && action === "worktree/delete")
-      return json(response, 200, await sessions.deleteWorktree(key, await body(request)));
+      return json(
+        response,
+        200,
+        await sessions.deleteWorktree(key, await body(request)),
+      );
     if (request.method === "GET" && !action)
       return json(response, 200, await sessions.view(key));
     if (request.method === "GET" && action === "history")
@@ -95,7 +122,7 @@ async function serveApi(request, response, url, context, { token, events }) {
       );
     if (request.method === "GET" && /^images\/\d+$/.test(action || "")) {
       const file = services.imagePath(key, action.split("/")[1]);
-      sendFile(response, file, "private, max-age=300");
+      sendFile(response, file, "private, no-store");
       return;
     }
     if (request.method === "POST" && action === "message-images")
@@ -111,7 +138,7 @@ async function serveApi(request, response, url, context, { token, events }) {
       sendFile(
         response,
         sessions.messageImagePath(key, action.split("/")[1]),
-        "private, max-age=300",
+        "private, no-store",
       );
       return;
     }

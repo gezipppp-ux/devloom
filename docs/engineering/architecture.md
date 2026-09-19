@@ -2,13 +2,15 @@
 
 项目使用 Node.js CommonJS 后端和 Vue 3 前端。按职责放置后端代码，按功能组织前端；源码目录和运行数据目录分别管理。后端模块依赖由 `test/architecture/modules.test.cjs` 自动检查，前端目录、命名与依赖边界由 `test/architecture/frontend.test.cjs` 自动检查。
 
+生产持久化和账号约定见 [账号与数据库](./accounts-and-database.md)。Fastify 负责 HTTP 生命周期及会话插件；SQLite、Knex 升级、BLOB、账号与会话存储均属于 storage。原有 JSON 路径在数据库模式下只是存储资源标识，不在磁盘保存业务 JSON，也不回读旧数据。显式文件配置和隔离测试保留文件适配。
+
 ## 目录
 
 ```text
 src/
   domain/          # 身份、类型、图标、图片格式、会话消息与纯校验
   shared/          # 与业务无关的路径工具
-  storage/         # JSON 文件、运行记录、写锁与所有权
+  storage/         # SQLite、升级、账号、运行记录、BLOB、写锁与文件适配
   config/          # 安装/数据位置、显式配置读取、执行设置与仓库选择
   git/             # Git 命令、仓库/引用查询、worktree 创建与身份校验
   codex/           # 命令定位、app-server RPC、模型/权限能力、CLI 会话
@@ -20,7 +22,7 @@ src/
 web/src/
   main.js          # Vue 挂载与主题入口
   app/             # 应用壳层、工作区选择、跨功能协调
-  features/        # workspaces/、tasks/、session/、settings/
+  features/        # accounts/、workspaces/、tasks/、session/、settings/
   shared/          # api/、components/、styles/
 shared/            # 前后端共用的 JSON 目录与枚举
 test/
@@ -53,7 +55,7 @@ docs/engineering/  # 行为契约与架构规则
 
 禁止循环依赖和动态加载浏览器提交的模块名。渠道实现只依赖本渠道或通用模块，不能依赖其他渠道或反向依赖注册表。通用执行器通过渠道接口调用准备和流转，不导入 TAPD 实现；新增渠道在独立子目录实现并显式注册。domain 不进行文件、子进程和网络 I/O，storage/config 不直接启动子进程；Git 操作通过 git 模块调用。
 
-纯校验放在 domain，JSON 持久化放在 storage，路径比较放在 shared，避免为了复用一个函数反向依赖整个执行模块。模块从实际归属文件导入函数，不用无关模块转导出它们。不要通过聚合入口加载有副作用的认证脚本。
+纯校验放在 domain，SQL、持久化格式和文件适配放在 storage，路径比较放在 shared，避免为了复用一个函数反向依赖整个执行模块。application 不直接导入文件系统或底层 Git 命令，而调用存储和 Git 操作接口；执行流水线通过 ExecutionStore 管理运行记录与锁。模块从实际归属文件导入函数，不用无关模块转导出它们。不要通过聚合入口加载有副作用的认证脚本。
 
 ## 职责划分
 
@@ -63,21 +65,31 @@ docs/engineering/  # 行为契约与架构规则
 | `cli/web.cjs`、`cli/tapd/*.cjs` | 进程入口和输入/输出适配；导出 main，以主模块保护执行 |
 | `channels/tapd/` | 认证、浏览器采集、查询、素材准备和流程规则；接收显式参数，不读取 argv |
 | `channels/manual/adapter.cjs` | 手动输入校验与渠道组合 |
-| `channels/manual/uploads.cjs`、`task-package.cjs` | 上传生命周期；标题命名、图片复制和任务包 |
+| `channels/channel-registry.cjs` | ChannelRegistry 校验并注册渠道接口、组合渠道默认配置 |
+| `channels/manual/manual-upload-store.cjs`、`task-package.cjs` | ManualUploadStore 管理上传生命周期；任务包模块管理标题命名、图片复制和任务包 |
 | `config/runtime.cjs` | 安装/数据根及显式配置文件读取；不猜测命令行参数 |
 | `config/repository.cjs`、`git/` | 配置决定选择哪个仓库；git 负责验证、引用查询和 worktree 操作 |
 | `execution/runner.cjs` | 准备、初始化、执行、渠道同步顺序及记录；通过回调通知调用方，不写终端 |
-| `application/sessions.cjs` | 启动、继续、停止、操作互斥及生命周期协调 |
+| `application/session-manager.cjs` | SessionManager 协调启动、继续、停止、操作互斥及生命周期 |
+| `application/workspace-manager.cjs` | WorkspaceManager 组合工作区默认配置、公开摘要与各工作区的会话生命周期 |
+| `application/account-services.cjs`、`account-presenter.cjs` | AccountServices 组合账号权限、偏好、登录会话和生命周期接口；presenter 负责账号公开结构，HTTP 不穿透读取存储对象 |
+| `application/development-fixtures.cjs`、`storage/fixture-directory.cjs` | 前者编排开发示例账号与工作区，后者保护新空目录及初始化锁；CLI 只处理参数和输出 |
 | `application/session-events.cjs` | Codex 事件、审批与执行完成状态处理 |
 | `application/session-settings.cjs` | 会话执行设置校验、当前轮与下一轮选择、变更事件 |
 | `application/session-git.cjs`、`repository-services.cjs` | Git 状态及操作用例、运行与所有权门禁、删除进度和只读会话 |
 | `git/repository-operations.cjs`、`task-operations.cjs` | 远端获取/快进更新、任务 Git 状态、Worktree 身份校验和目录/本地分支删除 |
 | `storage/git-operations.cjs` | 按共享 Git 目录的操作互斥及最近获取记录；任务删除进度由 RunStore 保存 |
 | `codex/models.cjs`、`permissions.cjs`、`capabilities.cjs` | 模型发现与默认值解析、权限 RPC 映射、原生协议能力检查 |
+| `codex/app-server-client.cjs` | AppServerClient 启动 Codex app-server 子进程，管理 JSON-RPC 请求、响应和连接生命周期 |
 | `application/session-views.cjs`、`session-presenter.cjs` | 历史/快照查询、公开返回结构和图片 URL |
 | `storage/run-store.cjs` | 原始记录、快照、元数据、文件锁与安全附件路径；不做 Git 校验或拼 HTTP URL |
-| `storage/message-images.cjs` | 按任务保存会话图片、校验文件完整性并匹配历史图片；公开图片 URL 由应用 presenter 生成 |
-| `application/workspace-services.cjs` | 组合工作区配置、模型和渠道服务，供 HTTP 调用 |
+| `storage/message-image-store.cjs` | MessageImageStore 按任务保存会话图片、校验文件完整性并匹配历史图片；公开图片 URL 由应用 presenter 生成 |
+| `storage/workspace-store.cjs`、`domain/workspace.cjs` | WorkspaceStore 拥有工作区目录布局与配置持久化，在目录锁内维护名称唯一性；domain 拥有身份和输入校验 |
+| `storage/account-store.cjs`、`account-passwords.cjs`、`auth-session-store.cjs` | 分别负责账号及个人设置持久化、密码散列编码、登录会话与签名密钥；纯账号输入规则位于 domain/account |
+| `storage/database-lifecycle.cjs`、`database-registry.cjs` | 数据库初始化、升级与连接登记；初始化精确匹配数据根，资源寻址只在对应已登记数据库内路由 |
+| `storage/execution-store.cjs` | ExecutionStore 拥有单次执行的长生命周期锁、运行记录和需求快照；CLI 状态查询从这里读取 |
+| `storage/file-lock.cjs`、`json-files.cjs`、`run-state.cjs` | 分别拥有同步文件写锁、原子 JSON 写入、运行状态更新语义；不在写锁内等待网络或 Git |
+| `application/workspace-services.cjs` | 组合工作区配置、模型和渠道服务；新任务合并个人执行默认值，区分省略与显式清空，供 HTTP 调用 |
 | `application/system-services.cjs` | 组合系统 Worktree 基础目录设置及服务端目录浏览，供全局 HTTP 路由调用 |
 | `config/system-settings.cjs`、`worktree-location.cjs` | 系统目录配置与写权限校验、工作区相对路径的实际落盘边界校验 |
 | `storage/directories.cjs`、`domain/worktree-directory.cjs` | 分别负责服务端目录枚举及不含 I/O 的相对目录校验与路径拼接 |
@@ -90,11 +102,11 @@ docs/engineering/  # 行为契约与架构规则
 
 ## 前端与命名
 
-前端依赖方向为 `main.js → app → features → shared`。功能目录内组合自己的组件；跨功能业务由 app 协调，共享组件不引用具体功能。样式继续使用既有浅绿工作台变量。详细说明见 [前端模块边界](../../web/src/README.md) 和 [渠道模块说明](../../src/channels/README.md)。
+前端依赖方向为 `main.js → app → features → shared`。功能目录内组合自己的组件；跨功能业务由 app 协调，共享组件不引用具体功能。登录、改密、账号管理、个人设置与通知偏好位于 `features/accounts/`；app 保留路由与跨功能壳层。样式继续使用既有浅绿工作台变量。实施入口为项目内 [工程 Skill](../../.agents/skills/web-coding-engineering/SKILL.md) 和 [界面 Skill](../../.agents/skills/web-coding-ui/SKILL.md)，详细说明见 [前端模块边界](../../web/src/README.md) 和 [渠道模块说明](../../src/channels/README.md)。
 
 app 中的 `use-workspace-selection` 管理工作区与 URL，`use-workspace-console` 协调启动/SSE/刷新；tasks 的 `use-task-list` 拥有任务列表与元数据覆盖，session 的 `use-session` 拥有快照、流事件合并、消息动作和分页。Vue 壳层保留页面、草稿与滚动等呈现状态。异步操作必须保留请求身份、选择代际和卸载清理，避免过期 HTTP 响应覆盖新选择或 SSE。
 
-目录、JS/CJS 文件与测试文件使用 `kebab-case`；Vue 组件使用 `PascalCase.vue`。后端显式写 `.cjs` 扩展名，前端本地导入显式写 `.js`/`.vue`。仅向外导出其他模块确实需要的函数；测试辅助程序不进入产品模块。
+目录、JS/CJS 文件与测试文件使用 `kebab-case`；Vue 组件使用 `PascalCase.vue`。后端类使用 `PascalCase`，单独放在对应的 `kebab-case.cjs` 文件，例如 `SessionManager` 位于 `application/session-manager.cjs`；类名应表达管理、存储或客户端等实际职责，所在目录由其依赖和职责决定。后端显式写 `.cjs` 扩展名，前端本地导入显式写 `.js`/`.vue`。仅向外导出其他模块确实需要的函数；测试辅助程序不进入产品模块。架构测试检查目录、文件、类名、依赖方向和循环；前端静态导入、动态导入与转导出都纳入检查。
 
 ## 兼容与验证
 

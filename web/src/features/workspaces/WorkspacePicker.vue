@@ -10,6 +10,7 @@ const props = defineProps({
   unreadWorkspaceIds: { type: Array, default: () => [] },
   rail: Boolean,
   systemSettingsOpen: Boolean,
+  showSystemSettings: { type: Boolean, default: true },
 });
 const emit = defineEmits(["select", "saved", "system-settings"]);
 const dialog = ref(),
@@ -118,7 +119,7 @@ onMounted(() => {
       <span aria-hidden="true">＋</span><span v-if="!rail">新建工作区</span>
     </button>
     <button
-      v-if="rail"
+      v-if="rail && showSystemSettings"
       type="button"
       class="workspace-icon workspace-system-settings"
       :class="{ active: systemSettingsOpen }"

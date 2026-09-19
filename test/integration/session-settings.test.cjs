@@ -4,8 +4,8 @@ const path = require('node:path');
 const { test } = require('node:test');
 const { setImmediate: afterMicrotasks } = require('node:timers/promises');
 const { RunStore } = require('../../src/storage/run-store.cjs');
-const { WebSessions } = require('../../src/application/sessions.cjs');
-const { Workspaces } = require('../../src/application/workspaces.cjs');
+const { SessionManager } = require('../../src/application/session-manager.cjs');
+const { WorkspaceManager } = require('../../src/application/workspace-manager.cjs');
 const { createWebServer } = require('../../src/http/server.cjs');
 const { FakeClient } = require('../fixtures/web-client.cjs');
 const { temporary } = require('../support/helpers.cjs');
@@ -40,8 +40,8 @@ async function setup(t) {
   const state = saveRun(store, key, directory);
   const client = new FakeClient();
   const configFile = path.join(directory, 'config.json');
-  const manager = new WebSessions({ store, client, configFile, worktreeReason: () => null });
-  const application = createWebServer({ manager, configFile });
+  const manager = new SessionManager({ store, client, configFile, worktreeReason: () => null });
+  const application = createWebServer({ testIdentity: true, manager, configFile });
   const origin = await application.listen(0);
   t.after(() => application.close());
   const { token } = await (await fetch(`${origin}/api/bootstrap`)).json();
@@ -133,7 +133,7 @@ test('saved next-turn settings survive a new manager', async (t) => {
   await settings(next);
   await manager.close();
   const client = new FakeClient();
-  const restarted = new WebSessions({
+  const restarted = new SessionManager({
     store: new RunStore(directory), client, configFile, worktreeReason: () => null,
   });
   t.after(() => restarted.close());
@@ -337,16 +337,16 @@ test('execution settings API keeps token, origin, read-only and workspace bounda
   assert.equal(store.read(key).codex, undefined);
 
   const directory = temporary(t);
-  const workspaces = new Workspaces({
+  const workspaces = new WorkspaceManager({
     directory: path.join(directory, 'workspaces'),
-    createManager: (options) => new WebSessions({ ...options, client: new FakeClient(), worktreeReason: () => null }),
+    createManager: (options) => new SessionManager({ ...options, client: new FakeClient(), worktreeReason: () => null }),
   });
   const a = workspaces.save({ name: '设置 A' });
   const b = workspaces.save({ name: '设置 B' });
   const aContext = workspaces.get(a.id);
   const bContext = workspaces.get(b.id);
   saveRun(aContext.sessions.store, key, directory);
-  const application = createWebServer({ workspaces });
+  const application = createWebServer({ testIdentity: true, workspaces });
   const origin = await application.listen(0);
   t.after(() => application.close());
   const { token } = await (await fetch(`${origin}/api/bootstrap`)).json();

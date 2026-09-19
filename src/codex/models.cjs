@@ -121,5 +121,4 @@ module.exports = {
   listModels,
   validateModelSelection,
   resolveTurnModel,
-  validEffort,
 };

@@ -1,5 +1,5 @@
-const fs = require('node:fs');
 const path = require('node:path');
+const { writeArtifact } = require('../../storage/artifact-store.cjs');
 const { pinyin } = require('pinyin-pro');
 const {
   getPromptTemplates,
@@ -28,8 +28,7 @@ function buildManualTaskPackage({ item, directory, readImage, config = {} }) {
       'images',
       `${String(offset + 1).padStart(2, '0')}.${extension}`,
     );
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, bytes, { mode: 0o600 });
+    writeArtifact(file, bytes, { materialize: true, mimeType: extension === 'jpg' ? 'image/jpeg' : `image/${extension}` });
     return {
       index: offset + 1,
       source: `manual-image:${id}`,

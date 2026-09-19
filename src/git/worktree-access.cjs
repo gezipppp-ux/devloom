@@ -1,6 +1,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
+const { git: gitCommand } = require("./command.cjs");
+const { registeredWorktrees } = require("./operation-state.cjs");
+const { repositoryCommonDirectory } = require("./repository.cjs");
 const { samePath } = require("../shared/paths.cjs");
 
 function worktreeReason(state) {
@@ -8,41 +10,22 @@ function worktreeReason(state) {
   if (!tree?.path || !tree.repository || !tree.branch) return "尚未创建工作区";
   try {
     const git = (cwd, args) =>
-      execFileSync("git", ["-C", cwd, ...args], {
-        encoding: "utf8",
-        windowsHide: true,
-        timeout: 10000,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-    const entries = git(tree.repository, [
-      "worktree",
-      "list",
-      "--porcelain",
-      "-z",
-    ]);
-    const match = entries.split("\0\0").find((entry) => {
-      const location = entry
-        .split("\0")
-        .find((line) => line.startsWith("worktree "))
-        ?.slice(9);
-      return location && samePath(location, tree.path);
-    });
+      gitCommand(cwd, args, { timeout: 10000 });
+    const match = registeredWorktrees(tree.repository)
+      .find((entry) => entry.path && samePath(entry.path, tree.path));
     if (
       !match ||
-      !match.split("\0").includes(`branch refs/heads/${tree.branch}`) ||
+      match.branch !== `refs/heads/${tree.branch}` ||
       !fs.existsSync(path.join(tree.path, ".git"))
     )
       return "工作区或分支已移除，此任务仅供查看";
-    const expectedCommon = git(tree.repository, [
-      "rev-parse",
-      "--path-format=absolute",
-      "--git-common-dir",
-    ]).replace(/\r?\n$/, "");
-    const [common, gitDirectory, topLevel] = [
-      "--git-common-dir", "--git-dir", "--show-toplevel",
+    const expectedCommon = repositoryCommonDirectory(tree.repository);
+    const common = repositoryCommonDirectory(tree.path);
+    const [gitDirectory, topLevel] = [
+      "--git-dir", "--show-toplevel",
     ].map((field) => git(tree.path, [
       "rev-parse", "--path-format=absolute", field,
-    ]).replace(/\r?\n$/, ""));
+    ]));
     const branch = git(tree.path, ["symbolic-ref", "--quiet", "HEAD"]).trim();
     const registeredMarker = fs
       .readFileSync(path.join(gitDirectory, "gitdir"), "utf8")

@@ -51,5 +51,5 @@ async function main(
   );
 }
 
-if (require.main === module) execute(main);
+if (require.main === module) execute(main, '', { database: true });
 module.exports = { main };

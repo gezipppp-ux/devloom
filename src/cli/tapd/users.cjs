@@ -45,5 +45,5 @@ async function main(
   );
 }
 
-if (require.main === module) execute(main, 'TAPD user search failed: ');
+if (require.main === module) execute(main, 'TAPD user search failed: ', { database: true });
 module.exports = { main };

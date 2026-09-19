@@ -8,7 +8,8 @@ const {
   numericId,
   workspaceId,
 } = require('../../channels/tapd/config.cjs');
-const { runRequirement, readRunStatus } = require('../../application/tapd-run.cjs');
+const { runRequirement } = require('../../application/tapd-run.cjs');
+const { readRunStatus } = require('../../storage/execution-store.cjs');
 const { argument, configPath } = require('../arguments.cjs');
 const { execute } = require('../execute.cjs');
 
@@ -89,5 +90,5 @@ async function main(
     : 1;
 }
 
-if (require.main === module) execute(main);
+if (require.main === module) execute(main, '', { database: true });
 module.exports = { main };

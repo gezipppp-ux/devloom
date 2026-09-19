@@ -1,11 +1,12 @@
 <script setup>
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onUnmounted, reactive, ref, watch } from "vue";
 import UserSearchSelect from "./UserSearchSelect.vue";
 import ManualRequirementFields from "./ManualRequirementFields.vue";
 import CodexModelSettings from "./CodexModelSettings.vue";
 import FormSection from "../../shared/components/FormSection.vue";
 import { taskTypes } from "./task-metadata.js";
 import { api } from "../../shared/api/api.js";
+import { accountSession } from "../../shared/api/account-session.js";
 import { createRequestId } from "../../shared/api/request-id.js";
 const props = defineProps({
   workspace: { type: String, default: "" },
@@ -24,15 +25,17 @@ const form = reactive({
   content: "",
   images: [],
   worktreeName: "",
-  model: "",
-  reasoningEffort: "",
-  permissionMode: "ask",
+  model: accountSession.settings.model || "",
+  reasoningEffort: accountSession.settings.reasoningEffort || "",
+  permissionMode: accountSession.settings.permissionMode || "ask",
   taskType: "requirement",
 });
 const query = ref("");
 const items = ref([]);
 const error = ref("");
-const busy = ref(false);
+const searching = ref(false);
+const starting = ref(false);
+const busy = computed(() => searching.value || starting.value);
 const uploading = ref(false);
 const searched = ref(false);
 const selectedChannel = computed(() =>
@@ -75,6 +78,11 @@ watch(
   },
 );
 let searchRevision = 0;
+let disposed = false;
+onUnmounted(() => {
+  disposed = true;
+  searchRevision++;
+});
 watch(
   () => [form.channel, form.workspace, form.id],
   () => {
@@ -85,13 +93,14 @@ watch(
   () => [form.workspace, form.channel],
   () => {
     searchRevision++;
-    busy.value = false;
+    searching.value = false;
   },
 );
 
 async function search() {
+  if (disposed || starting.value || uploading.value || !form.workspace) return;
   const revision = ++searchRevision;
-  busy.value = true;
+  searching.value = true;
   error.value = "";
   try {
     const result = (
@@ -105,12 +114,12 @@ async function search() {
   } catch (e) {
     if (revision === searchRevision) error.value = e.message;
   } finally {
-    if (revision === searchRevision) busy.value = false;
+    if (revision === searchRevision) searching.value = false;
   }
 }
 async function start() {
-  if (busy.value || uploading.value) return;
-  busy.value = true;
+  if (disposed || busy.value || uploading.value) return;
+  starting.value = true;
   error.value = "";
   try {
     if (manualInput.value && !form.content.trim() && !form.images.length)
@@ -145,11 +154,11 @@ async function start() {
             metadata: { type: form.taskType },
           },
     );
-    emit("started", result.key);
+    if (!disposed) emit("started", result.key);
   } catch (e) {
-    error.value = e.message;
+    if (!disposed) error.value = e.message;
   } finally {
-    busy.value = false;
+    if (!disposed) starting.value = false;
   }
 }
 </script>
@@ -215,6 +224,7 @@ async function start() {
           ><input
             v-model="form.workspace"
             :readonly="selectedChannel?.scopeLocked"
+            :disabled="busy || uploading"
             :aria-label="selectedChannel?.scopeLabel || '项目 ID'"
             required
         /></a-form-item>
@@ -232,6 +242,7 @@ async function start() {
             id="search"
             v-model="query"
             placeholder="输入需求标题关键词"
+            :disabled="starting || uploading"
             @keydown.enter.prevent="search"
           /><button
             type="button"
@@ -246,6 +257,7 @@ async function start() {
             v-for="item in items"
             :key="item.id"
             type="button"
+            :disabled="busy || uploading"
             :class="{ selected: form.id === item.id }"
             @click="form.id = item.id"
           >
@@ -257,7 +269,11 @@ async function start() {
           当前待办视图没有匹配结果，也可直接填写需求 ID。
         </p>
         <a-form-item v-if="!manualInput" label="需求 ID" name="id"
-          ><input v-model="form.id" aria-label="需求 ID" required
+          ><input
+            v-model="form.id"
+            aria-label="需求 ID"
+            :disabled="busy || uploading"
+            required
         /></a-form-item>
         <a-form-item
           v-if="form.channel === 'tapd'"
@@ -284,6 +300,7 @@ async function start() {
               v-model="form.developer"
               :channel="form.channel"
               :workspace="form.workspace"
+              :disabled="busy || uploading"
               label="开发人员"
           /></a-form-item>
           <a-form-item label="测试人员" name="tester"
@@ -291,6 +308,7 @@ async function start() {
               v-model="form.tester"
               :channel="form.channel"
               :workspace="form.workspace"
+              :disabled="busy || uploading"
               label="测试人员"
           /></a-form-item>
         </div>

@@ -4,8 +4,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { chromium } = require("playwright");
-const { Workspaces } = require("../../src/application/workspaces.cjs");
-const { WebSessions } = require("../../src/application/sessions.cjs");
+const { WorkspaceManager } = require("../../src/application/workspace-manager.cjs");
+const { SessionManager } = require("../../src/application/session-manager.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { readOptional } = require("../../src/storage/json-files.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
@@ -40,12 +40,12 @@ async function main() {
     "-m",
     "fixture",
   );
-  const workspaces = new Workspaces({
+  const workspaces = new WorkspaceManager({
     directory: path.join(directory, "workspaces"),
     createManager: (options) =>
-      new WebSessions({ ...options, client: new FakeClient() }),
+      new SessionManager({ ...options, client: new FakeClient() }),
   });
-  const application = createWebServer({ workspaces });
+  const application = createWebServer({ workspaces, testIdentity: true });
   const origin = await application.listen(0);
   const originalFetch = global.fetch;
   let checks = 0;
@@ -443,7 +443,7 @@ async function main() {
       .click();
     await page.getByRole("heading", { name: "项目 B · 工作区设置" }).waitFor();
     assert.equal(await page.locator(".session-link").count(), 0);
-    assert.equal(await page.getByLabel("任务分组方式").inputValue(), "type");
+    assert.equal(await page.getByLabel("任务分组方式").inputValue(), "progress", "grouping belongs to the account and follows it across workspaces");
     assert.ok(
       aContext.sessions.sessions.get(key).turnId,
       "switching workspace must not stop background execution",

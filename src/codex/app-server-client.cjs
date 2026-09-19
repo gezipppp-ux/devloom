@@ -6,7 +6,7 @@ const { inspectExecutionCapabilities } = require('./capabilities.cjs');
 const { stopProcessTree } = require('./process-tree.cjs');
 const { childEnvironment } = require('./environment.cjs');
 
-class AppServer extends EventEmitter {
+class AppServerClient extends EventEmitter {
   constructor(config = {}) {
     super();
     this.config = config;
@@ -174,4 +174,4 @@ class AppServer extends EventEmitter {
   }
 }
 
-module.exports = { AppServer };
+module.exports = { AppServerClient };

@@ -91,6 +91,17 @@ async function verifySessionImages(browser, origin, manager, client, key, errors
   const messages = `**/api/runs/${key}/messages`;
   const messageRequests = [];
   const uploadResponses = [];
+  const pendingUploads = new Map();
+  const failedUploads = [];
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/message-images'))
+      pendingUploads.set(request, { url: request.url(), startedAt: Date.now() });
+  });
+  page.on('requestfinished', (request) => pendingUploads.delete(request));
+  page.on('requestfailed', (request) => {
+    if (pendingUploads.has(request)) failedUploads.push({ ...pendingUploads.get(request), error: request.failure()?.errorText });
+    pendingUploads.delete(request);
+  });
   page.on('response', async (response) => {
     if (response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith('/message-images'))
       uploadResponses.push({ status: response.status(), body: await response.text().catch(() => '<response unavailable>') });
@@ -246,7 +257,8 @@ async function verifySessionImages(browser, origin, manager, client, key, errors
         alt: image.alt, complete: image.complete, width: image.naturalWidth,
       })),
     })).catch(() => null);
-    process.stderr.write(`Session image diagnostics: ${JSON.stringify({ composer, uploadResponses })}\n`);
+    const resources = await page.evaluate(() => window.performance.getEntriesByType('resource').filter((entry) => entry.name.includes('/message-images')).map((entry) => ({ name: entry.name, startTime: entry.startTime, requestStart: entry.requestStart, responseStart: entry.responseStart, duration: entry.duration }))).catch(() => []);
+    process.stderr.write(`Session image diagnostics: ${JSON.stringify({ composer, uploadResponses, pendingUploads: [...pendingUploads.values()], failedUploads, resources })}\n`);
     await page.screenshot({ path: path.join(output, 'session-images-failure.png'), fullPage: true }).catch(() => {});
     throw error;
   } finally {

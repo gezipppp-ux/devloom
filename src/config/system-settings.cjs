@@ -2,7 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { dataRoot } = require("./runtime.cjs");
-const { defaultWorktreeRoot } = require("../git/worktrees.cjs");
+const { defaultWorktreeRoot } = require("./worktree-location.cjs");
 const { absolutePath } = require("../shared/paths.cjs");
 const { readOptional, updateConfig } = require("../storage/json-files.cjs");
 

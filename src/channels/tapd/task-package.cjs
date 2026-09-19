@@ -1,5 +1,6 @@
-const fs = require("node:fs");
 const path = require("node:path");
+const { writeConfig } = require("../../storage/json-files.cjs");
+const { writeArtifact } = require("../../storage/artifact-store.cjs");
 const { collectImages } = require("./images.cjs");
 const {
   getPromptTemplates,
@@ -50,13 +51,8 @@ async function buildTask(workitem, session, directory, config = {}) {
     images,
     codex_prompt: prompt,
   };
-  fs.mkdirSync(directory, { recursive: true });
-  fs.writeFileSync(
-    path.join(directory, "tapd-task.json"),
-    JSON.stringify(task, null, 2),
-    { mode: 0o600 },
-  );
-  fs.writeFileSync(path.join(directory, "task.md"), prompt, { mode: 0o600 });
+  writeConfig(path.join(directory, "tapd-task.json"), task);
+  writeArtifact(path.join(directory, "task.md"), prompt, { mimeType: "text/markdown" });
   return task;
 }
 

@@ -3,8 +3,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { test } = require("node:test");
-const { WebSessions } = require("../../src/application/sessions.cjs");
-const { Workspaces } = require("../../src/application/workspaces.cjs");
+const { SessionManager } = require("../../src/application/session-manager.cjs");
+const { WorkspaceManager } = require("../../src/application/workspace-manager.cjs");
 const { RunStore } = require("../../src/storage/run-store.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { MAX_IMAGE_BYTES } = require("../../src/domain/image-format.cjs");
@@ -46,7 +46,7 @@ function setup(t) {
     configFile: path.join(directory, "config.json"),
     worktreeReason: () => null,
   };
-  const manager = new WebSessions(options);
+  const manager = new SessionManager(options);
   t.after(() => manager.close());
   return { directory, store, state, client, manager, key: "1-2", options };
 }
@@ -132,7 +132,7 @@ test("session pictures persist, start and steer the original thread, and remain 
           nextCursor: null,
         }
       : original(method, params);
-  const restored = new WebSessions({
+  const restored = new SessionManager({
     ...options,
     store: new RunStore(store.directory),
     client: restoredClient,
@@ -245,10 +245,10 @@ test("message image storage refuses a directory redirected outside its run", asy
 
 test("HTTP message images require origin/token and isolate workspace and run IDs while serving persistent safe URLs", async (t) => {
   const directory = temporary(t);
-  const workspaces = new Workspaces({
+  const workspaces = new WorkspaceManager({
     directory: path.join(directory, "workspaces"),
     createManager: (options) =>
-      new WebSessions({
+      new SessionManager({
         ...options,
         client: new FakeClient(),
         worktreeReason: () => null,
@@ -261,7 +261,7 @@ test("HTTP message images require origin/token and isolate workspace and run IDs
     saveRun(store);
     saveRun(store, "1-3");
   }
-  const application = createWebServer({ workspaces });
+  const application = createWebServer({ testIdentity: true, workspaces });
   const origin = await application.listen(0);
   t.after(() => application.close());
   const { token } = await (await fetch(`${origin}/api/bootstrap`)).json();

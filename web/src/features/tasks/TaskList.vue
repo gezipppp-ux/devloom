@@ -1,7 +1,7 @@
 <script setup>
-/* global window */
-import { computed, ref, watch } from "vue";
-import { apiPath, statusLabel } from "../../shared/api/api.js";
+import { computed, ref } from "vue";
+import { statusLabel } from "../../shared/api/api.js";
+import { accountSession, saveAccountSettings } from "../../shared/api/account-session.js";
 import {
   FileTextOutlined,
   BugOutlined,
@@ -19,23 +19,13 @@ const props = defineProps({
   unreadResultKeys: { type: Array, default: () => [] },
 });
 const emit = defineEmits(["open"]);
-const preferenceKey = `task-grouping:${apiPath("/runs")}`;
-function savedGrouping() {
-  try {
-    const value = window.localStorage.getItem(preferenceKey);
-    return ["type", "progress", "none"].includes(value) ? value : "type";
-  } catch {
-    return "type";
-  }
+const preferenceError = ref("");
+const grouping = computed(() => accountSession.settings.grouping || "type");
+async function changeGrouping(event) {
+  preferenceError.value = "";
+  try { await saveAccountSettings({ grouping: event.target.value }); }
+  catch (error) { preferenceError.value = error.message; }
 }
-const grouping = ref(savedGrouping());
-watch(grouping, (value) => {
-  try {
-    window.localStorage.setItem(preferenceKey, value);
-  } catch {
-    /* Grouping still works without persistent browser storage. */
-  }
-});
 const groups = computed(() => {
   if (grouping.value === "none")
     return [{ value: "all", label: "全部任务", runs: props.runs }];
@@ -59,12 +49,13 @@ const groups = computed(() => {
     <span
       >需求列表 <small>{{ runs.length }}</small></span
     >
-    <select v-model="grouping" aria-label="任务分组方式">
+    <select :value="grouping" aria-label="任务分组方式" @change="changeGrouping">
       <option value="type">按类型</option>
       <option value="progress">按进度</option>
       <option value="none">不分组</option>
     </select>
   </div>
+  <p v-if="preferenceError" class="error" role="alert">分组保存失败：{{ preferenceError }}</p>
   <nav class="task-list" aria-label="会话列表">
     <details
       v-for="group in groups"
