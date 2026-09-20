@@ -21,7 +21,7 @@ async function readPassword(input, output) {
       terminal: true,
     });
     try {
-      output.write("新密码（至少 12 字符，输入不回显）：");
+      output.write("新密码（至少 6 字符，输入不回显）：");
       const first = await prompt.question("");
       output.write("\n再次输入密码：");
       const second = await prompt.question("");

@@ -12,7 +12,10 @@ const {
   validateAccountUpdate,
   validateAccountPreferences,
 } = require("../domain/account.cjs");
-const { hashPassword, verifyPassword } = require("../storage/account-passwords.cjs");
+const {
+  hashPassword,
+  verifyPassword,
+} = require("../storage/account-passwords.cjs");
 const { publicAccount } = require("./account-presenter.cjs");
 
 class AccountServices {
@@ -29,6 +32,8 @@ class AccountServices {
       !row ||
       row.status !== "active" ||
       row.auth_version !== session.authVersion ||
+      !session.sessionId ||
+      !this.sessions.valid(session.sessionId, row.id) ||
       (session.absoluteExpiresAt && session.absoluteExpiresAt <= Date.now())
     )
       return null;
@@ -60,10 +65,11 @@ class AccountServices {
       throw accountError("账号或密码错误。", 401);
     return row;
   }
-  async create(input, actor, initial = false) {
+  async create(input, actor, initial = false, authorize) {
     if (!initial) this.requireAdmin(actor);
     const validated = validateAccountCreation(input, { initial });
     const encoded = await hashPassword(validated.password);
+    authorize?.();
     if (!initial) this.requireAdmin(actor);
     const row = this.store.create(
       {
@@ -76,7 +82,7 @@ class AccountServices {
     );
     return publicAccount(row);
   }
-  async update(id, input, actor) {
+  async update(id, input, actor, authorize) {
     this.requireAdmin(actor);
     input = validateAccountUpdate(input);
     const patch = {};
@@ -90,14 +96,16 @@ class AccountServices {
       patch.password_hash = await hashPassword(input.password);
       patch.must_change_password = 1;
     }
+    authorize?.();
     this.requireAdmin(actor);
     return publicAccount(this.store.update(id, patch));
   }
-  async changePassword(actor, input) {
+  async changePassword(actor, input, authorize) {
     const row = this.store.byId(actor.id);
     if (!(await verifyPassword(input.currentPassword, row.password_hash)))
       throw accountError("当前密码错误。", 400);
     const passwordHash = await hashPassword(input.password);
+    authorize?.();
     if (this.store.byId(actor.id).auth_version !== row.auth_version)
       throw accountError("账号状态已变更，请重新登录。", 401);
     return this.store.update(actor.id, {
@@ -160,7 +168,11 @@ class AccountServices {
     return this.store.preferences(actor.id, id);
   }
   savePreferences(actor, id, input) {
-    return this.store.savePreferences(actor.id, id, validateAccountPreferences(input));
+    return this.store.savePreferences(
+      actor.id,
+      id,
+      validateAccountPreferences(input),
+    );
   }
 }
 async function initializeAccountServices(directory) {

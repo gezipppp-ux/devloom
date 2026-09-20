@@ -138,7 +138,7 @@ test("metadata HTTP writes require token/origin, remain workspace scoped and emi
   );
   assert.equal((await post({ progress: "unknown" })).status, 400);
   assert.equal(
-    (await post({ progress: "done" }, {}, route.replace("1-2", "1-99"))).status,
+    (await post({ progress: "done" }, {}, route.replace("/runs/1-2/", "/runs/1-99/"))).status,
     404,
   );
   const abort = new AbortController();

@@ -17,16 +17,18 @@ test("local account CLI initializes and resets without printing or accepting pas
       next();
     },
   });
-  const first = "local-fixture-password",
-    second = "reset-fixture-password";
+  const first = "local6",
+    second = "reset6";
   const run = (action, password) =>
     main([action, "--username", "admin"], {
       directory,
       output,
       input: Readable.from([`${password}\n${password}\n`]),
     });
+  await assert.rejects(run("init", "abc12"), /6–256/);
   await run("init", first);
   await assert.rejects(run("init", first), /已初始化/);
+  await assert.rejects(run("reset", "abc12"), /6–256/);
   await run("reset", second);
   const database = await initializeDatabase(directory);
   try {
@@ -49,7 +51,7 @@ test("local account CLI initializes and resets without printing or accepting pas
   }
   assert.doesNotMatch(
     text,
-    /local-fixture-password|reset-fixture-password|scrypt/,
+    /local6|reset6|scrypt/,
   );
   await assert.rejects(
     main(["init", "--username", "admin", "--password", first], {

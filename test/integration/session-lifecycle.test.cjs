@@ -5,6 +5,8 @@ const { test } = require("node:test");
 const { setImmediate } = require("node:timers");
 const { SessionManager } = require("../../src/application/session-manager.cjs");
 const { RunStore } = require("../../src/storage/run-store.cjs");
+const { initializeDatabase } = require("../../src/storage/database-lifecycle.cjs");
+const { writeConfig } = require("../../src/storage/json-files.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const { temporary } = require("../support/helpers.cjs");
 
@@ -133,4 +135,69 @@ test("shutdown retains ownership until an already-started channel callback finis
   } finally {
     release.resolve();
   }
+});
+
+test("late first-turn response cannot restore a completed turn while database history is synchronizing", { timeout: 10000 }, async (t) => {
+  const startResponse = deferred(), historyReached = deferred(), history = deferred();
+  let database, manager;
+  t.after(async () => {
+    startResponse.resolve();
+    history.resolve();
+    await manager?.close();
+    database?.close();
+  });
+  const directory = temporary(t);
+  database = await initializeDatabase(directory);
+  const store = new RunStore(path.join(directory, "runs"));
+  const key = "1-2", client = new FakeClient();
+  const request = client.request.bind(client);
+  client.request = async (method, params) => {
+    const result = await request(method, params);
+    if (method === "turn/start" && result.turn.id === "turn-1") {
+      client.notify("turn/completed", { turn: { id: "turn-1", status: "completed" } });
+      await startResponse.promise;
+    }
+    return result;
+  };
+  const state = {
+    workitem: { id: "2", workspace_id: "1", title: "late response fixture" },
+    worktree: { path: directory },
+    execution: { status: "starting" },
+  };
+  manager = new SessionManager({
+    store, client, configFile: path.join(directory, "config.json"),
+    worktreeReason: () => null,
+    async run(_input, { startSession }) {
+      const save = () => writeConfig(path.join(store.dir(key), "run.json"), state);
+      save();
+      state.execution = await startSession({
+        repository: directory,
+        task: { codex_prompt: "fixture", images: [] },
+        onSession(id) { state.session_id = id; save(); },
+        async onStarted() {},
+      });
+      save();
+      return state;
+    },
+  });
+  manager.views.synchronizeHistory = async () => {
+    historyReached.resolve();
+    await history.promise;
+  };
+  manager.launch(key, state.workitem, {}, {});
+  await historyReached.promise;
+  const runtime = manager.sessions.get(key);
+  assert.equal(runtime.status, "completed");
+  assert.equal(runtime.turnId, null);
+  startResponse.resolve();
+  await new Promise((resolve) => setImmediate(resolve));
+  history.resolve();
+  await runtime.operation;
+  assert.equal(runtime.turnId, null);
+  assert.equal(runtime.status, "completed");
+  const next = await manager.send(key, "start another turn");
+  assert.equal(next.sessionId, "original");
+  assert.equal(next.turnId, "turn-2");
+  assert.equal(client.calls.filter(({ method }) => method === "turn/start").length, 2);
+  assert.equal(client.calls.some(({ method }) => method === "turn/steer"), false);
 });

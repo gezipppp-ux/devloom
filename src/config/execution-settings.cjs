@@ -10,7 +10,7 @@ const {
   resolveWorktreeDirectory,
 } = require("../domain/worktree-directory.cjs");
 const { readSystemSettings } = require("./system-settings.cjs");
-const { assertWorktreeLocation, defaultWorktreeRoot } = require("./worktree-location.cjs");
+const { assertWorktreeLocation, assertMemberWorktreeLocation, defaultWorktreeRoot } = require("./worktree-location.cjs");
 
 const { readOptional, writeConfig, updateConfig } = require("../storage/json-files.cjs");
 const { absolutePath, samePath } = require("../shared/paths.cjs");
@@ -30,14 +30,17 @@ function executionConfig(config, configFile) {
     );
     const dataDirectory = path.dirname(path.dirname(path.dirname(configFile)));
     codex.worktree_base_path = readSystemSettings(dataDirectory).worktreeBasePath;
-    const memberRoot = config.workspace.owner_user_id
-      ? path.join(codex.worktree_base_path, memberWorktreeDirectory(config.workspace.owner_user_id))
-      : codex.worktree_base_path;
+    codex.worktree_member_path = config.workspace.owner_user_id
+      ? path.join(codex.worktree_base_path, memberWorktreeDirectory(config.workspace.owner_username))
+      : undefined;
+    const memberRoot = codex.worktree_member_path || codex.worktree_base_path;
     codex.worktree_root = resolveWorktreeDirectory(
       memberRoot,
       codex.worktree_directory,
     );
-    assertWorktreeLocation(codex.worktree_base_path, codex.worktree_root);
+    if (codex.worktree_member_path)
+      assertMemberWorktreeLocation(codex.worktree_base_path, memberRoot, codex.worktree_root);
+    else assertWorktreeLocation(codex.worktree_base_path, codex.worktree_root);
   } else {
     codex.worktree_root =
       settings.worktreeRoot || codex.worktree_root || defaultWorktreeRoot();
@@ -65,9 +68,7 @@ function readSettings(configFile) {
       ? {
           worktreeDirectory: config.codex.worktree_directory,
           worktreeBasePath: config.codex.worktree_base_path,
-          worktreeMemberPath: config.workspace.owner_user_id
-            ? path.join(config.codex.worktree_base_path, memberWorktreeDirectory(config.workspace.owner_user_id))
-            : config.codex.worktree_base_path,
+          worktreeMemberPath: config.codex.worktree_member_path || config.codex.worktree_base_path,
           worktreePathMode: "relative",
         }
       : {}),
@@ -112,7 +113,9 @@ function saveSettings(input, configFile) {
   resolveCommit(repository, baseRef);
   // Validate without creating a worktree or changing the selected Git branch.
   fs.mkdirSync(worktreeRoot, { recursive: true });
-  if (location) assertWorktreeLocation(location.worktree_base_path, worktreeRoot);
+  if (location?.worktree_member_path)
+    assertMemberWorktreeLocation(location.worktree_base_path, location.worktree_member_path, worktreeRoot);
+  else if (location) assertWorktreeLocation(location.worktree_base_path, worktreeRoot);
   const realRoot = fs.realpathSync.native(worktreeRoot);
   if (samePath(realRoot, repository))
     throw new Error("worktree 根目录不能等于代码仓库根目录。");
@@ -144,6 +147,7 @@ function saveSettings(input, configFile) {
       delete current.codex.repositories;
       delete current.codex.worktree_root;
       delete current.codex.worktree_base_path;
+      delete current.codex.worktree_member_path;
       delete current.codex.model;
       delete current.codex.reasoning_effort;
       return current;

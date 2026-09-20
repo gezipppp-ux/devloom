@@ -21,8 +21,8 @@ async function save() {
 <template>
   <a-form :model="form" layout="vertical" @finish="save">
     <a-form-item label="当前密码"><input v-model="form.currentPassword" type="password" autocomplete="current-password" aria-label="当前密码" required :disabled="busy" /></a-form-item>
-    <a-form-item label="新密码"><input v-model="form.password" type="password" autocomplete="new-password" aria-label="新密码" required minlength="12" :disabled="busy" /><p class="field-hint">至少 12 个字符。</p></a-form-item>
-    <a-form-item label="确认新密码"><input v-model="form.confirmation" type="password" autocomplete="new-password" aria-label="确认新密码" required minlength="12" :disabled="busy" /></a-form-item>
+    <a-form-item label="新密码"><input v-model="form.password" type="password" autocomplete="new-password" aria-label="新密码" required minlength="6" :disabled="busy" /><p class="field-hint">至少 6 个字符。</p></a-form-item>
+    <a-form-item label="确认新密码"><input v-model="form.confirmation" type="password" autocomplete="new-password" aria-label="确认新密码" required minlength="6" :disabled="busy" /></a-form-item>
     <p v-if="error" class="error" role="alert">{{ error }}</p><p v-if="saved" class="success" role="status">密码已更新。</p>
     <button class="primary" type="submit" :disabled="busy">{{ busy ? "正在保存…" : "修改密码" }}</button>
   </a-form>

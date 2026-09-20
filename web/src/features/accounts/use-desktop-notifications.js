@@ -1,5 +1,5 @@
 /* global window */
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { accountSession, saveAccountSettings } from "../../shared/api/account-session.js";
 function notificationApi() { return "Notification" in window ? window.Notification : null; }
 export function useDesktopNotifications() {
@@ -7,20 +7,26 @@ export function useDesktopNotifications() {
   const enabled = computed(() => accountSession.settings.notificationsEnabled !== false);
   const available = computed(() => permission.value !== "unsupported");
   const error = ref(""), busy = ref(false);
+  let disposed = false;
   onMounted(() => { permission.value = notificationApi()?.permission || "unsupported"; });
+  onUnmounted(() => { disposed = true; });
   async function toggle() {
-    if (busy.value) return;
+    if (busy.value || disposed) return;
+    const generation = accountSession.generation;
+    const current = () => !disposed && generation === accountSession.generation;
     busy.value = true; error.value = "";
     try {
       const api = notificationApi();
       if (!api) return;
       if (api.permission !== "granted") {
-        permission.value = await api.requestPermission();
+        const granted = await api.requestPermission();
+        if (!current()) return;
+        permission.value = granted;
         if (permission.value === "granted") await saveAccountSettings({ notificationsEnabled: true });
       } else await saveAccountSettings({ notificationsEnabled: !enabled.value });
-      permission.value = api.permission;
-    } catch (failure) { error.value = failure.message; }
-    finally { busy.value = false; }
+      if (current()) permission.value = api.permission;
+    } catch (failure) { if (current()) error.value = failure.message; }
+    finally { if (current()) busy.value = false; }
   }
   function notifyResult({ key, title }) {
     const api = notificationApi();

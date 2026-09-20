@@ -6,6 +6,7 @@ import { api } from "../../shared/api/api.js";
 const props = defineProps({
   modelValue: { type: String, default: "HEAD" },
   repository: { type: String, default: "" },
+  disabled: Boolean,
 });
 const emit = defineEmits(["update:modelValue"]);
 const inputId = `base-ref-${useId()}`;
@@ -73,7 +74,7 @@ onUnmounted(() => {
     :value="modelValue"
     :options="options"
     :loading="loading"
-    :disabled="!repository.trim()"
+    :disabled="disabled || !repository.trim()"
     :aria-describedby="!repository.trim() ? `${inputId}-hint` : undefined"
     show-search
     :filter-option="false"

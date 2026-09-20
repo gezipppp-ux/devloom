@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { createServer } = require("node:http");
 const { chromium } = require("playwright");
+const { verifyAccountPreferenceRaces } = require("./account-preferences.cjs");
 
 async function main() {
   const staticRoot = path.resolve("web/dist");
@@ -24,6 +25,7 @@ async function main() {
   const workspaceFor = (user) => ({ id: user.id === "admin" ? "11111111-1111-4111-8111-111111111111" : "22222222-2222-4222-8222-222222222222", name: `${user.username} 的私有项目` });
   let activeUser = null, heldDetail, holdDetail = false, heldDetailReady;
   const requests = [], errors = [];
+  const writesTo = (endpoint) => requests.filter((request) => request.endpoint === endpoint && request.method === "POST");
   let browser;
   try {
     browser = await chromium.launch({ ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : process.platform === "win32" ? { channel: "msedge" } : {}), headless: true });
@@ -110,9 +112,25 @@ async function main() {
     await page.getByRole("button", { name: "账号管理", exact: true }).click();
     await page.getByRole("heading", { name: "账号管理", exact: true }).waitFor();
     await page.getByLabel("新账号", { exact: true }).fill("created-user");
-    await page.getByLabel("临时密码", { exact: true }).fill("fixture-password-123");
+    const temporaryPassword = page.getByLabel("临时密码", { exact: true });
+    await temporaryPassword.fill("short");
+    await page.getByRole("button", { name: "创建账号", exact: true }).click();
+    assert.equal(await temporaryPassword.evaluate((input) => input.validity.tooShort), true);
+    assert.equal(writesTo("/api/admin/accounts").length, 0, "five-character creation passwords must not be submitted");
+    await temporaryPassword.fill("new123");
     await page.getByRole("button", { name: "创建账号", exact: true }).click();
     await page.getByText("账号已创建，首次登录需要修改密码。", { exact: true }).waitFor();
+    assert.equal(writesTo("/api/admin/accounts").at(-1).body.password, "new123");
+    await page.getByRole("button", { name: "created-user：重置密码" }).click();
+    const resetPassword = page.getByLabel("created-user 的新临时密码", { exact: true });
+    await resetPassword.fill("short");
+    await page.getByRole("button", { name: "确认重置密码", exact: true }).click();
+    assert.equal(await resetPassword.evaluate((input) => input.validity.tooShort), true);
+    assert.equal(writesTo("/api/admin/accounts/created").length, 0, "five-character reset passwords must not be submitted");
+    await resetPassword.fill("rst123");
+    await page.getByRole("button", { name: "确认重置密码", exact: true }).click();
+    await page.getByRole("button", { name: "确认重置密码", exact: true }).waitFor({ state: "hidden" });
+    assert.equal(writesTo("/api/admin/accounts/created").at(-1).body.password, "rst123");
     await page.getByRole("button", { name: "created-user：停用账号" }).click();
     await page.getByText("账号已更新。", { exact: true }).waitFor();
     assert.equal(users.find((entry) => entry.id === "created").status, "disabled");
@@ -159,10 +177,19 @@ async function main() {
     await page.getByRole("heading", { name: "设置你的新密码" }).waitFor();
     await page.screenshot({ path: path.join(output, "password-1440.png"), fullPage: true });
     await page.getByLabel("当前密码", { exact: true }).fill("fixture-password-123");
-    await page.getByLabel("新密码", { exact: true }).fill("new-fixture-password-123");
-    await page.getByLabel("确认新密码", { exact: true }).fill("new-fixture-password-123");
+    const newPassword = page.getByLabel("新密码", { exact: true });
+    const passwordConfirmation = page.getByLabel("确认新密码", { exact: true });
+    await newPassword.fill("short");
+    await passwordConfirmation.fill("short");
+    await page.getByRole("button", { name: "修改密码", exact: true }).click();
+    assert.equal(await newPassword.evaluate((input) => input.validity.tooShort), true);
+    assert.equal(await passwordConfirmation.evaluate((input) => input.validity.tooShort), true);
+    assert.equal(writesTo("/api/auth/password").length, 0, "five-character new passwords must not be submitted");
+    await newPassword.fill("next12");
+    await passwordConfirmation.fill("next12");
     await page.getByRole("button", { name: "修改密码", exact: true }).click();
     await page.getByText("member 的私有回复", { exact: true }).waitFor();
+    assert.equal(writesTo("/api/auth/password").at(-1).body.password, "next12");
     await heldDetail();
     await page.waitForFunction(() => window.accountResponseMarkers.includes("late"));
     assert.equal(await page.getByText("不应展示的旧账号响应", { exact: true }).count(), 0);
@@ -172,6 +199,7 @@ async function main() {
     await page.getByRole("heading", { name: "个人设置", exact: true }).waitFor();
     assert.equal(await page.getByLabel("Codex 模型", { exact: true }).inputValue(), "");
     assert.equal(await page.getByLabel("默认任务分组").inputValue(), "type");
+    await verifyAccountPreferenceRaces(browser, origin);
     assert.deepEqual(errors, []);
     process.stdout.write("Account browser checks passed: login, password, settings, administration, private state, late responses and cross-tab logout.\n");
   } finally { await browser?.close(); await new Promise((resolve) => server.close(resolve)); }

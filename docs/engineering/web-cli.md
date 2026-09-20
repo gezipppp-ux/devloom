@@ -13,6 +13,8 @@ Process startup lives in `src/cli/web.cjs`. The HTTP module exports an inert ser
 
 Closing a session manager fences in-flight validation/resume/start operations, drains already-started channel callbacks and transport shutdown, then releases ownership. `AppServerClient.close()` is terminal; accidental disconnects can reconnect. A completed first turn cannot start another turn until the execution runner finishes persisting its result and releases its lock; steering an active first turn remains supported.
 
+A delayed first `turn/start` response must still belong to the original startup operation and must not restore a turn already marked completed, including while database history reconciliation is pending.
+
 ## 2. Signatures
 
 - `npm run tapd:web -- [--host 0.0.0.0] [--port 4317]` builds assets and starts HTTP. CLI startup defaults to `0.0.0.0` for direct IPv4 LAN access; `--host 127.0.0.1` limits access to the local machine. `--config` remains CLI-only and is rejected by Web startup.
@@ -44,6 +46,7 @@ Closing a session manager fences in-flight validation/resume/start operations, d
 - Conversation attachments are channel-independent and persisted under the owning run, separately from the original requirement snapshot. Accept only server-generated image IDs belonging to that run, never browser-supplied paths or URLs. Uploads and sends respect session ownership, preparation, read-only state and pending approvals. History and SSE expose attachment URLs through the application presenter, preserving images on refresh and reconnect without exposing arbitrary local files.
 - The composer accepts clipboard image files and file selection, previews/removes attachments, and supports image-only sends. Ordinary text paste keeps native textarea behavior. Enter sends, Shift+Enter inserts a newline, and IME confirmation or repeated keydown events never send. Uploading or failed attachments block both the send button and Enter until resolved; upload retry and failed sends retain the draft. Async uploads and successful sends stay scoped to the original workspace/run selection and cannot mutate a newly opened draft.
 - History uses `thread/items/list {threadId,limit:50,sortDirection:'desc',cursor?}`. Reverse each page for chronological rendering. Preserve pagination cursor when refreshing an expanded history.
+- Snapshot history defines the visible page and chronological order. Runtime overlays update overlapping items and append new items without moving saved items from older pages behind the latest messages.
 - SSE events have `{key,at,type,status,sessionId,turnId,...}`; `item` contains a normalized item; `requests` contains currently valid server requests. Reload fetches canonical history plus live items; pending approvals are never silently replayed after disconnect.
 - The browser ignores superseded view/list responses and preserves newer SSE fields, metadata and items received while a snapshot is pending. Initial selection follows the same rule, and history pagination remains scoped to its selection. A delayed snapshot must not resurrect an ended turn or an already resolved approval.
 - Render escaped text, including tool output. Bound long text/output. `web-events.jsonl` stores item metadata rather than duplicating the whole growing output for every token.

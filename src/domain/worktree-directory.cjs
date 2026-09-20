@@ -1,14 +1,21 @@
 const path = require("node:path");
 const { absolutePath } = require("../shared/paths.cjs");
+const { username } = require("./account.cjs");
 
 function defaultWorktreeDirectory(workspaceId) {
   return `w-${workspaceId.slice(0, 8)}`;
 }
 
-function memberWorktreeDirectory(ownerId) {
-  if (typeof ownerId !== "string" || !/^[a-zA-Z0-9-]{1,80}$/.test(ownerId))
-    throw new Error("工作区所有者标识无效。");
-  return "u-" + ownerId;
+function memberWorktreeDirectory(ownerUsername) {
+  const name = username(ownerUsername);
+  // Keep old UUID directories reserved, and encode names that cannot be used
+  // on every supported filesystem. '~' is excluded from account names, so the
+  // encoded namespace cannot collide with an ordinary username.
+  if (!/^u-[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(name)) {
+    try { return normalizeWorktreeDirectory(name); }
+    catch { /* Valid account names can still be reserved filesystem names. */ }
+  }
+  return `user~${Buffer.from(name, "utf8").toString("hex")}`;
 }
 
 function normalizeWorktreeDirectory(value) {

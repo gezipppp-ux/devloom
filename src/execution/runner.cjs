@@ -3,7 +3,7 @@ const { createWorktree, worktreePlan } = require("../git/worktrees.cjs");
 const { repositoryFor } = require("../config/repository.cjs");
 const { startSession } = require("../codex/cli-session.cjs");
 const { executionConfig } = require("../config/execution-settings.cjs");
-const { assertWorktreeLocation } = require("../config/worktree-location.cjs");
+const { assertWorktreeLocation, assertMemberWorktreeLocation } = require("../config/worktree-location.cjs");
 const { sourceFor, runKey } = require("../domain/run-identity.cjs");
 const { initializeWorktree } = require("./worktree-init.cjs");
 const { ExecutionStore } = require("../storage/execution-store.cjs");
@@ -113,8 +113,11 @@ async function runExecution(
     // Persist intent before any external side effect; an uncertain run is never redispatched.
     store.save(state);
     if (dependencies.signal?.aborted) throw new Error("任务准备已停止。");
-    if (config.workspace)
-      assertWorktreeLocation(config.codex.worktree_base_path, worktree.path);
+    if (config.workspace) {
+      if (config.codex.worktree_member_path)
+        assertMemberWorktreeLocation(config.codex.worktree_base_path, config.codex.worktree_member_path, worktree.path);
+      else assertWorktreeLocation(config.codex.worktree_base_path, worktree.path);
+    }
     services.createWorktree(worktree);
     if (config.codex.init_commands.length) {
       state.execution = { status: "initializing" };

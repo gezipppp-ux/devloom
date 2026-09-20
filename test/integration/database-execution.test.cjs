@@ -17,8 +17,9 @@ const { createManualChannel } = require("../../src/channels/manual/adapter.cjs")
 const { runExecution } = require("../../src/execution/runner.cjs");
 const { sourceFor, runKey } = require("../../src/domain/run-identity.cjs");
 const { verifyPassword } = require("../../src/storage/account-passwords.cjs");
-const { saveSettings } = require("../../src/config/execution-settings.cjs");
-const { updateConfig, writeConfig } = require("../../src/storage/json-files.cjs");
+const { readSettings, saveSettings } = require("../../src/config/execution-settings.cjs");
+const { readOptional, updateConfig, writeConfig } = require("../../src/storage/json-files.cjs");
+const { worktreePlan, createWorktree } = require("../../src/git/worktrees.cjs");
 const { main: seedFixtures } = require("../../src/cli/seed-fixtures.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const { temporary, png } = require("../support/helpers.cjs");
@@ -88,6 +89,7 @@ test("SQLite execution uses a temporary Git worktree and fake CLI, retains compl
   assert.equal(state.execution.status, "completed", state.execution.error);
   assert.equal(state.transition.status, "skipped");
   assert.equal(state.session_id, "sqlite-cli-thread");
+  assert.equal(path.dirname(state.worktree.path), path.join(root, "trees", "alice", "p"));
   assert.equal(git("branch", "--show-current"), "main");
   assert.equal(fs.readFileSync(path.join(repository, "tracked.txt"), "utf8"), "root-dirty");
   assert.equal(fs.readFileSync(path.join(state.worktree.path, "tracked.txt"), "utf8"), "committed");
@@ -157,6 +159,138 @@ test("SQLite Web streaming and message images survive restart without connecting
   assert.equal(view.items.find((item) => item.id === "command").output, "saved tool output");
   assert.equal(view.items.find((item) => item.id === "user-2").images[0].id, image.id);
   assert.equal(view.warning, undefined);
+});
+
+test("username worktree roots apply to new tasks while legacy UUID paths retain their sessions and Git identities", async (t) => {
+  const { root, managers, alice, a, b, workspaces, repository, git } = await fixture(t);
+  const file = workspaces.configFile(a.id);
+  const runsDirectory = path.join(path.dirname(file), "runs");
+  const item = { id: randomUUID(), workspace_id: "local", title: "旧成员目录任务", type: "requirement" };
+  const source = sourceFor("manual", item);
+  const key = runKey(source);
+  const legacy = worktreePlan(repository, item, "main", {
+    root: path.join(root, "trees", "u-" + alice.id, "p"),
+    workspaceId: a.id,
+    source,
+    name: "legacy",
+  });
+  createWorktree(legacy);
+  fs.writeFileSync(path.join(legacy.path, "keep.txt"), "original task content");
+  const legacyState = {
+    version: 3,
+    workspace_id: a.id,
+    source,
+    workitem: item,
+    worktree: legacy,
+    session_id: "legacy-member-thread",
+    codex: { model: "", reasoning_effort: "", permission_mode: "ask" },
+    execution: { status: "completed" },
+    transition: { status: "skipped" },
+  };
+  new ExecutionStore(path.join(runsDirectory, key)).save(legacyState);
+  const client = new FakeClient();
+  const manager = new SessionManager({ runsDirectory, configFile: file, client });
+  managers.push(manager);
+  await manager.send(key, "继续原来的任务");
+  const resumed = client.calls.find((call) => call.method === "thread/resume").params;
+  assert.equal(resumed.threadId, legacyState.session_id);
+  assert.equal(resumed.cwd, legacy.path);
+  assert.deepEqual(client.calls.filter((call) => call.method === "turn/start").at(-1).params.sandboxPolicy.writableRoots, [legacy.path]);
+  assert.equal(client.calls.some((call) => call.method === "thread/start"), false);
+  await manager.interrupt(key);
+
+  for (const [workspace, username] of [[a, "alice"], [b, "bob"]]) {
+    const selectedFile = workspaces.configFile(workspace.id);
+    const selected = workspace.id === a.id ? manager : new SessionManager({
+      runsDirectory: path.join(path.dirname(selectedFile), "runs"),
+      configFile: selectedFile,
+      client: new FakeClient(),
+    });
+    if (selected !== manager) managers.push(selected);
+    const started = await selected.start({ channel: "manual", requestId: randomUUID(), title: "新成员目录任务", content: "模拟需求" });
+    const runtime = selected.sessions.get(started.key);
+    const deadline = Date.now() + 10000;
+    while (!runtime.turnId && runtime.pipelineActive && Date.now() < deadline) await immediate();
+    assert.ok(runtime.turnId, runtime.error);
+    const state = selected.store.read(started.key);
+    assert.equal(path.dirname(state.worktree.path), path.join(root, "trees", username, "p"));
+    assert.equal(selected.client.calls.filter((call) => call.method === "thread/start").at(-1).params.cwd, state.worktree.path);
+    assert.notEqual(state.worktree.branch, legacy.branch);
+    await selected.interrupt(started.key);
+    await runtime.operation;
+  }
+  const retained = manager.store.read(key);
+  assert.equal(retained.session_id, legacyState.session_id);
+  assert.deepEqual(retained.worktree, legacyState.worktree);
+  assert.deepEqual(retained.source, source);
+  assert.equal(retained.workspace_id, a.id);
+  assert.equal(fs.readFileSync(path.join(legacy.path, "keep.txt"), "utf8"), "original task content");
+  assert.equal(git("show-ref", "--hash", `refs/heads/${legacy.branch}`), legacy.base_commit);
+  assert.equal(git("branch", "--show-current"), "main");
+  assert.equal(fs.readFileSync(path.join(repository, "tracked.txt"), "utf8"), "root-dirty");
+});
+
+test("member roots and workspace subdirectories cannot redirect settings into another member", async (t) => {
+  const { root, a, workspaces, repository } = await fixture(t);
+  const file = workspaces.configFile(a.id);
+  const linkType = process.platform === "win32" ? "junction" : "dir";
+  for (const scenario of ["member-root", "workspace-child"]) {
+    const base = path.join(root, scenario);
+    const member = path.join(base, "alice");
+    const peer = path.join(base, "bob");
+    fs.mkdirSync(peer, { recursive: true });
+    if (scenario === "workspace-child") fs.mkdirSync(member);
+    const link = scenario === "member-root" ? member : path.join(member, "escape");
+    fs.symlinkSync(peer, link, linkType);
+    writeConfig(path.join(root, "system-settings.json"), { worktreeBasePath: base });
+    const worktreeDirectory = scenario === "member-root" ? "p" : "escape/new-directory";
+    updateConfig(file, (config) => ({ ...config, codex: { ...config.codex, worktree_directory: worktreeDirectory } }));
+    const before = readOptional(file);
+    assert.throws(() => readSettings(file), /符号链接/, scenario);
+    assert.throws(() => saveSettings({ repository, worktreeDirectory, baseRef: "main", initCommands: [] }, file), /符号链接/, scenario);
+    assert.deepEqual(readOptional(file), before);
+    assert.deepEqual(fs.readdirSync(peer), []);
+  }
+});
+
+test("execution rechecks member isolation when preparation replaces a root or child with a junction", async (t) => {
+  const { root, a, workspaces, git } = await fixture(t);
+  const file = workspaces.configFile(a.id);
+  const linkType = process.platform === "win32" ? "junction" : "dir";
+  for (const scenario of ["member-root", "workspace-child"]) {
+    const base = path.join(root, "during-prepare-" + scenario);
+    const member = path.join(base, "alice");
+    const peer = path.join(base, "bob");
+    const link = scenario === "member-root" ? member : path.join(member, "p");
+    fs.mkdirSync(link, { recursive: true });
+    fs.mkdirSync(peer);
+    fs.writeFileSync(path.join(peer, "keep.txt"), "other member content");
+    writeConfig(path.join(root, "system-settings.json"), { worktreeBasePath: base });
+    const channel = createManualChannel(file, { uploadDirectory: path.join(path.dirname(file), "uploads") });
+    const resolved = await channel.resolve({ requestId: randomUUID(), title: "拒绝准备期间越界", content: "模拟需求" });
+    const prepare = channel.prepare.bind(channel);
+    channel.prepare = async (input) => {
+      const prepared = await prepare(input);
+      assert.ok(path.resolve(link).startsWith(path.resolve(root) + path.sep));
+      fs.rmdirSync(link);
+      fs.symlinkSync(peer, link, linkType);
+      return prepared;
+    };
+    let created = false, started = false;
+    const branches = git("for-each-ref", "--format=%(refname)", "refs/heads");
+    const key = runKey(sourceFor("manual", resolved.item));
+    const directory = path.join(path.dirname(file), "runs", key);
+    await assert.rejects(runExecution({ ...resolved, configFile: file, directory, channel }, {
+      createWorktree() { created = true; throw new Error("Unexpected worktree creation"); },
+      startSession() { started = true; throw new Error("Unexpected Codex execution"); },
+    }), /符号链接/, scenario);
+    assert.equal(created, false);
+    assert.equal(started, false);
+    assert.equal(new ExecutionStore(directory).read().execution.status, "failed");
+    assert.equal(git("for-each-ref", "--format=%(refname)", "refs/heads"), branches);
+    assert.deepEqual(fs.readdirSync(peer), ["keep.txt"]);
+    assert.equal(fs.readFileSync(path.join(peer, "keep.txt"), "utf8"), "other member content");
+  }
 });
 
 test("database image caches are reconstructible, reject symlinks, and cannot cross workspace boundaries", async (t) => {

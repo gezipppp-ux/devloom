@@ -189,6 +189,7 @@ async function save() {
                 : '/srv/repos/my-project'
             "
             required
+            :disabled="busy"
         /></a-form-item>
         <p class="field-hint">
           选择此工作区对应的 Git 仓库根目录，所有渠道任务都使用这个项目。
@@ -218,6 +219,7 @@ async function save() {
               :aria-invalid="Boolean(directoryError)"
               aria-describedby="worktree-directory-hint"
               required
+              :disabled="busy"
             />
           </a-form-item>
           <p id="worktree-directory-hint" class="field-hint">
@@ -245,12 +247,13 @@ async function save() {
               platform === 'win32' ? 'D:\\wt' : '/srv/wt'
             "
             required
+            :disabled="busy"
         /></a-form-item>
         <p v-if="!props.workspaceName" class="field-hint">
           建议选择简短且当前服务用户可写的路径。每个任务在其下创建一层短目录，例如 ce-shi-a1b2c3d4e5f6。
         </p>
         <a-form-item label="新任务基准引用" name="baseRef">
-          <BaseRefSelect v-model="form.baseRef" :repository="form.repository" />
+          <BaseRefSelect v-model="form.baseRef" :repository="form.repository" :disabled="busy" />
         </a-form-item>
         <p class="field-hint">
           可搜索本地分支、已获取的远程分支和标签，也可输入 commit
@@ -261,6 +264,7 @@ async function save() {
             v-model="initCommandsText"
             aria-label="Worktree 初始化命令"
             rows="5"
+            :disabled="busy"
             placeholder="pnpm install&#10;pnpm build"
           />
         </a-form-item>

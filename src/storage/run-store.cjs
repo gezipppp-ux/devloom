@@ -227,6 +227,10 @@ class RunStore {
     return new SessionHistoryStore(this.dir(key)).list(cursor);
   }
 
+  historyItemIdsBefore(key, itemIds, beforeId) {
+    return new SessionHistoryStore(this.dir(key)).idsBefore(itemIds, beforeId);
+  }
+
   reconcileHistory(key, items, startedAt) {
     new SessionHistoryStore(this.dir(key)).reconcile(items, startedAt);
   }

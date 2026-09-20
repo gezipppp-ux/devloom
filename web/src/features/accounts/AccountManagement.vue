@@ -39,7 +39,7 @@ function update(user, patch) { return mutate(`/admin/accounts/${encodeURICompone
     <FormSection title="创建账号">
       <a-form :model="form" layout="vertical" @finish="create">
         <div class="form-columns"><a-form-item label="新账号"><input v-model="form.username" aria-label="新账号" autocomplete="off" required maxlength="80" :disabled="busy" /></a-form-item><a-form-item label="账号角色"><select v-model="form.role" aria-label="账号角色" :disabled="busy"><option value="member">普通成员</option><option value="admin">管理员</option></select></a-form-item></div>
-        <a-form-item label="临时密码"><input v-model="form.password" type="password" aria-label="临时密码" autocomplete="new-password" required minlength="12" :disabled="busy" /><p class="field-hint">至少 12 个字符；首次登录强制修改。</p></a-form-item>
+        <a-form-item label="临时密码"><input v-model="form.password" type="password" aria-label="临时密码" autocomplete="new-password" required minlength="6" :disabled="busy" /><p class="field-hint">至少 6 个字符；首次登录强制修改。</p></a-form-item>
         <button class="primary" type="submit" :disabled="busy">创建账号</button>
       </a-form>
     </FormSection>
@@ -53,7 +53,7 @@ function update(user, patch) { return mutate(`/admin/accounts/${encodeURICompone
             <button :disabled="busy || user.id === accountSession.user.id" :aria-label="`${user.username}：${user.status === 'disabled' ? '启用账号' : '停用账号'}`" @click="update(user, { status: user.status === 'disabled' ? 'active' : 'disabled' })">{{ user.status === 'disabled' ? '启用账号' : '停用账号' }}</button>
             <button :disabled="busy" :aria-label="`${user.username}：重置密码`" @click="selected = user; resetPassword = ''">重置密码</button>
           </div>
-          <form v-if="selected?.id === user.id" class="account-reset-form" @submit.prevent="update(user, { password: resetPassword })"><label :for="`reset-${user.id}`">{{ user.username }} 的新临时密码</label><input :id="`reset-${user.id}`" v-model="resetPassword" type="password" autocomplete="new-password" required minlength="12" :disabled="busy" /><div class="actions"><button type="submit" :disabled="busy">确认重置密码</button><button type="button" :disabled="busy" @click="selected = null; resetPassword = ''">取消</button></div></form>
+          <form v-if="selected?.id === user.id" class="account-reset-form" @submit.prevent="update(user, { password: resetPassword })"><label :for="`reset-${user.id}`">{{ user.username }} 的新临时密码</label><input :id="`reset-${user.id}`" v-model="resetPassword" type="password" autocomplete="new-password" required minlength="6" :disabled="busy" /><div class="actions"><button type="submit" :disabled="busy">确认重置密码</button><button type="button" :disabled="busy" @click="selected = null; resetPassword = ''">取消</button></div></form>
         </li>
       </ul>
     </FormSection>

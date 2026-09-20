@@ -94,10 +94,30 @@ class SessionViews {
       warning = error.message;
     }
     const items = new Map(history.items.map((item) => [item.id, item]));
-    const initializationItems = (state.initialization?.commands || []).map(
-      initializationItem,
+    const initializationItems = new Map(
+      (state.initialization?.commands || []).map(initializationItem)
+        .map((item) => [item.id, item]),
     );
-    if (runtime) for (const [id, item] of runtime.items) items.set(id, item);
+    for (const [id, item] of items) if (item.type === "worktreeInitialization") {
+      initializationItems.set(id, item);
+      items.delete(id);
+    }
+    if (runtime) {
+      const earlierIds = this.store.database
+        ? this.store.historyItemIdsBefore(key, [...runtime.items.keys()], history.items[0]?.id)
+        : new Set();
+      // File adapters have no saved ordering index. An overlapping live item
+      // anchors the page; keep unanchored items when their age is unknown.
+      let beforePage = !this.store.database && Boolean(history.nextCursor) &&
+        history.items.some((item) => runtime.items.has(item.id));
+      for (const [id, item] of runtime.items) {
+        if (items.has(id)) beforePage = false;
+        if (item.type === "worktreeInitialization") initializationItems.set(id, item);
+        // Old runtime entries belong to earlier pages. New entries remain
+        // visible even if they were saved after this page was read.
+        else if (items.has(id) || (!beforePage && !earlierIds.has(id))) items.set(id, item);
+      }
+    }
     const deletion = this.store.readWorktreeDeletion(key);
     let readOnlyReason = deletion.worktreeRemoved || deletion.status === "deleted"
       ? "Worktree 已删除，此会话仅供查看。"
@@ -135,7 +155,7 @@ class SessionViews {
       warning,
       items: [
         ...new Map(
-          [...initializationItems, ...items.values()].map((item) => [
+          [...initializationItems.values(), ...items.values()].map((item) => [
             item.id,
             item,
           ]),

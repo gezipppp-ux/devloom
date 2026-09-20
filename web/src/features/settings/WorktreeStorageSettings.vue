@@ -95,14 +95,14 @@ onUnmounted(() => {
         建议使用较短路径{{ platform === "win32" ? "，例如 D:\\wt" : "，例如 /srv/wt" }}，减少项目内深层文件路径过长的风险。
       </p>
       <div class="worktree-path-example">
-        <strong>基础目录 + 工作区目录 = 工作区 Worktree 完整路径</strong>
+        <strong>基础目录 + 用户名 + 工作区目录 = 工作区 Worktree 完整路径</strong>
         <code>{{
           platform === "win32"
-            ? "D:\\wt + project-a → D:\\wt\\project-a"
-            : "/srv/wt + project-a → /srv/wt/project-a"
+            ? "D:\\wt + alice + project-a → D:\\wt\\alice\\project-a"
+            : "/srv/wt + alice + project-a → /srv/wt/alice/project-a"
         }}</code>
         <p>
-          系统自动处理路径分隔符。每个工作区设置自己的相对目录，每个任务在其下仅创建一层短目录，例如 ce-shi-a1b2c3d4e5f6。
+          示例用户名为 alice。系统按账号区分目录，每个工作区设置自己的相对目录；每个任务在其下仅创建一层短目录，例如 ce-shi-a1b2c3d4e5f6。
         </p>
       </div>
       <p class="field-hint">

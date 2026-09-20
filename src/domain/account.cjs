@@ -20,8 +20,8 @@ function username(value) {
 }
 
 function password(value) {
-  if (typeof value !== "string" || value.length < 12 || value.length > 256)
-    throw accountError("密码需为 12–256 个字符。");
+  if (typeof value !== "string" || value.length < 6 || value.length > 256)
+    throw accountError("密码需为 6–256 个字符。");
   return value;
 }
 

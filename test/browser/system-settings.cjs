@@ -29,10 +29,22 @@ async function verifySystemSettings(browser, { origin, output, errors, directory
     await relativeField.waitFor();
   };
   const saveWorkspace = async () => {
+    let captured;
+    const pending = new Promise((resolve) => { captured = resolve; });
+    await page.route(settingsEndpoint, (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      captured(route);
+    }, { times: 1 });
     const response = page.waitForResponse((entry) => entry.url() === settingsEndpoint && entry.request().method() === "POST");
     await page.getByRole("button", { name: "保存执行设置", exact: true }).click();
+    const held = await pending;
+    for (const label of ["项目代码仓库", "工作区 Worktree 目录", "新任务基准引用", "Worktree 初始化命令"])
+      assert.equal(await page.getByLabel(label, { exact: true }).isDisabled(), true,
+        `${label} must not accept draft changes while the save response is pending`);
+    await held.continue();
     assert.equal((await response).status(), 200);
     await page.getByText("设置已保存，新任务将使用此配置。", { exact: true }).waitFor();
+    assert.equal(await relativeField.isDisabled(), false, "successful saving unlocks the form");
   };
   const runPosts = [];
   page.on("request", (request) => {

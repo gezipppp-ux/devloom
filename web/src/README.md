@@ -28,7 +28,7 @@ Vue 组件使用 PascalCase 文件名；JavaScript 辅助模块使用 kebab-case
 - `app/SystemSettings.vue` 仅组合管理员的全局存储设置；账号业务页面属于 `features/accounts/`：`LoginPage.vue` 负责登录，`PasswordPage.vue` 组合首次改密入口，两类改密入口复用 `PasswordForm.vue`；`PersonalSettings.vue` 管理账号默认模型、强度、权限、分组、通知和改密；`AccountManagement.vue` 管理账号身份，不提供读取他人工作区的入口。工作区配置仍由所有者在 `features/settings` 管理。
 - `features/accounts/use-desktop-notifications.js` 拥有浏览器通知授权、个人通知偏好保存与通知投递；应用壳层将其设置状态传给个人设置页，并把投递回调传给工作区。账号功能不反向依赖应用壳层或其他功能目录。
 - `features/settings/WorktreeStorageSettings.vue` 使用全局 `appApi` 独立加载和保存基础目录；`ServerDirectoryPicker.vue` 仅浏览服务器目录并返回选择，表单保存才生效。工作区设置只提交相对目录，前端完整路径用于预览，实际校验与拼接由服务端负责。
-- Worktree 路径采用「基础目录 / 稳定成员目录 / 工作区相对目录 / 任务前缀-短标识」，任务只增加一层目录；成员目录由服务端身份生成，修改用户名不影响路径。`features/tasks/ManualRequirementFields.vue` 的可选目录前缀最多 16 位；留空按标题生成，12 位短标识由服务端统一追加。系统设置提示使用较短基础目录，例如 Windows 的 `D:\wt`。
+- 新 Worktree 路径采用「基础目录 / 用户名 / 工作区相对目录 / 任务前缀-短标识」，例如 `D:\wt\alice\project-a\login-a1b2c3d4e5f6`，任务只增加一层目录。账号名统一小写且全局唯一，当前不提供账号改名；特殊名称的目录转义由服务端负责，前端继续复用 `worktreeMemberPath` 和 `worktreeRoot`，不自行拼出成员目录。已有任务的记录路径与 session 身份保持不变，不移动旧目录。`features/tasks/ManualRequirementFields.vue` 的可选目录前缀最多 16 位；留空按标题生成，12 位短标识由服务端统一追加。系统设置的示例必须包含用户名层，并提示使用较短基础目录，例如 Windows 的 `D:\wt`。
 - `app/use-workspace-console.js` 负责渠道 bootstrap、SSE 建连/关闭与防抖刷新，将事件分发给任务列表和会话状态，不处理 DOM 或表单草稿。
 - `features/tasks/use-task-list.js` 负责列表刷新、请求乱序保护和请求期间的人工进度覆盖。
 - `features/session/use-session.js` 负责详情快照、请求期间的 SSE 覆盖、会话动作和历史分页；执行偏好拥有独立保存状态和错误反馈，迟到响应不能覆盖较新的设置/当前轮状态。打开会话、收到消息和完成动作通过回调交给应用/界面层处理，不导入任务列表或界面组件。

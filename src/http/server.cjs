@@ -18,7 +18,7 @@ const {
   DEFAULT_ACCOUNT_SETTINGS,
 } = require("../domain/account.cjs");
 const { json, body } = require("./messages.cjs");
-const { serveApi } = require("./api.cjs");
+const { readApiBody, serveApi } = require("./api.cjs");
 const { serveStatic } = require("./assets.cjs");
 const { createEventStream } = require("./events.cjs");
 const {
@@ -143,6 +143,13 @@ function createWebServer({
       const url = new URL(request.raw.url, origin);
       if (url.origin !== origin)
         return reply.code(403).send({ error: "请求地址必须与服务地址同源。" });
+      // Fastify matches the raw path. Do not let URL normalization dispatch an
+      // API route with another route's security hooks (notably login limits).
+      if (
+        url.pathname.startsWith("/api/") &&
+        request.raw.url.split("?", 1)[0] !== url.pathname
+      )
+        return reply.code(400).send({ error: "接口地址必须使用规范路径。" });
       request.applicationUrl = url;
       if (request.method === "POST") {
         if (testIdentity) {
@@ -190,15 +197,13 @@ function createWebServer({
         handler: dispatch,
       });
     instance.setErrorHandler((error, _request, reply) => {
-      reply
-        .code(error.statusCode || 400)
-        .send({
-          error:
-            error.statusCode === 429
-              ? "登录尝试过于频繁，请稍后重试。"
-              : error.message,
-          ...(error.code ? { code: error.code } : {}),
-        });
+      reply.code(error.statusCode || 400).send({
+        error:
+          error.statusCode === 429
+            ? "登录尝试过于频繁，请稍后重试。"
+            : error.message,
+        ...(error.code ? { code: error.code } : {}),
+      });
     });
   });
 
@@ -251,6 +256,18 @@ function createWebServer({
         return json(response, 200, description());
       }
       if (!actor) throw accountError("请先登录。", 401, "AUTH_REQUIRED");
+      const authorize = () => {
+        if (testIdentity) return fixtureUser;
+        const current = accounts.actor(request.session);
+        if (!current) throw accountError("请先登录。", 401, "AUTH_REQUIRED");
+        return current;
+      };
+      // Consume bounded JSON/binary input before resolving any mutable scope.
+      // A session can be revoked while the client is still sending its body.
+      const input =
+        request.method === "POST" ? await readApiBody(raw, url) : {};
+      actor = authorize();
+      request.applicationActor = actor;
       if (request.method === "POST" && url.pathname === "/api/auth/logout") {
         if (!testIdentity) {
           events.revoke({ sessionId: request.session.sessionId });
@@ -264,7 +281,7 @@ function createWebServer({
         url.pathname === "/api/auth/password" &&
         !testIdentity
       ) {
-        const row = await accounts.changePassword(actor, await body(raw));
+        const row = await accounts.changePassword(actor, input, authorize);
         events.revoke({ userId: actor.id });
         await establish(request, row);
         actor = accounts.describe(row);
@@ -278,7 +295,6 @@ function createWebServer({
         );
       if (url.pathname === "/api/account/settings") {
         if (request.method === "POST") {
-          const input = await body(raw);
           if (testIdentity) fixtureSettings = { ...fixtureSettings, ...input };
           else
             return json(response, 200, {
@@ -305,7 +321,6 @@ function createWebServer({
             : await accounts.executionOptions(),
         );
       if (url.pathname === "/api/account/preferences") {
-        const input = request.method === "POST" ? await body(raw) : {};
         const id = input.workspaceId || url.searchParams.get("workspaceId");
         if (!testIdentity || workspaces)
           workspaces.read(id, testIdentity ? undefined : actor);
@@ -330,7 +345,7 @@ function createWebServer({
           return json(response, 200, { users: accounts.list(actor) });
         if (request.method === "POST")
           return json(response, 201, {
-            user: await accounts.create(await body(raw), actor),
+            user: await accounts.create(input, actor, false, authorize),
           });
       }
       const accountRoute = /^\/api\/admin\/accounts\/([^/]+)$/.exec(
@@ -339,8 +354,9 @@ function createWebServer({
       if (accountRoute && request.method === "POST" && !testIdentity) {
         const user = await accounts.update(
           accountRoute[1],
-          await body(raw),
+          input,
           actor,
+          authorize,
         );
         events.revoke({ userId: user.id });
         return json(response, 200, { user });
@@ -361,11 +377,7 @@ function createWebServer({
             workspaces: workspaces.list(contextActor),
           });
         if (request.method === "POST") {
-          const created = workspaces.save(
-            await body(raw),
-            undefined,
-            contextActor,
-          );
+          const created = workspaces.save(input, undefined, contextActor);
           request.applicationWorkspace = created.id;
           return json(response, 201, created);
         }
@@ -376,11 +388,7 @@ function createWebServer({
           if (request.method === "GET")
             return json(response, 200, systemServices.readSettings());
           if (request.method === "POST")
-            return json(
-              response,
-              200,
-              systemServices.saveSettings(await body(raw)),
-            );
+            return json(response, 200, systemServices.saveSettings(input));
         }
         if (
           request.method === "GET" &&
@@ -403,11 +411,7 @@ function createWebServer({
         request.applicationWorkspace = id;
         workspaces.read(id, contextActor);
         if (!scoped[2] && request.method === "POST")
-          return json(
-            response,
-            200,
-            workspaces.save(await body(raw), id, contextActor),
-          );
+          return json(response, 200, workspaces.save(input, id, contextActor));
         context = workspaces.get(id, contextActor);
         url.pathname = `/api${scoped[2] || "/bootstrap"}`;
       } else if (manager && testIdentity)
@@ -438,6 +442,7 @@ function createWebServer({
         events,
         authorization,
         accountSettings: testIdentity ? undefined : accounts.settings(actor),
+        input,
       });
     } catch (error) {
       if (!response.headersSent)

@@ -1,6 +1,30 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { normalizeWorktreeDirectory, resolveWorktreeDirectory } = require("../../src/domain/worktree-directory.cjs");
+const { memberWorktreeDirectory, normalizeWorktreeDirectory, resolveWorktreeDirectory } = require("../../src/domain/worktree-directory.cjs");
+
+test("member worktree directories use canonical account names without exposing path syntax", () => {
+  for (const name of ["alice", "bob", "team.member-01", "member_name", "u-alice", "x".repeat(64)])
+    assert.equal(memberWorktreeDirectory(name), name);
+  assert.equal(memberWorktreeDirectory(" Alice "), "alice");
+  for (const name of [undefined, null, 123, "", "ab", "x".repeat(65), "../alice", "a/b", "a\\b", "a:b", "a b", "user~636f6e", ".alice", "a\u0000b"])
+    assert.throws(() => memberWorktreeDirectory(name), /账号|用户|所有者/, String(name));
+});
+
+test("portable hazards and the legacy UUID namespace have deterministic collision-free member names", () => {
+  const reserved = "u-12345678-1234-4234-8234-123456789abc";
+  const encodedNames = ["con", "con.txt", "prn", "aux", "nul", "com1", "com9.log", "lpt1", "lpt9.txt", "alice.", "member..", reserved];
+  const names = ["alice", "bob", "conman", "com0", "com10", "lpt10", "u-alice", "u-12345678-1234-4234-8234-123456789abz", ...encodedNames];
+  for (const name of encodedNames) {
+    const expected = `user~${Buffer.from(name).toString("hex")}`;
+    assert.equal(memberWorktreeDirectory(name), expected);
+    assert.equal(memberWorktreeDirectory(name.toUpperCase()), expected);
+    assert.equal(normalizeWorktreeDirectory(expected), expected);
+    assert.equal(resolveWorktreeDirectory("D:\\trees", expected, "win32"), `D:\\trees\\${expected}`);
+    assert.equal(resolveWorktreeDirectory("/trees", expected, "linux"), `/trees/${expected}`);
+  }
+  assert.equal(new Set(names.map(memberWorktreeDirectory)).size, names.length);
+  assert.equal(names.some((name) => memberWorktreeDirectory(name) === reserved), false);
+});
 
 test("worktree directories join with exactly one host separator on POSIX and Windows", () => {
   for (const base of ["/root", "/root/"])

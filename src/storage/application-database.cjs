@@ -36,12 +36,13 @@ class ApplicationDatabase {
   }
 
   readWorkspace(id, ownerUserId) {
-    const row = this.handle.prepare(`SELECT w.*, s.data FROM workspaces w
-      JOIN workspace_settings s ON s.workspace_id=w.id WHERE w.id=?`).get(id);
+    const row = this.handle.prepare(`SELECT w.*, s.data, u.username AS owner_username FROM workspaces w
+      JOIN workspace_settings s ON s.workspace_id=w.id
+      JOIN users u ON u.id=w.owner_user_id WHERE w.id=?`).get(id);
     if (!row || (ownerUserId !== undefined && row.owner_user_id !== ownerUserId)) throw missing();
     const config = decodeSettings(row.data, this.encryptionKey);
     return { ...config, workspace: { ...config.workspace, id: row.id, name: row.name,
-      icon: row.icon, owner_user_id: row.owner_user_id } };
+      icon: row.icon, owner_user_id: row.owner_user_id, owner_username: row.owner_username } };
   }
 
   listWorkspaces(ownerUserId) {

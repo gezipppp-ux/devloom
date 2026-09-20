@@ -433,7 +433,8 @@ class SessionManager extends EventEmitter {
           this.assertOpen();
           this.events.persist(runtime);
           return new Promise((resolve, reject) => {
-            runtime.initial = { resolve, reject, onStarted, started: false };
+            const initial = { resolve, reject, onStarted, started: false };
+            runtime.initial = initial;
             runtime.initial.timer = setTimeout(() => {
               reject(
                 new Error(
@@ -458,12 +459,15 @@ class SessionManager extends EventEmitter {
               })
               .then((response) => {
                 if (
-                  runtime.initial &&
-                  (!runtime.turnId || runtime.turnId === response.turn.id)
+                  runtime.initial !== initial ||
+                  runtime.completedTurns.has(response.turn.id)
+                )
+                  return;
+                if (
+                  !runtime.turnId || runtime.turnId === response.turn.id
                 )
                   this.settings.applied(key, selection);
                 if (
-                  runtime.initial &&
                   !runtime.turnId &&
                   response.turn.status === "inProgress"
                 )

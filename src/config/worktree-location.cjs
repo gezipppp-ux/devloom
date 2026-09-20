@@ -50,4 +50,15 @@ function assertWorktreeLocation(base, target) {
   }
 }
 
-module.exports = { assertWorktreeLocation, defaultWorktreeRoot };
+function assertMemberWorktreeLocation(base, memberRoot, target) {
+  assertWorktreeLocation(base, memberRoot);
+  try {
+    if (fs.lstatSync(memberRoot).isSymbolicLink())
+      throw new Error("成员 Worktree 目录不能是符号链接，请选择独立目录。");
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  assertWorktreeLocation(memberRoot, target);
+}
+
+module.exports = { assertWorktreeLocation, assertMemberWorktreeLocation, defaultWorktreeRoot };

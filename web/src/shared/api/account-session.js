@@ -87,7 +87,11 @@ export function saveAccountSettings(patch) {
     if (generation !== accountSession.generation)
       throw Object.assign(new Error("账号已切换。"), { name: "AbortError" });
     const result = await appApi("/account/settings", patch);
-    if (generation === accountSession.generation) accountSession.settings = result.settings;
+    if (generation === accountSession.generation) {
+      // A session read started during this save must not restore its older snapshot.
+      settingsRevision++;
+      accountSession.settings = result.settings;
+    }
     return result.settings;
   });
   settingsQueue = operation;

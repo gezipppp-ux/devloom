@@ -31,6 +31,17 @@ class SessionHistoryStore {
     });
   }
 
+  idsBefore(itemIds, beforeId) {
+    if (!this.database || !itemIds.length || !beforeId) return new Set();
+    const placeholders = itemIds.map(() => "?").join(",");
+    const rows = this.database.handle.prepare(`SELECT item.item_id FROM session_items AS item
+      JOIN session_items AS boundary ON boundary.run_path=item.run_path AND boundary.item_id=?
+      WHERE item.run_path=? AND item.item_id IN (${placeholders}) AND
+      (item.sort_order<boundary.sort_order OR (item.sort_order=boundary.sort_order AND item.id<boundary.id))`)
+      .all(beforeId, this.key, ...itemIds);
+    return new Set(rows.map((row) => row.item_id));
+  }
+
   list(cursor) {
     if (!this.database) return null;
     if (cursor != null && !/^db:\d+$/.test(cursor)) throw new Error("无效的历史分页游标。");
