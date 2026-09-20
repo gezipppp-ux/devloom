@@ -35,7 +35,7 @@ function openHandle(file) {
 
 function seedProductionDefaults(handle) {
   handle.prepare("INSERT INTO system_settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO NOTHING")
-    .run("worktreeBasePath", JSON.stringify(path.join(os.homedir(), ".codex-workspaces")), new Date().toISOString());
+    .run("memberStorageRoot", JSON.stringify(path.join(os.homedir(), ".codex-workspaces")), new Date().toISOString());
 }
 
 async function initializeDatabase(directory, options = {}) {
@@ -108,8 +108,13 @@ async function initialize(dataRoot, options) {
     handle = openHandle(file);
     seedProductionDefaults(handle);
     const keyFile = path.join(dataRoot, "secrets", "database.key");
-    if (!process.env.RUNNER_ENCRYPTION_KEY && !fs.existsSync(keyFile) &&
-        handle.prepare("SELECT COUNT(*) AS count FROM workspace_settings").get().count > 0)
+    const hasGitAccounts = Boolean(handle.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='user_git_accounts'").get());
+    const credentialCount = handle.prepare(
+      hasGitAccounts
+        ? "SELECT (SELECT COUNT(*) FROM workspace_settings) + (SELECT COUNT(*) FROM user_git_accounts) + (SELECT COUNT(*) FROM git_key_drafts) AS count"
+        : "SELECT COUNT(*) AS count FROM workspace_settings",
+    ).get().count;
+    if (!process.env.RUNNER_ENCRYPTION_KEY && !fs.existsSync(keyFile) && credentialCount > 0)
       throw new Error("数据库凭据主密钥缺失，请恢复 secrets/database.key 后启动。");
     const database = new ApplicationDatabase(dataRoot, handle, loadEncryptionKey(dataRoot));
     fs.mkdirSync(leases, { recursive: true, mode: 0o700 });

@@ -11,6 +11,7 @@ const { createWebServer } = require("../../src/http/server.cjs");
 const { saveSystemSettings } = require("../../src/config/system-settings.cjs");
 const { saveSettings } = require("../../src/config/execution-settings.cjs");
 const { writeConfig } = require("../../src/storage/json-files.cjs");
+const { seedWorkspaceProject } = require("../support/workspace-project.cjs");
 const {
   withRepositoryOperation,
 } = require("../../src/storage/git-operations.cjs");
@@ -47,13 +48,14 @@ async function fixture(t) {
       new SessionManager({ ...options, client: new FakeClient() }),
   });
   saveSystemSettings(
-    { worktreeBasePath: path.join(directory, "trees") },
+    { memberStorageRoot: path.join(directory, "trees") },
     directory,
   );
   const a = workspaces.save({ name: "Git fixture" });
   const b = workspaces.save({ name: "Other workspace" });
+  seedWorkspaceProject(workspaces.configFile(a.id), repository);
   saveSettings(
-    { repository, worktreeDirectory: "fixture", baseRef: "main" },
+    { baseRef: "main" },
     workspaces.configFile(a.id),
   );
   const manager = workspaces.get(a.id).sessions;

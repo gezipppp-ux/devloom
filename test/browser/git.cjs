@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
+const { seedWorkspaceProject } = require("../support/workspace-project.cjs");
 
 // All Git operations in this browser flow target disposable local repositories.
 async function verifyGit(browser, { origin, output, errors, directory, workspaces }) {
@@ -33,6 +34,7 @@ async function verifyGit(browser, { origin, output, errors, directory, workspace
   const beforeFetch = git(repository, "rev-parse", "HEAD");
   const remoteHead = git(peer, "rev-parse", "HEAD");
   const workspace = workspaces.save({ name: "Git 操作回归" });
+  seedWorkspaceProject(workspaces.configFile(workspace.id), repository, "git-browser");
   const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
   page.on("pageerror", (error) => errors.push(error.message));
   const api = `${origin}/api/workspaces/${workspace.id}`;
@@ -52,7 +54,7 @@ async function verifyGit(browser, { origin, output, errors, directory, workspace
     const bootstrap = await (await page.request.get(`${origin}/api/bootstrap`)).json();
     const headers = { origin, "x-tapd-token": bootstrap.token };
     const settings = await page.request.post(`${api}/settings`, {
-      headers, data: { repository, worktreeDirectory: "git-browser", baseRef: "main", initCommands: [] },
+      headers, data: { baseRef: "main", initCommands: [] },
     });
     assert.equal(settings.status(), 200);
     await page.goto(`${origin}/?workspace=${workspace.id}`);
@@ -124,6 +126,28 @@ async function verifyGit(browser, { origin, output, errors, directory, workspace
     await capture("git-worktree-status-desktop");
     await page.getByRole("button", { name: "删除 Worktree…", exact: true }).click();
     await dialog.waitFor();
+    assert.equal(
+      await dialog.getByText(`请准确输入：${branch}`, { exact: true }).count(),
+      1,
+      "delete confirmation shows the required complete branch name",
+    );
+    assert.equal(
+      await dialog.getByRole("textbox", { name: "确认删除的本地分支", exact: true }).getAttribute("placeholder"),
+      branch,
+      "delete confirmation input repeats the required branch name",
+    );
+    const riskConfirmation = dialog.locator(".git-risk-confirm");
+    assert.equal(
+      await riskConfirmation.evaluate((element) => window.getComputedStyle(element).display),
+      "grid",
+      "risk acknowledgement keeps its checkbox and text in an aligned two-column layout",
+    );
+    const checkbox = await riskConfirmation.getByRole("checkbox").boundingBox();
+    const acknowledgement = await riskConfirmation.locator("span").boundingBox();
+    assert.ok(
+      acknowledgement.x - (checkbox.x + checkbox.width) >= 12,
+      "risk acknowledgement leaves a readable gap after its checkbox",
+    );
     assert.equal(await deleteButton().isDisabled(), true);
     await dialog.getByRole("button", { name: "取消", exact: true }).click();
     await dialog.waitFor({ state: "hidden" });

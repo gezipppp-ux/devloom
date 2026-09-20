@@ -13,10 +13,6 @@ function runsPath(config, file) {
     : path.join(dataRoot, "runs");
 }
 
-function inputPath(value, env = process.env) {
-  return path.resolve(env.INIT_CWD || process.cwd(), value);
-}
-
 function loadConfig(file) {
   if (typeof file !== "string" || !path.isAbsolute(file))
     throw new Error("An absolute configuration file path is required.");
@@ -32,7 +28,6 @@ function loadConfig(file) {
 
 module.exports = {
   runsPath,
-  inputPath,
   loadConfig,
   root,
   dataRoot,

@@ -14,11 +14,16 @@ function withFileLock(file, operation, label = "JSON configuration") {
       fs.mkdirSync(lock);
       break;
     } catch (error) {
-      if (error.code !== "EEXIST") throw error;
-      if (Date.now() >= deadline)
+      // Windows may briefly report EPERM while a competing writer's removed
+      // directory is still pending deletion. Retry without removing that lock.
+      const pendingDelete = process.platform === "win32" && error.code === "EPERM";
+      if (error.code !== "EEXIST" && !pendingDelete) throw error;
+      if (Date.now() >= deadline) {
+        if (pendingDelete) throw error;
         throw new Error(
           `${label} is locked: ${lock}. Check that all writers have stopped before removing an abandoned lock.`,
         );
+      }
       Atomics.wait(pause, 0, 0, 10);
     }
   }

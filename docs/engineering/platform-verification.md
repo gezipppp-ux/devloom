@@ -7,12 +7,15 @@
 ```sh
 npm ci
 npx playwright install chromium
-npm run verify
+npx eslint src test web/src web/vite.config.mjs
+node --test test/architecture/*.test.cjs test/unit/*.test.cjs test/integration/*.test.cjs
+npm run build
+node test/browser/session.cjs && node test/browser/workspaces.cjs && node test/browser/dev.cjs && node test/browser/accounts.cjs && node test/browser/visual.cjs
 ```
 
-`verify` 依次执行 lint、全部架构/单元/集成测试、前端构建、Web 功能回归和视觉截图。测试只使用 fake Codex、模拟 TAPD 与临时 Git 仓库，不需要 Codex 登录，不执行真实需求。
+上述命令依次执行 lint、全部架构/单元/集成测试、前端构建、Web 功能回归和视觉截图。测试只使用 fake Codex、模拟 TAPD 与临时 Git 仓库，不需要 Codex 登录，不执行真实需求。
 
-Linux 首次运行浏览器测试时，管理员需为测试节点安装 Chromium 系统依赖，例如 `npx playwright install --with-deps chromium`。Windows 默认使用本机 Edge；要使用上面安装的 Chromium，在 PowerShell 设置 `$env:BROWSER_CHANNEL = 'chromium'`；Linux 可用 `BROWSER_CHANNEL=chromium npm run verify`。截图输出到被忽略的 `state/browser/`。
+Linux 首次运行浏览器测试时，管理员需为测试节点安装 Chromium 系统依赖，例如 `npx playwright install --with-deps chromium`。Windows 默认使用本机 Edge；要使用上面安装的 Chromium，在 PowerShell 设置 `$env:BROWSER_CHANNEL = 'chromium'`；Linux 可在运行上述浏览器脚本前设置 `BROWSER_CHANNEL=chromium`。截图输出到被忽略的 `state/browser/`。
 
 ### Ubuntu 26.04 的浏览器准备
 
@@ -20,7 +23,7 @@ Linux 首次运行浏览器测试时，管理员需为测试节点安装 Chromiu
 
 ```sh
 PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64 npx playwright install chromium
-BROWSER_CHANNEL=chromium npm run verify
+BROWSER_CHANNEL=chromium node test/browser/session.cjs && node test/browser/workspaces.cjs && node test/browser/dev.cjs && node test/browser/accounts.cjs && node test/browser/visual.cjs
 ```
 
 此环境变量仅用于浏览器准备，不修改系统版本。已具备与锁文件版本一致的 Playwright 浏览器缓存时，可直接执行验证。系统仍需具备 Chromium 运行库；后端与前端构建不依赖服务器上的 Chromium。该兼容方式绑定当前 Playwright 版本，升级后应重新验证发行版支持情况。
@@ -36,7 +39,7 @@ BROWSER_CHANNEL=chromium npm run verify
 | `web-coding-linux` | Linux、受支持的 Node.js LTS、npm、Git、Chromium 系统依赖 |
 | `web-coding-windows` | Windows、受支持的 Node.js LTS、npm、Git |
 
-两个节点均须支持创建本系统的符号链接或 junction；测试目录应位于本地可写磁盘。节点不配置业务 Cookie、Codex 凭据或生产数据目录。流水线并行安装锁定依赖和 Playwright Chromium，执行 `npm run verify`，保存截图。节点版本由运维管理，建议至少保留 Node.js 22 LTS 验证；升级 Node 或依赖时同样跑两端。
+两个节点均须支持创建本系统的符号链接或 junction；测试目录应位于本地可写磁盘。节点不配置业务 Cookie、Codex 凭据或生产数据目录。流水线并行安装锁定依赖和 Playwright Chromium，并执行 Jenkinsfile 中的校验序列、保存截图。节点版本由运维管理，建议至少保留 Node.js 22 LTS 验证；升级 Node 或依赖时同样跑两端。
 
 Linux CI 优先使用 Playwright 支持的发行版，如 Ubuntu 24.04。若节点为 Ubuntu 26.04 x64，为该 Jenkins 节点配置 `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64`，让安装步骤使用上述已验证的兼容构建；不要将此值设置到 Windows 节点。
 

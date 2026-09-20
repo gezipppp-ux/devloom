@@ -61,8 +61,8 @@ docs/engineering/  # 行为契约与架构规则
 
 | 位置 | 拥有的职责 |
 | --- | --- |
-| `cli/arguments.cjs`、`cli/execute.cjs` | 命令参数、CLI 配置选择优先级、错误输出和退出码 |
-| `cli/web.cjs`、`cli/tapd/*.cjs` | 进程入口和输入/输出适配；导出 main，以主模块保护执行 |
+| `cli/arguments.cjs` | Web 与开发服务的命令参数校验 |
+| `cli/init-admin.cjs`、`cli/web.cjs` | 管理员初始化和 Web 服务进程入口；导出 main，以主模块保护执行 |
 | `channels/tapd/` | 认证、浏览器采集、查询、素材准备和流程规则；接收显式参数，不读取 argv |
 | `channels/manual/adapter.cjs` | 手动输入校验与渠道组合 |
 | `channels/channel-registry.cjs` | ChannelRegistry 校验并注册渠道接口、组合渠道默认配置 |
@@ -73,7 +73,8 @@ docs/engineering/  # 行为契约与架构规则
 | `application/session-manager.cjs` | SessionManager 协调启动、继续、停止、操作互斥及生命周期 |
 | `application/workspace-manager.cjs` | WorkspaceManager 组合工作区默认配置、公开摘要与各工作区的会话生命周期 |
 | `application/account-services.cjs`、`account-presenter.cjs` | AccountServices 组合账号权限、偏好、登录会话和生命周期接口；presenter 负责账号公开结构，HTTP 不穿透读取存储对象 |
-| `application/development-fixtures.cjs`、`storage/fixture-directory.cjs` | 前者编排开发示例账号与工作区，后者保护新空目录及初始化锁；CLI 只处理参数和输出 |
+| `application/git-account-services.cjs`、`git-account-presenter.cjs` | GitAccountServices 组合 SSH 生成、连接检测、重新授权与检测成功后的保存；presenter 仅返回账号公开字段 |
+| `storage/git-account-store.cjs`、`git/account-credentials.cjs` | 前者拥有个人 Git 账号、加密密钥草稿及修订号条件更新；后者为 Git 子进程隔离凭据，不负责数据库或公开响应 |
 | `application/session-events.cjs` | Codex 事件、审批与执行完成状态处理 |
 | `application/session-settings.cjs` | 会话执行设置校验、当前轮与下一轮选择、变更事件 |
 | `application/session-git.cjs`、`repository-services.cjs` | Git 状态及操作用例、运行与所有权门禁、删除进度和只读会话 |
@@ -90,9 +91,11 @@ docs/engineering/  # 行为契约与架构规则
 | `storage/execution-store.cjs` | ExecutionStore 拥有单次执行的长生命周期锁、运行记录和需求快照；CLI 状态查询从这里读取 |
 | `storage/file-lock.cjs`、`json-files.cjs`、`run-state.cjs` | 分别拥有同步文件写锁、原子 JSON 写入、运行状态更新语义；不在写锁内等待网络或 Git |
 | `application/workspace-services.cjs` | 组合工作区配置、模型和渠道服务；新任务合并个人执行默认值，区分省略与显式清空，供 HTTP 调用 |
-| `application/system-services.cjs` | 组合系统 Worktree 基础目录设置及服务端目录浏览，供全局 HTTP 路由调用 |
-| `config/system-settings.cjs`、`worktree-location.cjs` | 系统目录配置与写权限校验、工作区相对路径的实际落盘边界校验 |
-| `storage/directories.cjs`、`domain/worktree-directory.cjs` | 分别负责服务端目录枚举及不含 I/O 的相对目录校验与路径拼接 |
+| `application/workspace-clone-manager.cjs`、`workspace-clone-presenter.cjs` | 后台克隆生命周期、完成发布事务与只读进度响应；不绑定浏览器连接 |
+| `storage/workspace-clone-store.cjs`、`git/clone-process.cjs`、`clone-progress.cjs` | 分别拥有克隆任务持久化/幂等/归属，Git 长进程，以及受限进度解析；通用进程树终止归 `shared/process-tree.cjs` |
+| `application/system-services.cjs` | 组合成员项目与任务目录基础路径、Git 环境检测及服务端目录浏览，供全局 HTTP 路由调用 |
+| `config/system-settings.cjs`、`worktree-location.cjs` | 成员存储根目录配置与写权限校验、自动生成任务路径的实际落盘边界校验 |
+| `storage/directories.cjs`、`domain/member-project-paths.cjs` | 分别负责服务端目录枚举及不含 I/O 的单目录名称校验、成员目录名称和路径拼接 |
 | `http/server.cjs`、`api.cjs` | 同源保护、工作区路由和 HTTP 输入/响应映射 |
 | `http/messages.cjs`、`assets.cjs`、`events.cjs` | 请求体/响应编码、静态与附件传输、SSE 订阅及清理 |
 
@@ -110,10 +113,10 @@ app 中的 `use-workspace-selection` 管理工作区与 URL，`use-workspace-con
 
 ## 兼容与验证
 
-- 对外命令仍使用 `npm run tapd:*`、`npm start`，实际文件入口由 package.json 维护。systemd 的源码入口使用 `src/cli/web.cjs`，`src/http/server.cjs` 仅导出服务工厂。
+- 对外 npm 命令为 `init:admin`、`dev`、`dev:watch`、`build` 和 `start`，实际文件入口由 package.json 维护。systemd 的源码入口使用 `src/cli/web.cjs`，`src/http/server.cjs` 仅导出服务工厂。
 - 安装根由 `src/config/runtime.cjs` 定位；静态资源始终来自安装根 `web/dist`。`RUNNER_DATA_DIR` 只选择数据根。
 - 开发入口 `src/cli/dev.cjs` 可以向 HTTP 工厂注入非 API 页面处理器，以同端口 Vite 中间件替代静态页面；正式入口仍固定使用 `web/dist`。仅开发页面增加 HMR 所需的同源 WebSocket 和 blob worker CSP，HTTP 与 WebSocket 均校验 Host/Origin，Vite 源码访问只允许 `web/`、`shared/` 和依赖目录。
 - `src/cli/dev-watch.cjs` 拥有开发文件监听和子进程生命周期；变更合并后通过 IPC 请求关闭并等待旧进程退出，再启动替代进程。不能用 Windows 强制终止进程代替会话清理，也不能因热更新自动重跑需求。
 - 目录调整不迁移运行数据，不改 API、渠道 ID、session ID、source、run key、记录中的 worktree 路径或历史素材文件名。
-- `npm test` 显式运行 architecture、unit、integration 的 `*.test.cjs`；browser 和 fixtures 不参与自动单测发现，避免意外启动进程。
-- 完整验证：`npm run lint`、`npm test`、`npm run build`、`npm run test:web`。界面和样式迁移还运行 `npm run test:visual`。所有验证使用模拟数据和临时仓库。
+- `node --test test/architecture/*.test.cjs test/unit/*.test.cjs test/integration/*.test.cjs` 显式运行 architecture、unit、integration 的 `*.test.cjs`；browser 和 fixtures 不参与自动单测发现，避免意外启动进程。
+- 完整验证由 Jenkinsfile 运行 eslint、上述 Node 测试、`npm run build` 和浏览器脚本。界面和样式迁移还运行 `node test/browser/visual.cjs`。所有验证使用模拟数据和临时仓库。

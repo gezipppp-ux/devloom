@@ -6,7 +6,7 @@ const { png } = require("../support/helpers.cjs");
 async function settingsReady(page, workspace, repository, tapdWorkspace) {
   await page.getByRole("heading", { name: `${workspace.name} · 工作区设置` }).waitFor();
   await page.waitForFunction(({ repository, tapdWorkspace }) =>
-    document.querySelector('input[aria-label="项目代码仓库"]')?.value === repository &&
+    document.querySelector('[aria-label="项目代码仓库路径"]')?.textContent === repository &&
     document.querySelector('input[aria-label="TAPD 项目 ID"]')?.value === tapdWorkspace,
   { repository, tapdWorkspace });
   assert.equal(await page.getByRole("button", {
@@ -83,7 +83,7 @@ async function verifyWorkspaceNavigation(page, { workspaceA, workspaceB, reposit
       await page.request.post(`${origin}/api/account/preferences`, { headers: { origin, "x-tapd-token": auth.token }, data: { workspaceId, unreadRunKeys } });
     const prunedPreference = page.waitForResponse((response) => response.url().endsWith("/api/account/preferences") && response.request().method() === "POST");
     await select(workspaceB);
-    await settingsReady(page, workspaceB, "", "");
+    await settingsReady(page, workspaceB, repository, "");
     await checkUrl(workspaceB);
     assert.equal(await page.getByLabel("TAPD Cookie", { exact: true }).inputValue(), "");
     await prunedPreference;
@@ -96,7 +96,7 @@ async function verifyWorkspaceNavigation(page, { workspaceA, workspaceB, reposit
     await settingsReady(page, workspaceA, repository, "42");
     await checkUrl(workspaceA);
     await page.goForward();
-    await settingsReady(page, workspaceB, "", "");
+    await settingsReady(page, workspaceB, repository, "");
     await checkUrl(workspaceB);
 
     await select(workspaceA);
@@ -127,7 +127,7 @@ async function verifyWorkspaceNavigation(page, { workspaceA, workspaceB, reposit
     ]);
     const oldUpload = await delayedUpload.captured;
     await select(workspaceB);
-    await settingsReady(page, workspaceB, "", "");
+    await settingsReady(page, workspaceB, repository, "");
     await releaseResponse(page, oldUpload, "old-manual-upload");
     await page.getByRole("button", { name: "＋ 从需求启动", exact: true }).click();
     await page.getByLabel("需求渠道", { exact: true }).selectOption("manual");

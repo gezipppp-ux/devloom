@@ -6,6 +6,7 @@ const path = require("node:path");
 const { createServer } = require("node:http");
 const { chromium } = require("playwright");
 const { verifyAccountPreferenceRaces } = require("./account-preferences.cjs");
+const { verifyGitAccounts } = require("./git-accounts.cjs");
 
 async function main() {
   const staticRoot = path.resolve("web/dist");
@@ -52,6 +53,8 @@ async function main() {
         return send({ settings: savedSettings.get(activeUser.id) });
       }
       if (endpoint === "/api/account/preferences") return send({ preferences: { unreadRunKeys: [] } });
+      if (endpoint === "/api/account/git-accounts") return send({ accounts: [] });
+      if (endpoint === "/api/workspace-clones") return send({ clones: [] });
       if (endpoint.endsWith("/models")) return send({ models: [{ model: "fixture-model", label: "测试模型", reasoningEfforts: ["low", "high"] }] });
       if (endpoint.endsWith("/execution-options")) return send({ permissionModes: ["ask", "auto", "full"].map((id) => ({ id, available: true })) });
       if (endpoint === "/api/admin/accounts") {
@@ -103,6 +106,7 @@ async function main() {
     await page.getByRole("button", { name: "保存个人设置" }).click();
     await page.getByText("个人设置已保存。", { exact: true }).waitFor();
     assert.equal(savedSettings.get("admin").model, "fixture-model");
+    await verifyGitAccounts(page, output);
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 1000 });
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));

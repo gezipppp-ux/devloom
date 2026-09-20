@@ -1,4 +1,6 @@
 const assert = require("node:assert/strict");
+const { randomUUID } = require("node:crypto");
+const { waitForClone } = require("../support/workspace-clones.cjs");
 const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -16,16 +18,45 @@ const {
 } = require("../../src/application/workspace-manager.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { png } = require("../support/helpers.cjs");
+const { gitRemote } = require("../support/git-remote.cjs");
+const { GitAccountServices } = require("../../src/application/git-account-services.cjs");
+const { saveSystemSettings } = require("../../src/config/system-settings.cjs");
 
 const password = "fixture-password-123";
+
+test("Git HTTP endpoints test drafts before saving and expose only generated SSH public keys", async t => {
+  const { client } = await fixture(t);
+  const browser = client();
+  await browser.login("admin");
+  const list = await browser.request("/api/account/git-accounts");
+  const saved = list.data.accounts[0];
+  assert.equal(saved.authType, "http");
+  assert.equal(saved.password, undefined);
+  const input = { name: saved.name, authType: saved.authType, remoteUrl: saved.remoteUrl, username: saved.username };
+  const tested = await browser.request(`/api/account/git-accounts/${saved.id}/test`, input);
+  assert.equal(tested.status, 200, JSON.stringify(tested.data));
+  const updated = await browser.request(`/api/account/git-accounts/${saved.id}`, { ...input, name: "edited" });
+  assert.equal(updated.status, 200, JSON.stringify(updated.data));
+  assert.equal(updated.data.account.name, "edited");
+  const failed = await browser.request(`/api/account/git-accounts/${saved.id}`, { ...input, password: "wrong" });
+  assert.equal(failed.status, 400);
+  assert.equal((await browser.request("/api/account/git-accounts")).data.accounts[0].name, "edited");
+  const key = await browser.request("/api/account/git-keys", {});
+  assert.equal(key.status, 201, JSON.stringify(key.data));
+  assert.deepEqual(Object.keys(key.data).sort(), ["expiresAt", "id", "publicKey"]);
+  assert.match(key.data.publicKey, /^ssh-ed25519 /);
+  const legacy = await browser.request("/api/account/git-accounts", { name: "obsolete", protocol: "http" });
+  assert.equal(legacy.status, 400);
+});
 
 async function fixture(t, options = {}) {
   const directory = fs.mkdtempSync(
     path.join(os.tmpdir(), "web-coding-accounts-"),
   );
-  let database, accounts, app;
+  let database, accounts, app, remote;
   t.after(async () => {
     await app?.close();
+    await remote?.close();
     await accounts?.close();
     database?.close();
     assert.equal(
@@ -44,6 +75,13 @@ async function fixture(t, options = {}) {
   );
   const member = await accounts.create({ username: "member", password }, admin);
   accounts.store.update(member.id, { must_change_password: 0 });
+  remote = await gitRemote(path.join(directory, "git-server"));
+  saveSystemSettings({ memberStorageRoot: path.join(directory, "members") }, directory);
+  const gitAccounts = new GitAccountServices(database), gitIds = new Map();
+  for (const actor of [admin, member]) {
+    const account = await gitAccounts.save(actor, { name: "fixture", authType: "http", remoteUrl: remote.remoteUrl, username: remote.username, password: remote.password });
+    gitIds.set(actor.username, account.id);
+  }
   const activity = [];
   const workspaces = new WorkspaceManager({
     database,
@@ -87,12 +125,13 @@ async function fixture(t, options = {}) {
   const origin = await app.listen(0);
   function client() {
     let cookie = "",
-      token = "";
+      token = "", username = "";
     return {
       get headers() {
         return { cookie, "x-tapd-token": token };
       },
       async request(url, input, extra = {}) {
+        if (url === "/api/workspaces" && input) input = { requestId: randomUUID(), remoteUrl: remote.remoteUrl, gitAccountId: gitIds.get(username), ...input };
         const response = await fetch(origin + url, {
           ...extra,
           method: input === undefined ? "GET" : "POST",
@@ -110,9 +149,15 @@ async function fixture(t, options = {}) {
         if (saved) cookie = saved.split(";", 1)[0];
         const data = await response.json();
         if (data.token) token = data.token;
+        if (url === "/api/workspaces" && input && response.status === 202) {
+          const clone = await waitForClone(async () => (await this.request(`/api/workspace-clones/${data.clone.id}`)).data.clone);
+          assert.equal(clone.status, "completed", JSON.stringify(clone));
+          return { status: response.status, data: clone.workspace, headers: response.headers };
+        }
         return { status: response.status, data, headers: response.headers };
       },
-      async login(username) {
+      async login(selectedUsername) {
+        username = selectedUsername;
         await this.request("/api/auth/session");
         const result = await this.request("/api/auth/login", {
           username,
@@ -248,7 +293,7 @@ test("SQLite accounts require login and session CSRF, isolate workspaces includi
   await admin.login("admin");
   await member.login("member");
   const own = await member.request("/api/workspaces", { name: "私有工作区" });
-  assert.equal(own.status, 201, JSON.stringify(own.data));
+  assert.equal(own.status, 202, JSON.stringify(own.data));
   assert.equal(
     (await admin.request(`/api/workspaces/${own.data.id}/bootstrap`)).status,
     404,
@@ -432,7 +477,7 @@ test("login attempts are rate limited and successful mutations record actor with
     .prepare("SELECT * FROM audit_events WHERE workspace_id=?")
     .all(workspace.data.id);
   assert.equal(audit.length, 1);
-  assert.match(audit[0].event, /workspaces/);
+  assert.equal(audit[0].event, "workspace.clone.completed");
   assert.ok(audit[0].actor_user_id);
   assert.doesNotMatch(
     JSON.stringify(audit),
@@ -537,7 +582,7 @@ test("logout fences every pending JSON or binary mutation before resolving its w
     ],
     ["/api/admin/accounts", { username: "late-user", password }],
     [`/api/admin/accounts/${member.id}`, { status: "disabled" }],
-    ["/api/system/settings", { worktreeBasePath: target }],
+    ["/api/system/settings", { memberStorageRoot: target }],
     ["/api/workspaces", { name: "迟到工作区" }],
     [prefix, { name: "迟到重命名" }],
     ...[
@@ -620,7 +665,7 @@ test("disabled, downgraded, reset and expired identities cannot finish an author
         origin,
         "/api/system/settings",
         browser,
-        { worktreeBasePath: target },
+        { memberStorageRoot: target },
       );
       try {
         if (reason === "expired")

@@ -3,7 +3,7 @@ const path = require('node:path');
 const readline = require('node:readline');
 const { spawn } = require('node:child_process');
 const { resolveCodex } = require('./command.cjs');
-const { stopProcessTree } = require('./process-tree.cjs');
+const { stopProcessTree } = require('../shared/process-tree.cjs');
 const { childEnvironment } = require('./environment.cjs');
 
 function commandFor(config, repository, directory, images) {

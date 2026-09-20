@@ -2,6 +2,7 @@ const { git, gitAsync } = require("./command.cjs");
 const { repositoryGit, resolveCommit } = require("./repository.cjs");
 const { samePath } = require("../shared/paths.cjs");
 const { operationReason, registeredWorktrees } = require("./operation-state.cjs");
+const { withGitAccount } = require("./account-credentials.cjs");
 
 function localBranches(repository) {
   return git(repository, [
@@ -47,24 +48,28 @@ function selectedRemote(repository, remote) {
   return selected;
 }
 
-async function fetchRepository(value, remote) {
+async function fetchRepository(value, remote, credentials) {
   const { repository } = repositoryGit(value);
   const selected = selectedRemote(repository, remote);
+  if (credentials && git(repository, ["remote", "get-url", "--all", selected]) !== credentials.remoteUrl)
+    throw new Error("远端地址已变更，不能使用此工作区保存的 Git 账号。");
   try {
-    await gitAsync(repository, ["fetch", "--prune", "--", selected]);
+    if (credentials)
+      await withGitAccount(credentials.account, credentials.remoteUrl, (run) => run(["-C", repository, "fetch", "--prune", "--", selected]));
+    else await gitAsync(repository, ["fetch", "--prune", "--", selected]);
   } catch {
     throw new Error("获取远端更新失败，请检查网络、远端地址及服务端 Git 凭据；操作不会弹出登录窗口。");
   }
   return { remote: selected, fetchedAt: new Date().toISOString() };
 }
 
-async function updateBaseBranch(value, baseRef = "HEAD", remote) {
+async function updateBaseBranch(value, baseRef = "HEAD", remote, credentials) {
   const before = readRepositoryStatus(value, baseRef);
   if (!before.canUpdate) throw new Error(before.updateReason);
   const selected = selectedRemote(before.repository, remote || before.remote);
   if (selected !== before.remote) throw new Error("更新基准分支必须使用该分支已配置的远端上游。");
   const head = git(before.repository, ["rev-parse", "--verify", "HEAD"]);
-  const fetched = await fetchRepository(before.repository, selected);
+  const fetched = await fetchRepository(before.repository, selected, credentials);
   const current = readRepositoryStatus(before.repository, baseRef);
   if (!current.canUpdate) throw new Error(current.updateReason);
   if (current.branch !== before.branch || current.upstream !== before.upstream ||

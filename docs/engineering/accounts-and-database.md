@@ -17,26 +17,41 @@
 
 | 层级 | 数据 | 权限 |
 | --- | --- | --- |
-| 个人设置 | 通知开关、任务分组、默认模型、思考强度、执行权限 | 本人，适用本人全部工作区 |
-| 系统设置 | Worktree 基础地址 | 仅管理员修改 |
-| 工作区设置 | 名称、图标、仓库、基准引用、相对目录、初始化命令、TAPD 配置与凭据、提示词模板 | 工作区所有者 |
+| 个人设置 | Git 账号、通知开关、任务分组、默认模型、思考强度、执行权限 | 本人，适用本人全部工作区 |
+| 系统设置 | 成员项目与任务目录基础地址、Git 环境检测 | 仅管理员修改 |
+| 工作区设置 | 名称、图标、自动生成的仓库与目录、基准引用、初始化命令、TAPD 配置与凭据、提示词模板 | 工作区所有者 |
 
 新任务可覆盖个人执行默认值。已启动任务保存实际选择，后续全局设置修改不回写已有任务。通知授权仍属于浏览器设备权限。未读记录按账号和工作区保存于数据库，不混入系统设置。
 
-新 Worktree 路径为 `<系统基础目录>/<用户名>/<工作区相对目录>/<任务前缀>-<12 位任务短标识>`，例如 `/srv/wt/alice/project-a/login-a1b2c3d4e5f6`。用户名目录由服务端从工作区所有者账号生成；工作区显示名称不参与路径，重命名工作区不会改变目录。基础目录只有系统级一份，普通成员和工作区不能覆盖。
+创建工作区时，Git 仓库克隆到 `<成员目录基础路径>/<用户名>/projects/<项目名>`；新 Worktree 路径为 `<成员目录基础路径>/<用户名>/worktree/<项目名>/<任务前缀>-<12 位任务短标识>`，例如 `/srv/wt/alice/worktree/project-a/login-a1b2c3d4e5f6`。用户名目录由服务端从工作区所有者账号生成；项目名由远程地址生成，仓库与目录不能在工作区设置中修改。基础目录只有系统级一份，普通成员和工作区不能覆盖。
 
-普通安全账号名直接作为成员目录名。Windows 设备名（包括带扩展名的形式）、以点结尾的账号名，以及匹配旧 `u-<UUID>` 成员目录格式的账号名，统一转义为 `user~<账号名的 UTF-8 十六进制>`；`~` 不属于合法账号名字符，避免转义目录与普通用户名目录碰撞。这套规则在所有平台一致，兼容 Windows 并避开既有 UUID 目录。工作区接口返回的 `worktreeMemberPath` 与 `worktreeRoot` 包含实际目录，前端复用返回值，不自行实现转义规则。
+普通安全账号名直接作为成员目录名。Windows 设备名（包括带扩展名的形式）和以点结尾的账号名，统一转义为 `user~<账号名的 UTF-8 十六进制>`；`~` 不属于合法账号名字符，避免转义目录与普通用户名目录碰撞。这套规则在所有平台一致，在 Windows 和 Linux 上生成相同目录名。工作区接口返回的 `memberRoot` 与 `worktreeRoot` 包含实际目录，前端复用返回值，不自行实现转义规则。
 
 用户名目录规则与基础目录修改都只影响后续新建任务。已有任务仍使用记录的 session、分支、真实 Worktree 路径与 Git 身份；旧 `u-<UUID>` 目录和其中的任务不会被搬移或重命名。
 
+## 个人 Git 账号
+
+- `GitAccountServices` 负责草稿校验、SSH 生成、连接检测与保存；`GitAccountStore` 负责加密和所有者隔离；公开字段由 presenter 构造。
+- 账号输入为 `name, authType, remoteUrl`。认证类型 `http` 同时表示 HTTP 与 HTTPS 的用户名／密码（或令牌），`ssh` 使用系统生成的 Ed25519 密钥。移除 `protocol`、手填私钥与旧目录字段，不提供别名或兼容读写。
+- 新增与编辑均执行当前草稿的 `git ls-remote`，成功后再次授权，再以修订号条件更新防止覆盖并发修改。空仓库连接算成功。HTTP 编辑时省略密码保留原值；检测失败不保存。
+- `POST /api/account/git-keys` 生成所有者隔离的 24 小时加密草稿，仅返回 `id, publicKey, expiresAt`。SSH 保存提交 `keyDraftId`，成功事务消费草稿；生成或检测失败不替换原密钥。私钥、密码从不进入公开响应。
+- `POST /api/account/git-accounts/check` 检测新增草稿，`POST /api/account/git-accounts/:id/test` 检测编辑草稿；保存路由重复检测，不能用过期的前端测试结果绕过。
+- 凭据以 AES-256-GCM 保存；临时私钥目录在 POSIX 限制模式，在 Windows 限制 ACL，操作结束清理。HTTP Basic 凭据通过仅对子进程生效的 Git 配置传递，不进入命令参数、远程 URL 或仓库配置；禁止跨站重定向。HTTP 明文传输有明确风险提示。
+- 关联工作区只保存 Git 账号 ID 与远程地址；克隆及 fetch 使用该账号，远端地址被改写时拒绝发送凭据。关联中的账号不能删除。测试不验证推送权限。
+- 本次是不兼容重构，旧数据不迁移、不回退，也不自动删除。使用新的数据目录。
+
 ## 持久化边界
+
+后台克隆由 `WorkspaceCloneManager` 管理，`WorkspaceCloneStore` 将所属账号、幂等请求标识、阶段进度和结果保存到 `workspace_clones`。发布工作区和完成任务记录必须在同一短事务提交。页面断开、退出登录不取消已受理克隆；发布时仍检查账号有效性与 Git 凭据修订。每个成员最多 3 个同时执行的克隆。服务关闭中断 Git 进程树，重启后将死亡进程的未完成记录标为中断，不自动重放、不清理不确定目录，也不将其他存活服务的任务标为中断。
+
+Git 使用 `--progress` 和英文机器环境输出阶段百分比，服务只解析固定阶段名及 0–100 的整数，不存储或返回原始 stderr、远程消息与凭据。百分比是阶段进度而非整体进度；无已知百分比时返回 null。大仓库最长 6 小时，30 分钟无输出超时，输出以流解析而非积累到固定大小缓冲区。
 
 默认文件为 `<RUNNER_DATA_DIR>/db/web-coding.sqlite`。SQLite 使用 WAL、外键、繁忙等待和短事务；不在事务内等待 Git、网络或 Codex 轮次。
 
 - 账号、登录会话、三类设置、工作区、任务身份、来源、状态、需求快照、提示词、工具和会话历史、操作记录、日志、图片及偏好入库。
 - 工作区和运行记录包含有约束的身份、归属和查询字段；渠道快照等异构内容保留 JSON 字段。`storage` 拥有 SQL 和格式，其他模块调用存储接口。
 - 登录使用 Fastify Cookie/Session/CSRF/限流插件，Session ID 的摘要保存在 SQLite。业务 POST 保留 `x-tapd-token` 请求头作为与当前会话绑定的 CSRF token。
-- TAPD session 使用 AES-256-GCM 加密；主密钥来自 `RUNNER_ENCRYPTION_KEY` 或自动生成的 `<RUNNER_DATA_DIR>/secrets/database.key`。主密钥不会与数据库备份打包；已有数据缺失密钥时拒绝启动。应用密钥不传给 Codex／初始化子进程。
+- TAPD session、Git 凭据与 SSH 草稿使用 AES-256-GCM 加密；主密钥来自 `RUNNER_ENCRYPTION_KEY` 或自动生成的 `<RUNNER_DATA_DIR>/secrets/database.key`。主密钥不会与数据库备份打包；已有数据缺失密钥时拒绝启动。应用密钥不传给 Codex／初始化子进程。
 - 原始 Codex 通知和日志按块保存；会话展示条目幂等保存，并在继续会话和轮次结束时补齐。分页读取数据库，Codex 离线仍可查看已保存历史。历史补齐保留实时更新，独立维护展示顺序。
 - 图片 BLOB 是权威数据，本地图片仅是 Codex 所需的缓存，可校验并重建。缓存不能通过符号链接越界；读取图片必须先经过工作区授权。暂存图片 24 小时过期。
 - Git 仓库、Worktree、构建产物、Codex 原生登录和引擎会话资料、必要的执行锁保留文件形式。业务数据库保存其身份和路径，不移动业务 Worktree。
@@ -50,34 +65,16 @@
 
 ```sh
 npm ci
-npm run accounts:init -- --username admin
+npm run init:admin
 npm run build
 npm start -- --host 127.0.0.1 --port 4317
 ```
 
-密码交互输入且不回显，不放入命令参数。服务和所有 CLI 使用同一个 `RUNNER_DATA_DIR`。重置账号：
-
-```sh
-npm run accounts:reset -- --username alice
-```
+密码交互输入且不回显，不放入命令参数。服务和初始化命令必须使用同一个 `RUNNER_DATA_DIR`；后续成员密码由管理员在页面的「账号管理」中重置。
 
 服务在监听前执行 Knex 尚未完成的升级，再幂等补齐生产默认值。模块导入不建立数据库、不执行升级。升级失败拒绝启动；不会自动重跑任务或自动执行破坏性降级。
 
-```sh
-npm run db:status
-npm run db:migrate
-npm run db:seed
-# 也可指定数据库目录（status 只读，不创建数据库）
-npm run db:status -- --data-dir /srv/web-coding-data
-```
-
-`db:seed` 仅补缺失的生产默认设置，保留用户修改。它不创建固定密码的账号、演示工作区或需求。需要开发示例时，显式选择一个全新空目录：
-
-```sh
-npm run db:seed:fixtures -- --data-dir /tmp/web-coding-demo
-```
-
-开发种子生成随机密码的示例管理员与成员，以及成员各自的私有工作区；密码仅在命令执行时输出。种子不执行任务、不连接 TAPD、不创建 Git Worktree。已有数据目录会拒绝初始化。
+升级和生产默认设置在服务监听前自动处理，日常部署不需要单独的数据库或开发种子 npm 命令。它不创建固定密码的账号、演示工作区或需求。
 
 升级脚本位于 `src/storage/migrations/`，文件名按版本排序。已发布脚本不修改，后续改动添加新脚本；一次性数据修正属于版本化升级，不放入每次运行的种子。SQLite 复杂改表必须独立验证事务、外键和恢复。
 
@@ -92,7 +89,7 @@ npm run db:seed:fixtures -- --data-dir /tmp/web-coding-demo
 登录限流必须覆盖所有实际进入登录处理的请求；URL 规范化不能使含点段等变体路径通过未限流的通配路由进入登录流程。
 
 - `/api/auth/login|logout|password`：登录、退出、修改密码。
-- `/api/account/settings`：个人设置；`/api/account/preferences`：当前成员某工作区的未读记录。
+- `/api/account/settings`：个人设置；`/api/account/git-accounts`：Git 账号维护与连接测试；`/api/account/preferences`：当前成员某工作区的未读记录。
 - `/api/admin/accounts`：管理员维护账号。
 - `/api/system/settings`：系统级设置；工作区接口保持 `/api/workspaces/:id/...`。
 
@@ -102,4 +99,4 @@ Vue 页面路径 `/login`、`/password`、`/personal`、`/system`、`/accounts` 
 
 ## 验证
 
-`npm run lint`、`npm test`、`npm run build`、`npm run test:web`、`npm run test:visual`。数据库测试使用临时 SQLite，执行测试使用假 Codex/TAPD 和临时 Git。覆盖成员越权、登录撤销、SSE/图片隔离、完整执行、离线历史、图片缓存重建、升级备份/失败/锁，以及开发种子隔离。
+Jenkinsfile 运行 eslint、Node 测试、`npm run build` 和浏览器脚本。数据库测试使用临时 SQLite，执行测试使用假 Codex/TAPD 和临时 Git。覆盖成员越权、登录撤销、SSE/图片隔离、完整执行、离线历史、图片缓存重建、升级备份/失败/锁，以及开发种子隔离。

@@ -16,7 +16,10 @@ function fixture(t, host) {
     staticDirectory: directory,
     workspaces: {
       list: () => [],
-      save: (input) => {
+      close: async () => {},
+    },
+    workspaceClones: {
+      start: (input) => {
         writes.push(input);
         return { id: "fixture", ...input };
       },
@@ -81,7 +84,7 @@ test("explicit wildcard bind serves a real LAN address while retaining Host, Ori
         body: payload,
       })
     ).status,
-    201,
+    202,
   );
   assert.deepEqual(writes, [{ name: "局域网测试" }]);
   for (const invalid of [

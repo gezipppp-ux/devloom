@@ -6,6 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { fork, execFileSync } = require("node:child_process");
 const { chromium } = require("playwright");
+const { gitRemote } = require("../support/git-remote.cjs");
 
 const root = path.resolve(__dirname, "../..");
 
@@ -119,12 +120,14 @@ async function main() {
       : [];
   let child;
   let browser;
+  let remote;
   let output = "";
   let exited = false;
   let exitCode;
   try {
     createFixture(directory);
-    execFileSync(process.execPath, [path.join(directory, "src", "cli", "accounts.cjs"), "init", "--username", "admin"], {
+    remote = await gitRemote(path.join(directory, "git-server"));
+    execFileSync(process.execPath, [path.join(directory, "src", "cli", "init-admin.cjs")], {
       cwd: directory,
       windowsHide: true,
       env: { ...process.env, RUNNER_DATA_DIR: path.join(directory, "data") },
@@ -231,20 +234,35 @@ async function main() {
       "Backend restart must reload the document once.",
     );
     await page.getByRole("heading", { name: "After hot update" }).waitFor();
-    const created = await page.evaluate(async () => {
+    const created = await page.evaluate(async ({ memberStorageRoot, account }) => {
+      const headers = { "content-type": "application/json", "x-tapd-token": document.querySelector("#token").textContent };
+      const system = await fetch("/api/system/settings", { method: "POST", headers, body: JSON.stringify({ memberStorageRoot }) });
+      if (!system.ok) throw new Error(await system.text());
+      const saved = await fetch("/api/account/git-accounts", { method: "POST", headers, body: JSON.stringify(account) });
+      if (!saved.ok) throw new Error(await saved.text());
+      const gitAccountId = (await saved.json()).account.id;
       const response = await fetch("/api/workspaces", {
         method: "POST",
         headers: {
           "content-type": "application/json",
           "x-tapd-token": document.querySelector("#token").textContent,
         },
-        body: JSON.stringify({ name: "Temporary development workspace" }),
+        body: JSON.stringify({ requestId: globalThis.crypto.randomUUID(), name: "Temporary development workspace", gitAccountId, remoteUrl: account.remoteUrl }),
       });
-      return { status: response.status, workspace: await response.json() };
-    });
+      const accepted = await response.json();
+      if (!response.ok) throw new Error(JSON.stringify(accepted));
+      let clone = accepted.clone;
+      const deadline = Date.now() + 15000;
+      while (clone.status === "running" && Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        clone = (await (await fetch(`/api/workspace-clones/${clone.id}`)).json()).clone;
+      }
+      if (clone.status !== "completed") throw new Error(JSON.stringify(clone));
+      return { status: response.status, workspace: clone.workspace };
+    }, { memberStorageRoot: path.join(directory, "members"), account: { name: "fixture", authType: "http", remoteUrl: remote.remoteUrl, username: remote.username, password: remote.password } });
     assert.equal(
       created.status,
-      201,
+      202,
       "The refreshed page must use the replacement token for POST.",
     );
     assert.equal(created.workspace.name, "Temporary development workspace");
@@ -301,6 +319,7 @@ async function main() {
     });
   } finally {
     await browser?.close();
+    await remote?.close();
     if (child && !exited) {
       if (child.connected) child.send({ type: "dev:shutdown" }, () => {});
       try {

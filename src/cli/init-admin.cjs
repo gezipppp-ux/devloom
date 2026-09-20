@@ -4,8 +4,6 @@ const { dataRoot } = require("../config/runtime.cjs");
 const {
   initializeAccountServices,
 } = require("../application/account-services.cjs");
-const { argument } = require("./arguments.cjs");
-const { execute } = require("./execute.cjs");
 
 async function readPassword(input, output) {
   let values;
@@ -21,7 +19,7 @@ async function readPassword(input, output) {
       terminal: true,
     });
     try {
-      output.write("新密码（至少 6 字符，输入不回显）：");
+      output.write("管理员密码（至少 6 字符，输入不回显）：");
       const first = await prompt.question("");
       output.write("\n再次输入密码：");
       const second = await prompt.question("");
@@ -53,38 +51,26 @@ async function main(
   argv = process.argv.slice(2),
   { input = process.stdin, output = process.stdout, directory = dataRoot } = {},
 ) {
-  const action = argv[0];
-  if (
-    !["init", "reset"].includes(action) ||
-    argv.length !== 3 ||
-    argv[1] !== "--username"
-  )
-    throw new Error(
-      "用法：accounts init|reset --username <账号>；密码通过交互或两行标准输入提供。",
-    );
-  const username = argument("--username", null, argv);
-  if (!username) throw new Error("请提供 --username。");
+  if (argv.length) throw new Error("init:admin 不接受命令行参数。");
   const password = await readPassword(input, output);
   const accounts = await initializeAccountServices(directory);
   try {
-    const user =
-      action === "init"
-        ? await accounts.create({ username, password }, null, true)
-        : await accounts.resetLocal(username, password);
-    accounts.audit(null, `account.local.${action}`, null, {
+    const user = await accounts.create({ username: "admin", password }, null, true);
+    accounts.audit(null, "account.local.init", null, {
       actorType: "local_operator",
       targetUserId: user.id,
     });
-    output.write(
-      action === "init"
-        ? `管理员 ${user.username} 已创建。\n`
-        : `账号 ${user.username} 的密码已重置，旧会话已撤销。\n`,
-    );
+    output.write(`管理员 ${user.username} 已创建。\n`);
   } finally {
     await accounts.close();
     accounts.closeDatabase();
   }
 }
 
-if (require.main === module) execute(main);
+if (require.main === module)
+  main().catch((error) => {
+    process.stderr.write(`${error.message}\n`);
+    process.exitCode = 1;
+  });
+
 module.exports = { main };

@@ -3,7 +3,7 @@ const { spawn } = require('node:child_process');
 const readline = require('node:readline');
 const { resolveCodex } = require('./command.cjs');
 const { inspectExecutionCapabilities } = require('./capabilities.cjs');
-const { stopProcessTree } = require('./process-tree.cjs');
+const { stopProcessTree } = require('../shared/process-tree.cjs');
 const { childEnvironment } = require('./environment.cjs');
 
 class AppServerClient extends EventEmitter {

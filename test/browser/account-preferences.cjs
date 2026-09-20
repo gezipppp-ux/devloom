@@ -70,6 +70,8 @@ async function verifyAccountPreferenceRaces(browser, origin) {
       if (body) settings.set(user.id, { ...settings.get(user.id), ...body });
       return { settings: settings.get(user.id) };
     });
+    if (endpoint === "/api/account/git-accounts") return reply({ accounts: [] });
+    if (endpoint === "/api/workspace-clones") return reply({ clones: [{ id: `${user.id}-clone`, name: `${user.id} 的私有克隆`, status: "running", progress: { stage: "receiving", percent: 37 }, workspace: null }] });
     if (endpoint === "/api/account/preferences") return reply(() => {
       const workspaceId = body?.workspaceId || new URL(request.url()).searchParams.get("workspaceId");
       const key = preferenceKey(user, workspaceId);
@@ -164,6 +166,16 @@ async function verifyAccountPreferenceRaces(browser, origin) {
     assert.equal(await page.evaluate(() => window.preferenceFixture.requests.filter((entry) => entry.url === "/api/account/settings" && entry.body).length), browserWritesBefore);
     assert.equal(settings.get("alice").notificationsEnabled, false);
     assert.equal(requests.filter((entry) => entry.endpoint === "/api/account/settings" && entry.body).length, settingWritesBefore, "permission granted for an unmounted account must not save another account's notification setting");
+    const pendingClones = hold("GET", "/api/workspace-clones");
+    const staleClones = await pendingClones;
+    await page.getByRole("button", { name: "退出登录", exact: true }).click();
+    await login("bob");
+    await page.getByRole("button", { name: "克隆任务（1）", exact: true }).click();
+    await page.getByRole("region", { name: "克隆任务：bob 的私有克隆", exact: true }).waitFor();
+    await staleClones.release();
+    assert.equal(await page.getByRole("region", { name: "克隆任务：alice 的私有克隆", exact: true }).count(), 0,
+      "late clone progress from the previous account must never enter the new account");
+    await page.keyboard.press("Escape");
     assert.deepEqual(errors, []);
     process.stdout.write("Account preference races passed: revalidation, queued and pre-load unread saves, remount ordering and account isolation.\n");
   } finally { await context.close(); }

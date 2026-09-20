@@ -1,7 +1,8 @@
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
-// POSIX callers create a detached process group; Windows taskkill follows the
+// Shared by Codex, initialization commands and Git. POSIX callers create a
+// detached process group; Windows taskkill follows the
 // child tree, including the native executable behind an npm launcher.
 function stopProcessTree(child) {
   if (!child?.pid) return Promise.resolve();

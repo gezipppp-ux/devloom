@@ -35,7 +35,7 @@ function serveStatic(request, response, url, staticDirectory) {
     return json(response, 403, { error: "无效的文件路径" });
   if (!fs.existsSync(file) || !fs.statSync(file).isFile())
     return json(response, 404, {
-      error: "页面未构建，请运行 npm run web:build。",
+      error: "页面未构建，请运行 npm run build。",
     });
   if (
     !isInside(

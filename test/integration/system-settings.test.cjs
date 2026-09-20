@@ -20,23 +20,23 @@ test("system base directory is canonical, persisted separately and validated bef
   const directory = temporary(t);
   const file = path.join(directory, "system-settings.json");
   assert.equal(
-    readSystemSettings(directory).worktreeBasePath,
+    readSystemSettings(directory).memberStorageRoot,
     path.join(os.homedir(), ".codex-workspaces"),
   );
   assert.equal(fs.existsSync(file), false);
   writeConfig(file, { unrelated: { keep: true } });
   const base = path.join(directory, "测试目录 with spaces", "trees");
   const result = saveSystemSettings(
-    { worktreeBasePath: `${base}${path.sep}` },
+    { memberStorageRoot: `${base}${path.sep}` },
     directory,
   );
-  assert.equal(result.worktreeBasePath, fs.realpathSync.native(base));
+  assert.equal(result.memberStorageRoot, fs.realpathSync.native(base));
   assert.equal(result.platform, process.platform);
   assert.deepEqual(readSystemSettings(directory), result);
   assert.deepEqual(readOptional(file).unrelated, { keep: true });
   assert.deepEqual(fs.readdirSync(base), []);
   const saved = fs.readFileSync(file, "utf8");
-  for (const worktreeBasePath of [
+  for (const memberStorageRoot of [
     "",
     "relative/path",
     "../outside",
@@ -45,20 +45,20 @@ test("system base directory is canonical, persisted separately and validated bef
     `${base}\ninvalid`,
   ])
     assert.throws(
-      () => saveSystemSettings({ worktreeBasePath }, directory),
+      () => saveSystemSettings({ memberStorageRoot }, directory),
       /绝对路径/,
     );
   for (const input of [
     null,
     [],
     {},
-    { worktreeBasePath: base, repository: base },
+    { memberStorageRoot: base, repository: base },
   ])
     assert.throws(() => saveSystemSettings(input, directory));
   const regularFile = path.join(directory, "file.txt");
   fs.writeFileSync(regularFile, "fixture");
   assert.throws(() =>
-    saveSystemSettings({ worktreeBasePath: regularFile }, directory),
+    saveSystemSettings({ memberStorageRoot: regularFile }, directory),
   );
   assert.equal(fs.readFileSync(file, "utf8"), saved);
 });
@@ -128,7 +128,7 @@ test("global system endpoints work before workspace creation and enforce origin 
   assert.deepEqual(bootstrap.workspaces, []);
   assert.equal((await fetch(`${origin}/api/system/settings`)).status, 200);
   const base = path.join(directory, "new-base");
-  const write = (headers = {}, input = { worktreeBasePath: base }) =>
+  const write = (headers = {}, input = { memberStorageRoot: base }) =>
     fetch(`${origin}/api/system/settings`, {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
@@ -148,7 +148,7 @@ test("global system endpoints work before workspace creation and enforce origin 
   const response = await write({ "x-tapd-token": bootstrap.token });
   assert.equal(response.status, 200);
   const settings = await response.json();
-  assert.equal(settings.worktreeBasePath, fs.realpathSync.native(base));
+  assert.equal(settings.memberStorageRoot, fs.realpathSync.native(base));
   assert.deepEqual(
     await (await fetch(`${origin}/api/system/settings`)).json(),
     settings,
@@ -178,7 +178,7 @@ test("global system endpoints work before workspace creation and enforce origin 
     (
       await write(
         { "x-tapd-token": bootstrap.token },
-        { worktreeBasePath: "relative" },
+        { memberStorageRoot: "relative" },
       )
     ).status,
     400,

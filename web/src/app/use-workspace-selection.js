@@ -38,13 +38,13 @@ export function useWorkspaceSelection() {
     }
   }
 
-  function workspaceSaved(workspace) {
+  function workspaceSaved(workspace, open = true) {
     workspaces.value = [
       ...workspaces.value.filter((entry) => entry.id !== workspace.id),
       workspace,
     ].sort((a, b) => a.name.localeCompare(b.name));
     if (current.value?.id === workspace.id) current.value = workspace;
-    else navigate(workspace.id);
+    else if (open) navigate(workspace.id);
   }
 
   onMounted(async () => {

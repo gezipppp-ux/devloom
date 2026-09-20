@@ -8,6 +8,7 @@ const { WorkspaceManager } = require("../../src/application/workspace-manager.cj
 const { SessionManager } = require("../../src/application/session-manager.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { readOptional } = require("../../src/storage/json-files.cjs");
+const { seedWorkspaceProject } = require("../support/workspace-project.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const { temporary, png, json } = require("../support/helpers.cjs");
 const { verifyLateImageUpload } = require("./session-images.cjs");
@@ -15,6 +16,8 @@ const { verifyPromptSettings } = require("./prompt-settings.cjs");
 const { verifyWorkspaceNavigation } = require("./workspace-navigation.cjs");
 const { verifySystemSettings } = require("./system-settings.cjs");
 const { verifyGit } = require("./git.cjs");
+const { fixtureWorkspaceClones } = require("../support/workspace-clones.cjs");
+const { verifyWorkspaceClones } = require("./workspace-clones.cjs");
 
 async function main() {
   const cleanup = [];
@@ -45,7 +48,13 @@ async function main() {
     createManager: (options) =>
       new SessionManager({ ...options, client: new FakeClient() }),
   });
-  const application = createWebServer({ workspaces, testIdentity: true });
+  const saveWorkspace = workspaces.save.bind(workspaces);
+  workspaces.save = (input, id) => {
+    const workspace = saveWorkspace(input, id);
+    if (!id) seedWorkspaceProject(workspaces.configFile(workspace.id), repository);
+    return workspace;
+  };
+  const application = createWebServer({ workspaces, workspaceClones: fixtureWorkspaceClones(workspaces), testIdentity: true });
   const origin = await application.listen(0);
   const originalFetch = global.fetch;
   let checks = 0;
@@ -73,22 +82,25 @@ async function main() {
     });
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
+    await page.route("**/api/account/git-accounts", route => route.fulfill({ json: { accounts: [{ id: "fixture-account", name: "临时 Git", authType: "http", remoteUrl: "http://git.example.test/team/project.git" }] } }));
     await page.goto(origin);
     const bootstrap = await (await page.request.get(`${origin}/api/bootstrap`)).json();
     const systemSettings = await page.request.post(`${origin}/api/system/settings`, {
       headers: { origin, "x-tapd-token": bootstrap.token },
-      data: { worktreeBasePath: path.join(directory, "trees") },
+      data: { memberStorageRoot: path.join(directory, "trees") },
     });
     assert.equal(systemSettings.status(), 200);
     await page.getByLabel("工作区名称", { exact: true }).fill("项目 A");
+    await page.getByLabel("Git 远程地址", { exact: true }).fill("http://git.example.test/team/project.git");
+    const createdResponse = page.waitForResponse(response => response.url() === `${origin}/api/workspaces` && response.request().method() === "POST");
     await page.getByRole("button", { name: "创建工作区", exact: true }).click();
+    const createdResult = await createdResponse;
+    assert.equal(createdResult.status(), 202, await createdResult.text());
+    await page.getByRole("button", { name: "打开工作区", exact: true }).click();
     await page.getByRole("heading", { name: "项目 A · 工作区设置" }).waitFor();
-    await page.waitForFunction((platform) =>
-      document.querySelector('input[aria-label="项目代码仓库"]')?.getAttribute('placeholder') ===
-        (platform === 'win32' ? 'D:\\Projects\\my-project' : '/srv/repos/my-project'), process.platform);
+    await page.getByText("项目代码仓库", { exact: true }).waitFor();
     const a = workspaces.list()[0];
-    await page.waitForFunction((value) =>
-      document.querySelector('input[aria-label="工作区 Worktree 目录"]')?.value === value, `w-${a.id.slice(0, 8)}`);
+    assert.ok(a.id);
     const output = path.resolve("state", "browser");
     fs.mkdirSync(output, { recursive: true });
     for (const width of [390, 1440]) {
@@ -98,7 +110,7 @@ async function main() {
         .evaluate(
           (el) => el.closest(".ant-select").getBoundingClientRect().bottom,
         );
-      const hint = await page.locator(".base-ref-hint").boundingBox();
+      const hint = await page.getByText(/可搜索本地分支、已获取的远程分支和标签/).boundingBox();
       assert.ok(
         hint.y >= bottom + 7,
         "base ref hint must sit below the selector",
@@ -106,7 +118,7 @@ async function main() {
     }
     await page
       .locator(".ant-form-item")
-      .filter({ has: page.locator(".base-ref-hint") })
+      .filter({ has: page.getByRole("combobox", { name: "新任务基准引用", exact: true }) })
       .screenshot({ path: path.join(output, "base-ref-spacing.png") });
     const selectedWorkspace = page.getByRole("button", {
       name: "切换工作区：项目 A",
@@ -124,10 +136,9 @@ async function main() {
     await page.keyboard.press("Escape");
     assert.equal(await page.getByRole("dialog").count(), 0);
     assert.equal(workspaces.list().length, 1);
-    await page.getByLabel("项目代码仓库", { exact: true }).fill(repository);
-    await page
-      .getByLabel("工作区 Worktree 目录", { exact: true })
-      .fill("workspace-a");
+    assert.equal(await page.getByLabel("项目代码仓库路径", { exact: true }).innerText(), repository);
+    assert.equal(await page.getByRole("textbox", { name: "工作区 Worktree 目录", exact: true }).count(), 0);
+    await page.getByLabel("Worktree 初始化命令", { exact: true }).fill('node -e "process.exit(0)"');
     assert.equal(
       await page.getByLabel("Codex 模型", { exact: true }).count(),
       0,
@@ -187,8 +198,10 @@ async function main() {
       .getByRole("button", { name: "＋ 新建工作区", exact: true })
       .click();
     await page.getByLabel("工作区名称", { exact: true }).fill("项目 B");
+    await page.getByRole("button", { name: "选择图标", exact: true }).click();
     await page.getByRole("button", { name: "图标：实验", exact: true }).click();
     await page.getByRole("button", { name: "创建工作区", exact: true }).click();
+    await page.getByRole("region", { name: "克隆任务：项目 B", exact: true }).getByRole("button", { name: "打开工作区", exact: true }).click();
     await page.getByRole("heading", { name: "项目 B · 工作区设置" }).waitFor();
     assert.equal(
       workspaces.list().find((entry) => entry.name === "项目 B").icon,
@@ -202,8 +215,8 @@ async function main() {
       1,
     );
     assert.equal(
-      await page.getByLabel("项目代码仓库", { exact: true }).inputValue(),
-      "",
+      await page.getByLabel("项目代码仓库路径", { exact: true }).innerText(),
+      repository,
     );
     assert.equal(
       await page.getByLabel("Codex 模型", { exact: true }).count(),
@@ -266,6 +279,8 @@ async function main() {
       "项目 A",
     );
     await page.getByLabel("工作区名称", { exact: true }).fill("项目 A 改名");
+    assert.equal(await page.getByRole("searchbox", { name: "搜索图标" }).count(), 0);
+    await page.getByRole("button", { name: "选择图标", exact: true }).click();
     await page
       .getByRole("searchbox", { name: "搜索图标" })
       .fill("没有这种图标");
@@ -278,14 +293,16 @@ async function main() {
       .waitFor();
     await page.getByRole("searchbox", { name: "搜索图标" }).fill("rocket");
     await page.getByRole("button", { name: "图标：火箭", exact: true }).click();
+    await page.getByRole("button", { name: "选择图标", exact: true }).click();
     await page.getByRole("searchbox", { name: "搜索图标" }).fill("");
     assert.equal(
       await page.getByRole("button", { name: /^图标：/ }).count(),
       40,
     );
     await page
-      .getByRole("dialog")
+      .getByRole("dialog", { name: "选择工作区图标", exact: true })
       .screenshot({ path: path.join(output, "workspace-icon-picker.png") });
+    await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "保存工作区", exact: true }).click();
     await page
       .getByRole("heading", { name: "项目 A 改名 · 工作区设置" })
@@ -512,6 +529,7 @@ async function main() {
     await page.getByRole("button", { name: "工作区设置", exact: true }).click();
     await page.getByRole("button", { name: "重命名", exact: true }).click();
     await page.getByRole("dialog").waitFor();
+    await page.getByRole("button", { name: "选择图标", exact: true }).click();
     await page.getByRole("button", { name: "恢复默认", exact: true }).click();
     await page.screenshot({
       path: path.join(output, "workspace-rename-mobile.png"),
@@ -527,6 +545,7 @@ async function main() {
       "cancel must preserve saved icon",
     );
     await page.getByRole("button", { name: "重命名", exact: true }).click();
+    await page.getByRole("button", { name: "选择图标", exact: true }).click();
     await page.getByRole("button", { name: "恢复默认", exact: true }).click();
     await page.getByRole("button", { name: "保存工作区", exact: true }).click();
     await page.getByRole("dialog").waitFor({ state: "hidden" });
@@ -588,6 +607,7 @@ async function main() {
       origin, output, errors, directory, repository, workspace: systemWorkspace,
     });
     await verifyGit(browser, { origin, output, errors, directory, workspaces });
+    await verifyWorkspaceClones(page, origin, output);
     assert.deepEqual(errors, []);
     process.stdout.write(
       "Workspace browser passed: create, switch, rename, scoped settings, manual runs, attachments, Git fetch/fast-forward/divergence, unpublished/ahead/dirty status, confirmed worktree deletion, read-only history and mobile.\n",

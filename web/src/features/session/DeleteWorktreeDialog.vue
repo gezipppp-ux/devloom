@@ -176,14 +176,19 @@ defineExpose({ open });
         </p>
         <form @submit.prevent="remove">
           <label for="delete-worktree-confirm"
-            >输入完整本地分支名以确认删除</label
+            >输入以下完整本地分支名以确认删除</label
           >
+          <p id="delete-worktree-confirm-hint" class="field-hint">
+            请准确输入：<code>{{ snapshot.branch }}</code>
+          </p>
           <input
             id="delete-worktree-confirm"
             ref="confirmInput"
             v-model="confirmation"
             aria-label="确认删除的本地分支"
+            aria-describedby="delete-worktree-confirm-hint"
             :disabled="busy"
+            :placeholder="snapshot.branch"
             autocomplete="off"
             spellcheck="false"
           />

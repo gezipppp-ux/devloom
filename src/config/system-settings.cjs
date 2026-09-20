@@ -1,8 +1,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const os = require("node:os");
 const { randomUUID } = require("node:crypto");
 const { dataRoot } = require("./runtime.cjs");
-const { defaultWorktreeRoot } = require("./worktree-location.cjs");
 const { absolutePath } = require("../shared/paths.cjs");
 const { readOptional, updateConfig } = require("../storage/json-files.cjs");
 
@@ -13,9 +13,9 @@ function settingsFile(directory) {
 function basePath(value) {
   if (typeof value !== "string" || /[\x00-\x1f\x7f]/.test(value))
     throw new Error(
-      "Worktree 基础目录必须是服务端的绝对路径，且不能包含控制字符。",
+      "成员目录基础路径必须是服务端的绝对路径，且不能包含控制字符。",
     );
-  const directory = absolutePath(value.trim(), "Worktree 基础目录");
+  const directory = absolutePath(value.trim(), "成员目录基础路径");
   if (process.platform === "win32") {
     const relative = directory.slice(path.parse(directory).root.length);
     if (
@@ -28,7 +28,7 @@ function basePath(value) {
             /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part),
         )
     )
-      throw new Error("Worktree 基础目录包含 Windows 不支持的目录名称。");
+      throw new Error("成员目录基础路径包含 Windows 不支持的目录名称。");
   }
   return directory;
 }
@@ -36,8 +36,8 @@ function basePath(value) {
 function readSystemSettings(directory = dataRoot) {
   const config = readOptional(settingsFile(directory));
   return {
-    worktreeBasePath: basePath(
-      config.worktreeBasePath ?? defaultWorktreeRoot(),
+    memberStorageRoot: basePath(
+      config.memberStorageRoot ?? path.join(os.homedir(), ".codex-workspaces"),
     ),
     platform: process.platform,
   };
@@ -48,24 +48,24 @@ function saveSystemSettings(input, directory = dataRoot) {
     !input ||
     typeof input !== "object" ||
     Array.isArray(input) ||
-    Object.keys(input).some((key) => key !== "worktreeBasePath")
+    Object.keys(input).some((key) => key !== "memberStorageRoot")
   )
-    throw new Error("系统设置仅支持修改 Worktree 基础目录。");
-  const selected = basePath(input.worktreeBasePath);
+    throw new Error("系统设置仅支持修改成员目录基础路径。");
+  const selected = basePath(input.memberStorageRoot);
   fs.mkdirSync(selected, { recursive: true });
   const canonical = fs.realpathSync.native(selected);
   const probe = path.join(canonical, `.runner-write-probe-${randomUUID()}`);
   try {
     fs.writeFileSync(probe, "", { flag: "wx", mode: 0o600 });
   } catch {
-    throw new Error("Worktree 基础目录不可写，请选择服务端有写入权限的目录。");
+    throw new Error("成员目录基础路径不可写，请选择服务端有写入权限的目录。");
   } finally {
     if (fs.existsSync(probe)) fs.unlinkSync(probe);
   }
   updateConfig(settingsFile(directory), (current) => ({
     ...current,
     version: 1,
-    worktreeBasePath: canonical,
+    memberStorageRoot: canonical,
   }));
   return readSystemSettings(directory);
 }

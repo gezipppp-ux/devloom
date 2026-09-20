@@ -18,7 +18,7 @@ test('workspace creation receives independent channel defaults and renaming pres
   const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
   assert.deepEqual(saved, {
     version: 3,
-    codex: { worktree_directory: `w-${workspace.id.slice(0, 8)}` },
+    codex: { project_name: `w-${workspace.id.slice(0, 8)}` },
     workflow: { allow_write: false, target_status: 'developing', fields: {} },
     workspace: { id: workspace.id, name: '默认配置' },
   });

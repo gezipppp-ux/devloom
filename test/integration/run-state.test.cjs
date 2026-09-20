@@ -5,6 +5,21 @@ const path = require('node:path');
 const { Worker } = require('node:worker_threads');
 const { saveState } = require('../../src/storage/run-state.cjs');
 const { temporary } = require('../support/helpers.cjs');
+const { withFileLock } = require('../../src/storage/file-lock.cjs');
+
+test('Windows pending-delete EPERM retries without deleting a competing lock', { skip: process.platform !== 'win32' }, t => {
+  const directory = temporary(t), file = path.join(directory, 'config.json');
+  const mkdir = fs.mkdirSync;
+  let attempts = 0, called = false;
+  t.mock.method(fs, 'mkdirSync', (target, options) => {
+    if (target === file + '.lock' && attempts++ === 0) throw Object.assign(new Error('pending delete'), { code: 'EPERM' });
+    return mkdir(target, options);
+  });
+  withFileLock(file, () => { called = true; });
+  assert.equal(called, true);
+  assert.equal(attempts, 2);
+  assert.equal(fs.existsSync(file + '.lock'), false);
+});
 
 test('concurrent state writers preserve independently owned fields', async (t) => {
   const directory = temporary(t);

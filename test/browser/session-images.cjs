@@ -52,11 +52,16 @@ async function verifyLateImageUpload(page, { pattern, leave, reopen }) {
   });
   let capture;
   const captured = new Promise((resolve) => { capture = resolve; });
+  let release, holding = true;
+  const released = new Promise((resolve) => { release = resolve; });
   const handler = async (route) => {
+    if (!holding) return route.continue();
+    holding = false;
     const response = await route.fetch();
     capture({ route, response });
+    await released;
   };
-  await page.route(pattern, handler, { times: 1 });
+  await page.route(pattern, handler);
   await pasteImages(page, ['旧会话上传.png']);
   const oldUpload = await captured;
   await leave();
@@ -70,6 +75,8 @@ async function verifyLateImageUpload(page, { pattern, leave, reopen }) {
     response: oldUpload.response,
     headers: { ...oldUpload.response.headers(), 'x-fixture-image': 'old-upload' },
   });
+  release();
+  await page.unroute(pattern, handler);
   await page.waitForFunction(() => window.processedImageUploads.includes('old-upload'));
   assert.equal((await freshUpload).url(), oldUpload.response.url(),
     'returning to a session keeps uploads scoped to the same workspace and run');

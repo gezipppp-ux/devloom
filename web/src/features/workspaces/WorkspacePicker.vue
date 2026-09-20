@@ -1,9 +1,10 @@
 <script setup>
-import { nextTick, onMounted, ref } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { SettingOutlined } from "@antdv-next/icons";
 import { appApi } from "../../shared/api/api.js";
 import WorkspaceIconEditor from "./WorkspaceIconEditor.vue";
 import { workspaceIcon } from "./workspace-icons.js";
+import { createRequestId } from "../../shared/api/request-id.js";
 const props = defineProps({
   workspaces: { type: Array, default: () => [] },
   current: { type: Object, default: null },
@@ -11,15 +12,31 @@ const props = defineProps({
   rail: Boolean,
   systemSettingsOpen: Boolean,
   showSystemSettings: { type: Boolean, default: true },
+  createWorkspace: { type: Function, required: true },
 });
-const emit = defineEmits(["select", "saved", "system-settings"]);
+const emit = defineEmits(["select", "saved", "system-settings", "clone-started"]);
 const dialog = ref(),
   nameInput = ref();
 const renaming = ref(false),
   icon = ref(null),
   name = ref(""),
+  remoteUrl = ref(""),
+  gitAccountId = ref(""),
+  gitAccounts = ref([]),
+  loadingAccounts = ref(false),
   error = ref(""),
   busy = ref(false);
+const form = reactive({ name, icon, remoteUrl, gitAccountId });
+let alive = true,
+  requestId = "",
+  generation = 0,
+  editingId = "",
+  returnFocus;
+onBeforeUnmount(() => {
+  alive = false;
+  generation++;
+});
+watch([name, icon, remoteUrl, gitAccountId], () => { requestId = createRequestId(); });
 function initial(workspace) {
   return Array.from(workspace.name.trim())[0]?.toUpperCase() || "项";
 }
@@ -32,34 +49,75 @@ function duplicateInitial(workspace) {
   );
 }
 async function edit(rename = false) {
+  if (busy.value) return;
+  const operation = ++generation;
+  returnFocus = globalThis.document.activeElement;
+  editingId = rename ? props.current.id : "";
+  requestId = createRequestId();
   renaming.value = rename;
   name.value = rename ? props.current.name : "";
   icon.value = rename ? (props.current.icon ?? null) : null;
+  remoteUrl.value = "";
+  gitAccountId.value = "";
   error.value = "";
+  gitAccounts.value = [];
+  loadingAccounts.value = !rename;
   dialog.value.showModal();
   await nextTick();
+  if (!alive || operation !== generation) return;
   nameInput.value.focus();
   nameInput.value.select();
+  if (!rename) {
+    try {
+      const result = await appApi("/account/git-accounts");
+      if (!alive || operation !== generation) return;
+      gitAccounts.value = result.accounts || [];
+      gitAccountId.value = gitAccounts.value[0]?.id || "";
+      selectAccount();
+    } catch (failure) {
+      if (alive && operation === generation) error.value = failure.message;
+    } finally {
+      if (alive && operation === generation) loadingAccounts.value = false;
+    }
+  }
+}
+function selectAccount() {
+  remoteUrl.value =
+    gitAccounts.value.find((account) => account.id === gitAccountId.value)
+      ?.remoteUrl || "";
 }
 function close(event) {
   if (busy.value) event?.preventDefault();
-  else dialog.value.close();
+  else {
+    generation++;
+    dialog.value.close();
+    returnFocus?.focus();
+  }
 }
 async function save() {
-  if (busy.value) return;
+  if (busy.value || loadingAccounts.value) return;
+  const operation = generation;
   busy.value = true;
   error.value = "";
   try {
-    const result = await appApi(
-      `/workspaces${renaming.value ? `/${props.current.id}` : ""}`,
-      { name: name.value, icon: icon.value },
-    );
+    const result = renaming.value
+      ? await appApi(`/workspaces/${editingId}`, { name: name.value, icon: icon.value })
+      : await props.createWorkspace({
+            requestId,
+            name: name.value,
+            icon: icon.value,
+            remoteUrl: remoteUrl.value,
+            gitAccountId: gitAccountId.value,
+          });
+    if (!alive || operation !== generation) return;
     dialog.value?.close();
-    emit("saved", result);
+    returnFocus?.focus();
+    if (renaming.value) emit("saved", result);
+    else emit("clone-started");
   } catch (e) {
-    error.value = e.message;
+    if (alive && operation === generation) error.value = renaming.value ? e.message : `${e.message} 如请求中断，请先从「克隆任务」确认是否已受理，再重试。`;
   } finally {
-    busy.value = false;
+    if (alive && operation === generation) busy.value = false;
   }
 }
 defineExpose({ edit });
@@ -74,7 +132,7 @@ onMounted(() => {
     aria-label="工作区"
   >
     <div v-if="rail" class="rail-brand" aria-label="需求开发工作台">t_</div>
-    <div class="workspace-icons">
+    <div v-if="workspaces.length" class="workspace-icons">
       <button
         v-for="(entry, index) in workspaces"
         :key="entry.id"
@@ -137,7 +195,7 @@ onMounted(() => {
       aria-labelledby="workspace-dialog-title"
       @cancel="close"
     >
-      <form @submit.prevent="save">
+      <a-form :model="form" layout="vertical" @finish="save">
         <div class="workspace-dialog-heading">
           <h2 id="workspace-dialog-title">
             {{ renaming ? "编辑工作区" : "新建工作区" }}
@@ -156,28 +214,86 @@ onMounted(() => {
           {{
             renaming
               ? "设置工作区名称和图标，便于识别不同项目。"
-              : "为项目起一个名称，随后配置仓库和需求渠道。"
+              : "选择 Git 账号并输入远程地址，提交后台克隆任务后创建工作区。"
           }}
         </p>
-        <label for="workspace-name">工作区名称</label>
-        <input
-          id="workspace-name"
-          ref="nameInput"
-          v-model="name"
-          maxlength="80"
-          required
-          placeholder="例如：客户管理系统"
-          :disabled="busy"
-        />
+        <a-form-item label="工作区名称" html-for="workspace-name">
+          <input
+            id="workspace-name"
+            ref="nameInput"
+            v-model="name"
+            maxlength="80"
+            required
+            placeholder="例如：客户管理系统"
+            :disabled="busy"
+          />
+        </a-form-item>
+        <template v-if="!renaming">
+          <a-form-item label="Git 账号" html-for="workspace-git-account">
+            <select
+              id="workspace-git-account"
+              v-model="gitAccountId"
+              :disabled="busy || loadingAccounts || !gitAccounts.length"
+              required
+              @change="selectAccount"
+            >
+              <option v-if="!gitAccounts.length" value="">
+                请先在个人设置添加 Git 账号
+              </option>
+              <option
+                v-for="account in gitAccounts"
+                :key="account.id"
+                :value="account.id"
+              >
+                {{ account.name }}（{{
+                  account.authType === "ssh" ? "SSH 密钥" : "HTTP/HTTPS 凭据"
+                }}）
+              </option>
+            </select>
+            <p v-if="loadingAccounts" class="field-hint" role="status">
+              正在加载 Git 账号…
+            </p>
+          </a-form-item>
+          <a-form-item label="Git 远程地址" html-for="workspace-remote-url">
+            <input
+              id="workspace-remote-url"
+              v-model="remoteUrl"
+              placeholder="例如：http://git.example.com/team/project.git"
+              required
+              :disabled="busy || loadingAccounts"
+            />
+            <p class="field-hint">
+              仓库会克隆至当前账号的 projects 目录，项目名称从远程地址自动生成。
+            </p>
+          </a-form-item>
+        </template>
         <WorkspaceIconEditor v-model="icon" :name="name" :disabled="busy" />
+        <p v-if="!renaming" class="field-hint">任务受理后可关闭窗口或浏览器，再次进入可从顶部「克隆任务」查看进度。</p>
         <p v-if="error" class="error" role="alert">{{ error }}</p>
         <div class="actions">
           <button type="button" :disabled="busy" @click="close">取消</button>
-          <button class="primary" :disabled="busy || !name.trim()">
-            {{ busy ? "正在保存…" : renaming ? "保存工作区" : "创建工作区" }}
+          <button
+            type="submit"
+            class="primary"
+            :disabled="
+              busy ||
+              loadingAccounts ||
+              !name.trim() ||
+              (!renaming && (!remoteUrl.trim() || !gitAccountId))
+            "
+          >
+            {{
+              busy
+                ? renaming
+                  ? "正在保存…"
+                  : "正在提交克隆任务…"
+                : renaming
+                  ? "保存工作区"
+                  : "创建工作区"
+            }}
           </button>
         </div>
-      </form>
+      </a-form>
     </dialog>
   </Teleport>
 </template>

@@ -187,6 +187,7 @@ async function main() {
       if (endpoint === "/auth/session")
         return send({ user: { id: "visual-admin", username: "演示管理员", role: "admin", status: "active", mustChangePassword: false }, token: "visual-fixture", settings: { model: null, reasoningEffort: null, permissionMode: "ask", notificationsEnabled: true, grouping: "type" } });
       if (endpoint === "/account/preferences") return send({ preferences: { unreadRunKeys: [] } });
+      if (endpoint === "/workspace-clones") return send({ clones: [] });
       if (url.pathname === "/api/bootstrap")
         return send({
           token: "visual-fixture",
@@ -224,7 +225,9 @@ async function main() {
       if (endpoint.endsWith("/images/0"))
         return route.fulfill({ contentType: "image/png", body: png });
       if (endpoint === "/system/settings")
-        return send({ worktreeBasePath: "/srv/wt", platform: "linux" });
+        return send({ memberStorageRoot: "/srv/wt", platform: "linux", git: { installed: true, version: "git version 2.55.0" } });
+      if (endpoint === "/account/git-accounts")
+        return send({ accounts: [{ id: "fixture-account", name: "公司 Git", authType: "http", remoteUrl: "http://git.example.test/team/customer.git" }] });
       if (endpoint === "/system/directories") {
         const directory = url.searchParams.get("path") || "/srv/wt";
         return send({
@@ -241,10 +244,11 @@ async function main() {
       }
       if (endpoint === "/settings")
         return send({
-          repository: "/srv/repos/customer",
-          worktreeRoot: "/srv/wt/customer-system",
-          worktreeBasePath: "/srv/wt",
-          worktreeDirectory: "customer-system",
+          repository: "/srv/wt/admin/projects/customer-system",
+          projectsRoot: "/srv/wt/admin/projects",
+          worktreeRoot: "/srv/wt/admin/worktree/customer-system",
+          memberStorageRoot: "/srv/wt",
+          projectName: "customer-system",
           baseRef: "main",
           platform: "linux",
           initCommands: ["pnpm install", "pnpm build"],
@@ -347,12 +351,34 @@ async function main() {
     }
     async function captureSystemSettings(suffix) {
       await page.getByRole("button", { name: "系统设置", exact: true }).click();
-      await page.getByRole("textbox", { name: "Worktree 基础目录", exact: true }).waitFor();
+      await page.getByRole("textbox", { name: "成员目录基础路径", exact: true }).waitFor();
       await capture("03-system-settings-" + suffix);
       await page.getByRole("button", { name: "浏览服务器目录", exact: true }).click();
       await page.getByRole("dialog", { name: "选择服务器目录", exact: true }).waitFor();
       await page.getByRole("button", { name: "打开目录：客户管理系统", exact: true }).waitFor();
       await capture("03-system-directory-picker-" + suffix);
+      await page.keyboard.press("Escape");
+    }
+    async function captureEmptyWorkspaceRail(suffix) {
+      await page.getByRole("button", { name: "系统设置", exact: true }).click();
+      await page.getByRole("textbox", { name: "成员目录基础路径", exact: true }).waitFor();
+      const rail = page.locator(".workspace-rail");
+      assert.equal(await rail.locator(".workspace-icons").count(), 0,
+        "an empty workspace list must not reserve rail space");
+      assert.equal(await rail.locator(".rail-brand + .workspace-add").count(), 1);
+      const brand = await rail.locator(".rail-brand").boundingBox();
+      const add = await rail.locator(".workspace-add").boundingBox();
+      if (page.viewportSize().width > 600) {
+        assert.equal(add.y - brand.y - brand.height, 28,
+          "empty desktop rail keeps only the brand margin and one navigation gap");
+      } else {
+        assert.equal(add.y, brand.y, "empty mobile rail controls stay on one row");
+        assert.ok(add.x >= brand.x + brand.width + 12);
+        assert.ok(add.x + add.width <= page.viewportSize().width);
+      }
+      await capture("07-empty-workspace-rail-" + suffix);
+      await rail.getByRole("button", { name: "＋ 新建工作区", exact: true }).click();
+      await page.getByRole("dialog", { name: "新建工作区", exact: true }).waitFor();
       await page.keyboard.press("Escape");
     }
     async function captureGitViews(suffix) {
@@ -372,6 +398,8 @@ async function main() {
       await load();
     }
     await load();
+    assert.equal(await page.locator(".workspace-rail .workspace-icons").count(), 1);
+    assert.equal(await page.locator(".workspace-rail .workspace-icon").count(), 2);
     await capture("05-session-desktop");
     await captureGitViews("desktop");
     await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
@@ -413,7 +441,7 @@ async function main() {
     );
     await capture("02-new-tapd");
     await page.getByRole("button", { name: "工作区设置", exact: true }).click();
-    await page.getByLabel("项目代码仓库", { exact: true }).waitFor();
+    await page.getByText("项目代码仓库", { exact: true }).waitFor();
     await page.locator("main").evaluate((el) => {
       el.scrollTop = 0;
     });
@@ -482,10 +510,26 @@ async function main() {
     await load("welcome");
     await page.getByRole("dialog").waitFor();
     await capture("07-workspace-create");
+    await page.getByRole("button", { name: "选择图标", exact: true }).click();
+    await capture("07-icon-picker-desktop");
+    await page.keyboard.press("Escape");
+    assert.equal(await page.getByRole("dialog", { name: "新建工作区", exact: true }).isVisible(), true);
     await page.keyboard.press("Escape");
     await capture("07-welcome");
+    await captureEmptyWorkspaceRail("desktop");
     for (const width of [768, 390, 320]) {
       await page.setViewportSize({ width, height: 1000 });
+      await load("welcome");
+      await page.getByRole("dialog", { name: "新建工作区", exact: true }).waitFor();
+      await page.getByRole("button", { name: "创建工作区", exact: true }).scrollIntoViewIfNeeded();
+      await capture("07-workspace-create-" + width);
+      const createBox = await page.getByRole("button", { name: "创建工作区", exact: true }).boundingBox();
+      assert.ok(createBox.x >= 0 && createBox.x + createBox.width <= width && createBox.y >= 0 && createBox.y + createBox.height <= 1000);
+      await page.getByRole("button", { name: "选择图标", exact: true }).click();
+      await capture("07-icon-picker-" + width);
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("Escape");
+      await captureEmptyWorkspaceRail(width);
       await load();
       await capture("05-session-" + width);
       await captureGitViews(width);
@@ -508,7 +552,7 @@ async function main() {
       await page
         .getByRole("button", { name: "工作区设置", exact: true })
         .click();
-      await page.getByLabel("项目代码仓库", { exact: true }).waitFor();
+      await page.getByText("项目代码仓库", { exact: true }).waitFor();
       await page.locator("main").evaluate((el) => {
         el.scrollTop = 0;
       });

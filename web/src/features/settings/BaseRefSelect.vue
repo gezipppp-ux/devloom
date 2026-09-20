@@ -48,9 +48,7 @@ watch(
     if (!loading.value) return;
     timer = setTimeout(async () => {
       try {
-        const result = await api(
-          `/settings/refs?${new URLSearchParams({ repository })}`,
-        );
+        const result = await api("/settings/refs");
         if (current === revision) refs.value = result.refs;
       } catch (e) {
         if (current === revision) error.value = e.message;
@@ -92,7 +90,7 @@ onUnmounted(() => {
     "
   />
   <p v-if="!repository.trim()" :id="`${inputId}-hint`" class="base-ref-hint">
-    请先填写上方的“项目代码仓库”绝对路径，填写后会自动加载分支和标签，无需先保存。
+    项目仓库由创建工作区时的 Git 地址生成；加载后会自动显示分支和标签。
   </p>
   <p v-if="error" role="alert" class="error">引用加载失败：{{ error }}</p>
 </template>

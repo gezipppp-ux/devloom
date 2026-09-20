@@ -16,13 +16,12 @@ const { materializeArtifact, writeArtifact } = require("../../src/storage/artifa
 const { createManualChannel } = require("../../src/channels/manual/adapter.cjs");
 const { runExecution } = require("../../src/execution/runner.cjs");
 const { sourceFor, runKey } = require("../../src/domain/run-identity.cjs");
-const { verifyPassword } = require("../../src/storage/account-passwords.cjs");
 const { readSettings, saveSettings } = require("../../src/config/execution-settings.cjs");
 const { readOptional, updateConfig, writeConfig } = require("../../src/storage/json-files.cjs");
 const { worktreePlan, createWorktree } = require("../../src/git/worktrees.cjs");
-const { main: seedFixtures } = require("../../src/cli/seed-fixtures.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const { temporary, png } = require("../support/helpers.cjs");
+const { seedWorkspaceProject } = require("../support/workspace-project.cjs");
 
 async function fixture(t) {
   let database;
@@ -46,8 +45,11 @@ async function fixture(t) {
   git("add", ".");
   git("-c", "user.name=Fixture", "-c", "user.email=test@example.invalid", "-c", "core.hooksPath=/dev/null", "commit", "-m", "fixture");
   fs.writeFileSync(path.join(repository, "tracked.txt"), "root-dirty");
-  writeConfig(path.join(root, "system-settings.json"), { worktreeBasePath: path.join(root, "trees") });
-  for (const workspace of [a, b]) saveSettings({ repository, worktreeDirectory: "p", baseRef: "main", initCommands: [] }, workspaces.configFile(workspace.id));
+  writeConfig(path.join(root, "system-settings.json"), { memberStorageRoot: path.join(root, "trees") });
+  for (const workspace of [a, b]) {
+    seedWorkspaceProject(workspaces.configFile(workspace.id), repository, "p");
+    saveSettings({ baseRef: "main", initCommands: [] }, workspaces.configFile(workspace.id));
+  }
   return { root, database, managers, alice, bob, a, b, workspaces, repository, git,
     async reopen() { database.close(); database = await initializeDatabase(root); return database; } };
 }
@@ -89,7 +91,7 @@ test("SQLite execution uses a temporary Git worktree and fake CLI, retains compl
   assert.equal(state.execution.status, "completed", state.execution.error);
   assert.equal(state.transition.status, "skipped");
   assert.equal(state.session_id, "sqlite-cli-thread");
-  assert.equal(path.dirname(state.worktree.path), path.join(root, "trees", "alice", "p"));
+  assert.equal(path.dirname(state.worktree.path), path.join(root, "trees", "alice", "worktree", "p"));
   assert.equal(git("branch", "--show-current"), "main");
   assert.equal(fs.readFileSync(path.join(repository, "tracked.txt"), "utf8"), "root-dirty");
   assert.equal(fs.readFileSync(path.join(state.worktree.path, "tracked.txt"), "utf8"), "committed");
@@ -213,7 +215,7 @@ test("username worktree roots apply to new tasks while legacy UUID paths retain 
     while (!runtime.turnId && runtime.pipelineActive && Date.now() < deadline) await immediate();
     assert.ok(runtime.turnId, runtime.error);
     const state = selected.store.read(started.key);
-    assert.equal(path.dirname(state.worktree.path), path.join(root, "trees", username, "p"));
+    assert.equal(path.dirname(state.worktree.path), path.join(root, "trees", username, "worktree", "p"));
     assert.equal(selected.client.calls.filter((call) => call.method === "thread/start").at(-1).params.cwd, state.worktree.path);
     assert.notEqual(state.worktree.branch, legacy.branch);
     await selected.interrupt(started.key);
@@ -231,7 +233,7 @@ test("username worktree roots apply to new tasks while legacy UUID paths retain 
 });
 
 test("member roots and workspace subdirectories cannot redirect settings into another member", async (t) => {
-  const { root, a, workspaces, repository } = await fixture(t);
+  const { root, a, workspaces } = await fixture(t);
   const file = workspaces.configFile(a.id);
   const linkType = process.platform === "win32" ? "junction" : "dir";
   for (const scenario of ["member-root", "workspace-child"]) {
@@ -239,15 +241,15 @@ test("member roots and workspace subdirectories cannot redirect settings into an
     const member = path.join(base, "alice");
     const peer = path.join(base, "bob");
     fs.mkdirSync(peer, { recursive: true });
-    if (scenario === "workspace-child") fs.mkdirSync(member);
-    const link = scenario === "member-root" ? member : path.join(member, "escape");
+    if (scenario === "workspace-child") fs.mkdirSync(path.join(member, "worktree"), { recursive: true });
+    const link = scenario === "member-root" ? member : path.join(member, "worktree", "p");
     fs.symlinkSync(peer, link, linkType);
-    writeConfig(path.join(root, "system-settings.json"), { worktreeBasePath: base });
-    const worktreeDirectory = scenario === "member-root" ? "p" : "escape/new-directory";
-    updateConfig(file, (config) => ({ ...config, codex: { ...config.codex, worktree_directory: worktreeDirectory } }));
+    writeConfig(path.join(root, "system-settings.json"), { memberStorageRoot: base });
+    const projectName = "p";
+    updateConfig(file, (config) => ({ ...config, codex: { ...config.codex, project_name: projectName } }));
     const before = readOptional(file);
     assert.throws(() => readSettings(file), /符号链接/, scenario);
-    assert.throws(() => saveSettings({ repository, worktreeDirectory, baseRef: "main", initCommands: [] }, file), /符号链接/, scenario);
+    assert.throws(() => saveSettings({ baseRef: "main", initCommands: [] }, file), /符号链接/, scenario);
     assert.deepEqual(readOptional(file), before);
     assert.deepEqual(fs.readdirSync(peer), []);
   }
@@ -261,11 +263,11 @@ test("execution rechecks member isolation when preparation replaces a root or ch
     const base = path.join(root, "during-prepare-" + scenario);
     const member = path.join(base, "alice");
     const peer = path.join(base, "bob");
-    const link = scenario === "member-root" ? member : path.join(member, "p");
+    const link = scenario === "member-root" ? member : path.join(member, "worktree", "p");
     fs.mkdirSync(link, { recursive: true });
     fs.mkdirSync(peer);
     fs.writeFileSync(path.join(peer, "keep.txt"), "other member content");
-    writeConfig(path.join(root, "system-settings.json"), { worktreeBasePath: base });
+    writeConfig(path.join(root, "system-settings.json"), { memberStorageRoot: base });
     const channel = createManualChannel(file, { uploadDirectory: path.join(path.dirname(file), "uploads") });
     const resolved = await channel.resolve({ requestId: randomUUID(), title: "拒绝准备期间越界", content: "模拟需求" });
     const prepare = channel.prepare.bind(channel);
@@ -321,31 +323,4 @@ test("database image caches are reconstructible, reject symlinks, and cannot cro
   const channelB = createManualChannel(workspaces.configFile(b.id), { uploadDirectory: path.join(path.dirname(workspaces.configFile(b.id)), "uploads") });
   const upload = channelA.uploadImage(png);
   await assert.rejects(channelB.resolve({ requestId: randomUUID(), title: "cross workspace", images: [upload.id] }), /不存在/);
-});
-
-test("development seeds require an explicit empty directory and issue unique random credentials without running tasks", async (t) => {
-  let database;
-  t.after(() => database?.close());
-  const root = temporary(t);
-  await assert.rejects(seedFixtures([], { write() {} }), /显式指定/);
-  const existing = path.join(root, "existing");
-  fs.mkdirSync(existing);
-  fs.writeFileSync(path.join(existing, "keep.txt"), "existing content");
-  await assert.rejects(seedFixtures(["--data-dir", existing], { write() {} }), /空目录/);
-  assert.equal(fs.readFileSync(path.join(existing, "keep.txt"), "utf8"), "existing content");
-  const selected = path.join(root, "fixtures");
-  let output = "";
-  await seedFixtures(["--data-dir", selected], { write(value) { output += value; } });
-  const result = JSON.parse(output);
-  assert.equal(new Set(result.accounts.map(({ password }) => password)).size, 3);
-  database = await initializeDatabase(selected);
-  const accounts = new AccountStore(database);
-  for (const account of result.accounts) {
-    const saved = accounts.byUsername(account.username);
-    assert.equal(await verifyPassword(account.password, saved.password_hash), true);
-    assert.notEqual(saved.password_hash, account.password);
-  }
-  assert.equal(database.handle.prepare("SELECT COUNT(*) AS count FROM workspaces").get().count, 2);
-  assert.equal(database.handle.prepare("SELECT COUNT(*) AS count FROM runs").get().count, 0);
-  await assert.rejects(seedFixtures(["--data-dir", selected], { write() {} }), /空目录/);
 });

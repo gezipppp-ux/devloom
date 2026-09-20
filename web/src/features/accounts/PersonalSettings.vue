@@ -9,6 +9,7 @@ import FormSection from "../../shared/components/FormSection.vue";
 import CodexModelControls from "../../shared/components/CodexModelControls.vue";
 import PermissionSelect from "../../shared/components/PermissionSelect.vue";
 import PasswordForm from "./PasswordForm.vue";
+import GitAccountSettings from "./GitAccountSettings.vue";
 defineProps({ notifications: { type: Object, required: true } });
 const form = reactive({ model: accountSession.settings.model || "", reasoningEffort: accountSession.settings.reasoningEffort || "", permissionMode: accountSession.settings.permissionMode || "ask", grouping: accountSession.settings.grouping || "type" });
 const models = useModelCatalog((url) => appApi(`/account${url}`));
@@ -44,6 +45,7 @@ async function save() {
       <p v-if="notifications.permission.value === 'denied'" class="field-hint">浏览器已拦截通知，请在网站权限中允许后重试。</p>
       <p v-if="notifications.error.value" class="error" role="alert">{{ notifications.error.value }}</p>
     </FormSection>
+    <GitAccountSettings />
     <FormSection title="账号安全" description="修改登录密码。"><PasswordForm /></FormSection>
   </section>
 </template>

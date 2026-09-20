@@ -65,7 +65,7 @@ async function serveApi(
     return json(response, 200, services.readSettings());
   if (request.method === "GET" && url.pathname === "/api/settings/refs")
     return json(response, 200, {
-      refs: services.listBaseRefs(url.searchParams.get("repository")),
+      refs: services.listBaseRefs(),
     });
   if (request.method === "GET" && url.pathname === "/api/models")
     return json(response, 200, {

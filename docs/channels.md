@@ -12,7 +12,6 @@
 - `src/application/workspace-manager.cjs`：组合工作区默认配置与各工作区独立的渠道/会话管理器；目录布局和磁盘记录由 `src/storage/workspace-store.cjs` 管理，输入校验由 `src/domain/workspace.cjs` 管理。
 - `src/config/execution-settings.cjs`：验证并保存执行位置、基准引用和初始化命令，保留同文件中的渠道凭据。
 - `src/channels/tapd/settings.cjs`：TAPD 项目绑定、Cookie 维护和只读连接检测。
-- `src/cli/tapd/`：TAPD 命令输入/输出适配；`src/application/tapd-run.cjs` 组合渠道与通用执行核心。
 
 各渠道拥有自己的默认配置（TAPD 为 `defaultTapdConfig()`），注册表通过 `defaultChannelConfig()` 组合后交给工作区创建；通用工作区不内嵌渠道状态码或流程字段。工厂每次返回独立对象，不能把一个工作区的设置变成另一个工作区的默认值。
 
@@ -44,7 +43,7 @@ TAPD 的开发人员、测试人员和 owner 字段只由 TAPD 适配器映射�
 
 每个应用工作区仅使用一个 `codex.repository`，所有渠道共用，不读取多仓库映射。不根据父目录层级猜测仓库。显式独立 CLI 配置仍可使用渠道仓库映射。
 
-Web 的 Worktree 基础目录在系统设置中配置，默认 `~/.codex-workspaces`；工作区保存相对目录，默认 `w-<工作区 UUID 前 8 位>`。最终位置为 `<系统基础目录>/<工作区相对目录>/<任务前缀>-<12 位任务短标识>`，使用标准路径拼接，不增加仓库哈希或重复 UUID 层级。显式独立 CLI 配置可使用 `codex.worktree_root` 或保存的 `worktreeRoot`。每次运行保存最终绝对路径；改配置仅影响新任务，历史任务续用原位置。
+Web 的成员目录基础路径在系统设置中配置，默认 `~/.codex-workspaces`。项目按远程 Git 地址克隆到 `<基础路径>/<用户名>/projects/<项目名>`，任务目录为 `<基础路径>/<用户名>/worktree/<项目名>/<任务前缀>-<12 位任务短标识>`，不接受用户指定工作区磁盘路径。显式独立 CLI 配置可使用 `codex.worktree_root` 或保存的 `worktreeRoot`。每次运行保存最终绝对路径；改系统配置仅影响新任务，已记录任务续用原位置。
 
 手动渠道的 `prepare` 还返回可选的 `worktreeSlug` 和 `worktreeName`，均只影响任务目录前缀。默认前缀取标题拼音前 16 位；自定义前缀接受 1–16 位英文字母、数字、短横线或下划线，以字母或数字开头，排除系统保留名。系统始终追加由仓库真实路径、完整工作区 UUID、渠道及来源范围/ID 生成的 12 位短标识；分支为 `codex/<短标识>`，与标题和前缀无关。不能由浏览器传入完整路径。运行 key 在各自工作区内保持来源身份。
 

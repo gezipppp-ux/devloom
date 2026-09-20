@@ -1,6 +1,6 @@
 # 独立安装与 Windows / Linux 部署
 
-应用为独立的 `web-coding` 项目。运行代码、前端构建、lint 与测试的依赖都在本项目声明，不需要 Vben、NestJS 或外部 workspace catalog。保留 `tapd:*` 命令用于渠道认证和排查。
+应用为独立的 `web-coding` 项目。运行代码、前端构建、lint 与测试的依赖都在本项目声明，不需要 Vben、NestJS 或外部 workspace catalog。
 
 ## 独立安装
 
@@ -15,9 +15,11 @@ npm start -- --port 4317
 
 如果本机 npm registry 配置异常，安装时可显式指定 `--registry https://registry.npmjs.org`。依赖由本项目的 `package-lock.json` 锁定，使用 `npm ci` 安装。
 
-Windows 也支持上述 npm 命令。`npm run tapd:web` 会先构建再启动，生产部署可先构建一次然后 `npm start`。
+Windows 也支持上述 npm 命令。生产部署先构建一次，再运行 `npm start`。
 
 更新源码后需要重新构建前端并重启 Web 服务。服务不会热加载后端代码；只构建或刷新页面可能使新版页面连接旧接口，出现“接口不存在”。确认没有执行中的任务后停止原服务，再从当前安装目录运行 `npm start -- --port 4317`，并刷新浏览器。重启继续使用同一 `RUNNER_DATA_DIR`，保留已有会话及 worktree。
+
+本次 Git／目录重构不兼容旧数据：使用新的独立 `RUNNER_DATA_DIR`，不迁移、不回退读取旧目录字段。旧数据库和业务文件不会自动删除。
 
 ## 持久化与配置
 
@@ -32,11 +34,11 @@ Windows 也支持上述 npm 命令。`npm run tapd:web` 会先构建再启动，
 
 启动前设置 `RUNNER_DATA_DIR` 为独立运行数据目录。业务数据保存在 `db/web-coding.sqlite`，独立凭据主密钥位于 `secrets/database.key`。`workspaces/` 仅保留执行图片缓存和必要锁。未设置变量时使用应用目录；静态页面始终取自安装包的 `web/dist`。账号与升级完整约定见 [账号与数据库](engineering/accounts-and-database.md)。
 
-先运行 `npm run accounts:init -- --username admin` 交互创建管理员，再启动和登录页面。管理员创建成员，成员各自创建私有工作区并配置仓库和 TAPD。Cookie 加密入库，不回显。旧配置和运行文件不迁移、不自动清理；业务仓库和 Worktree 保留原位。
+先运行 `npm run init:admin` 交互创建管理员，再启动和登录页面。密码需要输入两次且不回显，不会写入命令行或 npm 配置。管理员创建成员，成员各自创建私有工作区并配置仓库和 TAPD。Cookie 加密入库，不回显。旧配置和运行文件不迁移、不自动清理；业务仓库和 Worktree 保留原位。
 
-Web 不再接受 `--config`。CLI 使用 `--app-workspace <UUID>` 或 `RUNNER_WORKSPACE` 选择同一工作区；CLI 显式 `--config` 仍可用于独立排查。不要将凭据写入 service 文件或版本控制。
+Web 不接受 `--config`。不要将凭据写入 service 文件或版本控制。
 
-登录 Codex 的用户必须与运行服务的用户一致。管理员在「系统设置」维护 Worktree 基础目录；成员在自己的「工作区设置」中选择服务端代码仓库、Worktree 相对目录和基准分支。Linux 路径区分大小写，不接受 Windows 盘符路径。
+登录 Codex 的用户必须与运行服务的用户一致。管理员在「系统设置」维护成员目录基础路径并查看 Git 环境；成员在「个人设置」维护 Git 账号，创建工作区时输入远程克隆地址。项目与任务路径由服务生成，工作区只调整基准引用及初始化命令。SSH 生成需要服务器安装 OpenSSH（`ssh-keygen`）。Linux 路径区分大小写，不接受 Windows 盘符路径。
 
 Windows 路径需带完整盘符（例如 `D:\repos\project`）或使用 UNC 共享路径；`\repos\project`、`/repos/project` 依赖当前磁盘，不能作为明确的服务端绝对路径。中文、空格和 Windows 扩展路径可用于仓库及 worktree。Linux 保留路径中的空格并按大小写匹配。
 
@@ -109,15 +111,18 @@ ssh -N -L 4317:127.0.0.1:4317 runner@your-server
 初始化和 CLI 超时/停止时，Linux 终止独立进程组，Windows 使用 `taskkill /t` 清理普通子进程树。初始化适用于安装、构建等有明确结束时间的命令；主动脱离进程组的守护程序需要由独立服务管理。
 
 ```sh
-npm run lint
-npm test
+npx eslint src test web/src web/vite.config.mjs
+node --test test/architecture/*.test.cjs test/unit/*.test.cjs test/integration/*.test.cjs
 npm run build
 npx playwright install --with-deps chromium
-npm run test:web
+node test/browser/session.cjs
+node test/browser/workspaces.cjs
+node test/browser/dev.cjs
+node test/browser/accounts.cjs
 ```
 
 浏览器 smoke 在 Linux/macOS 默认使用 Playwright Chromium；Windows 默认使用本机 Edge。`BROWSER_CHANNEL` 可显式选择已安装的浏览器渠道。执行核心与 HTTP 测试不依赖浏览器、真实模型或 TAPD 写入。
 
-完整检查可直接运行 `npm run verify`，包含视觉截图。双平台 CI 节点准备和运行步骤见 [平台验证说明](engineering/platform-verification.md)。
+完整检查由 Jenkinsfile 按上述同一顺序执行，并额外包含视觉截图。双平台 CI 节点准备和运行步骤见 [平台验证说明](engineering/platform-verification.md)。
 
 Ubuntu 26.04 使用当前 Playwright 版本安装测试浏览器时，需要显式选择兼容下载目标；具体命令见平台验证说明中的 Ubuntu 26.04 小节。

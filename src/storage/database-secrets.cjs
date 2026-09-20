@@ -45,4 +45,22 @@ function decodeSettings(serialized, key) {
   return value;
 }
 
-module.exports = { loadEncryptionKey, encodeSettings, decodeSettings };
+function encodeSecret(value, key) {
+  const nonce = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, nonce);
+  const encrypted = Buffer.concat([cipher.update(JSON.stringify(value), "utf8"), cipher.final()]);
+  return JSON.stringify({ encrypted: 1, nonce: nonce.toString("base64"), tag: cipher.getAuthTag().toString("base64"), data: encrypted.toString("base64") });
+}
+
+function decodeSecret(serialized, key) {
+  const secret = JSON.parse(serialized);
+  if (secret?.encrypted !== 1 || typeof secret.nonce !== "string" || typeof secret.tag !== "string" || typeof secret.data !== "string")
+    throw new Error("Git 凭据加密数据无效。");
+  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(secret.nonce, "base64"));
+  decipher.setAuthTag(Buffer.from(secret.tag, "base64"));
+  return JSON.parse(Buffer.concat([
+    decipher.update(Buffer.from(secret.data, "base64")), decipher.final(),
+  ]).toString("utf8"));
+}
+
+module.exports = { loadEncryptionKey, encodeSettings, decodeSettings, encodeSecret, decodeSecret };

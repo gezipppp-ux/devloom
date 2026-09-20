@@ -80,10 +80,10 @@ test("SQLite initializes once, skips old files, encrypts credentials and isolate
   assert.equal(serialized.includes("private-cookie"), false);
   assert.equal(fs.existsSync(file), false);
   const settingsFile = path.join(root, "system-settings.json");
-  writeConfig(settingsFile, { worktreeBasePath: root });
+  writeConfig(settingsFile, { memberStorageRoot: root });
   const effective = executionConfig(readOptional(file), file);
-  assert.equal(effective.codex.worktree_root, path.join(root, "alice", "w-" + first.id.slice(0, 8)));
-  assert.equal(readSettings(file).worktreeMemberPath, path.join(root, "alice"));
+  assert.equal(effective.codex.worktree_root, path.join(root, "alice", "worktree", "w-" + first.id.slice(0, 8)));
+  assert.equal(readSettings(file).memberRoot, path.join(root, "alice"));
   const missingUsername = structuredClone(readOptional(file));
   delete missingUsername.workspace.owner_username;
   assert.throws(() => executionConfig(missingUsername, file), /账号|用户|所有者/);
@@ -91,8 +91,8 @@ test("SQLite initializes once, skips old files, encrypts credentials and isolate
   reopened = await initializeDatabase(root);
   assert.equal(readOptional(file).tapd.session.cookie_header, "private-cookie");
   assert.equal(readOptional(file).workspace.owner_username, "alice");
-  assert.equal(readSettings(file).worktreeMemberPath, path.join(root, "alice"));
-  assert.equal(readOptional(settingsFile).worktreeBasePath, root);
+  assert.equal(readSettings(file).memberRoot, path.join(root, "alice"));
+  assert.equal(readOptional(settingsFile).memberStorageRoot, root);
   assert.deepEqual((await databaseStatus(root)).pending, []);
 });
 

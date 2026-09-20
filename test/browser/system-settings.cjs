@@ -12,9 +12,9 @@ async function verifySystemSettings(browser, { origin, output, errors, directory
   for (let index = 0; index < 103; index++)
     fs.mkdirSync(path.join(base, `folder-${String(index).padStart(3, "0")}`));
   const initial = await (await page.request.get(`${origin}/api/system/settings`)).json();
-  const baseField = page.getByRole("textbox", { name: "Worktree 基础目录", exact: true });
+  const baseField = page.getByRole("textbox", { name: "成员目录基础路径", exact: true });
   const saveBase = page.getByRole("button", { name: "保存基础目录", exact: true });
-  const relativeField = page.getByRole("textbox", { name: "工作区 Worktree 目录", exact: true });
+  const readonlyRepository = page.getByLabel("项目代码仓库路径", { exact: true });
   const preview = page.getByLabel("工作区 Worktree 完整路径", { exact: true });
   const settingsEndpoint = `${origin}/api/workspaces/${workspace.id}/settings`;
   const readWorkspace = async () => (await page.request.get(settingsEndpoint)).json();
@@ -26,7 +26,7 @@ async function verifySystemSettings(browser, { origin, output, errors, directory
   const openWorkspace = async () => {
     await page.getByRole("button", { name: `切换工作区：${workspace.name}`, exact: true }).click();
     await page.getByRole("heading", { name: `${workspace.name} · 工作区设置`, exact: true }).waitFor();
-    await relativeField.waitFor();
+    await preview.waitFor();
   };
   const saveWorkspace = async () => {
     let captured;
@@ -38,13 +38,13 @@ async function verifySystemSettings(browser, { origin, output, errors, directory
     const response = page.waitForResponse((entry) => entry.url() === settingsEndpoint && entry.request().method() === "POST");
     await page.getByRole("button", { name: "保存执行设置", exact: true }).click();
     const held = await pending;
-    for (const label of ["项目代码仓库", "工作区 Worktree 目录", "新任务基准引用", "Worktree 初始化命令"])
+    for (const label of ["新任务基准引用", "Worktree 初始化命令"])
       assert.equal(await page.getByLabel(label, { exact: true }).isDisabled(), true,
         `${label} must not accept draft changes while the save response is pending`);
     await held.continue();
     assert.equal((await response).status(), 200);
     await page.getByText("设置已保存，新任务将使用此配置。", { exact: true }).waitFor();
-    assert.equal(await relativeField.isDisabled(), false, "successful saving unlocks the form");
+    assert.equal(await page.getByLabel("Worktree 初始化命令", { exact: true }).isDisabled(), false, "successful saving unlocks the form");
   };
   const runPosts = [];
   page.on("request", (request) => {
@@ -53,19 +53,19 @@ async function verifySystemSettings(browser, { origin, output, errors, directory
   });
   try {
     await page.goto(`${origin}/?workspace=${workspace.id}`);
-    await relativeField.waitFor();
+    await preview.waitFor();
     await openSystem();
     await page.waitForFunction((value) =>
-      document.querySelector('input[aria-label="Worktree 基础目录"]')?.value === value, initial.worktreeBasePath);
+      document.querySelector('input[aria-label="成员目录基础路径"]')?.value === value, initial.memberStorageRoot);
     await baseField.fill(base);
     const savedBase = page.waitForResponse((entry) => entry.url() === `${origin}/api/system/settings` && entry.request().method() === "POST");
     await saveBase.click();
     assert.equal((await savedBase).status(), 200);
-    assert.equal((await readSystem()).worktreeBasePath, base);
+    assert.equal((await readSystem()).memberStorageRoot, base);
     await page.reload();
     if (!(await baseField.count())) await openSystem();
     await page.waitForFunction((value) =>
-      document.querySelector('input[aria-label="Worktree 基础目录"]')?.value === value, base);
+      document.querySelector('input[aria-label="成员目录基础路径"]')?.value === value, base);
 
     const failedDraft = path.join(directory, "unsaved worktrees");
     await baseField.fill(failedDraft);
@@ -75,7 +75,7 @@ async function verifySystemSettings(browser, { origin, output, errors, directory
     await saveBase.click();
     await page.getByRole("alert").filter({ hasText: "模拟基础目录保存失败" }).waitFor();
     assert.equal(await baseField.inputValue(), failedDraft, "save failure retains the draft");
-    assert.equal((await readSystem()).worktreeBasePath, base, "save failure preserves the saved base directory");
+    assert.equal((await readSystem()).memberStorageRoot, base, "save failure preserves the saved base directory");
     await baseField.fill(base);
     await page.getByRole("button", { name: "浏览服务器目录", exact: true }).click();
     const picker = page.getByRole("dialog", { name: "选择服务器目录", exact: true });
@@ -100,39 +100,34 @@ async function verifySystemSettings(browser, { origin, output, errors, directory
     await picker.getByRole("button", { name: "选择此目录", exact: true }).click();
     await picker.waitFor({ state: "hidden" });
     assert.equal(await baseField.inputValue(), selected);
-    assert.equal((await readSystem()).worktreeBasePath, base, "directory selection changes only the unsaved draft");
+    assert.equal((await readSystem()).memberStorageRoot, base, "directory selection changes only the unsaved draft");
     const selectedSave = page.waitForResponse((entry) => entry.url() === `${origin}/api/system/settings` && entry.request().method() === "POST");
     await saveBase.click();
     assert.equal((await selectedSave).status(), 200);
     await page.screenshot({ path: path.join(output, "system-settings-desktop.png"), fullPage: true });
 
     await openWorkspace();
-    await page.waitForFunction((value) =>
-      document.querySelector('input[aria-label="工作区 Worktree 目录"]')?.value === value, `w-${workspace.id.slice(0, 8)}`);
-    await page.getByRole("textbox", { name: "项目代码仓库", exact: true }).fill(repository);
-    await relativeField.fill("team\\123");
-    const expected = path.join(selected, "team", "123");
-    await page.waitForFunction((value) =>
-      document.querySelector('[aria-label="工作区 Worktree 完整路径"]')?.textContent.trim() === value, expected);
-    assert.notEqual(await preview.innerText(), `${selected}team123`, "directory components must retain separators");
+    assert.equal(await readonlyRepository.innerText(), repository);
+    assert.equal(await page.getByRole("textbox", { name: "工作区 Worktree 目录", exact: true }).count(), 0);
+    const expected = path.join(selected, "worktree", "fixture");
+    await page.waitForFunction(value => document.querySelector('[aria-label="工作区 Worktree 完整路径"]')?.textContent.trim() === value, expected);
+    await page.getByLabel("Worktree 初始化命令", { exact: true }).fill('node -e "process.exit(0)"');
     await saveWorkspace();
     const saved = await readWorkspace();
     assert.equal(saved.worktreeRoot, expected);
-    assert.equal(saved.worktreeDirectory, "team/123");
-    assert.equal(saved.worktreeBasePath, selected);
+    assert.equal(saved.projectName, "fixture");
+    assert.equal(saved.memberStorageRoot, selected);
     await page.reload();
-    await page.waitForFunction((value) =>
-      document.querySelector('input[aria-label="工作区 Worktree 目录"]')?.value === value, saved.worktreeDirectory);
+    await preview.waitFor();
     assert.equal((await preview.innerText()).trim(), expected);
-    await relativeField.fill("../outside");
-    await page.getByRole("alert").filter({ hasText: /目录|路径/ }).first().waitFor();
-    assert.equal(await page.getByRole("button", { name: "保存执行设置", exact: true }).isDisabled(), true);
-    assert.equal((await readWorkspace()).worktreeRoot, expected, "invalid relative paths never change saved settings");
-    await relativeField.fill("team/123");
+    const auth = await (await page.request.get(`${origin}/api/auth/session`)).json();
+    const rejected = await page.request.post(settingsEndpoint, { headers: { origin, "x-tapd-token": auth.token }, data: { projectName: "../outside" } });
+    assert.equal(rejected.status(), 400);
+    assert.equal((await readWorkspace()).worktreeRoot, expected, "paths cannot be changed through settings");
 
     for (const [name, width, height] of [["desktop", 1440, 1100], ["mobile", 390, 844], ["narrow", 320, 844]]) {
       await page.setViewportSize({ width, height });
-      await relativeField.scrollIntoViewIfNeeded();
+      await preview.scrollIntoViewIfNeeded();
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
         `${name} workspace path preview must not overflow the viewport`);
       assert.ok(await page.locator("main").evaluate((element) => element.scrollWidth <= element.clientWidth),

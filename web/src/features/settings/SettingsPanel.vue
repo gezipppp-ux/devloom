@@ -5,24 +5,20 @@ import TapdSettings from "./TapdSettings.vue";
 import PromptSettings from "./PromptSettings.vue";
 import BaseRefSelect from "./BaseRefSelect.vue";
 import FormSection from "../../shared/components/FormSection.vue";
-const props = defineProps({ workspaceName: { type: String, default: "" }, canManageSystem: Boolean });
+const props = defineProps({
+  workspaceName: { type: String, default: "" },
+  canManageSystem: Boolean,
+});
 const emit = defineEmits(["saved", "rename-workspace", "system-settings"]);
 const form = reactive({
   repository: "",
   worktreeRoot: "",
-  worktreeDirectory: "",
   baseRef: "HEAD",
 });
 const initCommandsText = ref("");
-const worktreeBasePath = ref("");
-const worktreeMemberPath = ref("");
 let disposed = false;
 const savedSettings = ref(null);
 const settings = computed(() => ({
-  repository: form.repository,
-  ...(props.workspaceName
-    ? { worktreeDirectory: form.worktreeDirectory }
-    : { worktreeRoot: form.worktreeRoot }),
   baseRef: form.baseRef,
   initCommands: initCommandsText.value
     .split(/\r?\n/)
@@ -38,49 +34,9 @@ const platform = ref(""),
   busy = ref(true),
   error = ref(""),
   saved = ref(false);
-const worktreePreview = computed(() => {
-  const basePath = worktreeMemberPath.value || worktreeBasePath.value;
-  if (
-    !basePath ||
-    !form.worktreeDirectory.trim() ||
-    directoryError.value
-  )
-    return "";
-  const separator = platform.value === "win32" ? "\\" : "/";
-  return (
-    basePath.replace(/[\\/]+$/, "") +
-    separator +
-    form.worktreeDirectory.trim().split(/[\\/]/).join(separator)
-  );
-});
-const directoryError = computed(() => {
-  const value = form.worktreeDirectory;
-  if (!value || !props.workspaceName) return "";
-  if (value.length > 240) return "工作区 Worktree 目录最多 240 个字符。";
-  if (/^[\\/]|^[a-z]:/i.test(value))
-    return "请填写基础目录下的相对目录，不要填写绝对路径。";
-  const parts = value.split(/[\\/]/);
-  if (parts.some((part) => !part || part === "." || part === ".."))
-    return "目录不能包含空层级、. 或 ..，也不能以路径分隔符开头或结尾。";
-  if (
-    parts.some(
-      (part) =>
-        part !== part.trim() ||
-        /[<>:\"|?*\u0000-\u001f\u007f]/.test(part) ||
-        /[. ]$/.test(part) ||
-        /^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/i.test(part),
-    )
-  )
-    return "目录名称不能包含非法字符、Windows 设备名、首尾空格，或以句点结尾。";
-  return "";
-});
 const rules = computed(() =>
   Object.fromEntries(
-    [
-      "repository",
-      "baseRef",
-      props.workspaceName ? "worktreeDirectory" : "worktreeRoot",
-    ].map((key) => [
+    ["baseRef"].map((key) => [
       key,
       [{ required: true, whitespace: true, message: "请填写此项" }],
     ]),
@@ -92,8 +48,6 @@ onMounted(async () => {
     if (disposed) return;
     for (const key of Object.keys(form)) form[key] = result[key] ?? "";
     platform.value = result.platform;
-    worktreeBasePath.value = result.worktreeBasePath || "";
-    worktreeMemberPath.value = result.worktreeMemberPath || "";
     initCommandsText.value = (result.initCommands || []).join("\n");
     savedSettings.value = JSON.stringify(settings.value);
   } catch (e) {
@@ -106,7 +60,7 @@ onUnmounted(() => {
   disposed = true;
 });
 async function save() {
-  if (busy.value || !dirty.value || directoryError.value) return;
+  if (busy.value || !dirty.value) return;
   busy.value = true;
   error.value = "";
   saved.value = false;
@@ -115,8 +69,6 @@ async function save() {
     if (disposed) return;
     initCommandsText.value = result.initCommands.join("\n");
     for (const key of Object.keys(form)) form[key] = result[key] ?? "";
-    worktreeBasePath.value = result.worktreeBasePath || "";
-    worktreeMemberPath.value = result.worktreeMemberPath || "";
     await nextTick();
     if (disposed) return;
     form.baseRef = result.baseRef;
@@ -176,88 +128,37 @@ async function save() {
     <FormSection
       id="project-settings"
       title="项目环境"
-      description="配置代码仓库与独立开发目录。"
+      description="项目仓库和任务目录由创建工作区时的 Git 地址自动生成，不能在这里修改。"
     >
       <a-form :model="form" :rules="rules" layout="vertical" @finish="save">
-        <a-form-item label="项目代码仓库" name="repository"
-          ><input
-            v-model="form.repository"
-            aria-label="项目代码仓库"
-            :placeholder="
-              platform === 'win32'
-                ? 'D:\\Projects\\my-project'
-                : '/srv/repos/my-project'
-            "
-            required
-            :disabled="busy"
-        /></a-form-item>
+        <dl class="workspace-profile">
+          <dt>项目代码仓库</dt>
+          <dd>
+            <code aria-label="项目代码仓库路径">{{
+              form.repository || (busy ? "正在加载…" : "未加载")
+            }}</code>
+          </dd>
+          <dt>工作区 Worktree 目录</dt>
+          <dd>
+            <code aria-label="工作区 Worktree 完整路径">{{
+              form.worktreeRoot || "未加载"
+            }}</code>
+          </dd>
+        </dl>
         <p class="field-hint">
-          选择此工作区对应的 Git 仓库根目录，所有渠道任务都使用这个项目。
-        </p>
-        <template v-if="props.workspaceName">
-          <div class="worktree-base-summary">
-            <div>
-              <span>系统 Worktree 基础目录</span
-              ><code>{{
-                worktreeBasePath || (busy ? "正在加载…" : "未加载基础目录")
-              }}</code>
-            </div>
-            <button
-              v-if="canManageSystem"
-              type="button"
-              class="text-button"
-              @click="emit('system-settings')"
-            >
-              前往系统设置
-            </button>
-          </div>
-          <a-form-item label="工作区 Worktree 目录" name="worktreeDirectory">
-            <input
-              v-model="form.worktreeDirectory"
-              aria-label="工作区 Worktree 目录"
-              placeholder="例如：project-a"
-              :aria-invalid="Boolean(directoryError)"
-              aria-describedby="worktree-directory-hint"
-              required
-              :disabled="busy"
-            />
-          </a-form-item>
-          <p id="worktree-directory-hint" class="field-hint">
-            填写基础目录下的相对目录，可用 /
-            分隔多级目录，建议使用简短名称。系统自动补充分隔符；不支持绝对路径、.. 或非法目录名。
-          </p>
-          <p v-if="directoryError" class="error" role="alert">
-            {{ directoryError }}
-          </p>
-          <div class="worktree-path-preview">
-            <span>工作区 Worktree 完整路径</span>
-            <output aria-label="工作区 Worktree 完整路径">{{
-              worktreePreview || "填写有效的工作区目录后显示完整路径"
-            }}</output>
-            <p>
-              每个任务仅在此路径下创建一层短目录，由前缀与短标识组成，例如 ce-shi-a1b2c3d4e5f6。
-            </p>
-          </div>
-        </template>
-        <a-form-item v-else label="Worktree 根目录" name="worktreeRoot"
-          ><input
-            v-model="form.worktreeRoot"
-            aria-label="Worktree 根目录"
-            :placeholder="
-              platform === 'win32' ? 'D:\\wt' : '/srv/wt'
-            "
-            required
-            :disabled="busy"
-        /></a-form-item>
-        <p v-if="!props.workspaceName" class="field-hint">
-          建议选择简短且当前服务用户可写的路径。每个任务在其下创建一层短目录，例如 ce-shi-a1b2c3d4e5f6。
+          新任务会在上方 Worktree 目录下创建一层任务目录；路径由 Git
+          项目自动确定。
         </p>
         <a-form-item label="新任务基准引用" name="baseRef">
-          <BaseRefSelect v-model="form.baseRef" :repository="form.repository" :disabled="busy" />
+          <BaseRefSelect
+            v-model="form.baseRef"
+            :repository="form.repository"
+            :disabled="busy"
+          />
         </a-form-item>
         <p class="field-hint">
           可搜索本地分支、已获取的远程分支和标签，也可输入 commit
-          SHA。切换仓库后恢复为 HEAD。
+          SHA。列表只读取当前工作区的仓库，不会执行远端获取。
         </p>
         <a-form-item label="Worktree 初始化命令（可选）">
           <textarea
@@ -279,11 +180,7 @@ async function save() {
           设置已保存，新任务将使用此配置。
         </p>
         <div class="actions">
-          <button
-            class="primary"
-            type="submit"
-            :disabled="busy || !dirty || Boolean(directoryError)"
-          >
+          <button class="primary" type="submit" :disabled="busy || !dirty">
             {{ busy ? "正在处理…" : "保存执行设置" }}
           </button>
         </div>

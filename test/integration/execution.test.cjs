@@ -3,12 +3,19 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { test } = require('node:test');
-const { runRequirement } = require('../../src/application/tapd-run.cjs');
 const { runExecution } = require('../../src/execution/runner.cjs');
+const { createTapdChannel } = require('../../src/channels/tapd/adapter.cjs');
 const { saveState } = require('../../src/storage/run-state.cjs');
 const { SessionManager } = require('../../src/application/session-manager.cjs');
 const { FakeClient } = require('../fixtures/web-client.cjs');
 const { item, png, session, temporary, workflow } = require('../support/helpers.cjs');
+
+function runRequirement(input, dependencies = {}) {
+  return runExecution(
+    { ...input, channel: createTapdChannel(input.configFile, dependencies) },
+    dependencies,
+  );
+}
 
 function setup(t) {
   const directory = temporary(t);

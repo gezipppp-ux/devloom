@@ -3,7 +3,7 @@ const { appendArtifact } = require('../storage/artifact-store.cjs');
 const { spawn } = require('node:child_process');
 
 const { validateInitCommands } = require('../domain/init-commands.cjs');
-const { stopProcessTree } = require('../codex/process-tree.cjs');
+const { stopProcessTree } = require('../shared/process-tree.cjs');
 const { childEnvironment } = require('../codex/environment.cjs');
 
 async function initializeWorktree({

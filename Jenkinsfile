@@ -54,9 +54,9 @@ pipeline {
               dir("verification/${PLATFORM}") {
                 script {
                   if (isUnix()) {
-                    sh 'npm run verify'
+                    sh 'npx eslint src test web/src web/vite.config.mjs && node --test test/architecture/*.test.cjs test/unit/*.test.cjs test/integration/*.test.cjs && npm run build && node test/browser/session.cjs && node test/browser/workspaces.cjs && node test/browser/dev.cjs && node test/browser/accounts.cjs && node test/browser/visual.cjs'
                   } else {
-                    bat 'npm run verify'
+                    bat 'npx eslint src test web/src web/vite.config.mjs && node --test test/architecture/*.test.cjs test/unit/*.test.cjs test/integration/*.test.cjs && npm run build && node test/browser/session.cjs && node test/browser/workspaces.cjs && node test/browser/dev.cjs && node test/browser/accounts.cjs && node test/browser/visual.cjs'
                   }
                 }
               }

@@ -370,23 +370,6 @@ test('HTTP dispatches source searches and protects persisted settings with same-
   assert.ok(!settings.includes('secret-cookie'));
 });
 
-test('installation-independent data directory routes configuration outside the source package', (t) => {
-  const directory = temporary(t);
-  const output = execFileSync(
-    process.execPath,
-    [
-      '-e',
-      `process.stdout.write(require(${JSON.stringify(path.resolve(__dirname, '../../src/cli/arguments.cjs'))}).configPath())`,
-    ],
-    {
-      encoding: 'utf8',
-      windowsHide: true,
-      env: { ...process.env, RUNNER_DATA_DIR: directory, TAPD_CONFIG: '' },
-    },
-  );
-  assert.equal(output, path.join(directory, 'config', 'tapd.local.json'));
-});
-
 test('base reference options distinguish branches and tags, omit symbolic remotes and never switch branches', (t) => {
   const directory = temporary(t),
     repo = path.join(directory, 'repo');

@@ -1,5 +1,8 @@
 const { readSettings } = require("../config/execution-settings.cjs");
 const { repositoryCommonDirectory } = require("../git/repository.cjs");
+const { readOptional } = require("../storage/json-files.cjs");
+const { databaseForPath } = require("../storage/database-registry.cjs");
+const { GitAccountStore } = require("../storage/git-account-store.cjs");
 const {
   readRepositoryStatus,
   fetchRepository,
@@ -13,7 +16,7 @@ const {
 
 function repositoryContext(configFile) {
   const { repository, baseRef } = readSettings(configFile);
-  if (!repository) throw new Error("请先在工作区设置中配置项目代码仓库。");
+  if (!repository) throw new Error("工作区尚无项目仓库，请从 Git 远程地址创建工作区。");
   const commonDirectory = repositoryCommonDirectory(repository);
   return { repository, baseRef, commonDirectory };
 }
@@ -41,15 +44,21 @@ async function mutateRepository(configFile, action, input) {
   )
     throw new Error("请选择此仓库已有的远端。");
   const context = repositoryContext(configFile);
+  const config = readOptional(configFile);
+  const credentials = config.codex?.git_account_id ? {
+    account: new GitAccountStore(databaseForPath(configFile)).read(config.codex.git_account_id, config.workspace.owner_user_id),
+    remoteUrl: config.codex.remote_url,
+  } : undefined;
   return withRepositoryOperation(context.commonDirectory, async () => {
     let result;
     if (action === "fetch")
-      result = await fetchRepository(context.repository, input.remote);
+      result = await fetchRepository(context.repository, input.remote, credentials);
     else if (action === "update")
       result = await updateBaseBranch(
         context.repository,
         context.baseRef,
         input.remote,
+        credentials,
       );
     else throw new Error("不支持的 Git 操作。");
     writeFetchState(context.commonDirectory, result.remote, configFile);

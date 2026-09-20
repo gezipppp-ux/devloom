@@ -1,4 +1,6 @@
 const assert = require("node:assert/strict");
+const { randomUUID } = require("node:crypto");
+const { waitForClone } = require("../support/workspace-clones.cjs");
 const { execFileSync, fork } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
@@ -159,14 +161,14 @@ test("importing the development entrypoint is inert from a separate data directo
 
 test("development CLI serves Vite and workspace APIs on one guarded origin", async (t) => {
   const directory = temporary(t);
+  const { gitRemote } = require("../support/git-remote.cjs");
+  const remote = await gitRemote(path.join(directory, "git-server"));
+  t.after(() => remote.close());
   const accountPassword = "development-fixture-password";
   execFileSync(
     process.execPath,
     [
-      path.join(root, "src", "cli", "accounts.cjs"),
-      "init",
-      "--username",
-      "admin",
+      path.join(root, "src", "cli", "init-admin.cjs"),
     ],
     {
       cwd: directory,
@@ -252,14 +254,20 @@ test("development CLI serves Vite and workspace APIs on one guarded origin", asy
       "content-type": "application/json",
       "x-tapd-token": token,
     };
-    const payload = JSON.stringify({ name: "开发服务隔离测试" });
+    const system = await send(`${origin}/api/system/settings`, { method: "POST", headers, body: JSON.stringify({ memberStorageRoot: path.join(directory, "members") }) });
+    assert.equal(system.status, 200);
+    const account = await send(`${origin}/api/account/git-accounts`, { method: "POST", headers, body: JSON.stringify({ name: "fixture", authType: "http", remoteUrl: remote.remoteUrl, username: remote.username, password: remote.password }) });
+    assert.equal(account.status, 201, account.text);
+    const payload = JSON.stringify({ requestId: randomUUID(), name: "开发服务隔离测试", gitAccountId: JSON.parse(account.text).account.id, remoteUrl: remote.remoteUrl });
     const created = await send(`${origin}/api/workspaces`, {
       method: "POST",
       headers,
       body: payload,
     });
-    assert.equal(created.status, 201, created.text);
-    const workspace = JSON.parse(created.text);
+    assert.equal(created.status, 202, created.text);
+    const clone = await waitForClone(async () => JSON.parse((await send(`${origin}/api/workspace-clones/${JSON.parse(created.text).clone.id}`, { headers: { cookie } })).text).clone);
+    assert.equal(clone.status, "completed", JSON.stringify(clone));
+    const workspace = clone.workspace;
     assert.equal(workspace.name, "开发服务隔离测试");
     const configFile = path.join(directory, "db", "web-coding.sqlite");
     const database = require("better-sqlite3")(configFile, { readonly: true });

@@ -114,9 +114,9 @@ async function runExecution(
     store.save(state);
     if (dependencies.signal?.aborted) throw new Error("任务准备已停止。");
     if (config.workspace) {
-      if (config.codex.worktree_member_path)
-        assertMemberWorktreeLocation(config.codex.worktree_base_path, config.codex.worktree_member_path, worktree.path);
-      else assertWorktreeLocation(config.codex.worktree_base_path, worktree.path);
+      if (config.codex.member_root)
+        assertMemberWorktreeLocation(config.codex.member_storage_root, config.codex.member_root, worktree.path);
+      else assertWorktreeLocation(config.codex.member_storage_root, worktree.path);
     }
     services.createWorktree(worktree);
     if (config.codex.init_commands.length) {

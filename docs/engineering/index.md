@@ -18,7 +18,7 @@ Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install
 - For Web CLI changes, read [web-cli.md](./web-cli.md) for session identity, streaming, approval and HTTP contracts.
 - For source integration, settings or portability changes, read [channels-and-settings.md](./channels-and-settings.md).
 - Preserve `tapd.session` and `workflow` settings during authentication refresh. Never commit local credentials, browser state, requirement snapshots or execution logs.
-- `npm run tapd:web` builds and starts the service; `npm start` uses built assets. Other CLI scripts use `npm run <script> -- <arguments>`. Resolve explicit input paths against INIT_CWD when available; repository mappings are relative to the configuration file.
+- 对外 npm 命令只有 `init:admin`、`dev`、`dev:watch`、`build` 和 `start`；生产环境先构建再启动。运行参数由对应入口解析。
 - `npm run dev` serves Vite HMR and the API on one development port; `npm run dev:watch` also restarts the backend after source changes. The watch supervisor must shut down its child over IPC and wait for exit before replacement, including on Windows. Neither command automatically resumes interrupted requirements.
 
 ## Behavioral invariants
@@ -34,8 +34,8 @@ Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install
 
 ## Verification
 
-Windows / Linux 环境、统一 `npm run verify` 命令和 Jenkins 节点配置见 [platform-verification.md](./platform-verification.md)。
+Windows / Linux 环境和 Jenkins 节点配置见 [platform-verification.md](./platform-verification.md)。
 
-Run `npm test` and `npm run lint`. Tests use Node's test runner, mocked TAPD responses, a fixture Codex process and temporary real Git worktrees. Include coverage for authenticated files/redirects, image-only requirements, failed startup, duplicate suppression and transition retry. Read-only live search/detail/task-preview is appropriate for smoke tests; selecting and executing a real requirement is a separate operation from integrating the runner.
+Run the direct eslint and Node test commands from Jenkinsfile. Tests use Node's test runner, mocked TAPD responses, a fixture Codex process and temporary real Git worktrees. Include coverage for authenticated files/redirects, image-only requirements, failed startup, duplicate suppression and transition retry. Read-only live search/detail/task-preview is appropriate for smoke tests; selecting and executing a real requirement is a separate operation from integrating the runner.
 
-Web changes also require `npm run web:build` and `npm run test:web` (Windows Edge or Linux/macOS Playwright Chromium). Do not start real turns in an already merged requirement to validate the UI.
+Web changes also require `npm run build` and the browser scripts in Jenkinsfile (Windows Edge or Linux/macOS Playwright Chromium). Do not start real turns in an already merged requirement to validate the UI.

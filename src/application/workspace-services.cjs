@@ -65,8 +65,8 @@ class WorkspaceServices {
   savePromptSettings(input) {
     return presentPromptSettings(savePromptSettings(this.configFile, input));
   }
-  listBaseRefs(repository) {
-    return listBaseRefs(repository);
+  listBaseRefs() {
+    return listBaseRefs(readSettings(this.configFile).repository);
   }
   listModels() {
     return listModels(this.sessions.client);

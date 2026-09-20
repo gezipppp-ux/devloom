@@ -59,7 +59,7 @@ function assertWorktreeCheckoutPaths(plan) {
   }
   if (!issue) return;
   const advice = issue.maximumRootLength >= 3
-    ? `完整 Worktree 根目录最多允许 ${issue.maximumRootLength} 个字符；请缩短系统中的 Worktree 基础目录或工作区的 Worktree 相对目录后重试。`
+    ? `完整 Worktree 根目录最多允许 ${issue.maximumRootLength} 个字符；请缩短系统设置中的成员目录基础路径后重试。`
     : "仓库内文件层级本身过深，请先缩短仓库内路径后重试。";
   throw new Error(
     `无法创建 Worktree：基准提交中的${issue.kind === "directory" ? "目录" : "文件"}「${issue.relativePath}」拼接后为 ${issue.pathLength} 个字符，超过 Windows 的 ${issue.limit} 个字符限制。${advice}尚未创建任务目录或分支。`,

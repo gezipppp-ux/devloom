@@ -8,7 +8,9 @@ const csrf = require("@fastify/csrf-protection");
 const rateLimit = require("@fastify/rate-limit");
 const { root, dataRoot } = require("../config/runtime.cjs");
 const { WorkspaceManager } = require("../application/workspace-manager.cjs");
+const { WorkspaceCloneManager } = require("../application/workspace-clone-manager.cjs");
 const { SystemServices } = require("../application/system-services.cjs");
+const { GitAccountServices } = require("../application/git-account-services.cjs");
 const {
   AccountServices,
   initializeAccountServices,
@@ -52,6 +54,7 @@ function createWebServer({
   manager,
   channels = manager?.channels,
   workspaces: suppliedWorkspaces,
+  workspaceClones: suppliedWorkspaceClones,
   database,
   dataDirectory = database?.dataRoot || dataRoot,
   testIdentity = false,
@@ -80,7 +83,9 @@ function createWebServer({
   let fixtureSettings = { ...DEFAULT_ACCOUNT_SETTINGS };
   const fixturePreferences = new Map();
   let workspaces = suppliedWorkspaces;
+  let workspaceClones = suppliedWorkspaceClones;
   let accounts,
+    gitAccounts,
     systemServices,
     closing = false,
     closePromise;
@@ -91,11 +96,13 @@ function createWebServer({
       accounts = database
         ? new AccountServices(database)
         : await initializeAccountServices(dataDirectory);
+      gitAccounts = new GitAccountServices(accounts.database);
       if (!workspaces)
         workspaces = new WorkspaceManager({
           directory: path.join(dataDirectory, "workspaces"),
           database: accounts.database,
         });
+      workspaceClones ||= new WorkspaceCloneManager(accounts.database, workspaces);
       await instance.register(cookie);
       await instance.register(session, {
         secret: accounts.sessionSecret(),
@@ -320,6 +327,27 @@ function createWebServer({
             ? { permissionModes: [] }
             : await accounts.executionOptions(),
         );
+      if (url.pathname === "/api/account/git-accounts" && !testIdentity) {
+        if (request.method === "GET")
+          return json(response, 200, { accounts: gitAccounts.list(actor) });
+        if (request.method === "POST")
+          return json(response, 201, { account: await gitAccounts.save(actor, input, undefined, authorize) });
+      }
+      if (!testIdentity && request.method === "POST" && url.pathname === "/api/account/git-keys")
+        return json(response, 201, await gitAccounts.generateKey(actor, authorize));
+      if (!testIdentity && request.method === "POST" && url.pathname === "/api/account/git-accounts/check")
+        return json(response, 200, await gitAccounts.check(actor, input));
+      const gitAccountRoute = /^\/api\/account\/git-accounts\/([^/]+)(?:\/(test|delete))?$/.exec(url.pathname);
+      if (gitAccountRoute && !testIdentity && request.method === "POST") {
+        const [, id, action] = gitAccountRoute;
+        if (action === "test")
+          return json(response, 200, await gitAccounts.check(actor, input, id));
+        if (action === "delete") {
+          gitAccounts.remove(actor, id);
+          return json(response, 200, { ok: true });
+        }
+        return json(response, 200, { account: await gitAccounts.save(actor, input, id, authorize) });
+      }
       if (url.pathname === "/api/account/preferences") {
         const id = input.workspaceId || url.searchParams.get("workspaceId");
         if (!testIdentity || workspaces)
@@ -377,18 +405,27 @@ function createWebServer({
             workspaces: workspaces.list(contextActor),
           });
         if (request.method === "POST") {
-          const created = workspaces.save(input, undefined, contextActor);
-          request.applicationWorkspace = created.id;
-          return json(response, 201, created);
+          return json(response, 202, { clone: workspaceClones.start(input, actor) });
+        }
+      }
+      if (url.pathname === "/api/workspace-clones" && request.method === "GET")
+        return json(response, 200, { clones: workspaceClones.list(actor) });
+      const cloneRoute = /^\/api\/workspace-clones\/([^/]+)(\/dismiss)?$/.exec(url.pathname);
+      if (cloneRoute) {
+        if (request.method === "GET" && !cloneRoute[2])
+          return json(response, 200, { clone: workspaceClones.read(cloneRoute[1], actor) });
+        if (request.method === "POST" && cloneRoute[2]) {
+          workspaceClones.dismiss(cloneRoute[1], actor);
+          return json(response, 200, { ok: true });
         }
       }
       if (url.pathname.startsWith("/api/system/")) {
         if (!testIdentity) accounts.requireAdmin(actor);
         if (url.pathname === "/api/system/settings") {
           if (request.method === "GET")
-            return json(response, 200, systemServices.readSettings());
+            return json(response, 200, await systemServices.readSettings());
           if (request.method === "POST")
-            return json(response, 200, systemServices.saveSettings(input));
+            return json(response, 200, await systemServices.saveSettings(input));
         }
         if (
           request.method === "GET" &&
@@ -485,6 +522,7 @@ function createWebServer({
         app.close(),
         Promise.resolve().then(() => manager?.close()),
         Promise.resolve().then(() => workspaces?.close()),
+        Promise.resolve().then(() => workspaceClones?.close()),
         Promise.resolve().then(() => accounts?.close()),
       ]).then((results) => {
         if (ownedDatabase) accounts?.closeDatabase();

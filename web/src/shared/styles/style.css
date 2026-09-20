@@ -17,6 +17,7 @@
 .authentication-card > .muted { margin-bottom: 24px; }
 .authentication-card form > button.primary { width: 100%; }
 .account-list { list-style: none; margin: 0; padding: 0; }
+.git-account-settings .account-list { margin-bottom: 24px; }
 .account-list-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; padding: 20px 0; border-bottom: 1px solid var(--line); }
 .account-list-row:first-child { padding-top: 0; }
 .account-list-row:last-child { border-bottom: 0; padding-bottom: 0; }
@@ -311,7 +312,7 @@ pre {
 .directory-path-row > button {
   flex-shrink: 0;
 }
-.worktree-path-example,
+.storage-path-example,
 .worktree-path-preview {
   padding: 16px;
   margin-bottom: 20px;
@@ -319,13 +320,13 @@ pre {
   border-radius: var(--radius-control);
   background: var(--canvas);
 }
-.worktree-path-example strong,
+.storage-path-example strong,
 .worktree-path-preview > span {
   display: block;
   font-size: 12px;
   font-weight: 550;
 }
-.worktree-path-example code,
+.storage-path-example code,
 .worktree-path-preview output,
 .worktree-base-summary code {
   display: block;
@@ -333,7 +334,7 @@ pre {
   font: 12px/1.8 var(--font-code);
   overflow-wrap: anywhere;
 }
-.worktree-path-example p,
+.storage-path-example p,
 .worktree-path-preview p {
   margin: 8px 0 0;
   color: var(--muted);
@@ -1178,15 +1179,16 @@ main {
   width: min(560px, calc(100vw - 32px));
 }
 .workspace-dialog .git-risk-confirm {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 16px 0 0;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: start;
+  margin: 20px 0 0;
   color: var(--danger);
-  line-height: 1.8;
+  line-height: 1.6;
 }
 .git-risk-confirm input {
-  margin-top: 4px;
+  margin: 3px 0 0;
 }
 
 /* Conversation, artifacts and decisions */
@@ -1952,7 +1954,7 @@ main {
 .workspace-dialog .muted {
   margin-bottom: 24px;
 }
-.workspace-dialog label {
+.workspace-dialog label:not(.git-risk-confirm):not(.ant-form-item-label > label) {
   display: block;
   font-size: 13px;
   margin-bottom: 8px;
@@ -1978,7 +1980,7 @@ main {
   align-items: center;
   gap: 12px;
   padding: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
   background: var(--canvas);
@@ -2047,6 +2049,19 @@ main {
   padding: 20px 0;
   text-align: center;
 }
+.clone-progress-item {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--canvas);
+  overflow-wrap: anywhere;
+}
+.clone-progress-item h3 { margin: 0 0 12px; font-size: 15px; }
+.clone-progress-item progress { display: block; width: 100%; height: 12px; accent-color: var(--accent); }
+.clone-progress-dialog > .field-hint { margin-bottom: 12px; }
+.clone-progress-trigger { position: relative; }
+.clone-count { position: absolute; right: 0; top: 0; border-radius: 8px; padding: 0 4px; background: var(--accent); color: var(--surface); font-size: 10px; }
 
 /* Responsive layouts */
 @media (min-width: 601px) and (max-width: 1000px) {

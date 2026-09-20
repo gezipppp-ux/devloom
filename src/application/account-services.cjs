@@ -113,17 +113,6 @@ class AccountServices {
       must_change_password: 0,
     });
   }
-  async resetLocal(name, value) {
-    const row = this.store.byUsername(username(name));
-    if (!row) throw accountError("账号不存在。", 404);
-    return publicAccount(
-      this.store.update(row.id, {
-        password_hash: await hashPassword(value),
-        status: "active",
-        must_change_password: 1,
-      }),
-    );
-  }
   describe(row) {
     return publicAccount(row);
   }

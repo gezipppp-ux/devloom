@@ -16,6 +16,7 @@ const {
 } = require("../../src/config/prompt-settings.cjs");
 const { saveTapdSettings } = require("../../src/channels/tapd/settings.cjs");
 const { readOptional, writeConfig } = require("../../src/storage/json-files.cjs");
+const { seedWorkspaceProject } = require("../support/workspace-project.cjs");
 
 const manualTemplate = "自定义手动模板\n{{title}}\n{{content}}\n{{images}}";
 const tapdTemplate = "自定义 TAPD 模板\n{{title}}\n{{content}}\n{{supplement}}\n{{images}}";
@@ -32,7 +33,7 @@ function fixture(t) {
   const directory = temporary(t);
   writeConfig(path.join(directory, "system-settings.json"), {
     version: 1,
-    worktreeBasePath: path.join(directory, "trees"),
+    memberStorageRoot: path.join(directory, "trees"),
   });
   const workspaces = workspaceCatalog(path.join(directory, "workspaces"));
   const a = workspaces.save({ name: "模板项目 A" });
@@ -80,11 +81,12 @@ function configureRepository(directory, configFile) {
   );
   const settings = {
     repository,
-    worktreeDirectory: "project",
+    projectName: "project",
     baseRef: "main",
     initCommands: [],
   };
-  saveSettings(settings, configFile);
+  seedWorkspaceProject(configFile, repository, "project");
+  saveSettings({ baseRef: settings.baseRef, initCommands: settings.initCommands }, configFile);
   return settings;
 }
 
@@ -191,7 +193,8 @@ test("new fake sessions use saved prompts while existing snapshots and continuat
   const context = workspaces.get(a.id);
   const second = workspaces.get(b.id);
   const settings = configureRepository(directory, context.configFile);
-  saveSettings(settings, second.configFile);
+  seedWorkspaceProject(second.configFile, settings.repository, "project");
+  saveSettings({ baseRef: settings.baseRef, initCommands: settings.initCommands }, second.configFile);
   const { get, post } = await httpFixture(t, workspaces);
   const secondTemplate = manualTemplate.replace("自定义手动模板", "项目 B 独立模板");
   assert.equal((await post(a.id, { manual: manualTemplate })).status, 200);

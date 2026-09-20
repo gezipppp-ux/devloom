@@ -1127,13 +1127,10 @@ async function main() {
       '-m',
       'fixture',
     );
+    require('../../src/config/execution-settings.cjs').saveSettings({ repository, worktreeRoot: path.join(directory, 'custom trees'), baseRef: 'HEAD' }, path.join(directory, 'missing.json'));
     await page.getByRole('button', { name: '执行设置', exact: true }).click();
-    await page
-      .getByRole('textbox', { name: '项目代码仓库', exact: true })
-      .fill(repository);
-    await page
-      .getByRole('textbox', { name: 'Worktree 根目录', exact: true })
-      .fill(path.join(directory, 'custom trees'));
+    await page.waitForFunction(expected => document.querySelector('[aria-label="项目代码仓库路径"]')?.textContent === expected, repository);
+    assert.equal(await page.getByLabel('项目代码仓库路径', { exact: true }).innerText(), repository);
     await page
       .getByRole('combobox', { name: '新任务基准引用', exact: true })
       .fill('main');
@@ -1157,7 +1154,7 @@ async function main() {
     await page.getByRole('button', { name: '执行设置', exact: true }).click();
     await page.waitForFunction(
       (value) =>
-        document.querySelector('input[aria-label="Worktree 根目录"]')?.value ===
+        document.querySelector('[aria-label="工作区 Worktree 完整路径"]')?.textContent ===
         value,
       path.join(directory, 'custom trees'),
     );
