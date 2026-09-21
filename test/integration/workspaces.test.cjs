@@ -153,7 +153,7 @@ test("workspace settings and full execution paths reject symlink escapes without
   assert.throws(() => saveSettings(settings, file), /符号链接/);
   assert.deepEqual(fs.readdirSync(outside), []);
   assert.equal(fs.readFileSync(file, "utf8"), before);
-  fs.rmdirSync(path.join(base, "worktree"));
+  fs.unlinkSync(path.join(base, "worktree"));
 
   const saved = saveSettings(settings, file);
   const context = workspaces.get(a.id);
