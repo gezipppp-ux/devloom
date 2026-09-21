@@ -122,6 +122,13 @@ test("continuation requires the actual registered worktree Git identity", (t) =>
     worktree: { repository, path: worktree, branch: "codex/test" },
   };
   assert.equal(worktreeReason(state), null);
+  git("-C", worktree, "checkout", "-b", "follow-up-branch");
+  assert.equal(
+    worktreeReason(state),
+    null,
+    "a task may continue from the same registered worktree after a branch switch",
+  );
+  git("-C", worktree, "checkout", "codex/test");
   const marker = path.join(worktree, ".git");
   const originalMarker = fs.readFileSync(marker);
   fs.unlinkSync(marker);
@@ -193,4 +200,74 @@ test("delayed first-turn completion cannot overwrite a newer turn after reconnec
   assert.equal(store.read(key).execution.status, "running");
   await manager.interrupt(key);
   assert.equal(store.read(key).execution.status, "interrupted");
+});
+
+test("credential refresh waits for all workspace activity, then resumes the same session before the next turn", async t => {
+  const directory = temporary(t), store = new RunStore(directory), key = "1-2";
+  fs.mkdirSync(store.dir(key));
+  fs.writeFileSync(path.join(store.dir(key), "run.json"), JSON.stringify({
+    workitem: { id: "2", workspace_id: "1", title: "Fixture" },
+    worktree: { path: directory }, session_id: "original", execution: { status: "completed" },
+  }));
+  const client = new FakeClient();
+  let refreshes = 0;
+  client.refreshGitCredentials = () => { refreshes++; client.emit("disconnected", new Error("credentials changed")); };
+  const manager = new SessionManager({ store, client, worktreeReason: () => null });
+  t.after(() => manager.close());
+  const runtime = manager.runtime(key, "original");
+  runtime.connected = true;
+  const peer = manager.runtime("1-3", "peer");
+  for (const field of ["pipelineActive", "turnId"]) {
+    peer[field] = true;
+    manager.refreshGitCredentials();
+    peer[field] = null;
+  }
+  for (const status of ["preparing", "initializing", "starting", "running"]) {
+    peer.status = status;
+    manager.refreshGitCredentials();
+  }
+  peer.status = "idle";
+  peer.requests.set("approval", {});
+  manager.refreshGitCredentials();
+  peer.requests.clear();
+  manager.operations.set("1-3", Promise.resolve());
+  manager.refreshGitCredentials();
+  manager.operations.clear();
+  manager.startingRequests = 1;
+  manager.refreshGitCredentials();
+  manager.startingRequests = 0;
+  assert.equal(refreshes, 0);
+  manager.sessions.delete("1-3");
+  const next = await manager.send(key, "Continue with updated credentials");
+  assert.equal(refreshes, 1);
+  assert.equal(next.sessionId, "original");
+  const resume = client.calls.findIndex(call => call.method === "thread/resume");
+  const turn = client.calls.findIndex(call => call.method === "turn/start");
+  assert.ok(resume >= 0 && turn > resume);
+  assert.equal(client.calls[resume].params.threadId, "original");
+  await manager.send(key, "Steer the running turn");
+  assert.equal(refreshes, 1, "steering must not restart an active client");
+});
+
+test("asynchronous startup validation fences credential replacement and releases the fence on failure", async t => {
+  let rejectSource, enteredSource;
+  const source = new Promise((_, reject) => { rejectSource = reject; });
+  const entered = new Promise(resolve => { enteredSource = resolve; });
+  const client = new FakeClient();
+  let refreshes = 0;
+  client.refreshGitCredentials = () => { refreshes++; };
+  const manager = new SessionManager({ store: new RunStore(temporary(t)), client,
+    channels: { get: () => ({ resolve: () => { enteredSource(); return source; } }) },
+  });
+  t.after(() => manager.close());
+  const starting = manager.start({ channel: "manual" });
+  await entered;
+  assert.equal(refreshes, 1);
+  manager.refreshGitCredentials();
+  assert.equal(refreshes, 1);
+  rejectSource(new Error("fixture source validation failed"));
+  await assert.rejects(starting, /fixture source validation failed/);
+  assert.equal(manager.startingRequests, 0);
+  manager.refreshGitCredentials();
+  assert.equal(refreshes, 2);
 });

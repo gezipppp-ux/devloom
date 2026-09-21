@@ -7,7 +7,7 @@ const { stopProcessTree } = require('../shared/process-tree.cjs');
 const { childEnvironment } = require('./environment.cjs');
 
 class AppServerClient extends EventEmitter {
-  constructor(config = {}) {
+  constructor(config = {}, { gitCredentialProvider, gitCredentialRevision } = {}) {
     super();
     this.config = config;
     this.pending = new Map();
@@ -15,6 +15,9 @@ class AppServerClient extends EventEmitter {
     this.closed = false;
     this.closedChildren = new WeakSet();
     this.stopping = new Set();
+    this.gitCredentialProvider = gitCredentialProvider;
+    this.gitCredentialRevision = gitCredentialRevision;
+    this.gitCredentials = null;
   }
 
   async connect() {
@@ -35,7 +38,12 @@ class AppServerClient extends EventEmitter {
 
   async open() {
     const { command, args } = this.validateCommand();
-    const env = childEnvironment();
+    const credentials = await this.getGitCredentials();
+    if (this.closed) throw new Error('Web CLI 服务已关闭。');
+    const env = {
+      ...childEnvironment(process.env, { stripGit: Boolean(credentials) }),
+      ...(credentials?.env || {}),
+    };
     const child = spawn(command, [...args, 'app-server', '--stdio'], {
       env,
       shell: false,
@@ -104,6 +112,32 @@ class AppServerClient extends EventEmitter {
     this.write({ method: 'initialized', params: {} });
   }
 
+  async getGitCredentials() {
+    if (!this.gitCredentialProvider || this.gitCredentials)
+      return this.gitCredentials;
+    const credentials = await this.gitCredentialProvider();
+    if (!credentials || typeof credentials !== 'object' ||
+      !credentials.env || typeof credentials.env !== 'object' ||
+      Array.isArray(credentials.env))
+      throw new Error('Git 凭据环境无效。');
+    if (this.closed) {
+      await credentials.dispose?.();
+      throw new Error('Web CLI 服务已关闭。');
+    }
+    this.gitCredentials = credentials;
+    return credentials;
+  }
+
+  // The application must first fence active turns, approvals and startup work.
+  // This synchronous check/disconnect cannot race another command reservation.
+  refreshGitCredentials() {
+    if (this.closed || !this.child || this.pending.size ||
+      !this.gitCredentials || !this.gitCredentialRevision) return false;
+    if (this.gitCredentialRevision() === this.gitCredentials.revision) return false;
+    this.disconnected(new Error('Git 账号已更新，将使用新凭据继续原 session。'));
+    return true;
+  }
+
   validateCommand() {
     if (this.closed) throw new Error('Web CLI 服务已关闭。');
     return resolveCodex(this.config);
@@ -150,6 +184,8 @@ class AppServerClient extends EventEmitter {
   disconnected(error) {
     if (!this.child) return;
     const child = this.child;
+    const credentials = this.gitCredentials;
+    this.gitCredentials = null;
     this.child = null;
     this.connection = null;
     for (const pending of this.pending.values()) {
@@ -160,17 +196,21 @@ class AppServerClient extends EventEmitter {
     const closed = this.closedChildren.has(child)
       ? Promise.resolve()
       : new Promise((resolve) => child.once('close', resolve));
-    const stopped = Promise.all([closed, stopProcessTree(child)]).finally(() =>
-      this.stopping.delete(stopped),
-    );
+    const stopped = Promise.all([closed, stopProcessTree(child)])
+      .then(() => credentials?.dispose?.())
+      .finally(() => this.stopping.delete(stopped));
+    stopped.catch(() => this.emit('diagnostic', '无法清理 Git 临时配置，请检查服务端临时目录权限。'));
     this.stopping.add(stopped);
     this.emit('disconnected', error);
   }
 
-  close() {
+  async close() {
     this.closed = true;
     this.disconnected(new Error('Web CLI 服务已关闭。'));
-    return Promise.allSettled([...this.stopping]);
+    await Promise.allSettled([...this.stopping]);
+    const credentials = this.gitCredentials;
+    this.gitCredentials = null;
+    await credentials?.dispose?.();
   }
 }
 

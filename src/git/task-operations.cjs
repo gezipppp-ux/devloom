@@ -17,12 +17,11 @@ function taskIdentity(state) {
   return { ...tree, repository };
 }
 
-function verifyWorktree(state) {
+function inspectWorktree(state) {
   const tree = taskIdentity(state);
   const entry = registeredWorktrees(tree.repository).find((candidate) => samePath(candidate.path, tree.path));
-  if (!entry || entry.branch !== `refs/heads/${tree.branch}` || entry.prunable)
-    throw new Error("原 Worktree 已移除或不再属于任务分支。");
-  if (entry.locked) throw new Error("Worktree 已被 Git 锁定，请先解除锁定。");
+  if (!entry || entry.prunable)
+    throw new Error("原 Worktree 已移除或不再属于原仓库。");
   if (fs.lstatSync(tree.path).isSymbolicLink() || !fs.lstatSync(path.join(tree.path, ".git")).isFile())
     throw new Error("Worktree 路径或 Git 标记已变化，不能删除。");
   const common = repositoryCommonDirectory(tree.repository);
@@ -31,12 +30,21 @@ function verifyWorktree(state) {
   const topLevel = git(tree.path, ["rev-parse", "--show-toplevel"]);
   const backlink = fs.readFileSync(path.join(directory, "gitdir"), "utf8").replace(/\r?\n$/, "");
   const real = (value) => fs.realpathSync.native(value);
+  const current = currentBranch(tree);
   if (!samePath(real(common), real(actualCommon)) ||
       !samePath(real(topLevel), real(tree.path)) ||
       samePath(real(repositoryRoot(common)), real(tree.path)) ||
       !samePath(real(path.resolve(directory, backlink)), real(path.join(tree.path, ".git"))) ||
-      git(tree.path, ["symbolic-ref", "--quiet", "HEAD"]) !== `refs/heads/${tree.branch}`)
-    throw new Error("Worktree 的仓库、分支或注册关系已变化，不能删除。");
+      (entry.branch || null) !== (current ? `refs/heads/${current}` : null))
+    throw new Error("Worktree 的仓库或注册关系已变化，不能删除。");
+  return { ...tree, currentBranch: current, locked: entry.locked };
+}
+
+function verifyWorktree(state) {
+  const tree = inspectWorktree(state);
+  if (tree.currentBranch !== tree.branch)
+    throw new Error("原 Worktree 已不再属于任务分支。");
+  if (tree.locked) throw new Error("Worktree 已被 Git 锁定，请先解除锁定。");
   const reason = operationReason(tree.path);
   if (reason) throw new Error(reason);
   return tree;
@@ -126,6 +134,16 @@ function pathExists(value) {
   catch (error) { if (error.code === "ENOENT") return false; throw error; }
 }
 
+function currentBranch(tree) {
+  if (!tree?.path) return null;
+  try {
+    return git(tree.path, ["symbolic-ref", "--quiet", "--short", "HEAD"]).trim() || null;
+  } catch (error) {
+    if (error.status === 1) return null;
+    return null;
+  }
+}
+
 function recoveryState(state, deletion) {
   const tree = taskIdentity(state);
   if (!samePath(deletion.path || "", tree.path) || deletion.branch !== tree.branch ||
@@ -145,6 +163,7 @@ function recoveryState(state, deletion) {
 function readTaskGit(state, deletion = {}) {
   const empty = {
     path: state.worktree?.path || null, branch: state.worktree?.branch || null,
+    currentBranch: currentBranch(state.worktree),
     head: null, upstream: null, unpublished: null, ahead: null, behind: null,
     upstreamMissing: null, warning: null,
     changedFiles: null, untrackedFiles: null, ignoredFiles: null,
@@ -161,9 +180,11 @@ function readTaskGit(state, deletion = {}) {
         deleteReason: recovery.head ? null : "Worktree 和本地分支已删除。",
       };
     }
-    const tree = verifyWorktree(state);
+    const tree = inspectWorktree(state);
     const head = git(tree.path, ["rev-parse", "--verify", "HEAD"]);
-    const upstreamRef = git(tree.path, ["for-each-ref", "--format=%(upstream)", `refs/heads/${tree.branch}`]);
+    const upstreamRef = tree.currentBranch
+      ? git(tree.path, ["for-each-ref", "--format=%(upstream)", `refs/heads/${tree.currentBranch}`])
+      : "";
     const upstream = upstreamRef.startsWith("refs/remotes/")
       ? upstreamRef.slice("refs/remotes/".length)
       : null;
@@ -188,12 +209,21 @@ function readTaskGit(state, deletion = {}) {
     const untrackedFiles = entries.filter(({ code }) => code === "??").length;
     const ignoredFiles = entries.filter(({ code }) => code === "!!").length;
     const status = {
-      ...empty, path: tree.path, branch: tree.branch, head, upstream,
+      ...empty, path: tree.path, branch: tree.branch, currentBranch: tree.currentBranch, head, upstream,
       unpublished: !upstream, ahead, behind, changedFiles, untrackedFiles, ignoredFiles,
       upstreamMissing,
       warning: upstreamMissing ? "远端上游已不存在，无法计算待推送数量。" : null,
       clean: changedFiles + untrackedFiles === 0,
     };
+    const deleteReason = tree.currentBranch !== tree.branch
+      ? "当前 Worktree 已切换到其他分支；请恢复记录的任务分支后再删除。"
+      : tree.locked
+        ? "Worktree 已被 Git 锁定，请先解除锁定。"
+        : operationReason(tree.path);
+    if (deleteReason) {
+      status.deleteReason = deleteReason;
+      return status;
+    }
     try {
       status.statusToken = statusToken(tree, head, { ref: upstreamRef, ahead, behind }, entries);
       status.canDelete = true;

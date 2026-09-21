@@ -110,6 +110,19 @@ async function verifyGit(browser, { origin, output, errors, directory, workspace
     const originalSession = detail.sessionId;
     await refreshGit();
     await page.getByRole("button", { name: "删除 Worktree…", exact: true }).waitFor({ state: "visible" });
+    git(tree, "checkout", "-b", "follow-up-branch");
+    const switched = await (await page.request.get(`${api}/runs/${key}`)).json();
+    assert.ok(!switched.readOnlyReason, JSON.stringify(switched));
+    await refreshGit();
+    await gitPanel.getByText("follow-up-branch", { exact: true }).waitFor();
+    assert.equal(
+      await page.getByRole("button", { name: "删除 Worktree…", exact: true }).isDisabled(),
+      true,
+      "switching branches keeps destructive cleanup bound to the recorded task branch",
+    );
+    git(tree, "checkout", branch);
+    await refreshGit();
+    await gitPanel.getByText(branch, { exact: true }).waitFor();
     git(tree, "push", "-u", "origin", branch);
     fs.writeFileSync(path.join(tree, "task-change.txt"), "unpublished task commit\n");
     commit(tree, "local task commit");

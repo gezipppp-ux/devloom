@@ -38,17 +38,23 @@ class SessionManager extends EventEmitter {
     store,
     run = runExecution,
     channels,
+    gitCredentialProvider,
+    gitCredentialRevision,
     worktreeReason = defaultWorktreeReason,
     apiPrefix = "/api",
   }) {
     super();
     this.configFile = configFile;
     this.store = store || new RunStore(runsDirectory);
-    this.client = client || new AppServerClient(readOptional(configFile).codex);
+    this.client = client || new AppServerClient(readOptional(configFile).codex, {
+      gitCredentialProvider,
+      gitCredentialRevision,
+    });
     this.channels = channels || defaultChannels(configFile);
     this.run = run;
     this.sessions = new Map();
     this.operations = new Map();
+    this.startingRequests = 0;
     this.closing = false;
     this.worktreeReason = worktreeReason;
     this.git = new SessionGit(this);
@@ -187,6 +193,7 @@ class SessionManager extends EventEmitter {
 
   async send(key, message, images) {
     const validated = validateSessionMessage(message, images);
+    this.refreshGitCredentials();
     return this.exclusive(key, async () => {
       const attachments = validated.images.map((id) =>
         this.store.messageImages(key).read(id),
@@ -313,6 +320,16 @@ class SessionManager extends EventEmitter {
   }
 
   async start(input) {
+    this.refreshGitCredentials();
+    this.startingRequests++;
+    try {
+      return await this.resolveAndLaunch(input);
+    } finally {
+      this.startingRequests--;
+    }
+  }
+
+  async resolveAndLaunch(input) {
     this.assertOpen();
     validateTaskMetadata(input.metadata === undefined ? {} : input.metadata);
     const channel = this.channels.get(input.channel || "tapd");
@@ -361,6 +378,7 @@ class SessionManager extends EventEmitter {
     metadata = defaultTaskMetadata(item),
   ) {
     this.assertOpen();
+    this.refreshGitCredentials();
     metadata = validateTaskMetadata(metadata);
     config = executionConfig(config, this.configFile);
     const source = sourceFor(channel.id, item);
@@ -537,6 +555,16 @@ class SessionManager extends EventEmitter {
 
   assertOpen() {
     if (this.closing) throw new Error("会话服务正在关闭，不能继续操作。");
+  }
+
+  refreshGitCredentials() {
+    this.assertOpen();
+    if (this.operations.size || this.startingRequests ||
+      [...this.sessions.values()].some(runtime =>
+        runtime.pipelineActive || runtime.turnId || runtime.requests.size ||
+        ["preparing", "initializing", "starting", "running"].includes(runtime.status),
+      )) return;
+    this.client.refreshGitCredentials?.();
   }
 
   close() {

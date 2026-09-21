@@ -18,6 +18,7 @@ const {
 } = require("../domain/git-account.cjs");
 const { validateWorkspaceInput } = require("../domain/workspace.cjs");
 const { cloneProject } = require("../git/project-clone.cjs");
+const { createGitCredentialEnvironment } = require("../git/account-credentials.cjs");
 
 function presentWorkspace(config) {
   return {
@@ -148,16 +149,39 @@ class WorkspaceManager {
   }
 
   get(id, actor) {
-    this.read(id, actor);
+    const config = this.store.read(id, this.owner(actor));
     if (!this.contexts.has(id)) {
       const { configFile, uploadDirectory, runsDirectory } =
         this.store.paths(id);
       const channels = defaultChannels(configFile, { uploadDirectory });
+      const gitCredentialProvider =
+        this.store.database &&
+        config.codex?.git_account_id &&
+        config.codex?.remote_url &&
+        config.workspace?.owner_user_id
+          ? async () => {
+              const account = new GitAccountStore(this.store.database).read(
+                config.codex.git_account_id,
+                config.workspace.owner_user_id,
+              );
+              return createGitCredentialEnvironment(
+                account,
+                config.codex.remote_url,
+              );
+            }
+          : undefined;
+      const gitCredentialRevision = gitCredentialProvider
+        ? () => new GitAccountStore(this.store.database).read(
+            config.codex.git_account_id, config.workspace.owner_user_id,
+          ).revision
+        : undefined;
       const sessions = this.createManager({
         configFile,
         channels,
         runsDirectory,
         apiPrefix: `/api/workspaces/${id}`,
+        gitCredentialProvider,
+        gitCredentialRevision,
       });
       this.contexts.set(id, {
         configFile,

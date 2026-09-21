@@ -35,6 +35,11 @@ const uncommitted = computed(() =>
     ? git.value.changedFiles + git.value.untrackedFiles
     : "未知",
 );
+const currentBranch = computed(() => {
+  if (git.value && Object.hasOwn(git.value, "currentBranch"))
+    return git.value.currentBranch || "HEAD（分离）";
+  return props.worktree?.branch || "准备中";
+});
 
 async function refresh() {
   const current = ++revision;
@@ -93,7 +98,7 @@ onUnmounted(() => {
       <dl class="git-facts">
         <dt>当前分支</dt>
         <dd>
-          <code>{{ git?.branch || worktree?.branch || "准备中" }}</code>
+          <code>{{ currentBranch }}</code>
         </dd>
         <dt>Worktree 目录</dt>
         <dd>

@@ -5,7 +5,7 @@ const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
 const execute = promisify(execFile);
 
-async function withSshKeyDirectory(operation) {
+async function createSshKeyDirectory() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "web-coding-ssh-"));
   try {
     if (process.platform === "win32") {
@@ -24,17 +24,51 @@ async function withSshKeyDirectory(operation) {
         { windowsHide: true, timeout: 5000 },
       );
     } else fs.chmodSync(directory, 0o700);
-    return await operation(directory);
-  } finally {
+    return directory;
+  } catch (error) {
     fs.rmSync(directory, { recursive: true, force: true, maxRetries: 3 });
+    throw error;
   }
 }
 
-function withSshPrivateKey(privateKey, operation) {
-  return withSshKeyDirectory(async (directory) => {
+function removeSshKeyDirectory(directory) {
+  fs.rmSync(directory, { recursive: true, force: true, maxRetries: 3 });
+}
+
+async function withSshKeyDirectory(operation) {
+  const directory = await createSshKeyDirectory();
+  try {
+    return await operation(directory);
+  } finally {
+    removeSshKeyDirectory(directory);
+  }
+}
+
+async function createSshPrivateKeyFile(privateKey) {
+  const directory = await createSshKeyDirectory();
+  try {
     const file = path.join(directory, "identity");
     fs.writeFileSync(file, privateKey, { mode: 0o600, flag: "wx" });
-    return operation(file);
-  });
+    return {
+      file,
+      dispose: () => removeSshKeyDirectory(directory),
+    };
+  } catch (error) {
+    removeSshKeyDirectory(directory);
+    throw error;
+  }
 }
-module.exports = { withSshKeyDirectory, withSshPrivateKey };
+
+async function withSshPrivateKey(privateKey, operation) {
+  const key = await createSshPrivateKeyFile(privateKey);
+  try {
+    return await operation(key.file);
+  } finally {
+    key.dispose();
+  }
+}
+module.exports = {
+  withSshKeyDirectory,
+  withSshPrivateKey,
+  createSshPrivateKeyFile,
+};

@@ -138,6 +138,16 @@ test("task Git distinguishes unpublished branches, upstream ahead/behind and tra
   assert.equal(unknown.canDelete, true);
 });
 
+test("task Git exposes the live branch but keeps branch-changing worktrees ineligible for deletion", (t) => {
+  const { state } = fixture(t);
+  command(state.worktree.path, "checkout", "-b", "follow-up-branch");
+  const status = readTaskGit(state);
+  assert.equal(status.branch, state.worktree.branch);
+  assert.equal(status.currentBranch, "follow-up-branch");
+  assert.equal(status.canDelete, false);
+  assert.match(status.deleteReason, /切换到其他分支/);
+});
+
 test("a removed remote upstream allows cleanup only after confirming unknown push risk", async (t) => {
   const { repository, state } = fixture(t);
   command(state.worktree.path, "push", "-u", "origin", state.worktree.branch);

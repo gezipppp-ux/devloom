@@ -35,6 +35,11 @@ class GitAccountStore {
         .get(id, userId),
     );
   }
+  isReferenced(id, userId) {
+    return this.db.prepare(
+      "SELECT s.data FROM workspace_settings s JOIN workspaces w ON w.id=s.workspace_id WHERE w.owner_user_id=?",
+    ).all(userId).some(({ data }) => JSON.parse(data).codex?.git_account_id === id);
+  }
   save(userId, value, previous, keyDraftId) {
     return this.db
       .transaction(() => {
@@ -49,6 +54,8 @@ class GitAccountStore {
               };
         try {
           if (previous) {
+            if (previous.authType !== value.authType && this.isReferenced(id, userId))
+              throw accountError("该 Git 账号仍被工作区使用，不能切换认证方式；请新建另一种认证方式的账号。", 409);
             const updated = this.db
               .prepare(
                 "UPDATE user_git_accounts SET name=?,auth_type=?,remote_url=?,credentials=?,revision=revision+1,updated_at=? WHERE id=? AND user_id=? AND revision=?",
@@ -132,13 +139,7 @@ class GitAccountStore {
   remove(id, userId) {
     return this.db
       .transaction(() => {
-        const referenced = this.db
-          .prepare(
-            "SELECT s.data FROM workspace_settings s JOIN workspaces w ON w.id=s.workspace_id WHERE w.owner_user_id=?",
-          )
-          .all(userId)
-          .some(({ data }) => JSON.parse(data).codex?.git_account_id === id);
-        if (referenced)
+        if (this.isReferenced(id, userId))
           throw accountError("该 Git 账号仍被工作区使用，不能删除。", 409);
         if (
           !this.db

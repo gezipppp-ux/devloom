@@ -1,7 +1,11 @@
 const { execFile } = require("node:child_process");
 const { remoteUrl, remoteAuthType } = require("../domain/git-account.cjs");
-const { withSshPrivateKey } = require("./ssh-key-files.cjs");
+const {
+  withSshPrivateKey,
+  createSshPrivateKeyFile,
+} = require("./ssh-key-files.cjs");
 const { runClone } = require("./clone-process.cjs");
+const { createGitIdentityConfig } = require("./identity-config.cjs");
 
 function execute(args, env, timeout = 60000) {
   return new Promise((resolve, reject) => {
@@ -35,24 +39,16 @@ function shellPath(file) {
   return "'" + file.replaceAll("\\", "/").replaceAll("'", "'\\''") + "'";
 }
 
-async function withGitAccount(account, remote, operation, executeCommand = execute) {
+function gitAccountEnvironment(account, remote) {
   remoteUrl(remote);
   if (account.authType !== remoteAuthType(remote))
     throw new Error("Git 认证方式与远程地址不匹配。");
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([key]) =>
-        !/^(?:GIT_|GCM_|TAPD_|DSC_TOKEN$|SSH_AUTH_SOCK$|RUNNER_ENCRYPTION_KEY$)/i.test(
-          key,
-        ),
-    ),
-  );
-  Object.assign(env, {
+  const env = {
     GIT_TERMINAL_PROMPT: "0",
     GCM_INTERACTIVE: "never",
     GIT_CONFIG_GLOBAL: process.platform === "win32" ? "NUL" : "/dev/null",
     GIT_CONFIG_NOSYSTEM: "1",
-  });
+  };
   const config = {
     "credential.helper": "",
     "credential.interactive": "false",
@@ -70,6 +66,45 @@ async function withGitAccount(account, remote, operation, executeCommand = execu
     env[`GIT_CONFIG_KEY_${index}`] = key;
     env[`GIT_CONFIG_VALUE_${index}`] = value;
   });
+  return env;
+}
+
+function isolatedGitEnvironment() {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([key]) =>
+        !/^(?:GIT_|GCM_|TAPD_|DSC_TOKEN$|SSH_AUTH_SOCK$|RUNNER_ENCRYPTION_KEY$)/i.test(
+          key,
+        ),
+    ),
+  );
+}
+
+async function createGitCredentialEnvironment(account, remote) {
+  const env = gitAccountEnvironment(account, remote);
+  const identity = await createGitIdentityConfig();
+  let key;
+  try {
+    env.GIT_CONFIG_GLOBAL = identity.file;
+    if (account.authType === "ssh") {
+      key = await createSshPrivateKeyFile(account.sshPrivateKey);
+      env.GIT_SSH_COMMAND = `ssh -F ${process.platform === "win32" ? "NUL" : "/dev/null"} -i ${shellPath(key.file)} -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o StrictHostKeyChecking=accept-new`;
+      env.GIT_SSH_VARIANT = "ssh";
+    }
+    return { env, revision: account.revision, dispose: () => {
+      try { key?.dispose(); } finally { identity.dispose(); }
+    } };
+  } catch (error) {
+    identity.dispose();
+    throw error;
+  }
+}
+
+async function withGitAccount(account, remote, operation, executeCommand = execute) {
+  const env = {
+    ...isolatedGitEnvironment(),
+    ...gitAccountEnvironment(account, remote),
+  };
   const run = () =>
     operation((args, options = {}) => executeCommand(args, env, options.timeout));
   if (account.authType !== "ssh") return run();
@@ -110,6 +145,8 @@ function gitInstallation() {
 }
 module.exports = {
   withGitAccount,
+  gitAccountEnvironment,
+  createGitCredentialEnvironment,
   testGitConnection,
   cloneGitRepository,
   gitInstallation,

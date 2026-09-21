@@ -2,7 +2,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
+const { execFile, execFileSync } = require("node:child_process");
+const { promisify } = require("node:util");
 const { test } = require("node:test");
 const { initializeDatabase } = require("../../src/storage/database-lifecycle.cjs");
 const { AccountServices } = require("../../src/application/account-services.cjs");
@@ -11,11 +12,16 @@ const { WorkspaceManager } = require("../../src/application/workspace-manager.cj
 const { projectName, remoteAuthType, remoteUrl, validateGitAccount } = require("../../src/domain/git-account.cjs");
 const { saveSystemSettings } = require("../../src/config/system-settings.cjs");
 const { readSettings, saveSettings } = require("../../src/config/execution-settings.cjs");
-const { testGitConnection } = require("../../src/git/account-credentials.cjs");
+const {
+  testGitConnection,
+  createGitCredentialEnvironment,
+} = require("../../src/git/account-credentials.cjs");
 const { cloneProject } = require("../../src/git/project-clone.cjs");
 const { withSshPrivateKey } = require("../../src/git/ssh-key-files.cjs");
 const { mutateRepository } = require("../../src/application/repository-services.cjs");
 const { gitRemote } = require("../support/git-remote.cjs");
+
+const execute = promisify(execFile);
 
 async function fixture(t, options) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "web-coding-git-accounts-"));
@@ -149,6 +155,51 @@ test("real HTTP clone creates fixed member paths and fetch uses stored credentia
   await assert.rejects(mutateRepository(manager.configFile(workspace.id), "fetch", { remote: "origin" }), /远程|远端/);
 });
 
+test("a workspace provides its saved HTTP Git account to Codex worktree processes without changing origin", async t => {
+  const { directory, database, actor, services, input, storageRoot, remote } = await fixture(t);
+  const account = await services.save(actor, input);
+  const manager = new WorkspaceManager({ database, directory: path.join(directory, "workspaces") });
+  t.after(() => manager.close());
+  const workspace = await manager.createFromGit({ name: "推送凭据", remoteUrl: input.remoteUrl, gitAccountId: account.id }, actor);
+  const config = manager.store.read(workspace.id, actor.id);
+  const worktree = path.join(storageRoot, "admin", "worktree", "remote", "push-credential");
+  execFileSync("git", ["-C", config.codex.repository, "worktree", "add", "-b", "codex/push-credential", worktree, "HEAD"], { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+  const context = manager.get(workspace.id, actor);
+  assert.equal(context.sessions.client.gitCredentialRevision(), 1);
+  const credentials = await context.sessions.client.gitCredentialProvider();
+  try {
+    await execute("git", ["-C", worktree, "ls-remote", "--exit-code", "origin", "refs/heads/main"], {
+      encoding: "utf8",
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, ...credentials.env },
+    });
+  } finally {
+    credentials.dispose?.();
+  }
+  assert.ok(remote.requests.some(request => request.authorization === "Basic " + Buffer.from(input.username + ":" + input.password).toString("base64")));
+  assert.doesNotMatch(fs.readFileSync(path.join(config.codex.repository, ".git", "config"), "utf8"), /Authorization|password|extraHeader/);
+  services.store.save(actor.id, { ...input, password: "rotated-fixture-password" }, services.store.read(account.id, actor.id));
+  assert.equal(context.sessions.client.gitCredentialRevision(), 2, "cached workspace contexts observe account revisions");
+  const rotated = await context.sessions.client.gitCredentialProvider();
+  try {
+    assert.equal(rotated.revision, 2);
+    assert.ok(Object.values(rotated.env).includes("Authorization: Basic " + Buffer.from(input.username + ":rotated-fixture-password").toString("base64")));
+  } finally { rotated.dispose(); }
+});
+
+test("Codex SSH credential environments clean their private key when the client closes", async () => {
+  const credentials = await createGitCredentialEnvironment(
+    { authType: "ssh", sshPrivateKey: "fixture private key" },
+    "git@git.example.test:team/project.git",
+  );
+  const file = /-i '([^']+)'/.exec(credentials.env.GIT_SSH_COMMAND)?.[1];
+  assert.ok(file);
+  assert.equal(fs.existsSync(file), true);
+  credentials.dispose();
+  assert.equal(fs.existsSync(file), false);
+});
+
 test("failed or competing clones clean only their own directory; symlinks and existing code are preserved", async t => {
   const { storageRoot, services, actor, input } = await fixture(t);
   const saved = await services.save(actor, input);
@@ -210,4 +261,37 @@ test("connection failures never expose URLs, passwords or subprocess diagnostics
     assert.doesNotMatch(error.message, /never-reveal|private\.git|127\.0\.0\.1|Command failed/);
     return /Git 连接失败/.test(error.message);
   });
+});
+
+test("referenced accounts cannot switch protocol even if a workspace is published during connection testing", async t => {
+  const { directory, database, actor, input } = await fixture(t);
+  const services = new GitAccountServices(database, { checkConnection: async () => {} });
+  const manager = new WorkspaceManager({ database, directory: path.join(directory, "workspaces"), cloneProject: async ({ publish }) => publish() });
+  t.after(() => manager.close());
+  for (const type of ["http", "ssh"]) {
+    const draft = services.store.createKeyDraft(actor.id, { sshPrivateKey: "fixture-private", publicKey: "fixture-public" });
+    const ssh = { name: `SSH ${type}`, authType: "ssh", remoteUrl: "git@git.example.invalid:team/repo.git", keyDraftId: draft.id };
+    const http = { ...input, name: `HTTP ${type}` };
+    const initial = type === "http" ? http : ssh;
+    const replacement = type === "http" ? ssh : http;
+    const saved = await services.save(actor, initial);
+    const before = services.store.read(saved.id, actor.id);
+    let release;
+    services.checkConnection = () => new Promise(resolve => { release = resolve; });
+    const pending = services.save(actor, replacement, saved.id);
+    await manager.createFromGit({ name: `workspace ${type}`, remoteUrl: initial.remoteUrl, gitAccountId: saved.id }, actor);
+    release();
+    await assert.rejects(pending, error => error.statusCode === 409 && /不能切换认证方式/.test(error.message));
+    assert.deepEqual(services.store.read(saved.id, actor.id), before);
+    if (type === "http") assert.ok(services.store.keyDraft(draft.id, actor.id), 'a rejected update must not consume the new key');
+    services.checkConnection = async () => {};
+    const { keyDraftId, ...sameType } = initial;
+    assert.ok(keyDraftId || type === "http");
+    const updated = await services.save(actor, { ...sameType, name: `renamed ${type}` }, saved.id);
+    assert.equal(updated.authType, type);
+  }
+  const unreferenced = await services.save(actor, { ...input, name: "unreferenced" });
+  const draft = services.store.createKeyDraft(actor.id, { sshPrivateKey: "fixture-private", publicKey: "fixture-public" });
+  const changed = await services.save(actor, { name: "unreferenced", authType: "ssh", remoteUrl: "git@git.example.invalid:team/repo.git", keyDraftId: draft.id }, unreferenced.id);
+  assert.equal(changed.authType, "ssh");
 });
