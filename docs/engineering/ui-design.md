@@ -17,7 +17,7 @@ The approved workspace rail (prototype C) is the shared shell for every page. Th
 1. Workspace welcome, loading/error, workspace creation and editing, searchable icon picker.
    Icon choices open in a separate keyboard-accessible modal from the compact preview. Background clone progress is available from the account bar across pages and restored from the server on reload; show stage-specific percentages, indeterminate waiting, and explicit failure/interruption states without claiming browser closure cancels a job.
 2. New manual task: type, title/content/images, optional directory, model/effort/permissions.
-3. New TAPD task: type, bound project, search results, ID, assignees, model/effort/permissions.
+3. New TAPD task: type, bound project, search results with local progress markers, ID, model/effort/permissions; no TAPD status code or assignees.
 4. Workspace settings with independently saved project environment, TAPD connection settings and prompt templates; placeholder insertion, plain-text preview and reset/save feedback. Templates remain isolated across workspaces.
 5. Conversation: human progress, Codex state, message/tool timeline, composer.
 6. Expanded session context, requirement body/table/attachments, original prompt.

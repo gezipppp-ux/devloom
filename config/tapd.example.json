@@ -20,11 +20,6 @@
       }
     }
   },
-  "workflow": {
-    "allow_write": false,
-    "target_status": "developing",
-    "fields": {}
-  },
   "codex": {
     "repository": "",
     "repositories": {},

@@ -12,7 +12,6 @@ function readTapdSettings(file) {
   return {
     workspaceId: config.tapd?.session?.request_body?.group_id || "",
     hasCookie: Boolean(config.tapd?.session?.cookie_header),
-    targetStatus: config.workflow?.target_status || "developing",
     imageHosts: config.tapd?.image_hosts || [],
   };
 }
@@ -28,7 +27,6 @@ function draftConfig(file, input, config = readOptional(file)) {
           "workspaceId",
           "cookie",
           "clearCookie",
-          "targetStatus",
           "imageHosts",
         ].includes(key),
     )
@@ -49,10 +47,6 @@ function draftConfig(file, input, config = readOptional(file)) {
     : input.cookie?.trim() || config.tapd?.session?.cookie_header || "";
   const dscToken = cookie ? parseCookieHeader(cookie)["dsc-token"] : "";
   if (cookie && !dscToken) throw new Error("Cookie 必须包含 dsc-token。");
-  const targetStatus =
-    input.targetStatus ?? config.workflow?.target_status ?? "developing";
-  if (typeof targetStatus !== "string" || !/^[\w-]{1,100}$/.test(targetStatus))
-    throw new Error("请填写有效的目标状态码。");
   const imageHosts = input.imageHosts ?? config.tapd?.image_hosts ?? [];
   if (
     !Array.isArray(imageHosts) ||
@@ -76,7 +70,6 @@ function draftConfig(file, input, config = readOptional(file)) {
         referer: "https://www.tapd.cn/tapd_fe/my/work?left_tree=1",
       }),
     },
-    workflow: { ...config.workflow, target_status: targetStatus },
   };
 }
 

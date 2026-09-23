@@ -17,6 +17,7 @@ const form = reactive({
   channel: props.channels[0]?.id || "tapd",
   workspace: props.workspace,
   id: "",
+  sourceType: "story",
   developer: "",
   tester: "",
   supplementaryInstructions: "",
@@ -61,6 +62,7 @@ watch(
   () => {
     form.workspace = selectedChannel.value?.workspace || "";
     form.id = "";
+    form.sourceType = "story";
     form.developer = "";
     form.tester = "";
     items.value = [];
@@ -71,6 +73,7 @@ watch(
   () => form.workspace,
   () => {
     form.id = "";
+    form.sourceType = "story";
     form.developer = "";
     form.tester = "";
     items.value = [];
@@ -143,10 +146,12 @@ async function start() {
             channel: form.channel,
             workspace: form.workspace,
             id: form.id,
-            developer: form.developer,
-            tester: form.tester,
+            ...(needsAssignees.value ? { developer: form.developer, tester: form.tester } : {}),
             ...(form.channel === "tapd"
-              ? { supplementaryInstructions: form.supplementaryInstructions }
+              ? {
+                  supplementaryInstructions: form.supplementaryInstructions,
+                  type: form.sourceType,
+                }
               : {}),
             model: form.model,
             reasoningEffort: form.reasoningEffort,
@@ -259,18 +264,28 @@ async function start() {
             type="button"
             :disabled="busy || uploading"
             :class="{ selected: form.id === item.id }"
-            @click="form.id = item.id"
+            @click="form.id = item.id; form.sourceType = item.type || 'story'"
           >
             <span>{{ item.title }}</span
             ><small>{{ item.id }} · {{ item.status }}</small>
+            <span
+              v-if="item.localRun?.progress === 'in_progress'"
+              class="task-progress-tag"
+              data-progress="in_progress"
+            >本系统进行中</span>
+            <small v-else-if="item.localRun">本系统已有任务</small>
           </button>
         </div>
         <p v-else-if="searched" class="muted">
           当前待办视图没有匹配结果，也可直接填写需求 ID。
         </p>
+        <p v-if="form.channel === 'tapd'" class="field-hint">
+          显示当前 TAPD 项目的全部待办；“本系统进行中”依据当前工作区的任务进度标记。已有任务可从左侧列表继续处理，启动不会修改 TAPD 状态。
+        </p>
         <a-form-item v-if="!manualInput" label="需求 ID" name="id"
           ><input
             v-model="form.id"
+            @input="form.sourceType = 'story'"
             aria-label="需求 ID"
             :disabled="busy || uploading"
             required

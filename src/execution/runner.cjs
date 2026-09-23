@@ -47,7 +47,7 @@ async function runExecution(
           "Run identity does not match the requested requirement.",
         );
       if (!retry) return { ...state, reused: true };
-      if (state.transition.status === "succeeded")
+      if (["succeeded", "skipped"].includes(state.transition.status))
         return { ...state, reused: true };
       if (!state.session_id || !state.execution_started_at)
         throw new Error(

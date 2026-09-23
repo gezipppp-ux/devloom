@@ -1,13 +1,7 @@
 const { loadConfig } = require("../../config/runtime.cjs");
 
 function defaultTapdConfig() {
-  return {
-    workflow: {
-      allow_write: false,
-      target_status: "developing",
-      fields: {},
-    },
-  };
+  return {};
 }
 
 function sessionFromConfig(config) {

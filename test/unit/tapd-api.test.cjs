@@ -4,13 +4,8 @@ const path = require('node:path');
 const { test } = require('node:test');
 const { detail, selectItem, todos } = require('../../src/channels/tapd/detail.cjs');
 const { request } = require('../../src/channels/tapd/http.cjs');
-const {
-  applyTransition,
-  fieldsFor,
-  planTransition,
-} = require('../../src/channels/tapd/workflow.cjs');
 const { saveSession } = require('../../src/channels/tapd/auth-utils.cjs');
-const { item, json, session, temporary, workflow } = require('../support/helpers.cjs');
+const { item, json, session, temporary } = require('../support/helpers.cjs');
 
 test('search traverses pages despite total zero, filters and preserves captured request', async (t) => {
   const original = structuredClone(session.request_body);
@@ -70,70 +65,6 @@ test('API rejects redirects, non-JSON login pages and foreign credential destina
   });
   await assert.rejects(request(session, session.endpoint), /non-JSON/);
   await assert.rejects(request(session, 'https://example.com'), /endpoint/);
-});
-
-test('mandatory fields accept defaults and zero; whitespace and missing values fail', () => {
-  const transition = {
-    Appendfield: [
-      { FieldName: 'developer', Notnull: 'yes', default_value: '开发人员' },
-      { FieldName: 'estimate', Notnull: 'yes', default_value: 0 },
-    ],
-  };
-  assert.deepEqual(fieldsFor(transition), {
-    developer: '开发人员',
-    estimate: 0,
-  });
-  assert.throws(
-    () =>
-      fieldsFor(
-        { Appendfield: [{ FieldName: 'tester', Notnull: 'yes' }] },
-        { tester: ' ' },
-      ),
-    /tester/,
-  );
-  assert.throws(
-    () => planTransition(workflow, {}, 'done'),
-    /No permitted transition/,
-  );
-});
-
-test('workflow writes once and verifies; already developing does not write', async (t) => {
-  let writes = 0;
-  t.mock.method(global, 'fetch', async (url, options) => {
-    if (String(url).endsWith('/transition')) {
-      writes += 1;
-      assert.equal(JSON.parse(options.body).next_status, 'developing');
-      return json({}, '0');
-    }
-    return json({
-      get_workflow_by_story: {
-        data: { ...workflow, current_status: writes ? 'developing' : 'open' },
-      },
-    });
-  });
-  assert.equal(
-    (await applyTransition(session, item, { allow_write: true }, 'developing'))
-      .verified_status,
-    'developing',
-  );
-  assert.equal(
-    (await applyTransition(session, item, { allow_write: true }, 'developing'))
-      .already,
-    true,
-  );
-  assert.equal(writes, 1);
-});
-
-test('successful HTTP response with wrong workflow state remains a failure', async (t) => {
-  t.mock.method(global, 'fetch', async (url) =>
-    String(url).endsWith('/transition')
-      ? json({}, '0')
-      : json({ get_workflow_by_story: { data: workflow } }),
-  );
-  await assert.rejects(
-    applyTransition(session, item, { allow_write: true }, 'developing'),
-    /verification failed/,
-  );
 });
 
 test('refreshing credentials preserves repository mapping, image hosts and workflow fields', (t) => {

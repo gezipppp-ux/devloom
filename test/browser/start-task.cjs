@@ -22,7 +22,7 @@ async function verifyStartTaskLock(page) {
   try {
     await page.getByRole("button", { name: "创建 session 并开始开发 →", exact: true }).click();
     await pending;
-    for (const name of ["TAPD 工作区 ID", "需求 ID", "开发人员", "测试人员"])
+    for (const name of ["TAPD 工作区 ID", "需求 ID"])
       assert.equal(await page.getByLabel(name, { exact: true }).isDisabled(), true,
         `${name} must remain locked while task creation is pending`);
     const query = page.getByPlaceholder("输入需求标题关键词");

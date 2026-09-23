@@ -57,7 +57,7 @@ async function main() {
       workspace: "123456",
       scopeLabel: "TAPD 项目 ID",
       scopeLocked: true,
-      capabilities: { search: true, assignees: true },
+      capabilities: { search: true, assignees: false },
     },
     { id: "manual", label: "手动输入", capabilities: { manualInput: true } },
   ];
@@ -265,7 +265,6 @@ async function main() {
         return send({
           workspaceId: "123456",
           hasCookie: true,
-          targetStatus: "developing",
           imageHosts: [],
         });
       if (endpoint === "/models")
@@ -294,14 +293,14 @@ async function main() {
         return send({
           items: [
             { id: "1024", title: "修复客户导出异常", status: "待处理" },
-            { id: "1032", title: "优化客户搜索体验", status: "待处理" },
+            { id: "1032", title: "优化客户搜索体验", status: "待处理", localRun: { key: "1-1032", progress: "in_progress" } },
           ],
         });
       if (endpoint === "/users")
         return send({ users: [{ nick: "张明" }, { nick: "李欣" }] });
       return send({ error: "视觉预览禁止执行操作" }, 400);
     });
-    async function capture(name) {
+    async function capture(name, selector) {
       await page.evaluate(() => document.fonts.ready);
       await page.waitForFunction(
         () => !document.querySelector(".ant-select-loading"),
@@ -337,9 +336,9 @@ async function main() {
         return issues;
       });
       assert.deepEqual(issues, [], name + " layout overflow or overlap");
-      await page.screenshot({
+      await (selector ? page.locator(selector) : page).screenshot({
         path: path.join(output, name + ".png"),
-        fullPage: !(await page.locator("dialog[open]").count()),
+        ...(!selector ? { fullPage: !(await page.locator("dialog[open]").count()) } : {}),
       });
       captures.push(name);
     }
@@ -447,7 +446,8 @@ async function main() {
     });
     await capture("03-project-settings");
     await page.getByRole("link", { name: "TAPD 渠道", exact: true }).click();
-    await capture("04-tapd-settings");
+    await page.locator("#tapd-settings").scrollIntoViewIfNeeded();
+    await capture("04-tapd-settings", "#tapd-settings");
     await page.getByRole("link", { name: "提示词模板", exact: true }).click();
     await page.getByRole("textbox", { name: "提示词模板内容", exact: true }).waitFor();
     await capture("04-workspace-prompt-settings");
@@ -557,6 +557,10 @@ async function main() {
         el.scrollTop = 0;
       });
       await capture("03-settings-" + width);
+      await page.getByRole("link", { name: "TAPD 渠道", exact: true }).click();
+      await page.locator("#tapd-settings").scrollIntoViewIfNeeded();
+      assert.equal(await page.getByLabel("开发中状态码", { exact: true }).count(), 0);
+      await capture("04-tapd-settings-" + width, "#tapd-settings");
       await captureSystemSettings(width);
       await page.getByRole("button", { name: "切换工作区：客户管理系统", exact: true }).click();
       await page.getByRole("button", { name: "工作区设置", exact: true }).click();
@@ -572,6 +576,8 @@ async function main() {
       await page.getByLabel("需求渠道", { exact: true }).selectOption("manual");
       await capture("01-manual-" + width);
       await page.getByLabel("需求渠道", { exact: true }).selectOption("tapd");
+      await page.getByRole("button", { name: "检索", exact: true }).click();
+      await page.locator(".search-results").getByText("本系统进行中", { exact: true }).waitFor();
       await page.getByLabel("需求 ID", { exact: true }).fill("1024");
       await page.getByLabel("补充说明", { exact: true }).fill(
         "补充验收：导出结果应与当前筛选条件一致。\n指导意见：保留现有下载流程，补充移动端和空结果提示。",

@@ -625,18 +625,21 @@ async function main() {
   manager.channels = new ChannelRegistry([
     {
       id: 'tapd',
-      capabilities: { search: true, assignees: true },
+      capabilities: { search: true, assignees: false },
       describe: () => ({
         id: 'tapd',
         label: 'TAPD',
         workspace: '1',
         scopeLabel: 'TAPD 工作区 ID',
-        capabilities: { search: true, assignees: true },
+        capabilities: { search: true, assignees: false },
       }),
       resolve: async () => {},
       prepare: async () => {},
       transition: async () => {},
-      search: async () => [{ id: '2', title: '模拟需求', workspace: '1' }],
+      search: async () => [
+        { id: '2', title: '模拟需求', workspace: '1', type: 'story' },
+        { id: '5', title: '模拟缺陷', workspace: '1', type: 'bug' },
+      ],
       searchUsers: async ({ query, workspace }) => {
         searches.push({ query, workspace });
         if (query === 'slow') {
@@ -920,41 +923,18 @@ async function main() {
     await page
       .getByRole('button', { name: '＋ 从需求启动', exact: true })
       .click();
-    await page
-      .getByRole('combobox', { name: '开发人员', exact: true })
-      .waitFor();
+    await page.getByRole('textbox', { name: '需求 ID', exact: true }).waitFor();
+    assert.equal(await page.getByRole('combobox', { name: '开发人员', exact: true }).count(), 0);
+    assert.equal(await page.getByRole('combobox', { name: '测试人员', exact: true }).count(), 0);
+    await page.getByRole('button', { name: '检索', exact: true }).click();
+    await page.locator('.search-results').getByText('本系统已有任务', { exact: true }).waitFor();
+    assert.equal(await page.locator('.search-results').getByText('本系统进行中', { exact: true }).count(), 0);
+    manager.updateTaskMetadata(key, { progress: 'in_progress' });
+    await page.getByRole('button', { name: '检索', exact: true }).click();
+    await page.locator('.search-results').getByText('本系统进行中', { exact: true }).waitFor();
+    await page.getByRole('button', { name: /模拟缺陷/ }).click();
+    await page.getByRole('button', { name: '检索', exact: true }).click();
     await page.setViewportSize({ width: 1440, height: 1000 });
-    const developer = page.getByRole('combobox', {
-      name: '开发人员',
-      exact: true,
-    });
-    const tester = page.getByRole('combobox', {
-      name: '测试人员',
-      exact: true,
-    });
-    const slowRequest = page.waitForRequest((request) =>
-      request.url().includes('query=slow'),
-    );
-    const slowResponse = page.waitForResponse((response) =>
-      response.url().includes('query=slow'),
-    );
-    await developer.fill('slow');
-    await slowRequest;
-    await developer.fill('wei');
-    await page.getByTitle('魏文斌1（开发）', { exact: true }).click();
-    await slowResponse;
-    assert.equal(await page.getByText('过期结果', { exact: true }).count(), 0);
-    await tester.fill('none');
-    await page.getByText('没有匹配人员', { exact: true }).waitFor();
-    await tester.fill('error');
-    await page.getByText('模拟搜索失败', { exact: true }).waitFor();
-    await tester.fill('liu');
-    await page.getByTitle('刘嘉辉（测试）', { exact: true }).click();
-    await page.screenshot({
-      path: path.join(output, 'assignee-search.png'),
-      fullPage: true,
-    });
-    await page.getByRole('textbox', { name: '需求 ID', exact: true }).fill('2');
     const supplement = page.getByRole('textbox', { name: '补充说明', exact: true });
     const supplementaryInstructions = '  补充说明：保留现有支付流程。\n指导意见：覆盖空数据和网络错误。  ';
     assert.equal(await supplement.getAttribute('maxlength'), '60000');
@@ -974,28 +954,21 @@ async function main() {
       .getByRole('button', { name: '创建 session 并开始开发 →', exact: true })
       .click();
     await page.getByRole('textbox', { name: '发送给 Codex 的指令' }).waitFor();
-    assert.equal(submitted.developer, '魏文斌1');
-    assert.equal(submitted.tester, '刘嘉辉');
+    assert.equal(submitted.developer, undefined);
+    assert.equal(submitted.tester, undefined);
+    assert.equal(submitted.type, 'bug');
     assert.equal(submitted.channel, 'tapd');
     assert.equal(submitted.metadata.type, 'requirement');
     assert.equal(submitted.model, 'fixture-model-a');
     assert.equal(submitted.reasoningEffort, 'high');
     assert.equal(submitted.permissionMode, 'auto');
     assert.equal(submitted.supplementaryInstructions, supplementaryInstructions);
-    assert.ok(
-      searches.some(
-        (request) => request.query === 'wei' && request.workspace === '1',
-      ),
-    );
+    assert.deepEqual(searches, []);
     await page
       .getByRole('button', { name: '＋ 从需求启动', exact: true })
       .click();
     assert.equal(await supplement.inputValue(), '', 'a new task starts without the previous supplement');
     await page.getByRole('textbox', { name: '需求 ID', exact: true }).fill('2');
-    await developer.fill('wei');
-    await page.getByTitle('魏文斌1（开发）', { exact: true }).click();
-    await tester.fill('liu');
-    await page.getByTitle('刘嘉辉（测试）', { exact: true }).click();
     await page
       .getByRole('button', { name: '创建 session 并开始开发 →', exact: true })
       .click();
@@ -1005,8 +978,6 @@ async function main() {
     await page
       .getByRole('button', { name: '＋ 从需求启动', exact: true })
       .click();
-    await developer.fill('wei');
-    await page.getByTitle('魏文斌1（开发）', { exact: true }).click();
     await supplement.fill('这个补充仅属于当前项目。');
     await page
       .getByRole('textbox', { name: 'TAPD 工作区 ID', exact: true })
@@ -1023,15 +994,11 @@ async function main() {
         .count(),
       0,
     );
-    await developer.fill('wei');
-    await page.getByTitle('魏文斌1（开发）', { exact: true }).waitFor();
-    assert.equal(searches.at(-1).workspace, '9');
     await page.keyboard.press('Escape');
     await supplement.fill('切换渠道后不应保留这段补充。');
     await page
       .getByRole('combobox', { name: '需求渠道', exact: true })
       .selectOption('manual');
-    assert.equal(await developer.isVisible(), false);
     assert.equal(await supplement.isVisible(), false);
     await page.getByLabel('需求渠道', { exact: true }).selectOption('tapd');
     assert.equal(await supplement.inputValue(), '', 'switching channels clears the TAPD supplement');

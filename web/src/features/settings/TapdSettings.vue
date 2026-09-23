@@ -7,7 +7,6 @@ const form = reactive({
   workspaceId: "",
   cookie: "",
   clearCookie: false,
-  targetStatus: "developing",
 });
 const hosts = ref(""),
   hasCookie = ref(false),
@@ -18,7 +17,6 @@ onMounted(async () => {
   try {
     const result = await api("/settings/tapd");
     form.workspaceId = result.workspaceId;
-    form.targetStatus = result.targetStatus;
     hosts.value = result.imageHosts.join("\n");
     hasCookie.value = result.hasCookie;
   } catch (e) {
@@ -99,14 +97,7 @@ async function submit(check) {
           :disabled="busy"
         />清除已保存的 Cookie</label
       >
-      <label
-        >开发中状态码<input
-          v-model="form.targetStatus"
-          aria-label="开发中状态码"
-          required
-          :disabled="busy"
-      /></label>
-      <p class="field-hint">Codex 开始执行后，将 TAPD 需求流转到此状态。</p>
+      <p class="field-hint">检索 TAPD 全部待办，启动任务不会自动修改 TAPD 状态。</p>
       <label
         >额外图片域名（可选，每行一个）<textarea
           v-model="hosts"

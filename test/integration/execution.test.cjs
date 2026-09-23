@@ -63,19 +63,19 @@ function setup(t) {
   return { calls, input, dependencies };
 }
 
-test('session execution precedes status write, persists results and prevents duplicate dispatch', async (t) => {
+test('TAPD execution skips status writes, persists results and prevents duplicate dispatch', async (t) => {
   const { calls, input, dependencies } = setup(t);
   const state = await runRequirement(input, dependencies);
   assert.equal(state.execution.status, 'completed');
-  assert.equal(state.transition.status, 'succeeded');
+  assert.equal(state.transition.status, 'skipped');
   assert.equal(fs.existsSync(path.join(input.directory, '.lock')), false);
-  assert.deepEqual(calls, ['worktree', 'session', 'transition']);
+  assert.deepEqual(calls, ['worktree', 'session']);
   assert.equal((await runRequirement(input, dependencies)).reused, true);
   assert.equal(
     (await runRequirement({ ...input, retry: true }, dependencies)).reused,
     true,
   );
-  assert.deepEqual(calls, ['worktree', 'session', 'transition']);
+  assert.deepEqual(calls, ['worktree', 'session']);
 });
 
 test('initialization runs between worktree creation and Codex; failure prevents session and transition', async (t) => {
@@ -108,7 +108,6 @@ test('initialization runs between worktree creation and Codex; failure prevents 
         'worktree',
         'initialize',
         'session',
-        'transition',
       ]);
       await runRequirement(input, dependencies);
       assert.equal(calls.filter((call) => call === 'initialize').length, 1);
@@ -116,24 +115,15 @@ test('initialization runs between worktree creation and Codex; failure prevents 
   }
 });
 
-test('transition retry works after todo removal, without another detail fetch or session', async (t) => {
+test('legacy TAPD transition retries are skipped without writes or redispatch', async (t) => {
   const { calls, input, dependencies } = setup(t);
-  let attempts = 0;
-  dependencies.applyTransition = async () => {
-    attempts += 1;
-    if (attempts === 1) throw new Error('network failure');
-    return { verified_status: 'developing' };
-  };
-  let state = await runRequirement(input, dependencies);
-  assert.equal(state.execution.status, 'completed');
-  assert.equal(state.transition.status, 'failed');
-  dependencies.detail = () => {
-    throw new Error('no longer in todo');
-  };
-  state = await runRequirement({ ...input, retry: true }, dependencies);
-  assert.equal(state.transition.status, 'succeeded');
+  const state = await runRequirement(input, dependencies);
+  state.transition = { status: 'failed', error: 'legacy transition failure' };
+  saveState(path.join(input.directory, 'run.json'), state);
+  dependencies.detail = () => { throw new Error('no longer in todo'); };
+  const retried = await runRequirement({ ...input, retry: true }, dependencies);
+  assert.equal(retried.transition.status, 'skipped');
   assert.deepEqual(calls, ['worktree', 'session']);
-  assert.equal(attempts, 2);
 });
 
 test('failed startup never transitions and retry cannot manufacture an execution start', async (t) => {
@@ -216,24 +206,14 @@ test('transition retry preserves a concurrent Web followup on success and failur
   }
 });
 
-test('missing images or required fields fail before worktree, session or TAPD mutation', async (t) => {
+test('missing images fail before worktree or session', async (t) => {
   const { calls, input, dependencies } = setup(t);
   dependencies.buildTask = async () => {
     throw new Error('image download failed');
   };
   await assert.rejects(runRequirement(input, dependencies), /image download/);
   assert.equal(fs.existsSync(path.join(input.directory, '.lock')), false);
-  dependencies.buildTask = async () => ({ images: [], execution_ready: true });
-  dependencies.workflowInfo = async () => ({
-    ...workflow,
-    my_all_transitions: [
-      {
-        ...workflow.my_all_transitions[0],
-        Appendfield: [{ FieldName: 'tester', Notnull: 'yes' }],
-      },
-    ],
-  });
-  await assert.rejects(runRequirement(input, dependencies), /tester/);
+
   assert.deepEqual(calls, []);
   assert.equal(fs.existsSync(path.join(input.directory, 'run.json')), false);
 });
@@ -311,7 +291,7 @@ test('full pipeline uses one real Git worktree, image attachment and simulated C
     },
   );
   assert.equal(state.execution.status, 'completed');
-  assert.equal(state.transition.status, 'succeeded');
+  assert.equal(state.transition.status, 'skipped');
   assert.equal(state.image_count, 1);
   assert.equal(git('branch', '--show-current'), 'main');
   assert.equal(

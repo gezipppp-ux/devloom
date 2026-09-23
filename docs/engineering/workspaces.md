@@ -6,7 +6,7 @@
 
 One application workspace owns one repository and one configuration. Application UUIDs are distinct from TAPD numeric project IDs and task worktrees. The production Web server never imports the old global config/runs/uploads. No migration is required.
 
-`<dataRoot>/workspaces/<UUID>/config.json` contains `version:3`, `workspace:{id,name,icon?}`, `codex`, `tapd`, `workflow` and optional `prompt_templates`. Runs and staged uploads live in sibling `runs/` and `uploads/`. Workspace IDs are server-generated UUID v4 values; names are display text, never paths. Names must be nonempty, at most 80 characters and unique. Renaming retains UUID, config, runs and sessions. JSON mutations use temporary files and atomic rename. Workspace data is Git-ignored.
+`<dataRoot>/workspaces/<UUID>/config.json` contains `version:3`, `workspace:{id,name,icon?}`, `codex`, `tapd` and optional `prompt_templates`. Runs and staged uploads live in sibling `runs/` and `uploads/`. Workspace IDs are server-generated UUID v4 values; names are display text, never paths. Names must be nonempty, at most 80 characters and unique. Renaming retains UUID, config, runs and sessions. JSON mutations use temporary files and atomic rename. Workspace data is Git-ignored.
 
 `domain/workspace.cjs` owns identity and input validation; `storage/workspace-store.cjs` owns directory layout and configuration records; `application/workspace-manager.cjs` composes defaults and workspace runtimes. Creation and renaming hold the catalog lock (`workspaces/.catalog.lock`) across name checking and writing, preventing duplicate names across service processes. Individual configuration mutations retain their own short write lock and preserve independently owned settings.
 
@@ -78,10 +78,11 @@ Workspace settings neither expose nor accept model/effort. Old workspace values 
 
 Channel-specific validation and credential maintenance live in `src/channels/tapd/settings.cjs`. Other execution/session code remains source-independent.
 
-- `GET .../settings/tapd`: `{workspaceId,hasCookie,targetStatus,imageHosts}`; never return Cookie or DSC token.
-- `POST .../settings/tapd`: accepts `{workspaceId,cookie?,clearCookie?,targetStatus?,imageHosts?}`. Blank/omitted Cookie preserves the existing secret; `clearCookie:true` removes it. A supplied Cookie must be single-line, bounded, and include `dsc-token`. Rebuild the session using the shared auth utilities, preserve other workspace configuration.
+- `GET .../settings/tapd`: `{workspaceId,hasCookie,imageHosts}`; never return Cookie or DSC token.
+- `POST .../settings/tapd`: accepts `{workspaceId,cookie?,clearCookie?,imageHosts?}`. Blank/omitted Cookie preserves the existing secret; `clearCookie:true` removes it. A supplied Cookie must be single-line, bounded, and include `dsc-token`. Rebuild the session using the shared auth utilities, preserve other workspace configuration.
 - `POST .../settings/tapd/check`: validates and checks the draft with a one-item read-only TAPD todo request. Blank Cookie uses stored credentials. Return a bounded success message or sanitized failure; never echo upstream response text or secrets. Do not save, create a task, start Codex or perform a workflow mutation. Empty todo lists count as successful API access, not proof of individual requirement write permission.
 - TAPD project binding is displayed read-only in the task form. The adapter validates search, user lookup and task resolution against the saved binding; changing the request body cannot escape it.
+- TAPD no longer exposes or accepts `targetStatus`; old workflow settings are inert and existing run snapshots remain intact. Requirement results include `localRun:{key,progress}` or null from this application workspace only. Progress comes from local task metadata, never from TAPD status or Codex completion.
 - TAPD saves take effect immediately; existing executions retain the config/session captured at dispatch. Project execution changes affect new runs.
 
 ## Verification

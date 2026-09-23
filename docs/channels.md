@@ -4,7 +4,7 @@
 
 ## 分层
 
-- `src/channels/tapd/adapter.cjs`：TAPD 登录读取、需求检索、人员验证、图文任务包和状态流转。复用现有 TAPD HTTP 模块。
+- `src/channels/tapd/adapter.cjs`：TAPD 登录读取、全部待办检索和图文任务包；不修改状态或人员字段。复用现有 TAPD HTTP 模块。
 - `src/channels/manual/adapter.cjs`：手动输入验证与渠道组合；图片暂存/过期清理由 `manual-upload-store.cjs` 管理，标题命名与任务包由 `task-package.cjs` 管理；渠道同步返回 skipped。
 - `src/execution/runner.cjs`：幂等、锁、Git worktree、session 启动次序与记录持久化；通过适配器回调同步渠道状态。
 - `src/application/session-manager.cjs`：原 session 续聊、中断和生命周期；事件/审批、查询、公开数据分别由 `session-events.cjs`、`session-views.cjs`、`session-presenter.cjs` 管理。
@@ -31,7 +31,7 @@
 
 `item/workitem` 兼容既有记录，使用 `{id,workspace_id,title,...}`；`workspace_id` 对应渠道内的项目或作用域，不要求是数字。`task` 必须提供 `{execution_ready,blocked_reason?,codex_prompt,images:[{path,...}]}`，图片应放在当前任务目录下。素材应在 prepare 中准备完整，失败则中止，不应静默丢图。
 
-TAPD 的开发人员、测试人员和 owner 字段只由 TAPD 适配器映射，通用执行层不识别这些字段。Web 提交 `{channel,id,workspace,developer?,tester?}`；不支持人员选择的渠道无需这些字段。
+TAPD 不再要求开发/测试人员，也不写入人员或状态字段。Web 提交 `{channel,id,workspace,type?,supplementaryInstructions?}`，type 默认为 story；待办选项保留 bug/board_card 类型。其他需要人员选择的渠道可自行校验字段，通用执行层不识别来源特有字段。
 
 ## 身份与历史
 

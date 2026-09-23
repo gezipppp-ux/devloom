@@ -15,6 +15,7 @@ const { listBaseRefs } = require("../git/repository.cjs");
 const { listModels } = require("../codex/models.cjs");
 const { permissionOptions } = require("../codex/permissions.cjs");
 const { readRepository, mutateRepository } = require("./repository-services.cjs");
+const { presentRequirements } = require("./requirement-presenter.cjs");
 const {
   readTapdSettings,
   saveTapdSettings,
@@ -84,11 +85,14 @@ class WorkspaceServices {
     return checkTapdSettings(this.configFile, input);
   }
 
-  search(channelId, input) {
+  async search(channelId, input) {
     const channel = this.channels.get(channelId);
     if (!channel.capabilities?.search)
       throw new Error("该渠道不支持需求检索。");
-    return channel.search(input);
+    const items = await channel.search(input);
+    return channelId === "tapd"
+      ? presentRequirements(channelId, items, this.sessions.list())
+      : items;
   }
 
   async searchUsers(channelId, input) {

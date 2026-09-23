@@ -73,7 +73,6 @@ test("workspaces isolate settings, credentials and restart state; names never be
   saveTapdSettings(workspaces.configFile(a.id), {
     workspaceId: "42",
     cookie: "dsc-token=secret-a; auth=private",
-    targetStatus: "developing",
   });
   assert.equal(readSettings(workspaces.configFile(a.id)).model, undefined);
   assert.throws(

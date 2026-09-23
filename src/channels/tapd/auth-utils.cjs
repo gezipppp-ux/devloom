@@ -7,11 +7,6 @@ function saveSession(session, file) {
     ...previous,
     version: previous.version ?? 1,
     tapd: { ...previous.tapd, session },
-    workflow: previous.workflow || {
-      allow_write: false,
-      target_status: 'developing',
-      fields: {},
-    },
     codex: previous.codex || {},
   }));
   return resolved;

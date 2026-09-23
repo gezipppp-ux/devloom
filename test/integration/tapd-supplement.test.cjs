@@ -92,11 +92,8 @@ test("TAPD resolves only optional bounded text and keeps supplements out of work
   );
   assert.deepEqual(item, original);
   assert.equal(prepared.workitem.description, original.description);
-  assert.deepEqual(resolved.config.workflow.fields, {
-    developer: "开发人员;",
-    custom_field_one: "测试人员;",
-    owner: "开发人员;",
-  });
+  assert.equal(resolved.config.workflow, undefined);
+  assert.equal(userSearches, 0);
 });
 
 test("HTTP TAPD supplements reach the first Codex prompt and persist in task and run snapshots", async (t) => {
@@ -220,7 +217,7 @@ test("HTTP TAPD supplements reach the first Codex prompt and persist in task and
     assert.equal(snapshot.workitem.description, original.description);
     assert.equal(snapshot.codex_prompt, prompt);
   }
-  assert.equal(transitionItems.length, 1);
-  assert.equal(transitionItems[0].description, original.description);
+  assert.equal(transitionItems.length, 0);
+  assert.equal(state.transition.status, "skipped");
   assert.equal(git("branch", "--show-current"), "main");
 });

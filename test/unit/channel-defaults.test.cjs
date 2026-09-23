@@ -8,8 +8,7 @@ const { temporary } = require('../support/helpers.cjs');
 
 test('workspace creation receives independent channel defaults and renaming preserves configured workflow', (t) => {
   const changedDefaults = defaultChannelConfig();
-  changedDefaults.workflow.allow_write = true;
-  changedDefaults.workflow.fields.owner = 'other-workspace';
+  changedDefaults.workflow = { allow_write: true };
   const workspaces = new WorkspaceManager({
     directory: path.join(temporary(t), 'workspaces'),
   });
@@ -19,7 +18,6 @@ test('workspace creation receives independent channel defaults and renaming pres
   assert.deepEqual(saved, {
     version: 3,
     codex: { project_name: `w-${workspace.id.slice(0, 8)}` },
-    workflow: { allow_write: false, target_status: 'developing', fields: {} },
     workspace: { id: workspace.id, name: '默认配置' },
   });
   saved.workflow = {
@@ -34,6 +32,5 @@ test('workspace creation receives independent channel defaults and renaming pres
     saved.workflow,
   );
   assert.deepEqual(defaultChannelConfig(), {
-    workflow: { allow_write: false, target_status: 'developing', fields: {} },
   });
 });
