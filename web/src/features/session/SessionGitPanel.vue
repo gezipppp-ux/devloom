@@ -70,8 +70,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <details class="session-git" :aria-busy="loading">
-    <summary aria-label="Worktree Git 状态">
+  <section class="session-git" :aria-busy="loading" aria-label="Worktree Git 状态">
+    <div class="session-git-summary">
       <span class="git-summary-title"
         ><BranchesOutlined aria-hidden="true" /> Worktree</span
       >
@@ -93,7 +93,7 @@ onUnmounted(() => {
       <span v-else class="muted">{{
         loading ? "正在读取 Git 状态…" : "Git 状态暂不可用"
       }}</span>
-    </summary>
+    </div>
     <div class="session-git-body">
       <dl class="git-facts">
         <dt>当前分支</dt>
@@ -159,5 +159,5 @@ onUnmounted(() => {
       @refresh="refresh"
       @deleted="removed"
     />
-  </details>
+  </section>
 </template>

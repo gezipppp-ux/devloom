@@ -24,6 +24,7 @@
   --radius-composer: 24px;
   --control-height: 40px;
   --content-width: 800px;
+  --conversation-width: 1120px;
   --font-ui: "Segoe UI", "Microsoft YaHei", sans-serif;
   --font-code: "Cascadia Code", Consolas, monospace;
 }

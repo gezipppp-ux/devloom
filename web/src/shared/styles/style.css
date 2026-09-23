@@ -1110,35 +1110,16 @@ main {
   margin-bottom: 0;
 }
 .session-git {
-  flex-shrink: 0;
-  padding: 0 32px;
-  max-height: 50vh;
-  overflow: auto;
   background: var(--surface);
-  border-bottom: 1px solid var(--line);
 }
-.session-git > summary {
+.session-git-summary {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
   min-height: 48px;
   padding: 8px 0;
-  cursor: pointer;
-  list-style: none;
   font-size: 12px;
-}
-.session-git > summary::-webkit-details-marker {
-  display: none;
-}
-.session-git > summary::after {
-  content: "展开";
-  margin-left: auto;
-  color: var(--muted);
-  font-size: 11px;
-}
-.session-git[open] > summary::after {
-  content: "收起";
 }
 .git-summary-title {
   display: inline-flex;
@@ -1194,7 +1175,7 @@ main {
 /* Conversation, artifacts and decisions */
 .session-header {
   display: grid;
-  gap: 16px;
+  gap: 8px;
   padding: 16px 32px;
   flex-shrink: 0;
   background: var(--surface);
@@ -1210,6 +1191,130 @@ main {
 .session-toolbar > button,
 .session-toolbar > .status {
   flex-shrink: 0;
+}
+.session-toolbar > button {
+  margin-left: auto;
+}
+.session-body {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.session-conversation {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.session-details {
+  flex: 0 0 56px;
+  width: 56px;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+}
+.session-details-nav {
+  position: sticky;
+  top: 0;
+  display: grid;
+  gap: 8px;
+  padding: 12px 5px;
+}
+.session-details-nav button {
+  flex-direction: column;
+  min-height: 56px;
+  gap: 5px;
+  padding: 8px 4px;
+  border-color: transparent;
+  font-size: 12px;
+}
+.session-details-nav .anticon {
+  font-size: 17px;
+}
+.session-details-nav button[aria-expanded="true"] {
+  background: var(--selected);
+  color: var(--accent);
+}
+.session-drawer {
+  position: absolute;
+  top: 0;
+  right: 56px;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  width: min(420px, calc(100% - 56px));
+  min-width: 0;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  box-shadow: -8px 0 24px #203e3412;
+}
+.session-drawer-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.session-drawer-heading h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.session-drawer-heading button {
+  padding-inline: 10px;
+  font-size: 12px;
+}
+.session-drawer-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 20px;
+}
+.session-info-section {
+  margin-bottom: 24px;
+}
+.session-info-section h3 {
+  margin: 0 0 16px;
+  color: var(--ink);
+  font-size: 14px;
+}
+.session-drawer .task-metadata-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.session-drawer .task-metadata-fields label {
+  flex-direction: column;
+  align-items: stretch;
+}
+.session-drawer .task-metadata-fields select {
+  width: 100%;
+}
+.session-drawer .metadata-note {
+  grid-column: 1 / -1;
+}
+.session-drawer .session-lifecycle-controls {
+  margin: 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.session-drawer .git-facts {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+.session-drawer .git-facts dd {
+  margin-bottom: 12px;
+}
+.session-drawer .git-panel-actions > button {
+  width: 100%;
+  margin-left: 0;
 }
 .session-title-editor {
   min-width: 0;
@@ -1361,41 +1466,18 @@ main {
   color: var(--muted);
 }
 .session-context {
-  flex-shrink: 0;
-  max-height: 55vh;
-  overflow: auto;
-  padding: 0 32px;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
   font-size: 12px;
   color: var(--muted);
 }
-.session-context > summary {
-  padding: 14px 0;
-  cursor: pointer;
-  color: var(--ink);
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-.session-context > summary span {
-  float: right;
-  color: var(--muted);
-  font-weight: 400;
-  font-size: 11px;
-}
 .session-context dl {
   display: grid;
-  grid-template-columns: 90px minmax(0, 1fr);
-  gap: 12px 20px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
   line-height: 1.7;
-  padding: 18px;
-  margin: 4px 0 20px;
-  background: var(--canvas);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-control);
+  margin: 0;
 }
 .session-context dd {
-  margin: 0;
+  margin: 0 0 12px;
   overflow-wrap: anywhere;
   color: var(--ink);
 }
@@ -1416,7 +1498,7 @@ main {
   flex: 1;
   min-height: 140px;
   overflow: auto;
-  padding: 24px max(32px, calc((100% - var(--content-width)) / 2));
+  padding: 24px max(32px, calc((100% - var(--conversation-width)) / 2));
   scroll-behavior: smooth;
 }
 .message {
@@ -1430,7 +1512,7 @@ main {
   margin-bottom: 10px;
 }
 .message-text {
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.9;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -1527,7 +1609,7 @@ main {
 .composer-wrap {
   flex-shrink: 0;
   margin-top: auto;
-  padding: 12px max(32px, calc((100% - var(--content-width)) / 2)) 16px;
+  padding: 12px max(32px, calc((100% - var(--conversation-width)) / 2)) 16px;
   background: var(--canvas);
 }
 .composer {
@@ -1545,7 +1627,7 @@ main {
   border-radius: 4px;
   background: transparent;
   padding: 6px 0;
-  min-height: 88px;
+  min-height: 64px;
 }
 .composer textarea:focus-visible {
   outline-offset: 0;
@@ -2188,8 +2270,6 @@ main {
   }
   .page-breadcrumb,
   .session-header,
-  .session-context,
-  .session-git,
   .banner {
     padding-left: 24px;
     padding-right: 24px;
@@ -2213,11 +2293,6 @@ main {
   }
   .section-action {
     margin-left: 0;
-  }
-  .session-context > summary span {
-    float: none;
-    display: block;
-    margin-top: 6px;
   }
 }
 @media (max-width: 600px) {
@@ -2397,23 +2472,25 @@ main {
   .metadata-note {
     flex-basis: 100%;
   }
-  .session-context {
-    padding-inline: 20px;
-    max-height: 65dvh;
+  .session-drawer {
+    position: fixed;
+    top: 12px;
+    bottom: 12px;
+    width: calc(100vw - 68px);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
   }
-  .session-git {
-    padding-inline: 20px;
-    max-height: 65dvh;
+  .session-details-nav {
+    top: 12px;
+  }
+  .session-drawer-heading,
+  .session-drawer-content {
+    padding: 16px;
   }
   .git-facts {
     grid-template-columns: 80px minmax(0, 1fr);
     gap: 10px;
     font-size: 12px;
-  }
-  .session-context dl {
-    grid-template-columns: 74px minmax(0, 1fr);
-    padding: 12px;
-    gap: 10px;
   }
   .timeline {
     min-height: 240px;

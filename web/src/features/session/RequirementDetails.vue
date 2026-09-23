@@ -81,14 +81,12 @@ const capturedAt = computed(() => {
 
 <style scoped>
 .requirement-details {
-  margin-top: 20px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
   color: var(--ink);
   font-size: 13px;
 }
 .requirement-heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 16px;

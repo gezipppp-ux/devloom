@@ -36,6 +36,7 @@ async function verifySessionDeletion(browser, origin, manager, directory, errors
       await page.getByRole("button", { name: `永久删除会话：${title}`, exact: true }).click();
     } else {
       await page.locator(".session-link").filter({ hasText: title }).click();
+      await page.getByRole("button", { name: "会话信息", exact: true }).click();
       await page.getByRole("button", { name: "永久删除会话", exact: true }).click();
     }
     const dialog = page.getByRole("dialog", { name: "永久删除会话", exact: true });

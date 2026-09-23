@@ -308,7 +308,7 @@ async function main() {
       const issues = await page.evaluate(() => {
         const issues = [];
         for (const el of document.querySelectorAll(
-          "body, main, .sidebar, .form-section, dialog[open]",
+          "body, main, .sidebar, .form-section, .session-conversation, .session-drawer, .session-drawer-content, dialog[open]",
         )) {
           if (el.clientWidth && el.scrollWidth > el.clientWidth + 2)
             issues.push(el.className || el.tagName);
@@ -338,7 +338,7 @@ async function main() {
       assert.deepEqual(issues, [], name + " layout overflow or overlap");
       await (selector ? page.locator(selector) : page).screenshot({
         path: path.join(output, name + ".png"),
-        ...(!selector ? { fullPage: !(await page.locator("dialog[open]").count()) } : {}),
+        ...(!selector ? { fullPage: !(await page.locator("dialog[open]").count()) && !(await page.locator(".session-drawer:visible").count()) } : {}),
       });
       captures.push(name);
     }
@@ -381,7 +381,7 @@ async function main() {
       await page.keyboard.press("Escape");
     }
     async function captureGitViews(suffix) {
-      await page.getByLabel("Worktree Git 状态", { exact: true }).click();
+      await page.getByRole("button", { name: "Worktree Git", exact: true }).click();
       await page.getByRole("button", { name: "删除 Worktree…", exact: true }).waitFor();
       await page.locator(".session-git").scrollIntoViewIfNeeded();
       await capture("09-worktree-git-" + suffix);
@@ -391,21 +391,61 @@ async function main() {
       await dialog.getByRole("button", { name: "删除文件与本地分支", exact: true }).scrollIntoViewIfNeeded();
       await capture("09-delete-worktree-" + suffix);
       await page.keyboard.press("Escape");
+      assert.equal(await page.locator(".session-drawer").isVisible(), true,
+        "Escape closes the confirmation dialog before its containing drawer");
+      await page.getByRole("button", { name: "收起会话资料", exact: true }).click();
       await page.getByRole("button", { name: "代码仓库", exact: true }).click();
       await page.getByRole("button", { name: "获取远端更新", exact: true }).waitFor();
       await capture("09-repository-git-" + suffix);
       await load();
     }
+    async function captureSessionDrawer(suffix) {
+      const info = page.getByRole("button", { name: "会话信息", exact: true });
+      const drawer = page.locator(".session-drawer");
+      const input = page.getByRole("textbox", { name: "发送给 Codex 的指令", exact: true });
+      assert.equal(await drawer.isVisible(), false, "session drawers start collapsed");
+      await input.fill("打开资料时保留这段草稿");
+      const before = await page.locator(".session-conversation").boundingBox();
+      await page.locator(".timeline").evaluate(el => el.scrollTo({ top: 40, behavior: "instant" }));
+      const scrollBefore = await page.locator(".timeline").evaluate(el => el.scrollTop);
+      await info.click();
+      const bounds = await drawer.boundingBox();
+      const after = await page.locator(".session-conversation").boundingBox();
+      assert.equal(after.width, before.width, "the drawer overlays instead of shrinking the conversation");
+      assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= page.viewportSize().width);
+      assert.equal(await page.locator(".timeline").evaluate(el => el.scrollTop), scrollBefore);
+      await capture("05-session-info-" + suffix);
+      await page.keyboard.press("Escape");
+      assert.equal(await drawer.isVisible(), false);
+      assert.equal(await info.evaluate(el => el === document.activeElement), true, "Escape restores the trigger focus");
+      await page.getByRole("button", { name: "需求资料", exact: true }).click();
+      await page.getByRole("heading", { name: "客户搜索体验", exact: true }).waitFor();
+      await capture("06-requirement-drawer-" + suffix);
+      await page.getByRole("button", { name: "Worktree Git", exact: true }).click();
+      assert.equal(await page.locator(".session-git").isVisible(), true);
+      assert.equal(await page.locator(".requirement-details").isVisible(), false);
+      await page.getByRole("button", { name: "Worktree Git", exact: true }).click();
+      assert.equal(await drawer.isVisible(), false, "clicking the active entry collapses the drawer");
+      await info.click();
+      await page.locator(".account-bar").click({ position: { x: 4, y: 4 } });
+      assert.equal(await drawer.isVisible(), false, "clicking outside collapses the drawer");
+      assert.equal(await input.inputValue(), "打开资料时保留这段草稿");
+      await input.fill("");
+    }
     await load();
     assert.equal(await page.locator(".workspace-rail .workspace-icons").count(), 1);
     assert.equal(await page.locator(".workspace-rail .workspace-icon").count(), 2);
     await capture("05-session-desktop");
+    await page.setViewportSize({ width: 1920, height: 855 });
+    await capture("05-session-wide");
+    await page.setViewportSize({ width: 1440, height: 1200 });
+    await captureSessionDrawer("desktop");
     await captureGitViews("desktop");
     await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
     await page.getByRole('listbox', { name: '执行权限选项' }).waitFor();
     await capture('05-permission-menu-desktop');
     await page.keyboard.press('Escape');
-    await page.locator(".session-context > summary").click();
+    await page.getByRole("button", { name: "需求资料", exact: true }).click();
     await page
       .getByRole("heading", { name: "客户搜索体验", exact: true })
       .waitFor();
@@ -475,9 +515,10 @@ async function main() {
     await load("readonly");
     await capture("08-readonly");
     await load("git-deleted");
-    await page.getByLabel("Worktree Git 状态", { exact: true }).click();
+    await page.getByRole("button", { name: "Worktree Git", exact: true }).click();
     await capture("09-worktree-deleted");
     await load("git-unpublished");
+    await page.getByRole("button", { name: "Worktree Git", exact: true }).click();
     await page.locator(".session-git").getByText("分支尚未发布", { exact: true }).waitFor();
     await capture("09-worktree-unpublished");
     await load('pending');
@@ -532,6 +573,7 @@ async function main() {
       await captureEmptyWorkspaceRail(width);
       await load();
       await capture("05-session-" + width);
+      await captureSessionDrawer(width);
       await captureGitViews(width);
       const composer = page.locator('.composer-toolbar');
       await composer.scrollIntoViewIfNeeded();

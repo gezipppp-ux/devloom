@@ -75,6 +75,7 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
       await page.screenshot({ path: path.join(output, `session-title-display-${width}.png`), fullPage: true });
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.getByRole("button", { name: "会话信息", exact: true }).click();
     await page.getByRole("button", { name: "归档会话", exact: true }).click();
     const confirmation = page.getByRole("dialog", { name: "归档会话", exact: true });
     await confirmation.getByLabel("我确认归档此会话。", { exact: true }).check();

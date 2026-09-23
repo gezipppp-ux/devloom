@@ -42,7 +42,11 @@ async function verifyGit(browser, { origin, output, errors, directory, workspace
   const dialog = page.getByRole("dialog", { name: "删除 Worktree", exact: true });
   const deleteButton = () => dialog.getByRole("button", { name: "删除文件与本地分支", exact: true });
   const openRepository = () => page.getByRole("button", { name: "代码仓库", exact: true }).click();
-  const refreshGit = () => page.getByRole("button", { name: "刷新 Git 状态", exact: true }).click();
+  const refreshGit = async () => {
+    if (!(await gitPanel.isVisible()))
+      await page.getByRole("button", { name: "Worktree Git", exact: true }).click();
+    await page.getByRole("button", { name: "刷新 Git 状态", exact: true }).click();
+  };
   const capture = async (name) => {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       `${name}: document stays within viewport`);
@@ -97,10 +101,11 @@ async function verifyGit(browser, { origin, output, errors, directory, workspace
     await page.getByLabel("需求内容", { exact: true }).fill("仅使用 FakeClient 验证 Git 管理，不执行真实需求。");
     await page.getByRole("button", { name: "创建 session 并开始开发 →", exact: true }).click();
     await page.getByText("历史回复", { exact: true }).waitFor();
-    await page.getByLabel("Worktree Git 状态", { exact: true }).click();
+    await page.getByRole("button", { name: "Worktree Git", exact: true }).click();
     await gitPanel.getByText("分支尚未发布", { exact: true }).waitFor();
     assert.equal(await page.getByRole("button", { name: "删除 Worktree…", exact: true }).isDisabled(), true,
       "active Codex turns cannot delete their worktree");
+    await page.getByRole("button", { name: "收起会话资料", exact: true }).click();
     await page.getByRole("button", { name: "■ 停止", exact: true }).click();
     const context = workspaces.get(workspace.id);
     const record = context.sessions.list()[0];

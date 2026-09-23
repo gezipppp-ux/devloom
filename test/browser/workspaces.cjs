@@ -415,7 +415,7 @@ async function main() {
       .click();
     await page.getByRole("textbox", { name: "发送给 Codex 的指令" }).waitFor();
     await page.getByText("历史回复", { exact: true }).waitFor();
-    await page.locator(".session-context > summary").click();
+    await page.getByRole("button", { name: "需求资料", exact: true }).click();
     const image = page
       .locator(".requirement-images img, .requirement-details img")
       .first();
@@ -447,6 +447,7 @@ async function main() {
       type: "bug",
       progress: "in_progress",
     });
+    await page.getByRole("button", { name: "会话信息", exact: true }).click();
     await page.getByLabel("任务进度", { exact: true }).selectOption("review");
     await page.waitForFunction(
       () =>
@@ -489,7 +490,7 @@ async function main() {
     assert.equal(await page.locator('.permission-option[data-value="auto"]').getAttribute('aria-selected'), 'true');
     await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "■ 停止", exact: true }).click();
-    await page.locator(".session-context > summary").click();
+    await page.getByRole("button", { name: "会话信息", exact: true }).click();
     await page
       .locator(".session-context")
       .getByText("fixture-model-a", { exact: true })

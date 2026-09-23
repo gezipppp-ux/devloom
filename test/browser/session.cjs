@@ -535,6 +535,7 @@ async function verifyRefreshConsistency(browser, origin, manager, client, key, e
       const response = await route.fetch();
       captureMetadata({ route, response, body: await response.json() });
     });
+    await page.getByRole('button', { name: '会话信息', exact: true }).click();
     await page.getByLabel('任务类型', { exact: true }).selectOption(requestedType);
     const metadataSnapshot = await metadataCaptured;
     manager.updateTaskMetadata(key, { type: 'requirement', progress: 'merge' });
@@ -708,6 +709,7 @@ async function main() {
     assert.equal(await page.getByLabel('任务进度', { exact: true }).inputValue(), 'in_progress');
     assert.equal(await page.locator('.task-group > summary').count(), 3);
     await page.getByLabel('任务分组方式').selectOption('progress');
+    await page.getByRole('button', { name: '会话信息', exact: true }).click();
     await page.getByLabel('任务类型', { exact: true }).selectOption('bug');
     await page.waitForFunction(() => document.querySelector('select[aria-label="任务类型"]').value === 'bug');
     const peer = await page.context().newPage();
@@ -752,6 +754,7 @@ async function main() {
     await page.reload();
     await page.locator('.session-header .session-heading').getByText('套餐充值入口（已重命名）', { exact: true }).waitFor();
     assert.equal(store.read('1-2').workitem.title, '【演示】套餐充值入口');
+    await page.getByRole('button', { name: '会话信息', exact: true }).click();
     await page.getByRole('button', { name: '归档会话', exact: true }).click();
     await page.getByRole('heading', { name: '归档会话', exact: true }).waitFor();
     await page.getByText('归档后会话不再显示在左侧列表中，可从「已归档会话」恢复。历史、需求资料和 Worktree 保留。', { exact: true }).waitFor();
@@ -764,7 +767,7 @@ async function main() {
     await page.getByRole('button', { name: '保存', exact: true }).click();
     await page.locator('.session-header .session-heading').getByText('【演示】套餐充值入口', { exact: true }).waitFor();
 
-    await page.locator('.session-context > summary').click();
+    await page.getByRole('button', { name: '需求资料', exact: true }).click();
     await page
       .getByRole('heading', { name: '完整需求标题', exact: true })
       .waitFor();
@@ -805,7 +808,7 @@ async function main() {
       }),
     );
     await page.reload();
-    await page.locator('.session-context > summary').click();
+    await page.getByRole('button', { name: '需求资料', exact: true }).click();
     await page
       .getByRole('heading', { name: 'Markdown 需求', exact: true })
       .waitFor();
@@ -819,7 +822,7 @@ async function main() {
       '/api/runs/1-2/images/0',
     );
     assert.deepEqual(externalRequests, []);
-    await page.locator('.session-context > summary').click();
+    await page.getByRole('button', { name: '需求资料', exact: true }).click();
     await page.getByText('工作区初始化', { exact: true }).click();
     await page.getByText('初始化依赖安装完成', { exact: true }).waitFor();
     const input = page.getByRole('textbox', { name: '发送给 Codex 的指令' });

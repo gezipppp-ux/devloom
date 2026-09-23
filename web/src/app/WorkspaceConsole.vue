@@ -1,7 +1,6 @@
 <script setup>
 /* global document */
 import {
-  defineAsyncComponent,
   nextTick,
   onMounted,
   onUnmounted,
@@ -14,12 +13,11 @@ import { useWorkspaceConsole } from "./use-workspace-console.js";
 import StartTask from "../features/tasks/StartTask.vue";
 import SettingsPanel from "../features/settings/SettingsPanel.vue";
 import RepositoryGitPanel from "../features/settings/RepositoryGitPanel.vue";
-import SessionGitPanel from "../features/session/SessionGitPanel.vue";
+import SessionDetailsDrawer from "../features/session/SessionDetailsDrawer.vue";
 import SessionItem from "../features/session/SessionItem.vue";
 import SessionRequest from "../features/session/SessionRequest.vue";
 import SessionComposer from "../features/session/SessionComposer.vue";
 import SessionTitleEditor from "../features/session/SessionTitleEditor.vue";
-import SessionLifecycleControls from "../features/session/SessionLifecycleControls.vue";
 import SessionLifecycleDialog from "../features/session/SessionLifecycleDialog.vue";
 import { useSessionImages } from "../features/session/use-session-images.js";
 import TaskList from "../features/tasks/TaskList.vue";
@@ -31,9 +29,6 @@ import {
   FolderOpenOutlined,
   BranchesOutlined,
 } from "@antdv-next/icons";
-const RequirementDetails = defineAsyncComponent(
-  () => import("../features/session/RequirementDetails.vue"),
-);
 
 const props = defineProps({
   workspaceName: { type: String, default: "" },
@@ -304,162 +299,113 @@ async function worktreeDeleted() {
             @saved="titleSaved"
           />
           <div class="session-toolbar">
-          <span
-            class="status"
-            :data-status="session.requests?.length ? 'waiting' : session.status"
-            >Codex ·
-            {{
-              session.requests?.length
-                ? "等待你的输入"
-                : statusLabel(session.status)
-            }}</span
-          >
-          <TaskMetadataControls
+            <span
+              class="status"
+              :data-status="session.requests?.length ? 'waiting' : session.status"
+              >Codex ·
+              {{
+                session.requests?.length
+                  ? "等待你的输入"
+                  : statusLabel(session.status)
+              }}</span
+            >
+            <button :disabled="loading" @click="open(active)">
+              <ReloadOutlined aria-hidden="true" /> 刷新
+            </button>
+          </div>
+        </header>
+        <div class="session-body">
+          <div class="session-conversation">
+            <div v-if="!online" class="banner warning" role="status">
+              实时连接已断开，正在重连。服务运行时，关闭网页不会停止任务。
+            </div>
+            <div v-if="session.readOnlyReason" class="banner">
+              {{ session.readOnlyReason }}
+            </div>
+            <div v-if="session.warning" class="banner warning">
+              历史读取降级：{{ session.warning }}
+            </div>
+            <div
+              ref="timeline"
+              class="timeline"
+              aria-label="会话记录"
+              :aria-busy="loading"
+            >
+              <button
+                v-if="session.nextCursor"
+                class="load-older"
+                :disabled="busy"
+                @click="older"
+              >
+                加载更早记录 ↑
+              </button>
+              <p v-if="!session.items.length" class="empty-inline">
+                {{
+                  ["preparing", "initializing", "starting"].includes(session.status)
+                    ? "正在抓取需求、下载图片并准备独立工作区…"
+                    : "还没有消息，输入指令继续这个 session。"
+                }}
+              </p>
+              <SessionItem
+                v-for="item in session.items"
+                :key="item.id"
+                :item="item"
+              /><SessionRequest
+                v-for="request in session.requests"
+                :key="request.id"
+                :request="request"
+                :disabled="busy || !online"
+                @respond="(data) => action('responses', data)"
+              />
+              <p v-if="running" class="working-line">
+                <span class="connection online"></span>Codex
+                正在执行，可以补充指令或停止当前一轮。
+              </p>
+              <p v-if="initializing" class="working-line">
+                <span class="connection online"></span>正在初始化
+                worktree，完成后自动启动 Codex。
+              </p>
+            </div>
+            <SessionComposer
+              v-model="composer.text"
+              :images="imageDraft.images.value"
+              :images-uploading="imageDraft.uploading.value"
+              :images-blocked="imageDraft.blocked.value"
+              :images-error="imageDraft.error.value"
+              :can-send="Boolean(canSend)"
+              :running="running"
+              :initializing="initializing"
+              :busy="busy"
+              :online="online"
+              :read-only-reason="session.readOnlyReason || ''"
+              :error="error || session.error || ''"
+              :notice="notice"
+              :execution-settings="executionSettings"
+              :settings-pending="Boolean(session.settingsPending)"
+              :settings-busy="settingsBusy"
+              :settings-error="settingsError"
+              :can-edit-settings="canEditSettings"
+              @send="send"
+              @images-add="imageDraft.add"
+              @images-remove="imageDraft.remove"
+              @images-retry="imageDraft.retry"
+              @stop="action('interrupt', {})"
+              @settings-change="updateExecutionSettings"
+            />
+          </div>
+          <SessionDetailsDrawer
             :key="session.key"
-            :task-key="session.key"
-            :metadata="session.metadata"
-            @saved="metadataSaved"
-          />
-          <SessionLifecycleControls
-            :key="session.key"
-            :task-key="session.key"
-            :title="session.title"
-            :worktree="session.worktree"
-            :deletion="session.worktreeDeletion"
+            :session="session"
             :active="running || initializing || ['preparing', 'starting'].includes(session.status) || Boolean(session.requests?.length)"
             @archived="archiveSaved"
             @deleted="sessionDeleted"
-          />
-          <button :disabled="loading" @click="open(active)">
-            <ReloadOutlined aria-hidden="true" /> 刷新
-          </button>
-          </div>
-        </header>
-        <SessionGitPanel
-          v-if="session.worktree?.path"
-          :key="session.key"
-          :task-key="session.key"
-          :worktree="session.worktree"
-          :deletion="session.worktreeDeletion"
-          :status="session.status"
-          :active="
-            Boolean(
-              running ||
-              initializing ||
-              ['preparing', 'starting'].includes(session.status) ||
-              session.requests?.length,
-            )
-          "
-          @deleted="worktreeDeleted"
-        />
-        <details class="session-context">
-          <summary>
-            会话信息与需求资料
-            <span>模型 · 分支 · 需求快照</span>
-          </summary>
-          <dl>
-            <dt>Session</dt>
-            <dd>{{ session.sessionId || "创建中" }}</dd>
-            <dt>创建时模型</dt>
-            <dd>
-              {{ session.codex?.model || "Codex 默认配置" }}
-            </dd>
-            <dt>创建时思考强度</dt>
-            <dd>
-              {{ session.codex?.reasoningEffort || "默认思考强度" }}
-            </dd>
-            <dt>分支</dt>
-            <dd>{{ session.worktree?.branch || "准备中" }}</dd>
-            <dt>Worktree</dt>
-            <dd>{{ session.worktree?.path || "准备中" }}</dd>
-            <dt>渠道同步</dt>
-            <dd>
-              {{
-                session.transition?.status === "skipped"
-                  ? "无需同步"
-                  : session.transition?.status
-              }}
-              {{ session.transition?.error }}
-            </dd>
-          </dl>
-          <RequirementDetails :requirement="session.requirement" />
-        </details>
-        <div v-if="!online" class="banner warning" role="status">
-          实时连接已断开，正在重连。服务运行时，关闭网页不会停止任务。
-        </div>
-        <div v-if="session.readOnlyReason" class="banner">
-          {{ session.readOnlyReason }}
-        </div>
-        <div v-if="session.warning" class="banner warning">
-          历史读取降级：{{ session.warning }}
-        </div>
-        <div
-          ref="timeline"
-          class="timeline"
-          aria-label="会话记录"
-          :aria-busy="loading"
-        >
-          <button
-            v-if="session.nextCursor"
-            class="load-older"
-            :disabled="busy"
-            @click="older"
+            @worktree-deleted="worktreeDeleted"
           >
-            加载更早记录 ↑
-          </button>
-          <p v-if="!session.items.length" class="empty-inline">
-            {{
-              ["preparing", "initializing", "starting"].includes(session.status)
-                ? "正在抓取需求、下载图片并准备独立工作区…"
-                : "还没有消息，输入指令继续这个 session。"
-            }}
-          </p>
-          <SessionItem
-            v-for="item in session.items"
-            :key="item.id"
-            :item="item"
-          /><SessionRequest
-            v-for="request in session.requests"
-            :key="request.id"
-            :request="request"
-            :disabled="busy || !online"
-            @respond="(data) => action('responses', data)"
-          />
-          <p v-if="running" class="working-line">
-            <span class="connection online"></span>Codex
-            正在执行，可以补充指令或停止当前一轮。
-          </p>
-          <p v-if="initializing" class="working-line">
-            <span class="connection online"></span>正在初始化
-            worktree，完成后自动启动 Codex。
-          </p>
+            <template #metadata>
+              <TaskMetadataControls :task-key="session.key" :metadata="session.metadata" @saved="metadataSaved" />
+            </template>
+          </SessionDetailsDrawer>
         </div>
-        <SessionComposer
-          v-model="composer.text"
-          :images="imageDraft.images.value"
-          :images-uploading="imageDraft.uploading.value"
-          :images-blocked="imageDraft.blocked.value"
-          :images-error="imageDraft.error.value"
-          :can-send="Boolean(canSend)"
-          :running="running"
-          :initializing="initializing"
-          :busy="busy"
-          :online="online"
-          :read-only-reason="session.readOnlyReason || ''"
-          :error="error || session.error || ''"
-          :notice="notice"
-          :execution-settings="executionSettings"
-          :settings-pending="Boolean(session.settingsPending)"
-          :settings-busy="settingsBusy"
-          :settings-error="settingsError"
-          :can-edit-settings="canEditSettings"
-          @send="send"
-          @images-add="imageDraft.add"
-          @images-remove="imageDraft.remove"
-          @images-retry="imageDraft.retry"
-          @stop="action('interrupt', {})"
-          @settings-change="updateExecutionSettings"
-        />
       </template>
       <section
         v-else
