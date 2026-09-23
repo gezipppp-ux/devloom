@@ -29,8 +29,7 @@ export function useArchivedSessions() {
     try {
       await api(`/runs/${key}/restore`, {});
       if (disposed) return false;
-      pending?.removed.add(key);
-      runs.value = runs.value.filter((run) => run.key !== key);
+      remove(key);
       return true;
     } catch (e) {
       if (!disposed) restoreError.value = e.message;
@@ -40,6 +39,11 @@ export function useArchivedSessions() {
     }
   }
 
+  function remove(key) {
+    pending?.removed.add(key);
+    runs.value = runs.value.filter((run) => run.key !== key);
+  }
+
   onUnmounted(() => { disposed = true; pending = null; });
-  return { runs, loading, error, restoring, restoreError, refresh, restore };
+  return { runs, loading, error, restoring, restoreError, refresh, restore, remove };
 }

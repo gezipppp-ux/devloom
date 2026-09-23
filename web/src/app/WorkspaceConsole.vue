@@ -20,6 +20,7 @@ import SessionRequest from "../features/session/SessionRequest.vue";
 import SessionComposer from "../features/session/SessionComposer.vue";
 import SessionTitleEditor from "../features/session/SessionTitleEditor.vue";
 import SessionLifecycleControls from "../features/session/SessionLifecycleControls.vue";
+import SessionLifecycleDialog from "../features/session/SessionLifecycleDialog.vue";
 import { useSessionImages } from "../features/session/use-session-images.js";
 import TaskList from "../features/tasks/TaskList.vue";
 import ArchivedSessions from "../features/tasks/ArchivedSessions.vue";
@@ -241,7 +242,14 @@ async function worktreeDeleted() {
         :unread-result-keys="unreadResultKeys"
         @open="open"
       />
-      <ArchivedSessions :revision="archiveRevision" :disabled="workspaceLoading" @restored="archiveRestored" />
+      <ArchivedSessions :revision="archiveRevision" :disabled="workspaceLoading" @restored="archiveRestored" @deleted="sessionDeleted">
+        <template #delete-dialog="{ run, deleted, close }">
+          <SessionLifecycleDialog :key="run.key" mode="delete" :task-key="run.key" :title="run.title"
+            :worktree="run.worktree" :deletion="run.worktreeDeletion"
+            :active="['preparing', 'initializing', 'starting', 'running'].includes(run.status || run.execution?.status)"
+            @deleted="deleted" @closed="close" />
+        </template>
+      </ArchivedSessions>
       <div class="sidebar-footer">
         <p v-if="preferenceError" class="error" role="alert">未读状态同步失败：{{ preferenceError }}</p>
         <span :class="['connection', { online }]"></span
@@ -315,6 +323,7 @@ async function worktreeDeleted() {
           <SessionLifecycleControls
             :key="session.key"
             :task-key="session.key"
+            :title="session.title"
             :worktree="session.worktree"
             :deletion="session.worktreeDeletion"
             :active="running || initializing || ['preparing', 'starting'].includes(session.status) || Boolean(session.requests?.length)"

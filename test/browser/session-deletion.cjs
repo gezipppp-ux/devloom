@@ -4,11 +4,13 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { saveState } = require("../../src/storage/run-state.cjs");
 
-async function verifySessionDeletion(browser, origin, manager, directory, errors, output) {
-  const repository = path.join(directory, "delete-repository");
-  const tree = path.join(directory, "delete-task");
+async function verifySessionDeletion(browser, origin, manager, directory, errors, output, archived = false) {
+  const prefix = archived ? "archive-delete" : "delete";
+  const repository = path.join(directory, `${prefix}-repository`);
+  const tree = path.join(directory, `${prefix}-task`);
   const branch = "codex/browser-delete";
-  const key = "1-99";
+  const key = archived ? "1-97" : "1-99";
+  const title = archived ? "已归档的强制清理演示会话" : "强制清理演示会话";
   fs.mkdirSync(repository);
   const git = (...args) => execFileSync("git", ["-C", repository, ...args], { windowsHide: true, stdio: "ignore" });
   git("init", "-b", "main");
@@ -19,17 +21,23 @@ async function verifySessionDeletion(browser, origin, manager, directory, errors
   fs.writeFileSync(path.join(tree, "tracked.txt"), "uncommitted");
   fs.writeFileSync(path.join(tree, "untracked.txt"), "untracked");
   saveState(path.join(manager.store.dir(key), "run.json"), {
-    workitem: { id: "99", workspace_id: "1", title: "强制清理演示会话" },
+    workitem: { id: key.slice(2), workspace_id: "1", title },
     session_id: "delete-fixture", execution: { status: "completed" },
     worktree: { repository, path: tree, branch },
   });
+  if (archived) await manager.archive(key);
   const page = await browser.newPage();
   page.on("pageerror", (error) => errors.push(error.message));
-  let releaseSnapshot;
+  let releaseSnapshot, releaseDeletion;
   try {
     await page.goto(origin);
-    await page.locator(".session-link").filter({ hasText: "强制清理演示会话" }).click();
-    await page.getByRole("button", { name: "永久删除会话", exact: true }).click();
+    if (archived) {
+      await page.getByRole("button", { name: "已归档会话", exact: true }).click();
+      await page.getByRole("button", { name: `永久删除会话：${title}`, exact: true }).click();
+    } else {
+      await page.locator(".session-link").filter({ hasText: title }).click();
+      await page.getByRole("button", { name: "永久删除会话", exact: true }).click();
+    }
     const dialog = page.getByRole("dialog", { name: "永久删除会话", exact: true });
     assert.equal(await dialog.getByRole("button", { name: "永久删除", exact: true }).isDisabled(), true);
     await dialog.getByLabel("同时强制删除 Worktree、本地目录和本地分支", { exact: true }).check();
@@ -44,7 +52,7 @@ async function verifySessionDeletion(browser, origin, manager, directory, errors
       const bounds = await dialog.boundingBox();
       assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width, `dialog overflow at ${width}`);
       assert.equal(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth), true);
-      await page.screenshot({ path: path.join(output, `force-delete-${width}.png`), fullPage: true });
+      await page.screenshot({ path: path.join(output, `${archived ? 'archived-' : ''}force-delete-${width}.png`), fullPage: true });
     }
     await page.route(`**/api/runs/${key}/delete`, (route) => route.fulfill({
       status: 400, contentType: "application/json", body: JSON.stringify({ error: "模拟清理失败，请重试。" }),
@@ -55,28 +63,54 @@ async function verifySessionDeletion(browser, origin, manager, directory, errors
     assert.equal(await dialog.getByLabel("确认强制删除的本地分支", { exact: true }).inputValue(), branch);
 
     let snapshotReady;
+    let captureNextSnapshot = true;
     const captured = new Promise((resolve) => { snapshotReady = resolve; });
     const hold = new Promise((resolve) => { releaseSnapshot = resolve; });
-    await page.route("**/api/runs", async (route) => {
+    await page.route(archived ? "**/api/runs?archived=true" : "**/api/runs", async (route) => {
+      if (!captureNextSnapshot) return route.continue();
+      captureNextSnapshot = false;
       const response = await route.fetch();
       snapshotReady();
       await hold;
+      await route.fulfill({ response, headers: { ...response.headers(), "x-deletion-snapshot": "old" } });
+    });
+    let deletionReady;
+    const deletedOnServer = new Promise((resolve) => { deletionReady = resolve; });
+    const deletionHeld = new Promise((resolve) => { releaseDeletion = resolve; });
+    await page.route(`**/api/runs/${key}/delete`, async (route) => {
+      const response = await route.fetch();
+      deletionReady();
+      await deletionHeld;
       await route.fulfill({ response });
-    }, { times: 1 });
-    manager.emit("event", { key, type: "state", status: "completed" });
+    });
+    if (archived) manager.updateTitle(key, title);
+    else manager.emit("event", { key, type: "state", status: "completed" });
     await captured;
     await submit.click();
+    await deletedOnServer;
+    if (archived) {
+      assert.equal(await dialog.isVisible(), true, "list refresh must not unmount a pending deletion dialog");
+      assert.equal(await dialog.locator('button[type="submit"]').isDisabled(), true);
+    }
+    releaseDeletion();
     await dialog.waitFor({ state: "hidden" });
     assert.equal(manager.store.hasRun(key), false);
     assert.equal(fs.existsSync(tree), false);
-    const snapshotApplied = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/runs");
+    const snapshotApplied = page.waitForResponse((response) => response.headers()["x-deletion-snapshot"] === "old");
     releaseSnapshot();
     await snapshotApplied;
     await page.waitForTimeout(100);
-    assert.equal(await page.locator(".session-link").filter({ hasText: "强制清理演示会话" }).count(), 0);
+    assert.equal(await page.locator(".session-link").filter({ hasText: title }).count(), 0);
+    if (archived) {
+      await page.getByText(`已永久删除「${title}」。`, { exact: true }).waitFor();
+      assert.equal(await page.getByRole("button", { name: `恢复会话：${title}`, exact: true }).count(), 0);
+      assert.equal(await page.getByRole("button", { name: `永久删除会话：${title}`, exact: true }).count(), 0);
+    }
     assert.equal(fs.readFileSync(path.join(repository, "tracked.txt"), "utf8"), "original");
   } finally {
     releaseSnapshot?.();
+    releaseDeletion?.();
+    await page.unrouteAll({ behavior: "wait" });
     await page.close();
   }
 }

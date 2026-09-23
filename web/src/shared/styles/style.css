@@ -1268,6 +1268,10 @@ main {
 .session-delete-dialog {
   width: min(500px, calc(100vw - 32px));
 }
+.session-lifecycle-title {
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
 .archived-sessions-trigger {
   flex-shrink: 0;
   grid-column: 1 / -1;
@@ -1300,7 +1304,9 @@ main {
 .archived-session-info .field-hint {
   margin: 8px 0 0;
 }
-.archived-session-list li > button {
+.archived-session-actions {
+  display: flex;
+  gap: 8px;
   flex-shrink: 0;
 }
 .status {

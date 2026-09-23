@@ -1162,6 +1162,7 @@ async function main() {
     await verifyLanManualCreation(browser, directory, errors);
     await verifySessionImages(browser, origin, manager, client, key, errors, output);
     await verifySessionDeletion(browser, origin, manager, directory, errors, output);
+    await verifySessionDeletion(browser, origin, manager, directory, errors, output, true);
     await verifySessionArchiveTitle(browser, origin, manager, errors, output);
     assert.deepEqual(errors, []);
     process.stdout.write(

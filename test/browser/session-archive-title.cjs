@@ -145,6 +145,27 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
     await page.locator(".session-link").filter({ hasText: title }).click();
     await page.getByRole("heading", { name: title, exact: true }).waitFor();
     assert.equal(manager.store.read(key).session_id, "archive-fixture");
+    await manager.archive(key);
+    await trigger.click();
+    await search.fill("模型网关");
+    const deleteButton = dialog.getByRole("button", { name: `永久删除会话：${title}`, exact: true });
+    await deleteButton.click();
+    const deletion = page.getByRole("dialog", { name: "永久删除会话", exact: true });
+    await deletion.getByText(title, { exact: true }).waitFor();
+    assert.equal(await deletion.getByRole("button", { name: "永久删除", exact: true }).isDisabled(), true);
+    await page.keyboard.press("Escape");
+    await deletion.waitFor({ state: "hidden" });
+    assert.equal(await dialog.isVisible(), true);
+    assert.equal(await search.inputValue(), "模型网关");
+    assert.equal(await deleteButton.evaluate((el) => el === document.activeElement), true);
+    assert.equal(manager.store.hasRun(key), true);
+    await deleteButton.click();
+    await deletion.getByLabel("我确认永久删除且无法恢复此会话。", { exact: true }).check();
+    await deletion.getByRole("button", { name: "永久删除", exact: true }).click();
+    await deletion.waitFor({ state: "hidden" });
+    await dialog.getByText(`已永久删除「${title}」。`, { exact: true }).waitFor();
+    assert.equal(manager.store.hasRun(key), false);
+    await peer.getByRole("button", { name: `恢复会话：${title}`, exact: true }).waitFor({ state: "hidden" });
   } finally {
     releaseSnapshot?.();
     await page.close();

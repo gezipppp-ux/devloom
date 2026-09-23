@@ -1,13 +1,16 @@
 <script setup>
 import { computed, nextTick, ref, watch } from "vue";
-import { InboxOutlined, UndoOutlined, ReloadOutlined } from "@antdv-next/icons";
+import { InboxOutlined, UndoOutlined, ReloadOutlined, DeleteOutlined } from "@antdv-next/icons";
 import { useArchivedSessions } from "./use-archived-sessions.js";
 
 const props = defineProps({ revision: { type: Number, default: 0 }, disabled: Boolean });
-const emit = defineEmits(["restored"]);
-const { runs, loading, error, restoring, restoreError, refresh, restore } = useArchivedSessions();
+const emit = defineEmits(["restored", "deleted"]);
+const { runs, loading, error, restoring, restoreError, refresh, restore, remove } = useArchivedSessions();
 const dialog = ref(), trigger = ref(), searchInput = ref();
 const opened = ref(false), query = ref(""), notice = ref("");
+const deleteTarget = ref(null);
+const locked = computed(() => Boolean(restoring.value || deleteTarget.value));
+let deleteTrigger;
 const filtered = computed(() => runs.value.filter((run) =>
   run.title.toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase())));
 function open() {
@@ -20,18 +23,40 @@ function open() {
   void nextTick(() => searchInput.value?.focus());
 }
 function close() {
-  if (restoring.value) return;
+  if (locked.value) return;
   opened.value = false;
   dialog.value.close();
   trigger.value?.focus();
 }
 async function recover(run) {
+  if (locked.value) return;
   notice.value = "";
   if (await restore(run.key)) {
     notice.value = `已恢复「${run.title}」，可在左侧会话列表中打开。`;
     emit("restored", run.key);
     void nextTick(() => searchInput.value?.focus());
   }
+}
+function requestDelete(run, event) {
+  if (locked.value) return;
+  notice.value = "";
+  restoreError.value = "";
+  deleteTrigger = event.currentTarget;
+  deleteTarget.value = run;
+}
+function deleted(key) {
+  const title = deleteTarget.value?.title;
+  remove(key);
+  notice.value = `已永久删除「${title}」。`;
+  emit("deleted", key);
+}
+function closeDeletion() {
+  deleteTarget.value = null;
+  void nextTick(() => {
+    if (deleteTrigger?.isConnected) deleteTrigger.focus();
+    else searchInput.value?.focus();
+    deleteTrigger = null;
+  });
 }
 function dateLabel(value) {
   return new Date(value).toLocaleString("zh-CN", { hour12: false });
@@ -47,7 +72,7 @@ watch(() => props.revision, () => { if (opened.value) void refresh(); });
     <dialog ref="dialog" class="workspace-dialog archived-sessions-dialog" aria-label="已归档会话" @cancel.prevent="close">
       <div class="workspace-dialog-heading">
         <h2>已归档会话</h2>
-        <button type="button" class="workspace-menu" aria-label="关闭已归档会话" :disabled="Boolean(restoring)" @click="close">×</button>
+        <button type="button" class="workspace-menu" aria-label="关闭已归档会话" :disabled="locked" @click="close">×</button>
       </div>
       <p class="muted">恢复后会话重新显示在需求列表中，保留原有历史和代码状态。</p>
       <label for="archived-session-search">搜索会话名称</label>
@@ -65,16 +90,22 @@ watch(() => props.revision, () => { if (opened.value) void refresh(); });
             <h3>{{ run.title }}</h3>
             <p class="field-hint">归档于 <time :datetime="run.archivedAt">{{ dateLabel(run.archivedAt) }}</time></p>
           </div>
-          <button type="button" :disabled="Boolean(restoring)" :aria-label="`恢复会话：${run.title}`" @click="recover(run)">
-            <UndoOutlined aria-hidden="true" />{{ restoring === run.key ? "恢复中…" : "恢复" }}
-          </button>
+          <div class="archived-session-actions">
+            <button type="button" :disabled="locked" :aria-label="`恢复会话：${run.title}`" @click="recover(run)">
+              <UndoOutlined aria-hidden="true" />{{ restoring === run.key ? "恢复中…" : "恢复" }}
+            </button>
+            <button type="button" class="danger-button" :disabled="locked" :aria-label="`永久删除会话：${run.title}`" @click="requestDelete(run, $event)">
+              <DeleteOutlined aria-hidden="true" />删除
+            </button>
+          </div>
         </li>
       </ul>
       <p v-else class="empty-inline">{{ query.trim() ? "没有匹配的已归档会话。" : "暂无已归档会话。" }}</p>
       <div class="actions">
-        <button type="button" :disabled="loading || Boolean(restoring)" @click="refresh"><ReloadOutlined aria-hidden="true" /> 刷新列表</button>
-        <button type="button" class="primary" :disabled="Boolean(restoring)" @click="close">完成</button>
+        <button type="button" :disabled="loading || locked" @click="refresh"><ReloadOutlined aria-hidden="true" /> 刷新列表</button>
+        <button type="button" class="primary" :disabled="locked" @click="close">完成</button>
       </div>
     </dialog>
   </Teleport>
+  <slot v-if="deleteTarget" name="delete-dialog" :run="deleteTarget" :deleted="deleted" :close="closeDeletion" />
 </template>
