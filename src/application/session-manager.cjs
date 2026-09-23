@@ -538,6 +538,66 @@ class SessionManager extends EventEmitter {
     return { metadata };
   }
 
+  updateTitle(key, title) {
+    this.assertOpen();
+    this.store.read(key);
+    const savedTitle = this.store.writeSessionTitle(key, title);
+    this.emit("event", {
+      key,
+      type: "title",
+      title: savedTitle,
+      at: new Date().toISOString(),
+    });
+    return { title: savedTitle };
+  }
+
+  archive(key) {
+    return this.exclusive(key, () => {
+      this.store.read(key);
+      const reason = this.git.activeReason(key);
+      if (reason) throw new Error(reason.replace("删除 Worktree", "归档会话"));
+      const archive = this.store.archive(key);
+      this.emit("event", {
+        key,
+        type: "archived",
+        ...archive,
+        at: new Date().toISOString(),
+      });
+      return archive;
+    });
+  }
+
+  deleteSession(key, input) {
+    return this.exclusive(key, async () => {
+      if (
+        !input || typeof input !== "object" || Array.isArray(input) ||
+        Object.keys(input).some((field) => !["confirm", "force", "confirmBranch"].includes(field)) ||
+        (input.force !== undefined && typeof input.force !== "boolean") ||
+        (input.confirmBranch !== undefined && typeof input.confirmBranch !== "string") ||
+        input.confirm !== true
+      ) throw new Error("请明确确认永久删除会话。");
+      const state = this.store.read(key);
+      const reason = this.git.activeReason(key);
+      if (reason) throw new Error(reason.replace("删除 Worktree", "删除会话"));
+      this.store.claim(key);
+      // Completion can still be saving canonical history after turnId clears.
+      // Keep the operation lock until all old writes settle before removing data.
+      await this.events.settle(key);
+      this.assertOpen();
+      if (input.force) await this.git.forceRemove(key, input.confirmBranch);
+      await this.events.settle(key);
+      const afterCleanup = this.git.activeReason(key);
+      if (afterCleanup) throw new Error(afterCleanup);
+      const deletion = this.store.readWorktreeDeletion(key);
+      if (state.worktree?.path && deletion.status !== "deleted")
+        throw new Error("请先删除 Worktree 与本地分支，避免遗留无法管理的代码目录。");
+      this.store.deleteRun(key);
+      this.sessions.delete(key);
+      this.emit("event", { key, type: "deleted", at: new Date().toISOString() });
+      return { deleted: true };
+    });
+  }
+
   updateExecutionSettings(key, input) {
     return this.exclusive(key, () => {
       this.assertWorktreeRetained(key);
@@ -595,6 +655,7 @@ class SessionManager extends EventEmitter {
     await Promise.allSettled(
       [
         ...this.events.pendingCallbacks,
+        ...[...this.events.completions.values()].flatMap((pending) => [...pending]),
         ...this.operations.values(),
         ...[...this.sessions.values()].map((runtime) => runtime.operation),
       ].filter(Boolean),

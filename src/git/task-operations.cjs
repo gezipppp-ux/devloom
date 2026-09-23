@@ -3,7 +3,7 @@ const path = require("node:path");
 const { createHash } = require("node:crypto");
 const { git, gitAsync } = require("./command.cjs");
 const { repositoryGit, repositoryCommonDirectory } = require("./repository.cjs");
-const { samePath } = require("../shared/paths.cjs");
+const { absolutePath, samePath } = require("../shared/paths.cjs");
 const { operationReason, registeredWorktrees } = require("./operation-state.cjs");
 
 function taskIdentity(state) {
@@ -291,4 +291,92 @@ async function deleteTaskWorktree(state, input = {}, deletion = {}, onProgress =
   }
 }
 
-module.exports = { readTaskGit, deleteTaskWorktree };
+function containsPath(parent, child) {
+  const relative = path.relative(parent, child);
+  return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+function forceDeletionTarget(state, deletion) {
+  const tree = taskIdentity(state);
+  tree.path = absolutePath(tree.path, "任务目录");
+  if (samePath(tree.path, path.parse(tree.path).root))
+    throw new Error("不能删除磁盘或文件系统根目录。");
+  // Check every existing ancestor before any recursive removal, including
+  // junctions and dangling links. Only the recorded absolute directory is used.
+  for (let current = tree.path; ; current = path.dirname(current)) {
+    if (pathExists(current) && fs.lstatSync(current).isSymbolicLink())
+      throw new Error("任务目录或其父目录已被符号链接替换，不能强制删除。");
+    if (samePath(current, path.dirname(current))) break;
+  }
+  const entries = registeredWorktrees(tree.repository);
+  const common = repositoryCommonDirectory(tree.repository);
+  if ([tree.repository, common, ...entries.filter((entry) => !samePath(entry.path, tree.path)).map((entry) => entry.path)]
+    .some((protectedPath) => containsPath(tree.path, protectedPath)))
+    throw new Error("任务目录包含仓库或其他 Worktree，不能强制删除。");
+  if (entries.some((entry) => !samePath(entry.path, tree.path) && entry.branch === `refs/heads/${tree.branch}`))
+    throw new Error("任务分支已被其他 Worktree 使用，不能强制删除。");
+  const entry = entries.find((candidate) => samePath(candidate.path, tree.path));
+  const exists = pathExists(tree.path);
+  const stat = exists ? fs.lstatSync(tree.path, { bigint: true }) : null;
+  const directoryIdentity = stat ? `${stat.dev}:${stat.ino}` : null;
+  if (exists && Object.hasOwn(deletion, "directoryIdentity") && deletion.directoryIdentity !== directoryIdentity)
+    throw new Error("原任务目录已被替换，不能强制删除。");
+  if ((deletion.worktreeRemoved || deletion.status === "deleted") && (exists || entry))
+    throw new Error("原任务路径已被重新使用，不能强制删除。");
+  if (exists && !fs.lstatSync(tree.path).isDirectory())
+    throw new Error("任务目录已被其他文件替换，不能强制删除。");
+  if (entry && (entry.locked || entry.branch !== `refs/heads/${tree.branch}`))
+    throw new Error("Worktree 已锁定或不再属于任务分支，不能强制删除。");
+  if (exists && pathExists(path.join(tree.path, ".git"))) {
+    if (!entry) throw new Error("原路径包含未登记的 Git 仓库，不能强制删除。");
+    verifyWorktree(state);
+  }
+  const head = branchHead(tree);
+  if (Object.hasOwn(deletion, "expectedHead") && head && head !== deletion.expectedHead)
+    throw new Error("任务分支在清理期间发生变化，请重新确认删除。");
+  if ((deletion.worktreeRemoved || deletion.status === "deleted") && head && head !== deletion.head)
+    throw new Error("任务分支已有新的提交，不能继续删除。");
+  return { tree, head, registered: Boolean(entry), exists, directoryIdentity };
+}
+
+async function forceDeleteTaskWorktree(state, deletion = {}, onProgress = () => {}) {
+  let target = forceDeletionTarget(state, deletion);
+  const guard = { ...deletion, directoryIdentity: target.directoryIdentity, expectedHead: target.head };
+  const progress = {
+    path: target.tree.path, branch: target.tree.branch, head: target.head || deletion.head,
+    directoryIdentity: target.directoryIdentity,
+    worktreeRemoved: Boolean(deletion.worktreeRemoved), branchDeleted: Boolean(deletion.branchDeleted),
+  };
+  try {
+    await onProgress(progress);
+    target = forceDeletionTarget(state, guard);
+    if (target.registered) {
+      try {
+        await gitAsync(target.tree.repository, ["worktree", "remove", "--force", "--", target.tree.path]);
+      } catch {
+        // Git can leave a partly removed directory (for example with nested
+        // repositories). Revalidate ownership and path boundaries before cleanup.
+        target = forceDeletionTarget(state, guard);
+      }
+    }
+    target = forceDeletionTarget(state, guard);
+    if (target.exists) {
+      await fs.promises.rm(target.tree.path, { recursive: true, force: true, maxRetries: 3 });
+    }
+    target = forceDeletionTarget(state, guard);
+    if (target.registered)
+      await gitAsync(target.tree.repository, ["worktree", "remove", "--force", "--", target.tree.path]);
+    target = forceDeletionTarget(state, guard);
+    if (target.exists || target.registered) throw new Error("任务目录或 Worktree 登记尚未清理完成。");
+    progress.worktreeRemoved = true;
+    await onProgress(progress);
+    if (target.head) await removeBranch(target.tree, target.head, true);
+    progress.branchDeleted = true;
+    await onProgress(progress);
+    return { ...progress, deleted: true };
+  } catch (cause) {
+    throw Object.assign(new Error(`强制清理未完成：${cause.message} 会话记录已保留，可重试。`), { partial: progress });
+  }
+}
+
+module.exports = { readTaskGit, deleteTaskWorktree, forceDeleteTaskWorktree };

@@ -18,6 +18,8 @@ import SessionGitPanel from "../features/session/SessionGitPanel.vue";
 import SessionItem from "../features/session/SessionItem.vue";
 import SessionRequest from "../features/session/SessionRequest.vue";
 import SessionComposer from "../features/session/SessionComposer.vue";
+import SessionTitleEditor from "../features/session/SessionTitleEditor.vue";
+import SessionLifecycleControls from "../features/session/SessionLifecycleControls.vue";
 import { useSessionImages } from "../features/session/use-session-images.js";
 import TaskList from "../features/tasks/TaskList.vue";
 import TaskMetadataControls from "../features/tasks/TaskMetadataControls.vue";
@@ -68,6 +70,9 @@ const {
   older,
   reloadChannels,
   metadataSaved,
+  titleSaved,
+  archiveSaved,
+  sessionDeleted,
   executionSettings,
   canEditSettings,
   settingsBusy,
@@ -280,6 +285,12 @@ async function worktreeDeleted() {
       <RepositoryGitPanel v-else-if="repositoryOpen" />
       <template v-else-if="session">
         <header class="session-header" aria-label="会话工具栏">
+          <SessionTitleEditor
+            :key="session.key"
+            :task-key="session.key"
+            :title="session.title"
+            @saved="titleSaved"
+          />
           <span
             class="status"
             :data-status="session.requests?.length ? 'waiting' : session.status"
@@ -295,6 +306,15 @@ async function worktreeDeleted() {
             :task-key="session.key"
             :metadata="session.metadata"
             @saved="metadataSaved"
+          />
+          <SessionLifecycleControls
+            :key="session.key"
+            :task-key="session.key"
+            :worktree="session.worktree"
+            :deletion="session.worktreeDeletion"
+            :active="running || initializing || ['preparing', 'starting'].includes(session.status) || Boolean(session.requests?.length)"
+            @archived="archiveSaved"
+            @deleted="sessionDeleted"
           />
           <button :disabled="loading" @click="open(active)">
             <ReloadOutlined aria-hidden="true" /> 刷新

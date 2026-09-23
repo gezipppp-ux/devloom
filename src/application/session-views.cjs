@@ -172,6 +172,7 @@ class SessionViews {
     const saved = new Map(
       this.store.list().flatMap(({ key, state }) => {
         try {
+          if (this.store.isArchived(key)) return [];
           return [[key, this.presenter.summary(key, state)]];
         } catch {
           return [];
@@ -179,6 +180,7 @@ class SessionViews {
       }),
     );
     for (const runtime of this.sessions.values()) {
+      if (this.store.isArchived(runtime.key)) continue;
       saved.set(runtime.key, {
         ...(saved.get(runtime.key) || {
           key: runtime.key,

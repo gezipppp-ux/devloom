@@ -55,10 +55,33 @@ export function useWorkspaceConsole({
     conversation.updateMetadata(key, metadata);
   }
 
+  function titleSaved(key, title) {
+    tasks.updateTitle(key, title);
+    conversation.updateTitle(key, title);
+  }
+
+  async function removed(key) {
+    const wasActive = conversation.active.value === key;
+    tasks.remove(key);
+    conversation.remove(key);
+    if (wasActive) {
+      if (tasks.runs.value.length) await conversation.open(tasks.runs.value[0].key);
+      else onEmpty();
+    }
+  }
+
   function eventReceived(event) {
     if (disposed) return;
     if (event.type === "metadata") {
       metadataSaved(event.key, event.metadata);
+      return;
+    }
+    if (event.type === "title") {
+      titleSaved(event.key, event.title);
+      return;
+    }
+    if (["archived", "deleted"].includes(event.type)) {
+      void removed(event.key);
       return;
     }
     conversation.receiveEvent(event);
@@ -176,5 +199,8 @@ export function useWorkspaceConsole({
     refreshSession: conversation.refresh,
     reloadChannels,
     metadataSaved,
+    titleSaved,
+    archiveSaved: removed,
+    sessionDeleted: removed,
   };
 }

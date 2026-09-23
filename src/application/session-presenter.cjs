@@ -17,7 +17,7 @@ class SessionPresenter {
   summary(key, state) {
     return {
       key,
-      title: state.workitem.title,
+      title: this.store.readSessionTitle(key, state.workitem.title),
       source: state.source || sourceFor("tapd", state.workitem),
       storyId: state.workitem.id,
       workspaceId: state.workitem.workspace_id,

@@ -155,6 +155,12 @@ async function serveApi(
     }
     if (request.method === "POST" && action === "metadata")
       return json(response, 200, sessions.updateTaskMetadata(key, input));
+    if (request.method === "POST" && action === "title")
+      return json(response, 200, sessions.updateTitle(key, input.title));
+    if (request.method === "POST" && action === "archive")
+      return json(response, 200, await sessions.archive(key));
+    if (request.method === "POST" && action === "delete")
+      return json(response, 200, await sessions.deleteSession(key, input));
     if (request.method === "POST" && action === "execution-settings")
       return json(
         response,

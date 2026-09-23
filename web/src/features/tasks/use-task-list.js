@@ -9,15 +9,15 @@ export function useTaskList() {
   let pendingList;
 
   async function refresh() {
-    const request = (pendingList = { metadata: new Map() });
+    const request = (pendingList = { metadata: new Map(), titles: new Map(), removed: new Set() });
     try {
       const result = await api("/runs");
       if (pendingList !== request) return;
-      runs.value = result.runs.map((run) =>
-        request.metadata.has(run.key)
-          ? { ...run, metadata: request.metadata.get(run.key) }
-          : run,
-      );
+      runs.value = result.runs.filter((run) => !request.removed.has(run.key)).map((run) => ({
+        ...run,
+        ...(request.metadata.has(run.key) ? { metadata: request.metadata.get(run.key) } : {}),
+        ...(request.titles.has(run.key) ? { title: request.titles.get(run.key) } : {}),
+      }));
       retainRuns(runs.value);
     } catch (e) {
       if (pendingList === request) throw e;
@@ -32,6 +32,18 @@ export function useTaskList() {
     if (run) run.metadata = metadata;
   }
 
+  function updateTitle(key, title) {
+    pendingList?.titles.set(key, title);
+    const run = runs.value.find((entry) => entry.key === key);
+    if (run) run.title = title;
+  }
+
+  function remove(key) {
+    pendingList?.removed.add(key);
+    runs.value = runs.value.filter((entry) => entry.key !== key);
+    retainRuns(runs.value);
+  }
+
   onUnmounted(() => {
     pendingList = null;
   });
@@ -44,5 +56,7 @@ export function useTaskList() {
     markRead,
     refresh,
     updateMetadata,
+    updateTitle,
+    remove,
   };
 }

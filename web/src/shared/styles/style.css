@@ -1204,6 +1204,39 @@ main {
 .session-header > button {
   flex-shrink: 0;
 }
+.session-title-editor {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 6px;
+}
+.session-heading {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 650;
+}
+.session-title-editor input {
+  width: min(320px, 45vw);
+}
+.session-title-editor .error {
+  flex-basis: 100%;
+  margin: 0;
+  max-width: 320px;
+}
+.session-lifecycle-controls {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.session-lifecycle-controls .danger-button {
+  padding-inline: 10px;
+}
+.session-delete-dialog {
+  width: min(500px, calc(100vw - 32px));
+}
 .status {
   display: inline-block;
   padding: 3px 8px;
@@ -2260,6 +2293,9 @@ main {
     flex-wrap: wrap;
     padding: 16px 20px;
     gap: 12px;
+  }
+  .session-lifecycle-controls {
+    margin-left: 0;
   }
   .status {
     font-size: 10px;

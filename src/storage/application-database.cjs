@@ -127,6 +127,19 @@ class ApplicationDatabase {
     return this.handle.prepare(`DELETE FROM ${table} WHERE path=?`).run(relative).changes > 0;
   }
 
+  deleteRunDirectory(directory) {
+    const relative = this.relative(directory);
+    const prefix = `${relative}/`;
+    return this.transaction(() => {
+      this.handle.prepare("DELETE FROM session_items WHERE run_path=?").run(relative);
+      for (const table of ["run_documents", "attachments", "log_chunks"])
+        this.handle.prepare(`DELETE FROM ${table} WHERE substr(path,1,?)=?`)
+          .run(prefix.length, prefix);
+      return this.handle.prepare("DELETE FROM runs WHERE path=?")
+        .run(`${relative}/run.json`).changes > 0;
+    });
+  }
+
   listDocuments(directory) {
     const prefix = `${this.relative(directory).replace(/\/$/, "")}/`;
     return ["documents", "runs", "run_documents"].flatMap((table) =>

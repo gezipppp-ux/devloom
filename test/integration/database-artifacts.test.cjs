@@ -50,6 +50,24 @@ test("database run state and paginated history survive restart without JSON file
   assert.equal(fixture.database.handle.prepare("SELECT count(*) AS total FROM log_chunks").get().total, 1);
 });
 
+test("permanently deleting a run removes its database documents, history, logs and attachments", async (t) => {
+  const fixture = await setup(t);
+  const directory = path.join(fixture.directory, "runs", "1-2");
+  const execution = new ExecutionStore(directory);
+  execution.save({ session_id: "stable", workitem: { title: "Delete me" }, execution: { status: "completed" } });
+  execution.writeTask({ workitem: { title: "snapshot" }, codex_prompt: "prompt", images: [] });
+  execution.append("initialization.log", "log\n");
+  const store = new RunStore(path.dirname(directory));
+  store.saveHistoryItem("1-2", { id: "item", type: "agentMessage", text: "history" });
+  store.messageImages("1-2").save(png);
+  store.deleteRun("1-2");
+  assert.equal(store.hasRun("1-2"), false);
+  assert.equal(fixture.database.handle.prepare("SELECT count(*) AS total FROM run_documents").get().total, 0);
+  assert.equal(fixture.database.handle.prepare("SELECT count(*) AS total FROM session_items").get().total, 0);
+  assert.equal(fixture.database.handle.prepare("SELECT count(*) AS total FROM log_chunks").get().total, 0);
+  assert.equal(fixture.database.handle.prepare("SELECT count(*) AS total FROM attachments").get().total, 0);
+});
+
 test("manual and conversation image blobs rebuild deleted caches and remain scoped", async (t) => {
   const fixture = await setup(t);
   const uploads = new ManualUploadStore(path.join(fixture.directory, "uploads"));

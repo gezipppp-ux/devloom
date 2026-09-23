@@ -14,6 +14,7 @@ class SessionEvents {
     this.pendingCallbacks = new Set();
     this.pendingHistory = new Map();
     this.historyTimers = new Map();
+    this.completions = new Map();
     client.on("notification", (message) => this.notification(message));
     client.on("request", (message) => this.serverRequest(message));
     client.on("disconnected", (error) => this.disconnected(error));
@@ -208,7 +209,26 @@ class SessionEvents {
     }
   }
 
-  async completed(runtime, turn) {
+  completed(runtime, turn) {
+    const pending = this.completeTurn(runtime, turn);
+    let completions = this.completions.get(runtime.key);
+    if (!completions) this.completions.set(runtime.key, completions = new Set());
+    completions.add(pending);
+    const settled = () => {
+      completions.delete(pending);
+      if (!completions.size) this.completions.delete(runtime.key);
+    };
+    void pending.then(settled, settled);
+    return pending;
+  }
+
+  async settle(key) {
+    while (this.completions.has(key))
+      await Promise.allSettled([...this.completions.get(key)]);
+    this.flushHistory(key);
+  }
+
+  async completeTurn(runtime, turn) {
     if (runtime.turnId && runtime.turnId !== turn.id) return;
     const initial = runtime.initial;
     this.flushHistory(runtime.key);

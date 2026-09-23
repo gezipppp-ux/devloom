@@ -78,6 +78,7 @@ export function useSession({
       "executionSettings",
       "activeExecutionSettings",
       "settingsPending",
+      "title",
     ])
       if (name in event) fields[name] = event[name];
     if (event.at) fields.lastActivity = event.at;
@@ -164,6 +165,23 @@ export function useSession({
   function updateMetadata(key, metadata) {
     if (pendingView?.key === key) pendingView.fields.metadata = metadata;
     if (session.value?.key === key) session.value.metadata = metadata;
+  }
+
+  function updateTitle(key, title) {
+    if (pendingView?.key === key) pendingView.fields.title = title;
+    if (session.value?.key === key) session.value.title = title;
+  }
+
+  function remove(key) {
+    if (pendingView?.key === key) pendingView = null;
+    if (active.value === key) {
+      selection++;
+      active.value = null;
+      session.value = null;
+      loading.value = false;
+      busy.value = false;
+      onOpen();
+    }
   }
 
   async function updateExecutionSettings(patch) {
@@ -262,6 +280,8 @@ export function useSession({
     refresh,
     receiveEvent,
     updateMetadata,
+    updateTitle,
+    remove,
     action,
     older,
   };

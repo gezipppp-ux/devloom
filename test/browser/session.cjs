@@ -13,6 +13,7 @@ const { temporary, png } = require('../support/helpers.cjs');
 const { ChannelRegistry } = require('../../src/channels/channel-registry.cjs');
 const { createManualChannel } = require('../../src/channels/manual/adapter.cjs');
 const { verifySessionImages } = require('./session-images.cjs');
+const { verifySessionDeletion } = require('./session-deletion.cjs');
 const { verifyStartTaskLock } = require('./start-task.cjs');
 
 async function choosePermission(page, mode) {
@@ -742,6 +743,26 @@ async function main() {
     fs.mkdirSync(path.resolve('state/browser'), {recursive:true});
     await page.screenshot({path:path.resolve('state/browser/task-progress-groups.png'),fullPage:true});
 
+    await page.getByRole('button', { name: '修改会话标题', exact: true }).click();
+    await page.getByLabel('会话标题', { exact: true }).fill('套餐充值入口（已重命名）');
+    await page.getByRole('button', { name: '保存', exact: true }).click();
+    await page.locator('.session-header .session-heading').getByText('套餐充值入口（已重命名）', { exact: true }).waitFor();
+    await page.locator('.session-link.active').getByText('套餐充值入口（已重命名）', { exact: true }).waitFor();
+    await page.reload();
+    await page.locator('.session-header .session-heading').getByText('套餐充值入口（已重命名）', { exact: true }).waitFor();
+    assert.equal(store.read('1-2').workitem.title, '【演示】套餐充值入口');
+    await page.getByRole('button', { name: '归档会话', exact: true }).click();
+    await page.getByRole('heading', { name: '归档会话', exact: true }).waitFor();
+    await page.getByText('归档后会话不再显示在左侧列表中，不会删除历史、需求资料或 Worktree。', { exact: true }).waitFor();
+    await page.getByRole('button', { name: '取消', exact: true }).click();
+    await page.getByRole('button', { name: '永久删除会话', exact: true }).click();
+    await page.getByText('此会话仍有关联代码。可先在 Git 面板清理，或在下方选择强制删除。', { exact: true }).waitFor();
+    await page.getByRole('button', { name: '取消', exact: true }).click();
+    await page.getByRole('button', { name: '修改会话标题', exact: true }).click();
+    await page.getByLabel('会话标题', { exact: true }).fill('【演示】套餐充值入口');
+    await page.getByRole('button', { name: '保存', exact: true }).click();
+    await page.locator('.session-header .session-heading').getByText('【演示】套餐充值入口', { exact: true }).waitFor();
+
     await page.locator('.session-context > summary').click();
     await page
       .getByRole('heading', { name: '完整需求标题', exact: true })
@@ -1139,6 +1160,7 @@ async function main() {
     await verifyRefreshConsistency(browser, origin, manager, client, key, errors);
     await verifyLanManualCreation(browser, directory, errors);
     await verifySessionImages(browser, origin, manager, client, key, errors, output);
+    await verifySessionDeletion(browser, origin, manager, directory, errors, output);
     assert.deepEqual(errors, []);
     process.stdout.write(
       'Browser smoke passed: send, stream, steer, approval, question, interrupt, continue, reload, mobile and start form.\n',

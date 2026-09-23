@@ -13,6 +13,7 @@ const {
   defaultTaskMetadata,
   validateTaskMetadata,
 } = require("../domain/task-metadata.cjs");
+const { validateSessionTitle } = require("../domain/session-title.cjs");
 
 class RunStore {
   constructor(directory) {
@@ -79,7 +80,12 @@ class RunStore {
   }
 
   releaseAll() {
-    for (const key of this.owned) {
+    for (const key of [...this.owned]) this.release(key);
+  }
+
+  release(key) {
+    if (!this.owned.has(key)) return;
+    {
       const file = path.join(this.dir(key), "web-owner.json");
       try {
         const owner = JSON.parse(fs.readFileSync(file, "utf8"));
@@ -89,7 +95,7 @@ class RunStore {
         if (error.code !== "ENOENT") throw error;
       }
     }
-    this.owned.clear();
+    this.owned.delete(key);
   }
 
   dir(key) {
@@ -144,6 +150,35 @@ class RunStore {
     return updateConfig(path.join(this.dir(key), "task-metadata.json"), (saved) =>
       validateTaskMetadata(input, validateTaskMetadata(saved, defaultTaskMetadata(item))),
     );
+  }
+
+  readSessionTitle(key, fallback) {
+    const saved = readOptional(path.join(this.dir(key), "session-title.json"));
+    return typeof saved.title === "string" ? saved.title : fallback;
+  }
+
+  writeSessionTitle(key, title) {
+    const value = { title: validateSessionTitle(title) };
+    writeConfig(path.join(this.dir(key), "session-title.json"), value);
+    return value.title;
+  }
+
+  isArchived(key) {
+    return Boolean(readOptional(path.join(this.dir(key), "session-archive.json")).archivedAt);
+  }
+
+  archive(key) {
+    const archivedAt = new Date().toISOString();
+    writeConfig(path.join(this.dir(key), "session-archive.json"), { archivedAt });
+    return { archivedAt };
+  }
+
+  deleteRun(key) {
+    const directory = this.dir(key);
+    this.read(key);
+    this.release(key);
+    fs.rmSync(directory, { recursive: true, force: true, maxRetries: 3 });
+    return this.database ? this.database.deleteRunDirectory(directory) : true;
   }
 
   readExecutionSettings(key) {
