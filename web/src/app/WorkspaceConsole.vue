@@ -22,6 +22,7 @@ import SessionTitleEditor from "../features/session/SessionTitleEditor.vue";
 import SessionLifecycleControls from "../features/session/SessionLifecycleControls.vue";
 import { useSessionImages } from "../features/session/use-session-images.js";
 import TaskList from "../features/tasks/TaskList.vue";
+import ArchivedSessions from "../features/tasks/ArchivedSessions.vue";
 import TaskMetadataControls from "../features/tasks/TaskMetadataControls.vue";
 import {
   SettingOutlined,
@@ -72,6 +73,8 @@ const {
   metadataSaved,
   titleSaved,
   archiveSaved,
+  archiveRevision,
+  archiveRestored,
   sessionDeleted,
   executionSettings,
   canEditSettings,
@@ -238,6 +241,7 @@ async function worktreeDeleted() {
         :unread-result-keys="unreadResultKeys"
         @open="open"
       />
+      <ArchivedSessions :revision="archiveRevision" :disabled="workspaceLoading" @restored="archiveRestored" />
       <div class="sidebar-footer">
         <p v-if="preferenceError" class="error" role="alert">未读状态同步失败：{{ preferenceError }}</p>
         <span :class="['connection', { online }]"></span
@@ -291,6 +295,7 @@ async function worktreeDeleted() {
             :title="session.title"
             @saved="titleSaved"
           />
+          <div class="session-toolbar">
           <span
             class="status"
             :data-status="session.requests?.length ? 'waiting' : session.status"
@@ -319,6 +324,7 @@ async function worktreeDeleted() {
           <button :disabled="loading" @click="open(active)">
             <ReloadOutlined aria-hidden="true" /> 刷新
           </button>
+          </div>
         </header>
         <SessionGitPanel
           v-if="session.worktree?.path"

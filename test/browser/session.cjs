@@ -14,6 +14,7 @@ const { ChannelRegistry } = require('../../src/channels/channel-registry.cjs');
 const { createManualChannel } = require('../../src/channels/manual/adapter.cjs');
 const { verifySessionImages } = require('./session-images.cjs');
 const { verifySessionDeletion } = require('./session-deletion.cjs');
+const { verifySessionArchiveTitle } = require('./session-archive-title.cjs');
 const { verifyStartTaskLock } = require('./start-task.cjs');
 
 async function choosePermission(page, mode) {
@@ -493,7 +494,7 @@ async function verifyRefreshConsistency(browser, origin, manager, client, key, e
     await page.waitForFunction(() =>
       document.querySelector('select[aria-label="任务进度"]').value === 'review');
     await release(streamSnapshot, 'stream-overlay');
-    assert.equal(await page.locator('.session-header h1').count(), 0);
+    assert.equal(await page.locator('.session-header .session-heading').textContent(), manager.list().find((run) => run.key === key).title);
     assert.equal(await page.getByText('旧流式消息，保留最新内容', { exact: true }).count(), 1);
     assert.equal(await page.getByText('请求期间新增的消息', { exact: true }).count(), 1);
     assert.equal(await page.getByLabel('任务进度', { exact: true }).inputValue(), 'review');
@@ -753,7 +754,7 @@ async function main() {
     assert.equal(store.read('1-2').workitem.title, '【演示】套餐充值入口');
     await page.getByRole('button', { name: '归档会话', exact: true }).click();
     await page.getByRole('heading', { name: '归档会话', exact: true }).waitFor();
-    await page.getByText('归档后会话不再显示在左侧列表中，不会删除历史、需求资料或 Worktree。', { exact: true }).waitFor();
+    await page.getByText('归档后会话不再显示在左侧列表中，可从「已归档会话」恢复。历史、需求资料和 Worktree 保留。', { exact: true }).waitFor();
     await page.getByRole('button', { name: '取消', exact: true }).click();
     await page.getByRole('button', { name: '永久删除会话', exact: true }).click();
     await page.getByText('此会话仍有关联代码。可先在 Git 面板清理，或在下方选择强制删除。', { exact: true }).waitFor();
@@ -1161,6 +1162,7 @@ async function main() {
     await verifyLanManualCreation(browser, directory, errors);
     await verifySessionImages(browser, origin, manager, client, key, errors, output);
     await verifySessionDeletion(browser, origin, manager, directory, errors, output);
+    await verifySessionArchiveTitle(browser, origin, manager, errors, output);
     assert.deepEqual(errors, []);
     process.stdout.write(
       'Browser smoke passed: send, stream, steer, approval, question, interrupt, continue, reload, mobile and start form.\n',

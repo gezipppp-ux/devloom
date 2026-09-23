@@ -70,7 +70,7 @@ onUnmounted(() => { revision++; });
           <h2>{{ mode === "archive" ? "归档会话" : "永久删除会话" }}</h2>
           <button type="button" class="workspace-menu" aria-label="关闭确认窗口" :disabled="busy" @click="close">×</button>
         </div>
-        <p v-if="mode === 'archive'" class="muted">归档后会话不再显示在左侧列表中，不会删除历史、需求资料或 Worktree。</p>
+        <p v-if="mode === 'archive'" class="muted">归档后会话不再显示在左侧列表中，可从「已归档会话」恢复。历史、需求资料和 Worktree 保留。</p>
         <template v-else>
           <p class="git-feedback warning">永久删除会话会移除全部会话记录、需求资料和附件，无法恢复。</p>
           <p v-if="!codeRemoved" class="muted">此会话仍有关联代码。可先在 Git 面板清理，或在下方选择强制删除。</p>

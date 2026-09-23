@@ -14,6 +14,7 @@ export function useWorkspaceConsole({
   onUnreadResult = () => {},
 }) {
   const channels = ref([]),
+    archiveRevision = ref(0),
     workspace = ref(""),
     online = ref(false),
     workspaceLoading = ref(true);
@@ -58,9 +59,11 @@ export function useWorkspaceConsole({
   function titleSaved(key, title) {
     tasks.updateTitle(key, title);
     conversation.updateTitle(key, title);
+    archiveRevision.value++;
   }
 
   async function removed(key) {
+    archiveRevision.value++;
     const wasActive = conversation.active.value === key;
     tasks.remove(key);
     conversation.remove(key);
@@ -68,6 +71,11 @@ export function useWorkspaceConsole({
       if (tasks.runs.value.length) await conversation.open(tasks.runs.value[0].key);
       else onEmpty();
     }
+  }
+
+  function archiveRestored() {
+    archiveRevision.value++;
+    scheduleRefresh();
   }
 
   function eventReceived(event) {
@@ -82,6 +90,10 @@ export function useWorkspaceConsole({
     }
     if (["archived", "deleted"].includes(event.type)) {
       void removed(event.key);
+      return;
+    }
+    if (event.type === "restored") {
+      archiveRestored();
       return;
     }
     conversation.receiveEvent(event);
@@ -117,6 +129,7 @@ export function useWorkspaceConsole({
       });
       events.onopen = () => {
         online.value = true;
+        archiveRevision.value++;
         scheduleRefresh();
       };
       events.onerror = () => {
@@ -200,6 +213,8 @@ export function useWorkspaceConsole({
     reloadChannels,
     metadataSaved,
     titleSaved,
+    archiveRevision,
+    archiveRestored,
     archiveSaved: removed,
     sessionDeleted: removed,
   };

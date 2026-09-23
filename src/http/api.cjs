@@ -79,7 +79,7 @@ async function serveApi(
   if (request.method === "GET" && url.pathname === "/api/events")
     return events.connect(request, response, sessions, authorization);
   if (request.method === "GET" && url.pathname === "/api/runs")
-    return json(response, 200, { runs: sessions.list() });
+    return json(response, 200, { runs: sessions.list({ archived: url.searchParams.get("archived") === "true" }) });
   if (
     request.method === "GET" &&
     ["/api/stories", "/api/requirements"].includes(url.pathname)
@@ -159,6 +159,8 @@ async function serveApi(
       return json(response, 200, sessions.updateTitle(key, input.title));
     if (request.method === "POST" && action === "archive")
       return json(response, 200, await sessions.archive(key));
+    if (request.method === "POST" && action === "restore")
+      return json(response, 200, await sessions.restore(key));
     if (request.method === "POST" && action === "delete")
       return json(response, 200, await sessions.deleteSession(key, input));
     if (request.method === "POST" && action === "execution-settings")

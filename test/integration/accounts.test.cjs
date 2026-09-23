@@ -298,6 +298,8 @@ test("SQLite accounts require login and session CSRF, isolate workspaces includi
     (await admin.request(`/api/workspaces/${own.data.id}/bootstrap`)).status,
     404,
   );
+  assert.equal((await admin.request(`/api/workspaces/${own.data.id}/runs?archived=true`)).status, 404);
+  assert.equal((await admin.request(`/api/workspaces/${own.data.id}/runs/1-2/restore`, {})).status, 404);
   assert.deepEqual(
     (await admin.request("/api/workspaces")).data.workspaces,
     [],

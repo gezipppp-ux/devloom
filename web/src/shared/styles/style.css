@@ -1193,38 +1193,69 @@ main {
 
 /* Conversation, artifacts and decisions */
 .session-header {
-  display: flex;
-  align-items: center;
-  gap: 20px;
+  display: grid;
+  gap: 16px;
   padding: 16px 32px;
   flex-shrink: 0;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
 }
-.session-header > button {
+.session-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  min-width: 0;
+}
+.session-toolbar > button,
+.session-toolbar > .status {
   flex-shrink: 0;
 }
 .session-title-editor {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
   min-width: 0;
-  gap: 6px;
+}
+.session-title-display {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
 }
 .session-heading {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 16px;
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  font-size: 20px;
+  line-height: 1.5;
   font-weight: 650;
 }
-.session-title-editor input {
-  width: min(320px, 45vw);
+.session-title-form {
+  display: grid;
+  gap: 8px;
+}
+.session-title-form label {
+  margin: 0;
+}
+.session-title-form textarea {
+  width: 100%;
+  min-height: 76px;
+  max-height: 200px;
+  resize: vertical;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.session-title-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.session-title-actions .field-hint {
+  margin: 0 auto 0 0;
 }
 .session-title-editor .error {
-  flex-basis: 100%;
   margin: 0;
-  max-width: 320px;
+  overflow-wrap: anywhere;
 }
 .session-lifecycle-controls {
   display: flex;
@@ -1236,6 +1267,41 @@ main {
 }
 .session-delete-dialog {
   width: min(500px, calc(100vw - 32px));
+}
+.archived-sessions-trigger {
+  flex-shrink: 0;
+  grid-column: 1 / -1;
+}
+.workspace-dialog.archived-sessions-dialog {
+  width: min(640px, calc(100vw - 32px));
+}
+.archived-session-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0;
+}
+.archived-session-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+.archived-session-info {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.archived-session-info h3 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.archived-session-info .field-hint {
+  margin: 8px 0 0;
+}
+.archived-session-list li > button {
+  flex-shrink: 0;
 }
 .status {
   display: inline-block;
@@ -1263,7 +1329,7 @@ main {
 }
 .task-metadata-controls {
   min-width: 0;
-  flex: 1;
+  flex: 1 1 360px;
 }
 .task-metadata-fields {
   display: flex;
@@ -1277,6 +1343,7 @@ main {
   gap: 8px;
   font-size: 12px;
   color: var(--muted);
+  white-space: nowrap;
 }
 .task-metadata-fields select {
   width: 108px;
@@ -2290,9 +2357,20 @@ main {
     gap: 8px;
   }
   .session-header {
-    flex-wrap: wrap;
     padding: 16px 20px;
     gap: 12px;
+  }
+  .session-heading {
+    font-size: 18px;
+  }
+  .session-title-actions .field-hint {
+    flex-basis: 100%;
+  }
+  .archived-session-list li {
+    flex-wrap: wrap;
+  }
+  .archived-session-info {
+    flex-basis: 100%;
   }
   .session-lifecycle-controls {
     margin-left: 0;

@@ -48,13 +48,26 @@ test('direct ID lookup does not depend on todo membership and rejects missing ne
     return json({ get_workitem_basic_info_ret: { data: item } });
   });
   const selected = await selectItem(session, { id: item.id });
-  assert.equal((await detail(session, selected)).id, item.id);
+  const result = await detail(session, selected);
+  assert.equal(result.id, item.id);
+  assert.equal(result.title, item.title);
   assert.equal(calls.length, 1);
   assert.match(calls[0], /get_info/);
   t.mock.method(global, 'fetch', async () =>
     json({ get_workitem_basic_info_ret: { meta: { code: 403 }, data: {} } }),
   );
   await assert.rejects(detail(session, selected), /rejected/);
+});
+
+test('direct ID detail preserves long TAPD titles from either name or title without a todo title', async (t) => {
+  const title = '【生产】套餐本月已用积分在完成AI生成任务后，没有实时刷新已用积分，需要人工手动刷新';
+  const selected = { id: item.id, workspace_id: item.workspace_id, type: 'story' };
+  for (const fields of [{ name: title }, { title }, { name: '  ', title }]) {
+    t.mock.method(global, 'fetch', async () => json({ get_workitem_basic_info_ret: {
+      data: { id: item.id, workspace_id: item.workspace_id, ...fields },
+    } }));
+    assert.equal((await detail(session, selected)).title, title);
+  }
 });
 
 test('API rejects redirects, non-JSON login pages and foreign credential destinations', async (t) => {

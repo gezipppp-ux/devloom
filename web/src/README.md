@@ -31,6 +31,8 @@ Vue 组件使用 PascalCase 文件名；JavaScript 辅助模块使用 kebab-case
 - 新任务路径采用「基础目录 / 用户名 / worktree / 项目名 / 任务前缀-短标识」，例如 `D:\wt\alice\worktree\project-a\login-a1b2c3d4e5f6`；项目克隆目录为 `D:\wt\alice\projects\project-a`。仓库和路径均由创建工作区时的远程 Git 地址生成，前端只展示服务端返回值。个人设置维护系统生成的 SSH 密钥或 HTTP/HTTPS 账号密码／令牌。GitAccountSettings 复用表单分区，use-git-accounts 拥有加载、生成、检测、保存与卸载生命周期；展示公钥、服务端强制先检测后保存，私钥和密码不回显。
 - `app/use-workspace-console.js` 负责渠道 bootstrap、SSE 建连/关闭与防抖刷新，将事件分发给任务列表和会话状态，不处理 DOM 或表单草稿。
 - `features/tasks/use-task-list.js` 负责列表刷新、请求乱序保护和请求期间的人工进度覆盖。
+- `features/tasks/ArchivedSessions.vue` 提供侧栏归档入口、名称搜索和恢复交互；`use-archived-sessions.js` 拥有归档请求、恢复状态与卸载/乱序保护。壳层通过归档、删除、恢复与重连事件通知刷新，恢复后不自动启动任务或切换当前草稿。
+- 会话名称由 `SessionTitleEditor.vue` 独占标题行，长名称换行；编辑使用完整宽度的多行输入区，保存/取消同排并支持输入法。状态、人工分类和生命周期操作在下方独立工具栏呈现。
 - `features/session/use-session.js` 负责详情快照、请求期间的 SSE 覆盖、会话动作和历史分页；执行偏好拥有独立保存状态和错误反馈，迟到响应不能覆盖较新的设置/当前轮状态。打开会话、收到消息和完成动作通过回调交给应用/界面层处理，不导入任务列表或界面组件。
 - `features/session/SessionComposer.vue` 只组合输入、模型/权限控件和提示，通过事件提交消息与设置修改，不直接管理持久化。
 - `features/settings/RepositoryGitPanel.vue` 提供工作区仓库状态、获取远端更新和快进更新基准分支；`features/session/SessionGitPanel.vue` 按当前任务读取实时检出分支、未提交与上游提交差异，`DeleteWorktreeDialog.vue` 在打开时重新获取删除快照并校验记录任务分支的完整确认。删除结果由应用壳层协调刷新会话和列表，历史保留为只读。不提供合并或冲突处理按钮。

@@ -109,7 +109,8 @@ async function detail(session, item) {
     id: String(basic.id),
     workspace_id: String(basic.workspace_id || item.workspace_id),
     type,
-    title: basic.name || item.title || item.name || '',
+    title: [basic.name, basic.title, item.title, item.name]
+      .find((value) => typeof value === 'string' && value.trim()) || '',
     status: basic.status || item.status,
     description: basic.description || '',
     markdown_description: basic.markdown_description || '',

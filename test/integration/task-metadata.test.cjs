@@ -124,6 +124,24 @@ test("session title updates keep the requirement snapshot and run identity uncha
   assert.throws(() => manager.updateTitle("1-2", "x".repeat(201)), /不能超过/);
 });
 
+test("blank legacy titles remain identifiable and do not override a valid original title", async (t) => {
+  const store = new RunStore(temporary(t));
+  seed(store, "1-2");
+  const title = "【生产】套餐本月已用积分在完成AI生成任务后，没有实时刷新已用积分，需要人工手动刷新";
+  const state = store.read("1-2");
+  state.workitem.title = title;
+  store.update("1-2", state);
+  fs.writeFileSync(path.join(store.dir("1-2"), "session-title.json"), JSON.stringify({ title: " " }));
+  const manager = new SessionManager({ store, client: new FakeClient() });
+  t.after(() => manager.close());
+  assert.equal(manager.list()[0].title, title);
+  assert.equal((await manager.view("1-2")).title, title);
+  state.workitem.title = "";
+  store.update("1-2", state);
+  assert.equal(manager.list()[0].title, "未命名会话 · 2");
+  assert.equal(store.read("1-2").workitem.title, "", "display fallback does not rewrite the original snapshot");
+});
+
 test("archived sessions leave their record readable but disappear from the list; permanent deletion needs removed code", async (t) => {
   const store = new RunStore(temporary(t));
   seed(store, "1-2");
@@ -145,6 +163,40 @@ test("archived sessions leave their record readable but disappear from the list;
   assert.equal(store.hasRun("1-2"), false);
   assert.equal(fs.existsSync(store.dir("1-2")), false);
   assert.equal(events.at(-1).type, "deleted");
+});
+
+test("archived sessions can be listed and restored without changing history, identity or removed code", async (t) => {
+  const store = new RunStore(temporary(t));
+  seed(store, "1-2");
+  seed(store, "1-3");
+  const client = new FakeClient();
+  const manager = new SessionManager({ store, client });
+  t.after(() => manager.close());
+  const before = store.read("1-2");
+  manager.updateTitle("1-2", "找回已归档会话");
+  store.writeWorktreeDeletion("1-2", { status: "deleted", worktreeRemoved: true, branchDeleted: true });
+  const events = [];
+  manager.on("event", (event) => events.push(event));
+  const archived = await manager.archive("1-2");
+  assert.deepEqual(manager.list().map((run) => run.key), ["1-3"]);
+  const hidden = manager.list({ archived: true });
+  assert.equal(hidden.length, 1);
+  assert.equal(hidden[0].title, "找回已归档会话");
+  assert.equal(hidden[0].archivedAt, archived.archivedAt);
+  assert.deepEqual(await manager.restore("1-2"), { archivedAt: null });
+  assert.equal(events.at(-1).type, "restored");
+  assert.equal(manager.list().length, 2);
+  assert.deepEqual(manager.list({ archived: true }), []);
+  const view = await manager.view("1-2");
+  assert.match(view.readOnlyReason, /Worktree 已删除/);
+  assert.equal(view.title, "找回已归档会话");
+  assert.equal(view.archivedAt, null);
+  assert.deepEqual(store.read("1-2"), before);
+  await manager.restore("1-2");
+  assert.equal(manager.list().length, 2, "restore is idempotent");
+  assert.equal(client.calls.some(({ method }) => /^(thread\/(start|resume)|turn\/)/.test(method)), false);
+  await manager.deleteSession("1-2", { confirm: true });
+  await assert.rejects(manager.restore("1-2"), /ENOENT/);
 });
 
 test("metadata HTTP writes require token/origin, remain workspace scoped and emit metadata-only SSE", async (t) => {
@@ -271,5 +323,15 @@ test("session archive and deletion HTTP actions remain scoped and require explic
   const archived = await (await post(a.id, "archive", {})).json();
   assert.equal(typeof archived.archivedAt, "string");
   assert.deepEqual(first.list(), []);
+  assert.equal(second.list().length, 1);
+  const hidden = await (await fetch(`${origin}/api/workspaces/${a.id}/runs?archived=true`)).json();
+  assert.equal(hidden.runs[0].key, "1-2");
+  assert.deepEqual(await (await fetch(`${origin}/api/workspaces/${b.id}/runs?archived=true`)).json(), { runs: [] });
+  assert.equal((await fetch(`${origin}/api/workspaces/${a.id}/runs/1-2/restore`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: "{}",
+  })).status, 403);
+  assert.equal((await post(a.id, "restore", {})).status, 200);
+  assert.equal(first.list().length, 1);
+  assert.deepEqual(first.list({ archived: true }), []);
   assert.equal(second.list().length, 1);
 });

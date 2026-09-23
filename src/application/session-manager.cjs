@@ -521,8 +521,8 @@ class SessionManager extends EventEmitter {
     return { key, accepted: true };
   }
 
-  list() {
-    return this.views.list();
+  list(options) {
+    return this.views.list(options);
   }
 
   updateTaskMetadata(key, input) {
@@ -564,6 +564,15 @@ class SessionManager extends EventEmitter {
         at: new Date().toISOString(),
       });
       return archive;
+    });
+  }
+
+  restore(key) {
+    return this.exclusive(key, () => {
+      this.store.read(key);
+      const restored = this.store.restore(key);
+      this.emit("event", { key, type: "restored", ...restored, at: new Date().toISOString() });
+      return restored;
     });
   }
 

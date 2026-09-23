@@ -50,6 +50,26 @@ test("database run state and paginated history survive restart without JSON file
   assert.equal(fixture.database.handle.prepare("SELECT count(*) AS total FROM log_chunks").get().total, 1);
 });
 
+test("archive and restore persist across database reopen while retaining history and run identity", async (t) => {
+  const fixture = await setup(t);
+  const directory = path.join(fixture.directory, "runs", "1-2");
+  const execution = new ExecutionStore(directory);
+  execution.save({ session_id: "stable", workitem: { title: "Archived" }, execution: { status: "completed" } });
+  let store = new RunStore(path.dirname(directory));
+  store.saveHistoryItem("1-2", { id: "item", type: "agentMessage", text: "retained history" });
+  store.archive("1-2");
+  await fixture.reopen();
+  store = new RunStore(path.dirname(directory));
+  assert.equal(store.isArchived("1-2"), true);
+  store.restore("1-2");
+  await fixture.reopen();
+  store = new RunStore(path.dirname(directory));
+  assert.equal(store.isArchived("1-2"), false);
+  assert.equal(store.savedHistory("1-2").items[0].text, "retained history");
+  assert.equal(store.read("1-2").session_id, "stable");
+  assert.equal(fs.existsSync(path.join(directory, "session-archive.json")), false);
+});
+
 test("permanently deleting a run removes its database documents, history, logs and attachments", async (t) => {
   const fixture = await setup(t);
   const directory = path.join(fixture.directory, "runs", "1-2");

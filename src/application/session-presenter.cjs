@@ -15,9 +15,11 @@ class SessionPresenter {
   }
 
   summary(key, state) {
+    const originalTitle = text(state.workitem.title).trim() || text(state.workitem.name).trim();
     return {
       key,
-      title: this.store.readSessionTitle(key, state.workitem.title),
+      title: this.store.readSessionTitle(key, originalTitle || `未命名会话 · ${state.workitem.id || key}`),
+      archivedAt: this.store.readArchive(key).archivedAt || null,
       source: state.source || sourceFor("tapd", state.workitem),
       storyId: state.workitem.id,
       workspaceId: state.workitem.workspace_id,

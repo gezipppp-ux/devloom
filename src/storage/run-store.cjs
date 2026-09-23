@@ -154,7 +154,7 @@ class RunStore {
 
   readSessionTitle(key, fallback) {
     const saved = readOptional(path.join(this.dir(key), "session-title.json"));
-    return typeof saved.title === "string" ? saved.title : fallback;
+    return typeof saved.title === "string" && saved.title.trim() ? saved.title : fallback;
   }
 
   writeSessionTitle(key, title) {
@@ -164,13 +164,22 @@ class RunStore {
   }
 
   isArchived(key) {
-    return Boolean(readOptional(path.join(this.dir(key), "session-archive.json")).archivedAt);
+    return Boolean(this.readArchive(key).archivedAt);
+  }
+
+  readArchive(key) {
+    return readOptional(path.join(this.dir(key), "session-archive.json"));
   }
 
   archive(key) {
     const archivedAt = new Date().toISOString();
     writeConfig(path.join(this.dir(key), "session-archive.json"), { archivedAt });
     return { archivedAt };
+  }
+
+  restore(key) {
+    writeConfig(path.join(this.dir(key), "session-archive.json"), { archivedAt: null });
+    return { archivedAt: null };
   }
 
   deleteRun(key) {
