@@ -7,6 +7,7 @@ import {
 } from "@antdv-next/icons";
 import { api } from "../../shared/api/api.js";
 import DeleteWorktreeDialog from "./DeleteWorktreeDialog.vue";
+import SessionChangedFiles from "./SessionChangedFiles.vue";
 
 const props = defineProps({
   taskKey: { type: String, required: true },
@@ -15,7 +16,7 @@ const props = defineProps({
   active: Boolean,
   status: { type: String, default: "" },
 });
-const emit = defineEmits(["deleted"]);
+const emit = defineEmits(["deleted", "open-file"]);
 const git = ref(null);
 const loading = ref(false);
 const error = ref("");
@@ -150,6 +151,7 @@ onUnmounted(() => {
             : git.deleteReason
         }}
       </p>
+      <SessionChangedFiles v-if="!deleted" :task-key="taskKey" :status="status" @open-file="emit('open-file', $event)" />
     </div>
     <DeleteWorktreeDialog
       ref="deleteDialog"

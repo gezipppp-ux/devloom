@@ -11,6 +11,7 @@ const { FakeClient } = require("../fixtures/web-client.cjs");
 const { temporary, png } = require("../support/helpers.cjs");
 const { promptTemplateCatalog, MAX_PROMPT_TEMPLATE_LENGTH } = require("../../src/domain/prompt-templates.cjs");
 const { messageMarkdown } = require("../fixtures/message-markdown.cjs");
+const { structuredPatch } = require("diff");
 
 async function main() {
   const cleanup = [];
@@ -28,6 +29,9 @@ async function main() {
   fs.mkdirSync(output, { recursive: true });
   const captures = [];
   const errors = [];
+  const filePath = "web/src/views/marketing/hotspot-creation-workspace.vue";
+  const fileBefore = ['<a-button', '  :loading="refreshing"', '  @click="refreshHotspots"', '>', '  <ReloadOutlined />', '  刷新热点', '</a-button>', ''].join('\n');
+  const fileCurrent = fileBefore.replace('  :loading', '  v-permission="[\'ai:marketing:hotspot:refresh\']"\n  :loading');
   let browser,
     scenario = "session";
   const runs = [
@@ -67,7 +71,7 @@ async function main() {
     sessionId: "session-preview-customer-search",
     status: scenario === "readonly" ? "disconnected" : scenario === "pending" ? "running" : "completed",
     turnId: scenario === "pending" ? "fixture-active-turn" : null,
-    items: scenario === "markdown" ? [{
+    items: scenario === "files" ? [{ id: "file-preview-reply", type: "agentMessage", text: '已完成热点刷新按钮的独立菜单权限控制：\n\n- 新增权限 `ai:marketing:hotspot:refresh`，同步种子数据与迁移：[seed.ts](prisma/seed.ts)、[migration.sql](prisma/migrations/menu-v132/migration.sql)。\n- “刷新热点”按钮按权限显示：[hotspot-creation-workspace.vue](' + filePath + ':2)。\n- 增加菜单与迁移回归测试：[menu-v132.test.ts](test/system/menu-v132.test.ts)。\n\n验证通过，可以开始验收。' }] : scenario === "markdown" ? [{
       id: "markdown-reply", type: "agentMessage", text: messageMarkdown,
     }] : [
       {
@@ -200,6 +204,12 @@ async function main() {
         return send({ token: "visual-fixture", channels, workspace: "123456" });
       if (endpoint === "/runs")
         return send({ runs: scenario === "empty" ? [] : runs });
+      if (/^\/runs\/[^/]+\/files$/.test(endpoint))
+        return send({ files: [{ path: filePath, status: "M" }, { path: "prisma/seed.ts", status: "M" }, { path: "prisma/migrations/menu-v132/migration.sql", status: "A" }, { path: "test/system/menu-v132.test.ts", status: "A" }] });
+      if (/^\/runs\/[^/]+\/file$/.test(endpoint)) {
+        const selected = url.searchParams.get("path");
+        return send({ path: selected, previousPath: selected, base: "a91c3d2".padEnd(40, "0"), head: "b".repeat(40), scope: "task", status: "M", current: { text: fileCurrent, exists: true, reason: null }, before: { text: fileBefore, exists: true, reason: null }, hunks: structuredPatch(selected, selected, fileBefore, fileCurrent).hunks, comparisonReason: null, readAt: "2026-10-09T06:30:00Z" });
+      }
       if (/^\/runs\/[^/]+\/git$/.test(endpoint))
         return send({
           path: "/srv/wt/customer-system/customer-search-a1b2c3d4e5f6",
@@ -341,7 +351,7 @@ async function main() {
       assert.deepEqual(issues, [], name + " layout overflow or overlap");
       await (selector ? page.locator(selector) : page).screenshot({
         path: path.join(output, name + ".png"),
-        ...(!selector ? { fullPage: !(await page.locator("dialog[open]").count()) && !(await page.locator(".session-drawer:visible").count()) } : {}),
+        ...(!selector ? { fullPage: !(await page.locator("dialog[open]").count()) && !(await page.locator(".session-drawer:visible, .session-file-panel:visible").count()) } : {}),
       });
       captures.push(name);
     }
@@ -374,6 +384,23 @@ async function main() {
       assert.equal(overflow, false, 'wide Markdown must stay inside the timeline');
       await capture("05-markdown-long-" + suffix);
       await page.unroute('**/api/workspaces/*/runs/1-1');
+      await load();
+    }
+    async function captureFiles(suffix) {
+      await load("files");
+      await page.getByRole("button", { name: "hotspot-creation-workspace.vue", exact: true }).click();
+      const panel = page.getByRole("complementary", { name: "文件预览与对比" });
+      await panel.locator('[data-line="2"]').waitFor();
+      await capture("05-file-source-" + suffix);
+      await panel.getByRole("button", { name: "变更对比", exact: true }).click();
+      await panel.locator(".file-diff-line.added").waitFor();
+      await capture("05-file-diff-" + suffix);
+      if (page.viewportSize().width > 1100) {
+        await panel.getByLabel("差异显示方式").selectOption("split");
+        await panel.getByRole("button", { name: "加宽代码面板", exact: true }).click();
+        await capture("05-file-split-wide-" + suffix);
+      }
+      await page.keyboard.press("Escape");
       await load();
     }
     async function captureSystemSettings(suffix) {
@@ -465,6 +492,7 @@ async function main() {
     assert.equal(await page.locator(".workspace-rail .workspace-icon").count(), 2);
     await capture("05-session-desktop");
     await captureMarkdown("desktop");
+    await captureFiles("desktop");
     await page.setViewportSize({ width: 1920, height: 855 });
     await capture("05-session-wide");
     await page.setViewportSize({ width: 1440, height: 1200 });
@@ -603,6 +631,7 @@ async function main() {
       await load();
       await capture("05-session-" + width);
       await captureMarkdown(width);
+      await captureFiles(width);
       await captureSessionDrawer(width);
       await captureGitViews(width);
       const composer = page.locator('.composer-toolbar');

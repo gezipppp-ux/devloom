@@ -92,6 +92,15 @@ Run lint, unit tests, build and browser suites with the direct commands in Jenki
 
 ## Repository updates and Worktree deletion
 
+### Read-only session files
+
+- `GET .../runs/:key/files?scope=task|head` lists changes against the recorded `worktree.base_commit` or current HEAD, including untracked non-ignored files and rename metadata. `GET .../runs/:key/file?path=...&scope=task|head` resolves a local reference and returns current/baseline text, bounded hunks, or explicit unsupported-content reasons. Basename-only ambiguity returns candidate paths without content. Absolute paths must remain inside the recorded worktree; relative paths never select another repository.
+- `SessionFiles` checks task existence/deletion before and after reads; the HTTP workspace ownership gate applies unchanged. The Git module verifies registration/common-directory/backlink and rejects symlink/junction ancestors and file components. Only paths listed by Git in the current index/non-ignored files or selected base tree are eligible; `.git` and traversal are rejected. Reads never claim a Codex session, execute turns, mutate refs/index, or fetch remotes. Responses use `no-store`.
+- Use fixed resolved commit IDs during a read and reject a changed HEAD/worktree. Working text is a read-time view, not a turn snapshot. No missing-base fallback: current source remains available, while task comparison reports its unavailable baseline. Deleted worktrees remain unavailable even if a directory reappears.
+- Bound Git queries to 10 seconds / 4 MiB, catalogs to 20000 entries, and each source/baseline to 512 KiB / 10000 lines. Refuse binary/non-UTF8/symlink/submodule content. Diff calculation has a time/edit bound and normalizes CRLF to LF only for line comparison; returned source text is preserved. Never report an incomplete read as no changes.
+
+### Repository mutations
+
 All Git endpoints remain workspace-scoped and use the standard Host/Origin and POST token protections. No endpoint accepts arbitrary repository paths, remote URLs or Git commands. Repository operations use the saved workspace repository; task operations use the recorded original repository/path/branch, even after workspace settings change.
 
 - `GET .../repository/git` returns repository, baseRef, branch, remote, named remotes, upstream, canUpdate, updateReason and lastFetchedAt/lastFetchedRemote. Remote URLs and credentials are not exposed.

@@ -1,0 +1,97 @@
+<script setup>
+/* global document, navigator */
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { CloseOutlined, ExpandOutlined, CompressOutlined, ReloadOutlined, CopyOutlined, FileTextOutlined } from "@antdv-next/icons";
+import { useSessionFile, useSessionFileList } from "./use-session-files.js";
+import { diffRows, splitRows } from "./code-content.js";
+import CodeLine from "./CodeLine.vue";
+import "./session-files.css";
+
+const props = defineProps({ taskKey: { type: String, required: true }, request: { type: Object, required: true }, wide: Boolean, status: { type: String, default: "" } });
+const emit = defineEmits(["close", "resize"]);
+const selected = ref(props.request.path), scope = ref(props.request.scope || "task"), mode = ref(props.request.line ? "source" : "diff"), layout = ref("unified");
+const closeButton = ref(), codeArea = ref(), copied = ref("");
+const targetLine = ref(props.request.line || null);
+const list = useSessionFileList(() => props.taskKey, scope);
+const { file, loading, error, refresh } = useSessionFile(() => props.taskKey, () => selected.value, scope);
+const rows = computed(() => diffRows(file.value?.hunks || []));
+const pairs = computed(() => splitRows(rows.value));
+const source = computed(() => file.value?.current?.text ?? "");
+const lines = computed(() => source.value === "" ? [] : source.value.replace(/\n$/, "").split("\n"));
+const changed = computed(() => rows.value.some((row) => ["added", "removed"].includes(row.type)));
+const totals = computed(() => ({ added: rows.value.filter((row) => row.type === "added").length, removed: rows.value.filter((row) => row.type === "removed").length }));
+const choices = computed(() => {
+  const files = list.files.value;
+  return files.some((entry) => entry.path === selected.value) ? files : [{ path: selected.value, status: "" }, ...files];
+});
+function choose(path, line = null) { selected.value = path; targetLine.value = line; copied.value = ""; }
+function reload() { void refresh(); void list.refresh(); }
+async function copy() {
+  try { await navigator.clipboard.writeText(source.value); copied.value = "已复制"; }
+  catch { copied.value = "复制不可用，可选中源码复制。"; }
+}
+function escape(event) {
+  if (event.key === "Escape" && !event.defaultPrevented && !document.querySelector("dialog:modal")) { event.preventDefault(); emit("close"); }
+}
+watch(() => props.request, (request) => { choose(request.path, request.line); if (request.scope) scope.value = request.scope; mode.value = request.line ? "source" : "diff"; if (selected.value === file.value?.path) void refresh(); });
+watch(() => props.status, reload);
+watch([file, mode], async () => {
+  copied.value = "";
+  if (file.value?.path) selected.value = file.value.path;
+  await nextTick();
+  const target = codeArea.value?.querySelector(`[data-line="${targetLine.value}"]`);
+  if (target && mode.value === "source") codeArea.value.scrollTop = target.offsetTop - codeArea.value.offsetTop - 48;
+  else if (codeArea.value) codeArea.value.scrollTop = 0;
+});
+onMounted(() => { closeButton.value?.focus({ preventScroll: true }); document.addEventListener("keydown", escape); });
+onUnmounted(() => document.removeEventListener("keydown", escape));
+</script>
+<template>
+  <aside class="session-file-panel" aria-label="文件预览与对比" :aria-busy="loading">
+    <header class="file-panel-heading">
+      <FileTextOutlined aria-hidden="true" />
+      <div><strong>{{ (file?.path || selected).split(/[\\/]/).at(-1) }}</strong><small>{{ file?.path || selected }}</small></div>
+      <button type="button" class="file-expand" :aria-label="wide ? '恢复代码面板宽度' : '加宽代码面板'" @click="emit('resize')"><CompressOutlined v-if="wide" /><ExpandOutlined v-else /></button>
+      <button ref="closeButton" type="button" aria-label="关闭文件预览" @click="emit('close')"><CloseOutlined /></button>
+    </header>
+    <div class="file-picker">
+      <select aria-label="预览文件" :value="selected" @change="choose($event.target.value)"><option v-for="entry in choices" :key="entry.path" :value="entry.path">{{ entry.status }} {{ entry.path }}</option></select>
+      <button type="button" :disabled="loading || list.loading.value" aria-label="刷新文件与差异" @click="reload"><ReloadOutlined /></button>
+    </div>
+    <p v-if="list.error.value" class="file-list-warning" role="status">变更列表：{{ list.error.value }}</p>
+    <nav class="file-mode-tabs" aria-label="文件查看方式">
+      <button type="button" :aria-pressed="mode === 'source'" @click="mode = 'source'">源码</button>
+      <button type="button" :aria-pressed="mode === 'diff'" @click="mode = 'diff'">变更对比</button>
+      <span v-if="file?.path && !file.comparisonReason" class="file-delta"><span class="file-added">+{{ totals.added }}</span><span class="file-removed">−{{ totals.removed }}</span></span>
+    </nav>
+    <div class="file-controls">
+      <label>比较范围<select v-model="scope" aria-label="文件比较范围"><option value="task">任务累计变更</option><option value="head">未提交变更</option></select></label>
+      <label v-if="mode === 'diff'" class="file-layout-choice">显示方式<select v-model="layout" aria-label="差异显示方式"><option value="unified">统一差异</option><option value="split">左右对照</option></select></label>
+      <button v-else type="button" :disabled="!file?.current?.exists || file?.current?.text == null" @click="copy"><CopyOutlined /> 复制源码</button>
+    </div>
+    <p v-if="copied" class="file-feedback" role="status">{{ copied }}</p>
+    <div ref="codeArea" class="file-code-area">
+      <p v-if="loading" class="file-feedback" role="status">正在读取文件…</p>
+      <div v-else-if="error" class="file-feedback"><p class="error" role="alert">{{ error }}</p><button type="button" @click="reload">重试</button></div>
+      <div v-else-if="file?.candidates" class="file-candidates"><p>找到多个同名文件，请选择完整路径：</p><button v-for="path in file.candidates" :key="path" type="button" @click="choose(path)">{{ path }}</button></div>
+      <template v-else-if="file?.path">
+        <template v-if="mode === 'source'">
+          <p v-if="file.current.reason" class="file-feedback">{{ file.current.reason }}</p>
+          <p v-else-if="!file.current.exists" class="file-feedback">当前文件已删除，可切换「变更对比」查看删除前内容。</p>
+          <p v-else-if="!lines.length" class="file-feedback">这是一个空文件。</p>
+          <div v-else class="file-source" aria-label="当前文件源码"><div v-for="(text, index) in lines" :key="index" class="file-source-line" :class="{ 'file-target-line': index + 1 === targetLine }" :data-line="index + 1"><span class="file-line-number">{{ index + 1 }}</span><CodeLine :text="text" :path="file.path" /></div></div>
+        </template>
+        <template v-else>
+          <div class="file-compare-caption">{{ scope === 'task' ? '任务开始时' : '最新提交' }} · {{ file.base?.slice(0, 8) || '不可用' }} → 当前文件<span v-if="file.previousPath !== file.path">重命名自 {{ file.previousPath }}</span></div>
+          <p v-if="file.comparisonReason" class="file-feedback">{{ file.comparisonReason }}</p>
+          <p v-else-if="!changed" class="file-feedback">{{ file.status === 'R' ? '文件已重命名，内容没有变化。' : '此范围内没有内容差异。' }}</p>
+          <div v-else class="file-diff" :class="{ 'file-diff-split': layout === 'split' }" aria-label="文件差异">
+            <div class="file-unified"><template v-for="row in rows" :key="row.key"><div v-if="row.type === 'hunk' || row.type === 'note'" class="file-hunk">{{ row.text }}</div><div v-else class="file-diff-line" :class="row.type"><span class="file-line-number">{{ row.old }}</span><span class="file-line-number">{{ row.next }}</span><span class="file-mark">{{ row.mark }}</span><CodeLine :text="row.text" :path="file.path" /></div></template></div>
+            <div v-if="layout === 'split'" class="file-split"><div class="file-split-caption"><span>修改前</span><span>当前文件</span></div><template v-for="row in pairs" :key="row.key"><div v-if="row.type === 'hunk' || row.type === 'note'" class="file-hunk">{{ row.left.text }}</div><div v-else class="file-split-row"><div v-for="side in ['left', 'right']" :key="side" class="file-split-line" :class="row[side]?.type"><span class="file-line-number">{{ side === 'left' ? row.left?.old : row.right?.next }}</span><span class="file-mark">{{ row[side]?.mark }}</span><CodeLine :text="row[side]?.text || ''" :path="file.path" /></div></div></template></div>
+          </div>
+        </template>
+      </template>
+    </div>
+    <footer class="file-panel-footer"><span>只读 · 当前 Worktree</span><span v-if="file?.readAt">读取于 {{ new Date(file.readAt).toLocaleTimeString() }}</span><small>历史消息链接打开当前文件，不代表该轮结束时的版本。</small></footer>
+  </aside>
+</template>

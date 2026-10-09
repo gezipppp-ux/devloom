@@ -2,6 +2,12 @@
 import { computed } from "vue";
 import { renderMessage } from "./message-content.js";
 const props = defineProps({ item: { type: Object, required: true } });
+const emit = defineEmits(["open-file"]);
+function openFile(event) {
+  const target = event.target.closest("button[data-file-path]");
+  if (!target || !event.currentTarget.contains(target)) return;
+  emit("open-file", { path: target.dataset.filePath, line: Number(target.dataset.fileLine) || null });
+}
 const messageHtml = computed(() =>
   props.item.type === "agentMessage"
     ? renderMessage(props.item.text || "…")
@@ -49,6 +55,7 @@ const pretty = (value) =>
     <div
       v-if="item.type === 'agentMessage'"
       class="message-text message-markdown"
+      @click="openFile"
       v-html="messageHtml"
     />
     <div v-else-if="item.text || !images.length" class="message-text">

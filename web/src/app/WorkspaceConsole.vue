@@ -2,6 +2,7 @@
 /* global document */
 import {
   nextTick,
+  defineAsyncComponent,
   onMounted,
   onUnmounted,
   reactive,
@@ -29,6 +30,9 @@ import {
   FolderOpenOutlined,
   BranchesOutlined,
 } from "@antdv-next/icons";
+import "../features/session/session-files.css";
+
+const SessionFilePanel = defineAsyncComponent(() => import("../features/session/SessionFilePanel.vue"));
 
 const props = defineProps({
   workspaceName: { type: String, default: "" },
@@ -45,6 +49,20 @@ const settingsOpen = ref(false),
   repositoryOpen = ref(false);
 const composer = reactive({ text: "" });
 const timeline = ref();
+const fileRequest = ref(null), fileWide = ref(false), detailsDrawer = ref();
+let fileTrigger;
+function openFile(request) {
+  fileTrigger = document.activeElement;
+  detailsDrawer.value?.close(false);
+  fileRequest.value = { ...request };
+}
+function closeFile(restoreFocus = true) {
+  fileRequest.value = null;
+  if (restoreFocus) {
+    if (fileTrigger?.isConnected) fileTrigger.focus({ preventScroll: true });
+    else detailsDrawer.value?.focusTrigger();
+  }
+}
 const {
   channels,
   workspace,
@@ -108,6 +126,7 @@ const {
   onUnreadResult: (result) => props.notifyUnreadResult(result),
 });
 const imageDraft = useSessionImages({ active, canSend });
+watch(active, () => { closeFile(false); fileWide.value = false; });
 
 function readVisibleSession() {
   if (
@@ -314,7 +333,7 @@ async function worktreeDeleted() {
             </button>
           </div>
         </header>
-        <div class="session-body">
+        <div class="session-body" :class="{ 'with-file-panel': fileRequest, 'file-panel-wide': fileRequest && fileWide }">
           <div class="session-conversation">
             <div v-if="!online" class="banner warning" role="status">
               实时连接已断开，正在重连。服务运行时，关闭网页不会停止任务。
@@ -350,6 +369,7 @@ async function worktreeDeleted() {
                 v-for="item in session.items"
                 :key="item.id"
                 :item="item"
+                @open-file="openFile"
               /><SessionRequest
                 v-for="request in session.requests"
                 :key="request.id"
@@ -393,13 +413,17 @@ async function worktreeDeleted() {
               @settings-change="updateExecutionSettings"
             />
           </div>
+          <SessionFilePanel v-if="fileRequest" :key="session.key" :task-key="session.key" :request="fileRequest" :wide="fileWide" :status="session.status" @close="closeFile" @resize="fileWide = !fileWide" />
           <SessionDetailsDrawer
+            ref="detailsDrawer"
             :key="session.key"
             :session="session"
             :active="running || initializing || ['preparing', 'starting'].includes(session.status) || Boolean(session.requests?.length)"
             @archived="archiveSaved"
             @deleted="sessionDeleted"
             @worktree-deleted="worktreeDeleted"
+            @open-file="openFile"
+            @opened="closeFile(false)"
           >
             <template #metadata>
               <TaskMetadataControls :task-key="session.key" :metadata="session.metadata" @saved="metadataSaved" />

@@ -1,5 +1,6 @@
 import createDOMPurify from "dompurify";
 import { Marked } from "marked";
+import { fileReference } from "./file-reference.js";
 
 function escapeHtml(text) {
   return text.replace(
@@ -19,6 +20,17 @@ const markdown = new Marked({
   gfm: true,
   breaks: true,
   renderer: {
+    link({ href, tokens }) {
+      const file = fileReference(href);
+      if (!file) return false;
+      const label = this.parser.parseInline(tokens).replace(/<\/?button\b[^>]*>/g, "");
+      return `<button type="button" class="message-file-link" data-file-path="${escapeHtml(file.path)}"${file.line ? ` data-file-line="${file.line}"` : ""}>${label}</button>`;
+    },
+    codespan({ text }) {
+      const file = fileReference(text);
+      if (!file) return false;
+      return `<button type="button" class="message-file-link" data-file-path="${escapeHtml(file.path)}"${file.line ? ` data-file-line="${file.line}"` : ""}><code>${escapeHtml(text)}</code></button>`;
+    },
     // Replies may discuss HTML source. Display it literally, never execute it.
     html: ({ text }) => escapeHtml(text),
     // Message attachments have their own validated routes; Markdown cannot load images.
@@ -69,8 +81,9 @@ export function renderMessage(text) {
       "th",
       "td",
       "a",
+      "button",
     ],
-    ALLOWED_ATTR: ["href", "title", "start", "align"],
+    ALLOWED_ATTR: ["href", "title", "start", "align", "type", "class", "data-file-path", "data-file-line"],
     ALLOW_DATA_ATTR: false,
     ALLOW_ARIA_ATTR: false,
   });

@@ -24,7 +24,7 @@ defineProps({
   session: { type: Object, required: true },
   active: Boolean,
 });
-const emit = defineEmits(["archived", "deleted", "worktree-deleted"]);
+const emit = defineEmits(["archived", "deleted", "worktree-deleted", "open-file", "opened"]);
 const panels = [
   { key: "info", label: "信息", title: "会话信息", icon: InfoCircleOutlined },
   { key: "git", label: "Git", title: "Worktree Git", icon: BranchesOutlined },
@@ -45,6 +45,7 @@ async function toggle(key, event) {
   if (panel.value === key) return close();
   trigger = event.currentTarget;
   panel.value = key;
+  emit("opened");
   await nextTick();
   closeButton.value?.focus({ preventScroll: true });
 }
@@ -53,6 +54,8 @@ function close(restoreFocus = true) {
   if (restoreFocus && trigger?.isConnected)
     trigger.focus({ preventScroll: true });
 }
+defineExpose({ close, focusTrigger: () => trigger?.focus({ preventScroll: true }) });
+function openFile(request) { close(false); emit("open-file", request); }
 function outside(event) {
   if (
     panel.value &&
@@ -163,15 +166,16 @@ onUnmounted(() => {
           aria-label="Worktree Git 内容"
         >
           <SessionGitPanel
-            v-if="session.worktree?.path"
+            v-if="panel === 'git' && session.worktree?.path"
             :task-key="session.key"
             :worktree="session.worktree"
             :deletion="session.worktreeDeletion"
             :status="session.status"
             :active="active"
             @deleted="emit('worktree-deleted')"
+            @open-file="openFile"
           />
-          <p v-else class="empty-inline">Worktree 尚未准备完成。</p>
+          <p v-else-if="!session.worktree?.path" class="empty-inline">Worktree 尚未准备完成。</p>
         </section>
         <section v-show="panel === 'requirement'" :id="`${id}-requirement`">
           <RequirementDetails :requirement="session.requirement" />

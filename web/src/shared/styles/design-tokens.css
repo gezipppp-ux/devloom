@@ -18,6 +18,9 @@
   --success: #38734a;
   --success-soft: #e9f2e7;
   --focus: #568165;
+  --code-keyword: #426784;
+  --code-string: #80602b;
+  --code-literal: #815471;
   --radius-control: 8px;
   --radius-card: 12px;
   --radius-dialog: 16px;

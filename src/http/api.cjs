@@ -116,6 +116,10 @@ async function serveApi(
   const route = /^\/api\/runs\/([^/]+)(?:\/(.*))?$/.exec(url.pathname);
   if (route && RUN_KEY.test(route[1])) {
     const [, key, action] = route;
+    if (request.method === "GET" && action === "files")
+      return json(response, 200, await sessions.listFiles(key, url.searchParams.get("scope") || "task"));
+    if (request.method === "GET" && action === "file")
+      return json(response, 200, await sessions.readFile(key, url.searchParams.get("path"), url.searchParams.get("scope") || "task"));
     if (request.method === "GET" && action === "git")
       return json(response, 200, sessions.readGit(key));
     if (request.method === "POST" && action === "worktree/delete")

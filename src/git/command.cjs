@@ -10,16 +10,16 @@ function git(repository, args, { timeout = 60000, maxBuffer = 2 * 1024 * 1024 } 
   }).replace(/\r?\n$/, "");
 }
 
-function gitAsync(repository, args) {
+function gitAsync(repository, args, { encoding = "utf8", trim = true, maxBuffer = 8 * 1024 * 1024, timeout = 60000 } = {}) {
   return new Promise((resolve, reject) => {
     execFile(
       "git",
       ["-c", "credential.interactive=false", "-C", repository, ...args],
       {
-        encoding: "utf8",
+        encoding,
         windowsHide: true,
-        timeout: 60000,
-        maxBuffer: 8 * 1024 * 1024,
+        timeout,
+        maxBuffer,
         env: {
           ...process.env,
           GIT_TERMINAL_PROMPT: "0",
@@ -28,7 +28,7 @@ function gitAsync(repository, args) {
       },
       (error, stdout) => {
         if (error) reject(error);
-        else resolve(stdout.replace(/\r?\n$/, ""));
+        else resolve(trim ? stdout.replace(/\r?\n$/, "") : stdout);
       },
     ).stdin.end();
   });

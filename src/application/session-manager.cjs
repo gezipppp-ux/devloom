@@ -10,6 +10,7 @@ const { SessionEvents } = require("./session-events.cjs");
 const { SessionViews } = require("./session-views.cjs");
 const { SessionSettings } = require("./session-settings.cjs");
 const { SessionGit } = require("./session-git.cjs");
+const { SessionFiles } = require("./session-files.cjs");
 const { runExecution } = require("../execution/runner.cjs");
 const { defaultChannels } = require("../channels/channel-registry.cjs");
 const { executionConfig } = require("../config/execution-settings.cjs");
@@ -58,6 +59,7 @@ class SessionManager extends EventEmitter {
     this.closing = false;
     this.worktreeReason = worktreeReason;
     this.git = new SessionGit(this);
+    this.files = new SessionFiles(this);
     this.settings = new SessionSettings({
       store: this.store,
       client: this.client,
@@ -120,6 +122,14 @@ class SessionManager extends EventEmitter {
 
   readGit(key) {
     return this.git.read(key);
+  }
+
+  listFiles(key, scope) {
+    return this.files.list(key, scope);
+  }
+
+  readFile(key, file, scope) {
+    return this.files.read(key, file, scope);
   }
 
   deleteWorktree(key, input) {
