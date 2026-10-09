@@ -16,6 +16,7 @@ const { verifySessionImages } = require('./session-images.cjs');
 const { verifySessionDeletion } = require('./session-deletion.cjs');
 const { verifySessionArchiveTitle } = require('./session-archive-title.cjs');
 const { verifyStartTaskLock } = require('./start-task.cjs');
+const { verifySessionMarkdown } = require('./session-markdown.cjs');
 
 async function choosePermission(page, mode) {
   await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
@@ -1163,6 +1164,7 @@ async function main() {
     await verifyActionSelection(browser, origin, key, errors);
     await verifyRefreshConsistency(browser, origin, manager, client, key, errors);
     await verifyLanManualCreation(browser, directory, errors);
+    await verifySessionMarkdown(browser, origin, client, key, errors);
     await verifySessionImages(browser, origin, manager, client, key, errors, output);
     await verifySessionDeletion(browser, origin, manager, directory, errors, output);
     await verifySessionDeletion(browser, origin, manager, directory, errors, output, true);

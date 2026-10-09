@@ -10,6 +10,7 @@ const { createWebServer } = require("../../src/http/server.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const { temporary, png } = require("../support/helpers.cjs");
 const { promptTemplateCatalog, MAX_PROMPT_TEMPLATE_LENGTH } = require("../../src/domain/prompt-templates.cjs");
+const { messageMarkdown } = require("../fixtures/message-markdown.cjs");
 
 async function main() {
   const cleanup = [];
@@ -66,7 +67,9 @@ async function main() {
     sessionId: "session-preview-customer-search",
     status: scenario === "readonly" ? "disconnected" : scenario === "pending" ? "running" : "completed",
     turnId: scenario === "pending" ? "fixture-active-turn" : null,
-    items: [
+    items: scenario === "markdown" ? [{
+      id: "markdown-reply", type: "agentMessage", text: messageMarkdown,
+    }] : [
       {
         id: "user",
         type: "userMessage",
@@ -348,6 +351,31 @@ async function main() {
       if (mode !== "welcome" && mode !== "empty")
         await page.locator(".session-header").waitFor();
     }
+    async function captureMarkdown(suffix) {
+      await load("markdown");
+      await page.locator('.message-markdown pre code').waitFor();
+      await page.locator('.timeline').evaluate(el => el.scrollTo({ top: 0, behavior: "instant" }));
+      await capture("05-markdown-" + suffix);
+      await capture("05-markdown-content-" + suffix, ".message-markdown");
+      // Long code lines and tables scroll locally, without widening the conversation.
+      await page.route('**/api/workspaces/*/runs/1-1', route => route.fulfill({ json: {
+        ...detail('1-1'), items: [{ id: 'wide-markdown', type: 'agentMessage', text:
+          messageMarkdown + '\n\n```text\n' + 'long_identifier_'.repeat(80) + '\n```\n\n| ' +
+          Array.from({ length: 12 }, (_, index) => `Column ${index}`).join(' | ') + ' |\n| ' +
+          Array(12).fill('---').join(' | ') + ' |\n| ' + Array(12).fill('cell_value_'.repeat(6)).join(' | ') + ' |',
+        }],
+      } }));
+      await page.reload();
+      await page.locator('.message-markdown pre').nth(1).waitFor();
+      assert.equal(await page.locator('.message-markdown pre').last().evaluate(el => el.scrollWidth > el.clientWidth), true);
+      assert.equal(await page.locator('.message-markdown table').last().evaluate(el => el.scrollWidth > el.clientWidth), true);
+      const overflow = await page.locator('.timeline, .message-markdown').evaluateAll(elements =>
+        elements.some(el => el.scrollWidth > el.clientWidth + 2));
+      assert.equal(overflow, false, 'wide Markdown must stay inside the timeline');
+      await capture("05-markdown-long-" + suffix);
+      await page.unroute('**/api/workspaces/*/runs/1-1');
+      await load();
+    }
     async function captureSystemSettings(suffix) {
       await page.getByRole("button", { name: "系统设置", exact: true }).click();
       await page.getByRole("textbox", { name: "成员目录基础路径", exact: true }).waitFor();
@@ -436,6 +464,7 @@ async function main() {
     assert.equal(await page.locator(".workspace-rail .workspace-icons").count(), 1);
     assert.equal(await page.locator(".workspace-rail .workspace-icon").count(), 2);
     await capture("05-session-desktop");
+    await captureMarkdown("desktop");
     await page.setViewportSize({ width: 1920, height: 855 });
     await capture("05-session-wide");
     await page.setViewportSize({ width: 1440, height: 1200 });
@@ -573,6 +602,7 @@ async function main() {
       await captureEmptyWorkspaceRail(width);
       await load();
       await capture("05-session-" + width);
+      await captureMarkdown(width);
       await captureSessionDrawer(width);
       await captureGitViews(width);
       const composer = page.locator('.composer-toolbar');

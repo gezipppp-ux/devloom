@@ -41,6 +41,8 @@ Vue 组件使用 PascalCase 文件名；JavaScript 辅助模块使用 kebab-case
 
 目录和职责调整不改变 API、URL、会话身份或运行数据路径。需求富文本只能经 `features/session/requirement-content.js` 的安全渲染入口处理。
 
+Codex 回复的流式内容和历史消息统一经 `features/session/message-content.js` 解析 Markdown 并过滤 HTML。源码 HTML 按原文显示，Markdown 图片不加载，链接仅允许 HTTP、HTTPS 和 mailto；用户消息与工具输出保留纯文本。代码块和宽表格在自身区域滚动，不扩大对话宽度。
+
 工作区创建提交后台任务：`features/workspaces/use-workspace-clones.js` 拥有账号作用域的进度轮询、提交和迟到响应保护；壳层组合 `WorkspaceCloneProgress.vue` 的全局入口，完成后补充工作区列表，由用户点击打开，不抢占正在编辑的任务。关闭弹窗、刷新与重新登录从服务器恢复状态。`WorkspaceIconEditor.vue` 默认只显示预览，通过独立原生弹窗搜索和选择；Escape 只关闭图标弹窗并恢复焦点，父表单草稿保留。
 
 样式沿用浅绿工作台规范，统一修改 `shared/styles/design-tokens.css` 与 `shared/styles/style.css`。验证遵循仓库契约：lint、单元测试、构建、浏览器回归；视觉改动还需模拟数据截图验证。

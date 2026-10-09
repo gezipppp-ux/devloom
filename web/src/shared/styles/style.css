@@ -1517,6 +1517,95 @@ main {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.message-markdown {
+  min-width: 0;
+  white-space: normal;
+}
+.message-markdown > :first-child {
+  margin-top: 0;
+}
+.message-markdown > :last-child {
+  margin-bottom: 0;
+}
+.message-markdown p,
+.message-markdown ul,
+.message-markdown ol,
+.message-markdown blockquote,
+.message-markdown pre,
+.message-markdown table {
+  margin: 12px 0;
+}
+.message-markdown :is(h1, h2, h3, h4, h5, h6) {
+  margin: 24px 0 12px;
+  line-height: 1.5;
+  font-weight: 650;
+}
+.message-markdown h1 { font-size: 22px; }
+.message-markdown h2 { font-size: 20px; }
+.message-markdown :is(h3, h4, h5, h6) { font-size: 17px; }
+.message-markdown :is(ul, ol) {
+  padding-left: 24px;
+}
+.message-markdown li + li {
+  margin-top: 4px;
+}
+.message-markdown li > :is(ul, ol, p) {
+  margin: 4px 0;
+}
+.message-markdown code {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--soft);
+  font-family: var(--font-code);
+  font-size: 0.9em;
+}
+.message-markdown pre {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--soft);
+  white-space: pre;
+  overflow-wrap: normal;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.message-markdown pre code {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: inherit;
+}
+.message-markdown blockquote {
+  padding-left: 16px;
+  border-left: 3px solid var(--field-border);
+  color: var(--muted);
+}
+.message-markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  overflow-wrap: normal;
+}
+.message-markdown :is(th, td) {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+}
+.message-markdown th {
+  background: var(--soft);
+}
+.message-markdown a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.message-markdown hr {
+  margin: 20px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
 .message-images {
   display: flex;
   flex-wrap: wrap;

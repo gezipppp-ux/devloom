@@ -1,6 +1,12 @@
 <script setup>
 import { computed } from "vue";
+import { renderMessage } from "./message-content.js";
 const props = defineProps({ item: { type: Object, required: true } });
+const messageHtml = computed(() =>
+  props.item.type === "agentMessage"
+    ? renderMessage(props.item.text || "…")
+    : "",
+);
 const images = computed(() =>
   props.item.type === "userMessage"
     ? (props.item.images || []).filter((image) =>
@@ -22,7 +28,7 @@ const labels = {
 };
 const pretty = (value) =>
   typeof value === "string" ? value : JSON.stringify(value, null, 2);
-// Keep message bodies as escaped text, including content returned by tools.
+// User messages and tool output retain their literal text representation.
 </script>
 <template>
   <article
@@ -38,7 +44,14 @@ const pretty = (value) =>
         >正在回复</span
       >
     </div>
-    <div v-if="item.text || !images.length" class="message-text">
+    <!-- Only sanitized Markdown output is rendered as HTML. -->
+    <!-- eslint-disable-next-line vue/no-v-html -->
+    <div
+      v-if="item.type === 'agentMessage'"
+      class="message-text message-markdown"
+      v-html="messageHtml"
+    />
+    <div v-else-if="item.text || !images.length" class="message-text">
       {{ item.text || "…" }}
     </div>
     <div v-if="images.length" class="message-images" aria-label="消息图片">
