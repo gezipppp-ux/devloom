@@ -271,7 +271,7 @@ async function worktreeDeleted() {
       </div>
     </aside>
     <main>
-      <div class="page-breadcrumb" aria-label="当前位置">
+      <div v-if="settingsOpen || repositoryOpen || creating || !session" class="page-breadcrumb" aria-label="当前位置">
         <span :title="props.workspaceName || '开发工作台'">{{
           props.workspaceName || "开发工作台"
         }}</span>
@@ -283,9 +283,7 @@ async function worktreeDeleted() {
               ? "代码仓库"
               : creating
                 ? "新需求"
-                : session
-                  ? "需求会话"
-                  : "工作台"
+                : "工作台"
         }}</strong>
       </div>
       <SettingsPanel
@@ -311,6 +309,11 @@ async function worktreeDeleted() {
       <RepositoryGitPanel v-else-if="repositoryOpen" />
       <template v-else-if="session">
         <header class="session-header" aria-label="会话工具栏">
+          <div class="page-breadcrumb" aria-label="当前位置">
+            <span :title="props.workspaceName || '开发工作台'">{{ props.workspaceName || "开发工作台" }}</span>
+            <span aria-hidden="true">/</span>
+            <strong>需求会话</strong>
+          </div>
           <SessionTitleEditor
             :key="session.key"
             :task-key="session.key"

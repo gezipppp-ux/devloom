@@ -102,7 +102,7 @@ function send() {
                 ? '补充指令，调整当前执行方向…'
                 : '输入指令，继续这个 session…'
           "
-          rows="3"
+          rows="2"
           maxlength="60000"
           @input="emit('update:modelValue', $event.target.value)"
           @paste="paste"
@@ -237,15 +237,6 @@ function send() {
     <p v-if="settingsError" role="alert" class="error execution-settings-error">
       执行偏好保存失败：{{ settingsError }}
     </p>
-    <p v-else class="execution-settings-hint" role="status">
-      {{
-        settingsBusy
-          ? "正在保存执行偏好…"
-          : settingsPending
-            ? "已保存，下一轮生效；补充当前轮指令仍使用本轮设置。"
-            : "模型、思考和权限从下一轮生效。"
-      }}
-    </p>
     <p
       v-if="catalog.error.value"
       class="error composer-catalog-error"
@@ -279,6 +270,17 @@ function send() {
         刷新权限选项
       </button>
     </p>
-    <div class="composer-note">Enter 发送 · Shift + Enter 换行 · Ctrl + V 粘贴图片</div>
+    <div class="composer-hints">
+      <p v-if="!settingsError" class="execution-settings-hint" role="status">
+        {{
+          settingsBusy
+            ? "正在保存执行偏好…"
+            : settingsPending
+              ? "已保存，下一轮生效；补充当前轮指令仍使用本轮设置。"
+              : "模型、思考和权限从下一轮生效。"
+        }}
+      </p>
+      <div class="composer-note">Enter 发送 · Shift + Enter 换行 · Ctrl + V 粘贴图片</div>
+    </div>
   </section>
 </template>

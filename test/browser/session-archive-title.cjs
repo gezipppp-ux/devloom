@@ -53,6 +53,8 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
       const editor = await page.locator(".session-title-editor").boundingBox();
       const field = await input.boundingBox();
       assert.ok(field.width >= editor.width - 2, `title editor should use full width at ${width}`);
+      const toolbar = await page.locator(".session-toolbar").boundingBox();
+      assert.ok(toolbar.y >= editor.y + editor.height, `editing keeps toolbar below the full-width form at ${width}`);
       const save = await page.getByRole("button", { name: "保存", exact: true }).boundingBox();
       const cancel = await page.getByRole("button", { name: "取消", exact: true }).boundingBox();
       assert.equal(save.y, cancel.y, `title actions stay on one row at ${width}`);
@@ -70,7 +72,12 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
       await page.locator(".session-heading").scrollIntoViewIfNeeded();
       const heading = await page.locator(".session-heading").boundingBox();
       const toolbar = await page.locator(".session-toolbar").boundingBox();
-      assert.ok(toolbar.y >= heading.y + heading.height, `toolbar stays below title at ${width}`);
+      if (width > 1100) {
+        assert.ok(toolbar.x >= heading.x + heading.width, `wide toolbar stays beside the title without overlap at ${width}`);
+      } else {
+        assert.ok(toolbar.y >= heading.y + heading.height, `narrow toolbar stays below title at ${width}`);
+      }
+      assert.ok(toolbar.x >= 0 && toolbar.x + toolbar.width <= width, `toolbar remains inside the viewport at ${width}`);
       assert.equal(await page.locator(".session-heading").evaluate((el) => el.scrollWidth <= el.clientWidth), true);
       await page.screenshot({ path: path.join(output, `session-title-display-${width}.png`), fullPage: true });
     }

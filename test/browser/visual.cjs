@@ -68,6 +68,9 @@ async function main() {
   ];
   const detail = (key) => ({
     ...runs.find((run) => run.key === key),
+    ...(scenario === "long-title" ? {
+      title: "【生产】发布中心：补齐刷新热点按钮权限，保持需求列表、会话消息与执行状态的布局，在长标题及窄屏下仍可修改标题和继续对话。".repeat(4).slice(0, 200),
+    } : {}),
     sessionId: "session-preview-customer-search",
     status: scenario === "readonly" ? "disconnected" : scenario === "pending" ? "running" : "completed",
     turnId: scenario === "pending" ? "fixture-active-turn" : null,
@@ -386,6 +389,19 @@ async function main() {
       await page.unroute('**/api/workspaces/*/runs/1-1');
       await load();
     }
+    async function captureLongSessionTitle(suffix) {
+      await load("long-title");
+      await capture("05-session-long-title-" + suffix);
+      await page.getByRole("button", { name: "修改会话标题", exact: true }).click();
+      const input = page.getByRole("textbox", { name: "会话标题", exact: true });
+      await input.waitFor();
+      await capture("05-session-edit-title-" + suffix);
+      const bounds = await input.boundingBox();
+      assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= page.viewportSize().width,
+        "title editing stays inside the available width");
+      await input.press("Escape");
+      await load();
+    }
     async function captureFiles(suffix) {
       await load("files");
       await page.getByRole("button", { name: "hotspot-creation-workspace.vue", exact: true }).click();
@@ -493,6 +509,26 @@ async function main() {
     await capture("05-session-desktop");
     await captureMarkdown("desktop");
     await captureFiles("desktop");
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await capture("05-session-1920x1080");
+    const wideLayout = await page.evaluate(() => {
+      const timeline = document.querySelector(".timeline");
+      const style = window.getComputedStyle(timeline);
+      const composer = document.querySelector(".composer").getBoundingClientRect();
+      return {
+        pageHeight: document.documentElement.scrollHeight,
+        timelineHeight: timeline.clientHeight,
+        messageWidth: timeline.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+        composerWidth: composer.width,
+        composerBottom: composer.bottom,
+      };
+    });
+    assert.ok(wideLayout.pageHeight <= 1082, "desktop conversation fits the viewport without a second page scrollbar");
+    assert.ok(wideLayout.timelineHeight >= 750, "the full HD viewport gives most vertical space to history");
+    assert.ok(wideLayout.messageWidth >= 1400, "wide screens make use of the available conversation space");
+    assert.ok(Math.abs(wideLayout.messageWidth - wideLayout.composerWidth) <= 2, "history and composer remain aligned");
+    assert.ok(wideLayout.composerBottom <= 1080, "the input stays reachable within the full HD viewport");
+    await captureLongSessionTitle("1920x1080");
     await page.setViewportSize({ width: 1920, height: 855 });
     await capture("05-session-wide");
     await page.setViewportSize({ width: 1440, height: 1200 });
@@ -630,6 +666,7 @@ async function main() {
       await captureEmptyWorkspaceRail(width);
       await load();
       await capture("05-session-" + width);
+      if (width === 320) await captureLongSessionTitle(width);
       await captureMarkdown(width);
       await captureFiles(width);
       await captureSessionDrawer(width);
