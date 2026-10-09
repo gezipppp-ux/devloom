@@ -88,6 +88,12 @@ async function main() {
         text: "已完成搜索交互与结果展示，接下来检查边界情况。",
       },
       {
+        id: "reasoning",
+        type: "reasoning",
+        text: "检查搜索条件与空结果提示，保持现有表格交互。",
+        status: "completed",
+      },
+      {
         id: "command",
         type: "commandExecution",
         command: "npm run test",
@@ -511,6 +517,11 @@ async function main() {
     await captureFiles("desktop");
     await page.setViewportSize({ width: 1920, height: 1080 });
     await capture("05-session-1920x1080");
+    await capture("05-session-header-1920x1080", ".session-header");
+    await page.getByRole("button", { name: "修改会话标题", exact: true }).click();
+    await page.getByRole("textbox", { name: "会话标题", exact: true }).waitFor();
+    await capture("05-session-edit-header-1920x1080", ".session-header");
+    await page.getByRole("textbox", { name: "会话标题", exact: true }).press("Escape");
     const wideLayout = await page.evaluate(() => {
       const timeline = document.querySelector(".timeline");
       const style = window.getComputedStyle(timeline);

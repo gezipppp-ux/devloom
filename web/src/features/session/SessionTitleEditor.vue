@@ -69,23 +69,26 @@ async function save() {
 <template>
   <div class="session-title-editor">
     <form v-if="editing" class="session-title-form" @submit.prevent="save">
-      <label :for="`session-title-${taskKey}`">会话标题</label>
+      <div class="session-title-label">
+        <label :for="`session-title-${taskKey}`">会话标题</label>
+        <span :id="`session-title-hint-${taskKey}`" class="session-title-limit">最多 200 个字符</span>
+      </div>
       <textarea
         ref="input"
         :id="`session-title-${taskKey}`"
         v-model="draft"
         rows="2"
         maxlength="200"
+        :aria-describedby="`session-title-hint-${taskKey}`"
         :disabled="busy"
         @keydown.enter="saveFromKeyboard"
         @keydown.esc="cancelFromKeyboard"
       />
       <div class="session-title-actions">
-        <span class="field-hint">最多 200 个字符</span>
+        <button type="button" :disabled="busy" @click="cancel">取消</button>
         <button type="submit" class="primary compact" :disabled="busy || !draft.trim()">
           {{ busy ? "保存中…" : "保存" }}
         </button>
-        <button type="button" :disabled="busy" @click="cancel">取消</button>
       </div>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
     </form>

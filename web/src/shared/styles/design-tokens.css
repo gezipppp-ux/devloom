@@ -29,8 +29,9 @@
   --content-width: 800px;
   --conversation-width: 1440px;
   --project-pane-width: 240px;
-  --font-size-message: 16px;
-  --font-size-command: 13px;
+  --font-size-message: 14px;
+  --font-size-tool: 13px;
+  --font-size-command: 12px;
   --font-size-session-meta: 12px;
   --font-ui: "Segoe UI", "Microsoft YaHei", sans-serif;
   --font-code: "Cascadia Code", Consolas, monospace;
