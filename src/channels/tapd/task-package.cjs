@@ -7,7 +7,7 @@ const {
   renderPromptTemplate,
 } = require("../../domain/prompt-templates.cjs");
 
-async function buildTask(workitem, session, directory, config = {}) {
+async function prepareMaterials(workitem, session, directory, config = {}) {
   const images = await collectImages(workitem, session, directory, config.tapd);
   const description = (
     workitem.markdown_description ||
@@ -21,6 +21,21 @@ async function buildTask(workitem, session, directory, config = {}) {
   const supplement = workitem.supplementary_instructions?.trim() || "";
   const ready =
     visible.length > 0 || images.length > 0 || supplement.length > 0;
+  return {
+    generated_at: new Date().toISOString(),
+    execution_ready: ready,
+    blocked_reason: ready ? null : "TAPD 需求缺少描述和图片。",
+    workitem,
+    images,
+    content: description || (supplement && !images.length
+      ? "（TAPD 原始描述为空，请阅读补充说明。）" : "（仅有图片，请阅读附件。）"),
+  };
+}
+
+async function buildTask(workitem, session, directory, config = {}) {
+  const materials = await prepareMaterials(workitem, session, directory, config);
+  const { images, content } = materials;
+  const supplement = workitem.supplementary_instructions?.trim() || "";
   const imageList = images
     .map((image) => `${image.index}. ${path.basename(image.path)}`)
     .join("\n");
@@ -29,11 +44,7 @@ async function buildTask(workitem, session, directory, config = {}) {
     title: workitem.title,
     workspace_id: workitem.workspace_id,
     url: workitem.detail_url,
-    content:
-      description ||
-      (supplement && !images.length
-        ? "（TAPD 原始描述为空，请阅读补充说明。）"
-        : "（仅有图片，请阅读附件。）"),
+    content,
     supplement: supplement
       ? `--- 补充说明与指导意见开始 ---\n${supplement}\n--- 补充说明与指导意见结束 ---\n\n`
       : "",
@@ -44,11 +55,7 @@ async function buildTask(workitem, session, directory, config = {}) {
     image_list: imageList,
   });
   const task = {
-    generated_at: new Date().toISOString(),
-    execution_ready: ready,
-    blocked_reason: ready ? null : "TAPD 需求缺少描述和图片。",
-    workitem,
-    images,
+    ...materials,
     codex_prompt: prompt,
   };
   writeConfig(path.join(directory, "tapd-task.json"), task);
@@ -56,4 +63,4 @@ async function buildTask(workitem, session, directory, config = {}) {
   return task;
 }
 
-module.exports = { buildTask };
+module.exports = { buildTask, prepareMaterials };

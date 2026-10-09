@@ -5,10 +5,12 @@ const {
 const { loadSession, sessionFromConfig, numericId, workspaceId } = require("./config.cjs");
 const { todos, detail } = require("./detail.cjs");
 const { todoRequest } = require("./auth-utils.cjs");
-const { buildTask } = require("./task-package.cjs");
+const { buildTask, prepareMaterials } = require("./task-package.cjs");
 const { searchUsers } = require("./users.cjs");
 const { readOptional } = require("../../storage/json-files.cjs");
 const { sourceFor, runKey } = require("../../domain/run-identity.cjs");
+const { validateFusion, fingerprint } = require("../../domain/requirement-fusion.cjs");
+const { buildFusionTask } = require("./fusion-task.cjs");
 
 function createTapdChannel(configFile, dependencies = {}) {
   function boundWorkspace(value, config = loadConfig(configFile)) {
@@ -23,13 +25,14 @@ function createTapdChannel(configFile, dependencies = {}) {
   const services = {
     detail,
     buildTask,
+    prepareMaterials,
     searchUsers,
     ...dependencies,
   };
   return {
     id: "tapd",
     label: "TAPD",
-    capabilities: { search: true, assignees: false },
+    capabilities: { search: true, assignees: false, fusion: true },
     describe() {
       let workspace = "";
       try {
@@ -82,6 +85,10 @@ function createTapdChannel(configFile, dependencies = {}) {
       workspace,
       type = "story",
       supplementaryInstructions = "",
+      items,
+      requestId,
+      title,
+      fusionMode,
     }) {
       if (
         typeof supplementaryInstructions !== "string" ||
@@ -97,6 +104,25 @@ function createTapdChannel(configFile, dependencies = {}) {
         prompt_templates: getPromptTemplates(loaded),
       };
       const session = sessionFromConfig(config);
+      if (items !== undefined) {
+        const fusion = validateFusion({ items, requestId, title, fusionMode });
+        const scope = boundWorkspace(workspace, config);
+        const requirements = items.map(entry => {
+          if (!entry || (entry.type !== undefined && !["story", "bug", "board_card"].includes(entry.type)))
+            throw new Error("无效的 TAPD 待办类型。");
+          if (entry.workspace && String(entry.workspace) !== scope)
+            throw new Error("只能融合当前 TAPD 项目的需求。");
+          return { id: numericId(entry.id, "需求 ID"), workspace_id: scope,
+            ...(entry.type === undefined ? {} : { type: entry.type }) };
+        });
+        if (new Set(requirements.map(entry => entry.id)).size !== requirements.length)
+          throw new Error("请勿重复选择同一需求。");
+        const item = { ...fusion, workspace_id: scope, type: "requirement", requirements,
+          sources: requirements.map(entry => ({ ...sourceFor(this.id, entry), type: entry.type })),
+          supplementary_instructions: supplement };
+        item.request_fingerprint = fingerprint(item);
+        return { item, config, session };
+      }
       const item = {
         id: numericId(id, "需求 ID"),
         workspace_id: boundWorkspace(workspace, config),
@@ -113,6 +139,8 @@ function createTapdChannel(configFile, dependencies = {}) {
       };
     },
     async prepare({ session, item, directory, config }) {
+      if (item.requirements)
+        return buildFusionTask({ session, item, directory, config, services });
       const workitem = {
         ...(await services.detail(session, item)),
         ...(item.supplementary_instructions

@@ -186,6 +186,8 @@ class SessionViews {
           key: runtime.key,
           title: "正在准备需求",
           metadata: this.store.readTaskMetadata(runtime.key),
+          sources: this.store.requirements.read(runtime.key).sources || [],
+          requirementCount: this.store.requirements.read(runtime.key).sources?.length || 1,
         }),
         status: runtime.status,
         sessionId: runtime.sessionId,

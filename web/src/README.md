@@ -33,6 +33,7 @@ Vue 组件使用 PascalCase 文件名；JavaScript 辅助模块使用 kebab-case
 - 新任务路径采用「基础目录 / 用户名 / worktree / 项目名 / 任务前缀-短标识」，例如 `D:\wt\alice\worktree\project-a\login-a1b2c3d4e5f6`；项目克隆目录为 `D:\wt\alice\projects\project-a`。仓库和路径均由创建工作区时的远程 Git 地址生成，前端只展示服务端返回值。个人设置维护系统生成的 SSH 密钥或 HTTP/HTTPS 账号密码／令牌。GitAccountSettings 复用表单分区，use-git-accounts 拥有加载、生成、检测、保存与卸载生命周期；展示公钥、服务端强制先检测后保存，私钥和密码不回显。
 - `app/use-workspace-console.js` 负责渠道 bootstrap、SSE 建连/关闭与防抖刷新，将事件分发给任务列表和会话状态，不处理 DOM 或表单草稿。
 - `features/tasks/use-task-list.js` 负责列表刷新、请求乱序保护和请求期间的人工进度覆盖。
+- `features/tasks/TapdRequirementPicker.vue` 复用多选、ID 添加与顺序调整；`use-tapd-selection.js` 拥有检索请求和代际隔离。`AppendRequirements.vue` 与 `use-requirement-additions.js` 管理已有任务的追加草稿与保存；app 通过需求抽屉插槽组合这些组件，避免 session 直接依赖 tasks。原始与追加资料均由 session 的 `RequirementDetails.vue` 安全渲染，明确区分待处理、已发送和发送结果待确认；继续按钮通过 app 调用会话动作，SSE 更新完整资料且不会清空会话草稿。
 - `features/tasks/ArchivedSessions.vue` 提供侧栏归档入口、名称搜索、恢复和删除交互；`use-archived-sessions.js` 拥有归档请求、恢复状态与卸载/乱序保护。壳层通过归档、删除、恢复与重连事件通知刷新，并通过插槽组合 session 功能的删除确认窗口，功能之间不互相导入。删除目标独立于列表快照保存，刷新或提前到达的 SSE 不卸载正在提交的确认窗口；恢复后不自动启动任务或切换当前草稿。
 - 会话名称由 `SessionTitleEditor.vue` 呈现，长名称换行，编辑图标紧随标题。编辑区最大 1040px，字数说明位于标签旁，取消/保存在宽屏时紧邻输入区、窄屏时移到下方，并保留输入法处理。壳层将面包屑并入会话标题区，执行状态与刷新在宽屏时对齐标题行，编辑时位于表单上方；`SessionDetailsDrawer.vue` 拥有右侧信息、Git、需求抽屉的呈现状态、键盘关闭及焦点恢复。抽屉默认收起、独立滚动，打开时不压缩对话列；切换资料保留草稿、滚动位置与子组件状态，切换会话重建抽屉。任务元数据控件由 app 通过插槽组合，不跨功能导入。
 - `features/session/use-session.js` 负责详情快照、请求期间的 SSE 覆盖、会话动作和历史分页；执行偏好拥有独立保存状态和错误反馈，迟到响应不能覆盖较新的设置/当前轮状态。打开会话、收到消息和完成动作通过回调交给应用/界面层处理，不导入任务列表或界面组件。

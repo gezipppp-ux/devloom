@@ -16,8 +16,12 @@ class SessionPresenter {
 
   summary(key, state) {
     const originalTitle = text(state.workitem.title).trim() || text(state.workitem.name).trim();
+    const sources = this.store.requirements.read(key).sources || state.workitem.sources ||
+      [state.source || sourceFor("tapd", state.workitem)];
     return {
       key,
+      sources,
+      requirementCount: sources.length,
       title: this.store.readSessionTitle(key, originalTitle || `未命名会话 · ${state.workitem.id || key}`),
       archivedAt: this.store.readArchive(key).archivedAt || null,
       source: state.source || sourceFor("tapd", state.workitem),
@@ -52,22 +56,34 @@ class SessionPresenter {
           ? "任务资料快照缺失，已显示运行记录中保存的需求内容。"
           : "任务资料快照无法读取，已显示运行记录中保存的需求内容。";
     }
-    const item = { ...state.workitem, ...task.workitem };
+    return { ...this.taskRequirement(key, task, state.workitem, state.created_at), warning,
+      additions: (this.store.requirements.read(key).additions || []).map(entry => ({
+        id: entry.id, status: entry.status, createdAt: entry.createdAt,
+        requirement: this.taskRequirement(key, entry.task, {}, entry.createdAt, entry.id),
+      })),
+    };
+  }
+
+  taskRequirement(key, task, fallback = {}, createdAt, additionId, allImages = task.images || []) {
+    const item = { ...fallback, ...task.workitem };
+    const imagePrefix = additionId ? `addition-images/${additionId}` : "images";
     return {
       id: text(String(item.id || "")),
       title: text(item.title),
       sourceUrl: text(item.detail_url),
-      capturedAt: text(task.generated_at || state.created_at),
+      capturedAt: text(task.generated_at || createdAt),
+      type: text(item.type),
+      fusionMode: text(item.fusion_mode),
       description: text(item.description),
       markdown: text(item.markdown_description),
       supplementaryInstructions: text(item.supplementary_instructions),
       prompt: text(task.codex_prompt),
-      warning,
-      images: (task.images || []).map((image, index) => ({
-        index,
-        name: path.basename(image.path || `image-${index + 1}`),
+      requirements: task.requirements?.map(child => this.taskRequirement(key, child, {}, createdAt, additionId, allImages)),
+      images: (task.images || []).map((image) => ({
+        index: allImages.findIndex(entry => entry.path === image.path),
+        name: path.basename(image.path || "image"),
         source: text(image.source),
-        url: `${this.apiPrefix || "/api"}/runs/${key}/images/${index}`,
+        url: `${this.apiPrefix || "/api"}/runs/${key}/${imagePrefix}/${allImages.findIndex(entry => entry.path === image.path)}`,
       })),
     };
   }

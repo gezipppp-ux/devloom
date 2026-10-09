@@ -77,6 +77,7 @@ docs/engineering/  # 行为契约与架构规则
 | `storage/git-account-store.cjs`、`git/account-credentials.cjs` | 前者拥有个人 Git 账号、加密密钥草稿及修订号条件更新；后者为 Git 子进程隔离凭据，不负责数据库或公开响应 |
 | `application/session-events.cjs` | Codex 事件、审批与执行完成状态处理 |
 | `application/session-settings.cjs` | 会话执行设置校验、当前轮与下一轮选择、变更事件 |
+| `application/session-requirements.cjs`、`storage/run-requirements-store.cjs` | 分别负责追加资料的空闲/归属门禁与显式发送用例，以及来源唯一性、追加快照和发送状态的原子持久化 |
 | `application/session-git.cjs`、`repository-services.cjs` | Git 状态及操作用例、运行与所有权门禁、删除进度和只读会话 |
 | `application/session-files.cjs`、`session-file-presenter.cjs`、`git/task-files.cjs` | 分别负责会话文件读取门禁、公开文件/候选/差异响应，以及受限 Worktree 文件定位、Git 基准与文本差异读取 |
 | `git/repository-operations.cjs`、`task-operations.cjs` | 远端获取/快进更新、任务 Git 状态、Worktree 身份校验和目录/本地分支删除 |

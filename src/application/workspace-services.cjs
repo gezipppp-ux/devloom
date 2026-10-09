@@ -91,7 +91,7 @@ class WorkspaceServices {
       throw new Error("该渠道不支持需求检索。");
     const items = await channel.search(input);
     return channelId === "tapd"
-      ? presentRequirements(channelId, items, this.sessions.list())
+      ? presentRequirements(channelId, items, [...this.sessions.list(), ...this.sessions.list({ archived: true })])
       : items;
   }
 
@@ -118,6 +118,9 @@ class WorkspaceServices {
   }
   imagePath(key, index) {
     return this.sessions.store.imagePath(key, index);
+  }
+  additionImagePath(key, id, index) {
+    return this.sessions.store.additionImagePath(key, id, index);
   }
 }
 

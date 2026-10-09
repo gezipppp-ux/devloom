@@ -116,6 +116,15 @@ async function serveApi(
   const route = /^\/api\/runs\/([^/]+)(?:\/(.*))?$/.exec(url.pathname);
   if (route && RUN_KEY.test(route[1])) {
     const [, key, action] = route;
+    if (request.method === "POST" && action === "requirements")
+      return json(response, 200, await sessions.requirements.append(key, input));
+    if (request.method === "POST" && action === "requirements/continue")
+      return json(response, 202, await sessions.requirements.continue(key, input.id));
+    if (request.method === "GET" && /^addition-images\/[^/]+\/\d+$/.test(action || "")) {
+      const [, id, index] = action.split("/");
+      sendFile(response, services.additionImagePath(key, id, index), "private, no-store");
+      return;
+    }
     if (request.method === "GET" && action === "files")
       return json(response, 200, await sessions.listFiles(key, url.searchParams.get("scope") || "task"));
     if (request.method === "GET" && action === "file")

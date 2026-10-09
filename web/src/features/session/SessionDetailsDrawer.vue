@@ -23,8 +23,9 @@ const RequirementDetails = defineAsyncComponent(
 defineProps({
   session: { type: Object, required: true },
   active: Boolean,
+  requirementsDisabled: Boolean,
 });
-const emit = defineEmits(["archived", "deleted", "worktree-deleted", "open-file", "opened"]);
+const emit = defineEmits(["archived", "deleted", "worktree-deleted", "open-file", "opened", "continue-requirements"]);
 const panels = [
   { key: "info", label: "信息", title: "会话信息", icon: InfoCircleOutlined },
   { key: "git", label: "Git", title: "Worktree Git", icon: BranchesOutlined },
@@ -178,7 +179,8 @@ onUnmounted(() => {
           <p v-else-if="!session.worktree?.path" class="empty-inline">Worktree 尚未准备完成。</p>
         </section>
         <section v-show="panel === 'requirement'" :id="`${id}-requirement`">
-          <RequirementDetails :requirement="session.requirement" />
+          <slot name="append-requirements" />
+          <RequirementDetails :requirement="session.requirement" :disabled="requirementsDisabled || active" @continue="emit('continue-requirements', $event)" />
         </section>
       </div>
     </aside>

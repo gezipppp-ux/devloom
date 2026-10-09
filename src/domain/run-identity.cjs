@@ -19,7 +19,9 @@ function sourceFor(channel, item) {
 }
 function runKey(source) {
   sourceFor(source.channel, { workspace_id: source.scope, id: source.id });
-  if (source.channel === 'tapd') {
+  if (source.channel === 'tapd' && !/^\d+$/.test(source.scope))
+    throw new Error('TAPD identity must use numeric IDs.');
+  if (source.channel === 'tapd' && !/^fusion-[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(source.id)) {
     if (!/^\d+$/.test(source.scope) || !/^\d+$/.test(source.id))
       throw new Error('TAPD identity must use numeric IDs.');
     return `${source.scope}-${source.id}`;

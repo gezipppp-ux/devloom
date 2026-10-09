@@ -79,6 +79,8 @@ export function useSession({
       "activeExecutionSettings",
       "settingsPending",
       "title",
+      "requirement",
+      "requirementCount",
     ])
       if (name in event) fields[name] = event[name];
     if (event.at) fields.lastActivity = event.at;

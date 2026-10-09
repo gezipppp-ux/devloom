@@ -9,11 +9,13 @@ const { MessageImageStore } = require("./message-image-store.cjs");
 const { databaseForPath } = require("./database-registry.cjs");
 const { writeArtifact, materializeArtifact, appendArtifact } = require("./artifact-store.cjs");
 const { SessionHistoryStore } = require("./session-history-store.cjs");
+const { RunRequirementsStore } = require("./run-requirements-store.cjs");
 const {
   defaultTaskMetadata,
   validateTaskMetadata,
 } = require("../domain/task-metadata.cjs");
 const { validateSessionTitle } = require("../domain/session-title.cjs");
+const { REQUEST_ID } = require("../domain/requirement-fusion.cjs");
 
 class RunStore {
   constructor(directory) {
@@ -21,6 +23,7 @@ class RunStore {
     this.owned = new Set();
     this.ownerToken = randomUUID();
     this.database = databaseForPath(this.directory);
+    this.requirements = new RunRequirementsStore(this.directory);
   }
 
   claim(key) {
@@ -299,6 +302,34 @@ class RunStore {
   imagePath(key, index) {
     if (!/^\d+$/.test(index)) throw new Error("无效的图片编号");
     const task = this.readTask(key);
+    return this.taskImagePath(key, task, index);
+  }
+
+  additionDirectory(key, id) {
+    if (!REQUEST_ID.test(id)) throw new Error("追加资料标识无效。");
+    return path.join(this.dir(key), "additions", id);
+  }
+
+  additionImagePath(key, id, index) {
+    this.additionDirectory(key, id);
+    if (!/^\d+$/.test(index)) throw new Error("无效的图片编号。");
+    const task = this.requirements.read(key).additions?.find(entry => entry.id === id)?.task;
+    if (!task) throw new Error("追加资料不存在。");
+    return this.taskImagePath(key, task, index);
+  }
+
+  additionMessageImages(key, id) {
+    const addition = this.requirements.read(key).additions?.find(entry => entry.id === id);
+    if (!addition) throw new Error("追加资料不存在。");
+    const images = this.messageImages(key);
+    const ids = addition.messageImageIds || addition.task.images.map((_, index) =>
+      images.save(fs.readFileSync(this.additionImagePath(key, id, String(index)))).id);
+    if (!addition.messageImageIds)
+      this.requirements.updateAddition(key, id, () => ({ messageImageIds: ids }));
+    return ids.map(imageId => images.read(imageId));
+  }
+
+  taskImagePath(key, task, index) {
     if (this.database) {
       const recorded = task.images?.[Number(index)]?.path;
       if (!recorded) throw Object.assign(new Error("任务图片不存在。"), { code: "ENOENT" });

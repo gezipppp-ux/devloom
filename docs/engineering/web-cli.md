@@ -63,6 +63,13 @@ A delayed first `turn/start` response must still belong to the original startup 
 
 ## 4. Validation & error matrix
 
+### TAPD requirement additions
+
+- `POST .../runs/:key/requirements` accepts `{requestId,workspace,items:[{id,type?}],supplementaryInstructions?}`. SessionRequirements validates the original channel/project, non-archived state, retained Worktree and confirmed idle Codex state under the session operation mutex. Download materials and render the captured fusion template outside database transactions, then recheck state and commit source membership plus the complete addition snapshot atomically. A failed preparation leaves the original task, membership and initial snapshot unchanged.
+- `POST .../runs/:key/requirements/continue {id}` explicitly sends one saved addition as a new turn on the original session/worktree. Persist `sending` immediately before the RPC, `sent` with its turn ID after acknowledgement, and `uncertain` when acknowledgement is lost. Pre-dispatch validation failures leave the addition `ready`. A repeated sent request returns its result; `sending`/`uncertain` never replay automatically, including after restart. Addition pictures are also persisted as conversation images so native history image representations remain readable.
+- Original requirement snapshots remain immutable. Public requirement DTOs add `requirements` for ordered initial sources and `additions` for later batches; each source retains sanitized rendering and scoped local image routes. `GET .../runs/:key/addition-images/:id/:index` only serves images referenced by committed additions. The `requirements` SSE event carries the current requirement projection and source count; pending snapshots must preserve that newer event.
+- The app shell composes the tasks feature's reusable picker/append form into the session requirement drawer through a slot. Creation supports opt-in multi-selection and ordering; saving additions does not execute. The explicit continue button is disabled while running, awaiting approval, disconnected or read-only. Source search includes archived assignments and opens the owning task; it never combines already separate code/history automatically.
+
 | Condition                     | Result                                        |
 | ----------------------------- | --------------------------------------------- |
 | Removed/unregistered worktree | History readable, mutations refused           |

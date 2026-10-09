@@ -1,7 +1,8 @@
 <script setup>
 import { computed } from 'vue';
 import { renderRequirement, safeRequirementLink } from './requirement-content.js';
-const props = defineProps({ requirement: { type: Object, default: null } });
+const props = defineProps({ requirement: { type: Object, default: null }, disabled: Boolean, nested: Boolean });
+const emit = defineEmits(['continue']);
 const html = computed(() =>
   props.requirement ? renderRequirement(props.requirement) : '',
 );
@@ -19,7 +20,7 @@ const capturedAt = computed(() => {
 <template>
   <section class="requirement-details" aria-label="完整需求资料">
     <div class="requirement-heading">
-      <h2>需求正文</h2>
+      <h2>{{ requirement?.requirements?.length ? requirement.title : '需求正文' }}</h2>
       <a
         v-if="sourceUrl"
         :href="sourceUrl"
@@ -29,8 +30,8 @@ const capturedAt = computed(() => {
       >
     </div>
     <p class="field-hint">
-      <template v-if="requirement?.id">#{{ requirement.id }} · </template>
-      任务启动时保存的完整快照<template v-if="capturedAt">
+      <template v-if="requirement?.id && !requirement?.requirements?.length">#{{ requirement.id }} · </template>
+      {{ nested ? '完整资料快照' : '任务启动时保存的完整快照' }}<template v-if="capturedAt">
         · {{ capturedAt }}</template
       >
     </p>
@@ -38,7 +39,7 @@ const capturedAt = computed(() => {
     <!-- Only the allowlisted DOMPurify output is rendered as HTML. -->
     <!-- eslint-disable-next-line vue/no-v-html -->
     <div v-if="html" class="requirement-body" v-html="html" />
-    <p v-else class="muted">
+    <p v-else-if="!requirement?.requirements?.length" class="muted">
       {{
         requirement
           ? '该需求没有原始文字描述，请查看补充说明或图片附件。'
@@ -53,7 +54,11 @@ const capturedAt = computed(() => {
       <h3>补充说明与指导意见</h3>
       <pre>{{ requirement.supplementaryInstructions }}</pre>
     </section>
-    <div v-if="requirement?.images?.length" class="requirement-attachments">
+    <details v-for="(child, index) in requirement?.requirements || []" :key="child.id" class="requirement-source">
+      <summary>{{ index + 1 }}. {{ child.title }} · #{{ child.id }}</summary>
+      <RequirementDetails :requirement="child" nested />
+    </details>
+    <div v-if="requirement?.images?.length && !requirement?.requirements?.length" class="requirement-attachments">
       <h3>图片附件 · {{ requirement.images.length }}</h3>
       <div class="image-strip">
         <a
@@ -73,9 +78,15 @@ const capturedAt = computed(() => {
       </div>
     </div>
     <details v-if="requirement?.prompt" class="requirement-prompt">
-      <summary>发送给 Codex 的完整内容</summary>
+      <summary>{{ nested ? '本批资料的完整提示词' : '发送给 Codex 的完整内容' }}</summary>
       <pre>{{ requirement.prompt }}</pre>
     </details>
+    <section v-for="(addition, index) in requirement?.additions || []" :key="addition.id" class="requirement-addition">
+      <h3>追加资料 {{ index + 1 }} · {{ addition.status === 'ready' ? '待处理' : addition.status === 'sent' ? '已发送' : '发送结果待确认' }}</h3>
+      <RequirementDetails :requirement="addition.requirement" nested />
+      <button v-if="addition.status === 'ready'" type="button" class="primary" :disabled="disabled" @click="emit('continue', addition.id)">继续处理新增需求</button>
+      <p v-else-if="addition.status !== 'sent'" class="notice">请检查会话历史后通过消息继续；系统不会自动重发这批资料。</p>
+    </section>
   </section>
 </template>
 
@@ -84,6 +95,8 @@ const capturedAt = computed(() => {
   color: var(--ink);
   font-size: 13px;
 }
+.requirement-source, .requirement-addition { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.requirement-source summary { overflow-wrap: anywhere; cursor: pointer; margin-bottom: 12px; }
 .requirement-heading {
   display: flex;
   flex-wrap: wrap;

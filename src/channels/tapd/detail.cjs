@@ -65,6 +65,19 @@ function detailUrl(item) {
 }
 
 async function detail(session, item) {
+  if (!item.entity_type && !item.type) {
+    const failures = [];
+    for (const candidate of ['story', 'bug', 'board_card']) {
+      try { return await detail(session, { ...item, type: candidate }); }
+      catch (error) {
+        // Only a detail-level rejection or empty result may indicate a wrong
+        // entity type. Transport, login and identity failures must stop here.
+        if (error.code !== 'TAPD_DETAIL_UNAVAILABLE') throw error;
+        failures.push(`${candidate}: ${error.message}`);
+      }
+    }
+    throw new Error(`无法读取 TAPD 条目 ${item.id}，请检查 ID、项目和访问权限。${failures.join('；')}`);
+  }
   const type = String(item.entity_type || item.type || 'story').toLowerCase();
   const data = await request(
     session,
@@ -96,10 +109,18 @@ async function detail(session, item) {
     },
   );
   const basicResult = parseData(data?.get_workitem_basic_info_ret);
-  if (basicResult?.meta) assertSuccess(basicResult, 'TAPD detail');
+  if (basicResult?.meta) {
+    try { assertSuccess(basicResult, 'TAPD detail'); }
+    catch (error) { error.code = 'TAPD_DETAIL_UNAVAILABLE'; throw error; }
+  }
   const basic = parseData(basicResult?.data);
-  if (!basic?.id || String(basic.id) !== String(item.id))
-    throw new Error('TAPD detail is missing or returned a different item.');
+  if (!basic?.id) {
+    const error = new Error('TAPD detail is missing.');
+    error.code = 'TAPD_DETAIL_UNAVAILABLE';
+    throw error;
+  }
+  if (String(basic.id) !== String(item.id))
+    throw new Error('TAPD detail returned a different item.');
   if (
     basic.workspace_id &&
     String(basic.workspace_id) !== String(item.workspace_id)

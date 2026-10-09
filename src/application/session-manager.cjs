@@ -11,6 +11,7 @@ const { SessionViews } = require("./session-views.cjs");
 const { SessionSettings } = require("./session-settings.cjs");
 const { SessionGit } = require("./session-git.cjs");
 const { SessionFiles } = require("./session-files.cjs");
+const { SessionRequirements } = require("./session-requirements.cjs");
 const { runExecution } = require("../execution/runner.cjs");
 const { defaultChannels } = require("../channels/channel-registry.cjs");
 const { executionConfig } = require("../config/execution-settings.cjs");
@@ -60,6 +61,7 @@ class SessionManager extends EventEmitter {
     this.worktreeReason = worktreeReason;
     this.git = new SessionGit(this);
     this.files = new SessionFiles(this);
+    this.requirements = new SessionRequirements(this);
     this.settings = new SessionSettings({
       store: this.store,
       client: this.client,
@@ -208,10 +210,6 @@ class SessionManager extends EventEmitter {
       const attachments = validated.images.map((id) =>
         this.store.messageImages(key).read(id),
       );
-      const runtime = await this.attach(key);
-      this.assertOpen();
-      if (runtime.requests.size)
-        throw new Error("请先处理当前等待中的问题或审批。");
       const input = [
         ...(validated.text
           ? [{ type: "text", text: validated.text, text_elements: [] }]
@@ -221,61 +219,76 @@ class SessionManager extends EventEmitter {
           path: image.path,
         })),
       ];
-      const activeTurn = runtime.turnId;
-      if (activeTurn) {
-        await this.client.request("turn/steer", {
-          threadId: runtime.sessionId,
-          expectedTurnId: activeTurn,
-          input,
-        });
-        this.publish(runtime, {
-          type: "notice",
-          text: "补充指令已发送至当前一轮。",
-        });
-      } else {
-        let result;
-        const state = this.store.read(key);
-        const selection = this.settings.read(key, state).selection;
-        try {
-          await assertPermissionAvailable(
-            this.client,
-            selection.permissionMode,
-          );
-          this.assertOpen();
-          const model = await resolveTurnModel(
-            this.client,
-            selection,
-            state.worktree.path,
-          );
-          this.assertOpen();
-          this.settings.starting(key, selection);
-          result = await this.client.request("turn/start", {
-            threadId: runtime.sessionId,
-            input,
-            ...model,
-            ...turnPermissionParams(
-              selection.permissionMode,
-              state.worktree.path,
-            ),
-          });
-          this.settings.applied(key, selection);
-        } catch (error) {
-          runtime.connected = false;
-          runtime.status = "disconnected";
-          this.publish(runtime, { type: "state", error: error.message });
-          throw error;
-        }
-        if (
-          result.turn.status === "inProgress" &&
-          !runtime.completedTurns.has(result.turn.id)
-        ) {
-          runtime.turnId = result.turn.id;
-          runtime.status = "running";
-        }
-        this.publish(runtime, { type: "state" });
-      }
-      return { sessionId: runtime.sessionId, turnId: runtime.turnId };
+      return this.sendInput(key, input);
     });
+  }
+
+  // Caller holds the session operation lock. A dispatch hook persists addition
+  // intent immediately before RPC so unknown outcomes are never replayed.
+  async sendInput(key, input, beforeDispatch) {
+    let dispatchedTurnId;
+    const runtime = await this.attach(key);
+    this.assertOpen();
+    if (runtime.requests.size)
+      throw new Error("请先处理当前等待中的问题或审批。");
+    const activeTurn = runtime.turnId;
+    if (activeTurn) {
+      if (beforeDispatch) throw new Error("请等待当前轮结束后处理新增需求。");
+      await this.client.request("turn/steer", {
+        threadId: runtime.sessionId,
+        expectedTurnId: activeTurn,
+        input,
+      });
+      this.publish(runtime, {
+        type: "notice",
+        text: "补充指令已发送至当前一轮。",
+      });
+    } else {
+      let result;
+      const state = this.store.read(key);
+      const selection = this.settings.read(key, state).selection;
+      try {
+        await assertPermissionAvailable(
+          this.client,
+          selection.permissionMode,
+        );
+        this.assertOpen();
+        const model = await resolveTurnModel(
+          this.client,
+          selection,
+          state.worktree.path,
+        );
+        this.assertOpen();
+        this.settings.starting(key, selection);
+        beforeDispatch?.();
+        result = await this.client.request("turn/start", {
+          threadId: runtime.sessionId,
+          input,
+          ...model,
+          ...turnPermissionParams(
+            selection.permissionMode,
+            state.worktree.path,
+          ),
+        });
+        dispatchedTurnId = result.turn.id;
+        this.settings.applied(key, selection);
+      } catch (error) {
+        runtime.connected = false;
+        runtime.status = "disconnected";
+        this.publish(runtime, { type: "state", error: error.message });
+        throw error;
+      }
+      if (
+        result.turn.status === "inProgress" &&
+        !runtime.completedTurns.has(result.turn.id)
+      ) {
+        runtime.turnId = result.turn.id;
+        runtime.status = "running";
+      }
+      this.publish(runtime, { type: "state" });
+    }
+    return { sessionId: runtime.sessionId, turnId: runtime.turnId,
+      ...(beforeDispatch ? { dispatchedTurnId } : {}) };
   }
 
   uploadMessageImage(key, bytes) {
@@ -392,11 +405,20 @@ class SessionManager extends EventEmitter {
     metadata = validateTaskMetadata(metadata);
     config = executionConfig(config, this.configFile);
     const source = sourceFor(channel.id, item);
-    if (this.sessions.has(key) || this.store.hasRun(key))
+    if (this.sessions.has(key) || this.store.hasRun(key)) {
+      if (item.request_fingerprint && this.store.requirements.read(key).fingerprint === item.request_fingerprint)
+        return { key, accepted: true, reused: true };
       throw new Error("该需求已有运行记录。");
+    }
     // Resolve before creating run ownership, downloading images or creating a branch.
     this.client.validateCommand?.();
     this.store.claim(key);
+    try {
+      this.store.requirements.claim(key, item.sources || [source], { fingerprint: item.request_fingerprint });
+    } catch (error) {
+      this.store.release(key);
+      throw error;
+    }
     this.store.writeTaskMetadata(key, metadata, item);
     this.settings.initialize(key, config.codex);
     const runtime = this.runtime(key);
@@ -526,7 +548,10 @@ class SessionManager extends EventEmitter {
         runtime.status = "failed";
         runtime.error = error.message;
         this.publish(runtime, { type: "error", error: error.message });
-        if (!this.store.hasRun(key)) this.sessions.delete(key);
+        if (!this.store.hasRun(key)) {
+          this.store.requirements.releaseUnstarted(key);
+          this.sessions.delete(key);
+        }
       });
     return { key, accepted: true };
   }

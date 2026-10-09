@@ -3,6 +3,7 @@ import { computed, onUnmounted, reactive, ref, watch } from "vue";
 import UserSearchSelect from "./UserSearchSelect.vue";
 import ManualRequirementFields from "./ManualRequirementFields.vue";
 import CodexModelSettings from "./CodexModelSettings.vue";
+import TapdRequirementPicker from "./TapdRequirementPicker.vue";
 import FormSection from "../../shared/components/FormSection.vue";
 import { taskTypes } from "./task-metadata.js";
 import { api } from "../../shared/api/api.js";
@@ -12,7 +13,7 @@ const props = defineProps({
   workspace: { type: String, default: "" },
   channels: { type: Array, default: () => [] },
 });
-const emit = defineEmits(["started", "cancel"]);
+const emit = defineEmits(["started", "cancel", "open-task"]);
 const form = reactive({
   channel: props.channels[0]?.id || "tapd",
   workspace: props.workspace,
@@ -30,6 +31,8 @@ const form = reactive({
   reasoningEffort: accountSession.settings.reasoningEffort || "",
   permissionMode: accountSession.settings.permissionMode || "ask",
   taskType: "requirement",
+  fusion: false,
+  items: [],
 });
 const query = ref("");
 const items = ref([]);
@@ -52,7 +55,7 @@ const rules = computed(() =>
   Object.fromEntries(
     [
       "channel",
-      ...(manualInput.value ? ["title"] : ["workspace", "id"]),
+      ...(manualInput.value ? ["title"] : form.fusion ? ["workspace", "title"] : ["workspace", "id"]),
       ...(needsAssignees.value ? ["developer", "tester"] : []),
     ].map((key) => [key, [{ required: true, message: "请填写或选择此项" }]]),
   ),
@@ -63,6 +66,8 @@ watch(
     form.workspace = selectedChannel.value?.workspace || "";
     form.id = "";
     form.sourceType = "story";
+    form.fusion = false;
+    form.items = [];
     form.developer = "";
     form.tester = "";
     items.value = [];
@@ -74,6 +79,7 @@ watch(
   () => {
     form.id = "";
     form.sourceType = "story";
+    form.items = [];
     form.developer = "";
     form.tester = "";
     items.value = [];
@@ -87,7 +93,7 @@ onUnmounted(() => {
   searchRevision++;
 });
 watch(
-  () => [form.channel, form.workspace, form.id],
+  () => [form.channel, form.workspace, form.id, form.fusion],
   () => {
     form.supplementaryInstructions = "";
   },
@@ -125,6 +131,8 @@ async function start() {
   starting.value = true;
   error.value = "";
   try {
+    if (form.fusion && !manualInput.value && !form.items.length)
+      throw new Error("请选择要融合的需求。");
     if (manualInput.value && !form.content.trim() && !form.images.length)
       throw new Error("请填写需求内容或上传图片。");
     const result = await api(
@@ -146,6 +154,8 @@ async function start() {
             channel: form.channel,
             workspace: form.workspace,
             id: form.id,
+            ...(form.fusion ? { requestId: form.requestId, title: form.title,
+              items: form.items.map(({ id, type }) => ({ id, type })) } : {}),
             ...(needsAssignees.value ? { developer: form.developer, tester: form.tester } : {}),
             ...(form.channel === "tapd"
               ? {
@@ -239,10 +249,17 @@ async function start() {
         >
           请先在工作区设置中保存 TAPD 项目 ID 和 Cookie，或选择手动输入需求。
         </p>
-        <label v-if="selectedChannel?.capabilities.search" for="search"
+        <label v-if="selectedChannel?.capabilities.fusion" class="fusion-switch">
+          <input v-model="form.fusion" type="checkbox" :disabled="busy || uploading" /> 多条需求融合
+        </label>
+        <template v-if="form.fusion && !manualInput">
+          <a-form-item label="融合任务标题" name="title"><input v-model="form.title" maxlength="200" required aria-label="融合任务标题" :disabled="busy" /></a-form-item>
+          <TapdRequirementPicker v-model="form.items" :workspace="form.workspace" :disabled="busy" @open-task="emit('open-task', $event)" />
+        </template>
+        <label v-if="selectedChannel?.capabilities.search && !form.fusion" for="search"
           >检索需求</label
         >
-        <div v-if="selectedChannel?.capabilities.search" class="search-row">
+        <div v-if="selectedChannel?.capabilities.search && !form.fusion" class="search-row">
           <input
             id="search"
             v-model="query"
@@ -257,7 +274,7 @@ async function start() {
             检索
           </button>
         </div>
-        <div v-if="items.length" class="search-results">
+        <div v-if="items.length && !form.fusion" class="search-results">
           <button
             v-for="item in items"
             :key="item.id"
@@ -276,13 +293,13 @@ async function start() {
             <small v-else-if="item.localRun">本系统已有任务</small>
           </button>
         </div>
-        <p v-else-if="searched" class="muted">
+        <p v-else-if="searched && !form.fusion" class="muted">
           当前待办视图没有匹配结果，也可直接填写需求 ID。
         </p>
         <p v-if="form.channel === 'tapd'" class="field-hint">
           显示当前 TAPD 项目的全部待办；“本系统进行中”依据当前工作区的任务进度标记。已有任务可从左侧列表继续处理，启动不会修改 TAPD 状态。
         </p>
-        <a-form-item v-if="!manualInput" label="需求 ID" name="id"
+        <a-form-item v-if="!manualInput && !form.fusion" label="需求 ID" name="id"
           ><input
             v-model="form.id"
             @input="form.sourceType = 'story'"

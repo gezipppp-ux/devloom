@@ -14,6 +14,7 @@
 | `tapd/http.cjs` | TAPD API 请求、响应解包和成功状态校验 |
 | `tapd/detail.cjs`、`tapd/users.cjs` | 待办、详情和人员查询 |
 | `tapd/images.cjs`、`tapd/task-package.cjs` | 图片解析与下载、需求快照和 Codex 提示词 |
+| `tapd/fusion-task.cjs` | 按顺序准备完整来源快照，使用独立融合模板一次渲染，统一图片编号与来源归属并校验整批上限 |
 | `manual/adapter.cjs` | 手动需求输入校验与渠道组合；无需 TAPD 登录 |
 | `manual/manual-upload-store.cjs` | ManualUploadStore 管理工作区图片暂存、读取、大小/格式验证与过期清理 |
 | `manual/task-package.cjs` | 标题命名、按顺序复制图片与构建任务包 |
@@ -33,6 +34,7 @@
 - PNG/JPEG/WebP 签名校验与大小限制是所有渠道共用的能力。无法访问或不支持的实际图片应阻止准备，不能静默省略。
 - 手动上传 ID 属于当前应用工作区，不能作为路径使用，也不能跨工作区读取。准备时按上传顺序复制到任务目录，保留历史素材。
 - 保留 `source={channel,scope,id}`、已有 session、记录中的 worktree 路径及分支。源码目录调整不改变渠道 ID、HTTP 路由、运行 key 或历史 `requirement.json` / `tapd-task.json` 文件名。
+- TAPD 融合任务使用稳定的本地 `fusion-<UUID-v4>` 来源 ID，同时保留每条数字 TAPD 来源的 `sources` 清单；原单需求的数字身份不变。追加资料复用当前渠道的解析和准备能力，实际来源唯一性、任务空闲门禁和发送生命周期分别由 storage 与 application 管理，渠道不操作会话或 Worktree。
 
 ## 验证
 

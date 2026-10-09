@@ -38,6 +38,7 @@ test("prompt templates reject missing, unknown, malformed and oversized placehol
   assert.deepEqual(getPromptTemplates(), {
     manual: promptTemplateCatalog.manual.defaultTemplate,
     tapd: promptTemplateCatalog.tapd.defaultTemplate,
+    tapd_fusion: promptTemplateCatalog.tapd_fusion.defaultTemplate,
   });
   for (const invalid of [
     null,
@@ -56,6 +57,9 @@ test("prompt templates reject missing, unknown, malformed and oversized placehol
   ])
     assert.throws(() => validatePromptTemplate("manual", invalid));
   assert.throws(() => validatePromptTemplate("tapd", manualTemplate), /supplement/);
+  assert.throws(() => validatePromptTemplate("tapd_fusion", tapdTemplate), /未知占位符/);
+  assert.throws(() => validatePromptTemplate("tapd_fusion", "{{title}}{{images}}{{supplement}}"), /requirements/);
+  assert.throws(() => validatePromptTemplate("tapd_fusion", "{{title}}{{requirements}}{{images}}"), /supplement/);
   assert.throws(() => validatePromptTemplate("unknown", manualTemplate));
   for (const invalid of [null, [], "template", { manual: null }, { other: "text" }])
     assert.throws(() => getPromptTemplates({ prompt_templates: invalid }));
@@ -90,10 +94,12 @@ test("workspace prompt settings preserve credentials and execution configuration
   assert.deepEqual(savePromptSettings(file, { manual: manualTemplate }), {
     manual: manualTemplate,
     tapd: defaults.tapd,
+    tapd_fusion: defaults.tapd_fusion,
   });
   assert.deepEqual(savePromptSettings(file, { tapd: tapdTemplate }), {
     manual: manualTemplate,
     tapd: tapdTemplate,
+    tapd_fusion: defaults.tapd_fusion,
   });
   assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")), {
     ...retained,

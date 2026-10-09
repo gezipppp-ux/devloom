@@ -47,7 +47,7 @@ function getPromptTemplates(config = {}) {
       (channel) => !Object.hasOwn(promptTemplateCatalog, channel),
     )
   )
-    throw new Error("提示词配置仅支持手动需求和 TAPD 渠道。");
+    throw new Error("提示词配置仅支持手动需求、TAPD 需求和 TAPD 需求融合模板。");
   return Object.fromEntries(
     Object.entries(promptTemplateCatalog).map(([channel, definition]) => [
       channel,

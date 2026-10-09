@@ -80,6 +80,48 @@ test('API rejects redirects, non-JSON login pages and foreign credential destina
   await assert.rejects(request(session, 'https://example.com'), /endpoint/);
 });
 
+test('untyped direct IDs detect story, bug and board cards without todo membership', async (t) => {
+  for (const target of ['story', 'bug', 'board_card']) {
+    const calls = [];
+    t.mock.method(global, 'fetch', async (url, options) => {
+      assert.match(String(url), /get_info$/);
+      const body = JSON.parse(options.body);
+      calls.push(body.entity_type);
+      if (body.entity_type === target)
+        return json({ get_workitem_basic_info_ret: { data: item } });
+      return json({ get_workitem_basic_info_ret: target === 'board_card'
+        ? { meta: { code: 404 }, data: {} } : { data: {} } });
+    });
+    const result = await detail(session, { id: item.id, workspace_id: item.workspace_id });
+    assert.equal(result.type, target);
+    assert.deepEqual(calls, ['story', 'bug', 'board_card'].slice(0, calls.length));
+  }
+});
+
+test('type detection preserves failures and never retries network, login or identity errors', async (t) => {
+  const selected = { id: item.id, workspace_id: item.workspace_id };
+  for (const [response, message] of [
+    [() => new Response('', { status: 403 }), /HTTP 403/],
+    [() => new Response('<html>login</html>'), /non-JSON/],
+    [() => json({}, 403), /rejected/],
+    [() => { throw new Error('network failure'); }, /network failure/],
+    [() => json({ get_workitem_basic_info_ret: { data: { ...item, id: '999' } } }), /different item/],
+    [() => json({ get_workitem_basic_info_ret: { data: { ...item, workspace_id: '999' } } }), /different workspace/],
+  ]) {
+    let calls = 0;
+    t.mock.method(global, 'fetch', async () => { calls++; return response(); });
+    await assert.rejects(detail(session, selected), message);
+    assert.equal(calls, 1);
+  }
+  let calls = 0;
+  t.mock.method(global, 'fetch', async () => {
+    calls++;
+    return json({ get_workitem_basic_info_ret: { meta: { code: 403 }, data: {} } });
+  });
+  await assert.rejects(detail(session, selected), /无法读取.*story:.*bug:.*board_card:/);
+  assert.equal(calls, 3, 'all candidate failures remain visible; none is silently skipped');
+});
+
 test('refreshing credentials preserves repository mapping, image hosts and workflow fields', (t) => {
   const file = path.join(temporary(t), 'tapd.local.json');
   const config = {

@@ -18,6 +18,7 @@ const { verifySessionDeletion } = require('./session-deletion.cjs');
 const { verifySessionArchiveTitle } = require('./session-archive-title.cjs');
 const { verifyStartTaskLock } = require('./start-task.cjs');
 const { verifySessionMarkdown } = require('./session-markdown.cjs');
+const { verifyTapdFusion } = require('./tapd-fusion.cjs');
 
 async function choosePermission(page, mode) {
   await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
@@ -1171,6 +1172,7 @@ async function main() {
     await verifySessionDeletion(browser, origin, manager, directory, errors, output);
     await verifySessionDeletion(browser, origin, manager, directory, errors, output, true);
     await verifySessionArchiveTitle(browser, origin, manager, errors, output);
+    await verifyTapdFusion(browser, errors, output);
     assert.deepEqual(errors, []);
     process.stdout.write(
       'Browser smoke passed: send, stream, steer, approval, question, interrupt, continue, reload, mobile and start form.\n',

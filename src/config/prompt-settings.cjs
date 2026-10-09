@@ -18,7 +18,7 @@ function savePromptSettings(configFile, input) {
       (channel) => !Object.hasOwn(promptTemplateCatalog, channel),
     )
   )
-    throw new Error("仅允许修改手动需求和 TAPD 提示词模板。");
+    throw new Error("仅允许修改手动需求、TAPD 需求和 TAPD 需求融合提示词模板。");
   for (const [channel, template] of Object.entries(input)) {
     if (template !== null) validatePromptTemplate(channel, template);
   }

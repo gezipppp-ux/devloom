@@ -6,6 +6,7 @@ const { databaseForPath } = require("./database-registry.cjs");
 const { appendArtifact, writeArtifact } = require("./artifact-store.cjs");
 const { SessionHistoryStore } = require("./session-history-store.cjs");
 const { normalizeItem } = require("../domain/session-item.cjs");
+const { RunRequirementsStore } = require("./run-requirements-store.cjs");
 
 // Owns the on-disk execution intent, task snapshot and long-lived runner lock.
 class ExecutionStore {
@@ -14,6 +15,19 @@ class ExecutionStore {
     this.stateFile = path.join(directory, "run.json");
     this.lockDirectory = path.join(directory, ".lock");
     this.locked = false;
+  }
+
+  claimSources(key, sources, options) {
+    // Explicit isolated execution fixtures can use an arbitrary directory;
+    // never place their membership records outside that directory.
+    this.requirements = new RunRequirementsStore(path.basename(this.directory) === key
+      ? path.dirname(this.directory) : this.directory);
+    this.sourceKey = key;
+    this.requirements.claim(key, sources, options);
+  }
+
+  releaseUnstartedSources() {
+    if (!this.exists()) this.requirements?.releaseUnstarted(this.sourceKey);
   }
 
   lock() {

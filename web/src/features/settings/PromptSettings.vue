@@ -6,9 +6,9 @@ import FormSection from "../../shared/components/FormSection.vue";
 const channel = ref("manual");
 const catalog = ref({});
 const maxLength = ref(20000);
-const drafts = reactive({ manual: "", tapd: "" });
-const savedTemplates = reactive({ manual: "", tapd: "" });
-const resetDrafts = reactive({ manual: false, tapd: false });
+const drafts = reactive({});
+const savedTemplates = reactive({});
+const resetDrafts = reactive({});
 const loading = ref(true);
 const saving = ref(false);
 const loaded = ref(false);
@@ -27,7 +27,7 @@ const preview = computed(() => {
   const examples = new Map(
     (current.value?.placeholders || []).map((item) => [item.name, item.example]),
   );
-  return drafts[channel.value].replace(/\{\{([a-z_]+)\}\}/g, (token, name) =>
+  return (drafts[channel.value] || "").replace(/\{\{([a-z_]+)\}\}/g, (token, name) =>
     examples.has(name) ? examples.get(name) : token,
   );
 });
@@ -47,7 +47,7 @@ async function load() {
     if (!alive || request !== requestId) return;
     catalog.value = result.catalog;
     maxLength.value = result.maxLength;
-    for (const name of ["manual", "tapd"]) {
+    for (const name of Object.keys(result.catalog)) {
       drafts[name] = savedTemplates[name] = result.templates[name];
       resetDrafts[name] = false;
     }
@@ -113,7 +113,7 @@ async function save() {
     if (!alive || request !== requestId) return;
     savedTemplates[name] = drafts[name] = result.templates[name];
     resetDrafts[name] = false;
-    message.value = `${catalog.value[name].label}提示词模板已保存，仅对新任务生效。`;
+    message.value = `${catalog.value[name].label}提示词模板已保存，对新任务和新追加资料生效。`;
   } catch (failure) {
     if (alive && request === requestId)
       error.value = `保存失败：${failure.message.replace(/[。.!！?？]+$/, "")}。草稿已保留。`;
@@ -128,11 +128,11 @@ async function save() {
     id="prompt-settings"
     class="prompt-settings"
     title="提示词模板"
-    description="按渠道维护发送给 Codex 的首轮提示词，创建任务时自动填充占位符。"
+    description="维护发送给 Codex 的提示词，创建任务或追加需求时自动填充占位符。"
     :aria-busy="busy"
   >
     <p class="prompt-scope">
-      仅对当前工作区的新任务生效；已有任务的提示词与会话保持原样。每个渠道独立保存。
+      对当前工作区的新任务和新追加资料生效；已有资料快照与会话保持原样。各模板独立保存。
     </p>
     <p v-if="loading" role="status">正在加载提示词模板…</p>
     <p v-if="error" role="alert" class="error">{{ error }}</p>
@@ -142,7 +142,7 @@ async function save() {
     <form v-if="loaded" @submit.prevent="save">
       <div class="prompt-channels" role="group" aria-label="提示词渠道">
         <button
-          v-for="name in ['manual', 'tapd']"
+          v-for="(_, name) in catalog"
           :key="name"
           type="button"
           :aria-pressed="channel === name"

@@ -58,6 +58,9 @@ async function runExecution(
       return state;
     }
     if (retry) throw new Error("No previous run exists for this requirement.");
+    store.claimSources(runKey(source), item.sources || [source], {
+      fingerprint: item.request_fingerprint,
+    });
     config = executionConfig(config, configFile);
     channel.validate?.(config);
     const repository = services.repositoryFor(
@@ -180,6 +183,7 @@ async function runExecution(
     throw error;
   } finally {
     store.release();
+    store.releaseUnstartedSources();
   }
 }
 

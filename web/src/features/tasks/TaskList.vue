@@ -110,6 +110,7 @@ const groups = computed(() => {
           ></i
           >Codex · {{ statusLabel(run.status || run.execution?.status) }}</span
         >
+        <small v-if="run.requirementCount > 1">关联 {{ run.requirementCount }} 条需求</small>
       </button>
     </details>
     <p v-if="!runs.length" class="muted">暂无任务，从一个需求开始。</p>

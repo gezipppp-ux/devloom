@@ -20,6 +20,7 @@ const { seedWorkspaceProject } = require("../support/workspace-project.cjs");
 
 const manualTemplate = "自定义手动模板\n{{title}}\n{{content}}\n{{images}}";
 const tapdTemplate = "自定义 TAPD 模板\n{{title}}\n{{content}}\n{{supplement}}\n{{images}}";
+const fusionTemplate = "自定义融合模板\n{{title}}\n{{requirements}}\n{{supplement}}\n{{images}}";
 
 function workspaceCatalog(directory) {
   return new WorkspaceManager({
@@ -117,7 +118,7 @@ test("workspace prompt settings guard writes, isolate credentials and persist te
   const { app, origin, get, post, token } = await httpFixture(t, workspaces);
   const defaults = await (await get(a.id)).json();
   assert.deepEqual(Object.keys(defaults).sort(), ["catalog", "maxLength", "templates"]);
-  assert.deepEqual(Object.keys(defaults.templates).sort(), ["manual", "tapd"]);
+  assert.deepEqual(Object.keys(defaults.templates).sort(), ["manual", "tapd", "tapd_fusion"]);
   assert.equal(defaults.maxLength, 20000);
   assert.doesNotMatch(JSON.stringify(defaults), /private-template-secret|private-session|cookie_header|dsc_token/);
   assert.deepEqual((await (await get(b.id)).json()).templates, defaults.templates);
@@ -141,10 +142,10 @@ test("workspace prompt settings guard writes, isolate credentials and persist te
     assert.equal((await post(a.id, { manual: manualTemplate }, headers)).status, 403);
     assert.equal(fs.readFileSync(file, "utf8"), before);
   }
-  const saved = await post(a.id, { manual: manualTemplate, tapd: tapdTemplate });
+  const saved = await post(a.id, { manual: manualTemplate, tapd: tapdTemplate, tapd_fusion: fusionTemplate });
   assert.equal(saved.status, 200);
   const response = await saved.json();
-  assert.deepEqual(response.templates, { manual: manualTemplate, tapd: tapdTemplate });
+  assert.deepEqual(response.templates, { manual: manualTemplate, tapd: tapdTemplate, tapd_fusion: fusionTemplate });
   assert.doesNotMatch(JSON.stringify(response), /private-template-secret|private-session|cookie_header|dsc_token/);
   assert.deepEqual((await (await get(a.id)).json()).templates, response.templates);
   assert.deepEqual((await (await get(b.id)).json()).templates, defaults.templates);
@@ -163,6 +164,7 @@ test("workspace prompt settings guard writes, isolate credentials and persist te
     { manual: "{{title}}\n{{images}}" },
     { manual: 7 },
     { tapd: [] },
+    { tapd_fusion: "{{title}}{{images}}{{supplement}}" },
     { manual: "" },
     { manual: `${manualTemplate}${"x".repeat(20000)}` },
   ]) {
@@ -180,8 +182,10 @@ test("workspace prompt settings guard writes, isolate credentials and persist te
   assert.deepEqual((await resetManual.json()).templates, {
     manual: defaults.templates.manual,
     tapd: tapdTemplate,
+    tapd_fusion: fusionTemplate,
   });
   assert.equal((await restarted.post(a.id, { tapd: null })).status, 200);
+  assert.equal((await restarted.post(a.id, { tapd_fusion: null })).status, 200);
   assert.deepEqual(readPromptSettings(file), defaults.templates);
   assert.deepEqual(readOptional(file).tapd, originalConfig.tapd);
   assert.equal(fs.readFileSync(file, "utf8"), before);
