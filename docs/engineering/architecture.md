@@ -113,6 +113,13 @@ app 中的 `use-workspace-selection` 管理工作区与 URL，`use-workspace-con
 
 目录、JS/CJS 文件与测试文件使用 `kebab-case`；Vue 组件使用 `PascalCase.vue`。后端类使用 `PascalCase`，单独放在对应的 `kebab-case.cjs` 文件，例如 `SessionManager` 位于 `application/session-manager.cjs`；类名应表达管理、存储或客户端等实际职责，所在目录由其依赖和职责决定。后端显式写 `.cjs` 扩展名，前端本地导入显式写 `.js`/`.vue`。仅向外导出其他模块确实需要的函数；测试辅助程序不进入产品模块。架构测试检查目录、文件、类名、依赖方向和循环；前端静态导入、动态导入与转导出都纳入检查。
 
+## 测试文件命名
+
+- `test/architecture`、`test/unit`、`test/integration`、`test/browser` 下的测试文件统一使用 `<kebab-case>.test.cjs`。浏览器测试入口和被入口调用的断言模块均遵循此规则，例如 `accounts.test.cjs` 与 `account-preferences.test.cjs`。
+- 纯夹具、模拟客户端和通用辅助模块分别放在 `test/fixtures`、`test/support`，使用 `<kebab-case>.cjs`，不使用 `.test` 后缀。
+- 重命名时同步更新 `require` / `import`、Jenkins 命令和文档中的路径；架构检查按目录强制校验文件名，不为浏览器测试保留例外。
+- 浏览器测试仍由 Jenkins 中列出的入口组合运行，断言模块由对应入口调用。Node 测试命令显式限定 architecture、unit、integration，避免对整个 `test/` 自动发现而重复启动浏览器或夹具进程。
+
 ## 兼容与验证
 
 - 对外 npm 命令为 `init:admin`、`dev`、`dev:watch`、`build` 和 `start`，实际文件入口由 package.json 维护。systemd 的源码入口使用 `src/cli/web.cjs`，`src/http/server.cjs` 仅导出服务工厂。
@@ -121,4 +128,4 @@ app 中的 `use-workspace-selection` 管理工作区与 URL，`use-workspace-con
 - `src/cli/dev-watch.cjs` 拥有开发文件监听和子进程生命周期；变更合并后通过 IPC 请求关闭并等待旧进程退出，再启动替代进程。不能用 Windows 强制终止进程代替会话清理，也不能因热更新自动重跑需求。
 - 目录调整不迁移运行数据，不改 API、渠道 ID、session ID、source、run key、记录中的 worktree 路径或历史素材文件名。
 - `node --test test/architecture/*.test.cjs test/unit/*.test.cjs test/integration/*.test.cjs` 显式运行 architecture、unit、integration 的 `*.test.cjs`；browser 和 fixtures 不参与自动单测发现，避免意外启动进程。
-- 完整验证由 Jenkinsfile 运行 eslint、上述 Node 测试、`npm run build` 和浏览器脚本。界面和样式迁移还运行 `node test/browser/visual.cjs`。所有验证使用模拟数据和临时仓库。
+- 完整验证由 Jenkinsfile 运行 eslint、上述 Node 测试、`npm run build` 和浏览器脚本。界面和样式迁移还运行 `node test/browser/visual.test.cjs`。所有验证使用模拟数据和临时仓库。

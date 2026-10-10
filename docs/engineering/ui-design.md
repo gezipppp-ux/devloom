@@ -34,7 +34,7 @@ The approved workspace rail (prototype C) is the shared shell for every page. Th
 
 Use fixture data only. Browser regression suites verify behavior; the visual fixture captures all pages and checks viewport overflow, control containment and dialog reachability. Review the resulting screenshots against the prototype set. Generated prototypes and fixture screenshots must never contain live credentials or customer content.
 
-Run `node test/browser/visual.cjs` after building. The screenshot index is `state/browser/unified/index.html`; generated AI references are separate in `output/imagegen/unified-pages-20260917/index.html`. The fixture intercepts APIs, uses a fake Codex client, and never calls real task execution or TAPD.
+Run `node test/browser/visual.test.cjs` after building. The screenshot index is `state/browser/unified/index.html`; generated AI references are separate in `output/imagegen/unified-pages-20260917/index.html`. The fixture intercepts APIs, uses a fake Codex client, and never calls real task execution or TAPD.
 
 The account browser fixtures in Jenkinsfile also produce login, password, personal settings and account management screenshots under `state/browser/accounts/`. Review those screenshots for account-page changes in addition to the workspace visual fixture.
 

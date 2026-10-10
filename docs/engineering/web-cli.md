@@ -91,7 +91,7 @@ A delayed first `turn/start` response must still belong to the original startup 
 
 ## 6. Required tests
 
-`test/integration/web-sessions.test.cjs` covers RPC correlation, process exit/reconnect, same-thread followups, live deltas, steer/interrupt, startup ordering with images, questions/approval, worktree/ownership fences, pagination and HTTP UTF-8/origin/token/SSE. `session-settings.test.cjs` additionally covers setting validation, staging, permissions, persistence, identity preservation and write failures. `test/browser/session.cjs` uses a fake protocol client and real built page to exercise send/steer/stop/continue, requests, next-turn settings, reload and mobile layout. Existing runner tests verify TAPD execution and legacy retries never write upstream status.
+`test/integration/web-sessions.test.cjs` covers RPC correlation, process exit/reconnect, same-thread followups, live deltas, steer/interrupt, startup ordering with images, questions/approval, worktree/ownership fences, pagination and HTTP UTF-8/origin/token/SSE. `session-settings.test.cjs` additionally covers setting validation, staging, permissions, persistence, identity preservation and write failures. `test/browser/session.test.cjs` uses a fake protocol client and real built page to exercise send/steer/stop/continue, requests, next-turn settings, reload and mobile layout. Existing runner tests verify TAPD execution and legacy retries never write upstream status.
 
 ## 7. Wrong vs correct
 

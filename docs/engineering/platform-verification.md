@@ -10,7 +10,7 @@ npx playwright install chromium
 npx eslint src test web/src web/vite.config.mjs
 node --test test/architecture/*.test.cjs test/unit/*.test.cjs test/integration/*.test.cjs
 npm run build
-node test/browser/session.cjs && node test/browser/workspaces.cjs && node test/browser/dev.cjs && node test/browser/accounts.cjs && node test/browser/visual.cjs
+node test/browser/session.test.cjs && node test/browser/workspaces.test.cjs && node test/browser/dev.test.cjs && node test/browser/accounts.test.cjs && node test/browser/visual.test.cjs
 ```
 
 上述命令依次执行 lint、全部架构/单元/集成测试、前端构建、Web 功能回归和视觉截图。测试只使用 fake Codex、模拟 TAPD 与临时 Git 仓库，不需要 Codex 登录，不执行真实需求。
@@ -23,7 +23,7 @@ Linux 首次运行浏览器测试时，管理员需为测试节点安装 Chromiu
 
 ```sh
 PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64 npx playwright install chromium
-BROWSER_CHANNEL=chromium node test/browser/session.cjs && node test/browser/workspaces.cjs && node test/browser/dev.cjs && node test/browser/accounts.cjs && node test/browser/visual.cjs
+BROWSER_CHANNEL=chromium node test/browser/session.test.cjs && node test/browser/workspaces.test.cjs && node test/browser/dev.test.cjs && node test/browser/accounts.test.cjs && node test/browser/visual.test.cjs
 ```
 
 此环境变量仅用于浏览器准备，不修改系统版本。已具备与锁文件版本一致的 Playwright 浏览器缓存时，可直接执行验证。系统仍需具备 Chromium 运行库；后端与前端构建不依赖服务器上的 Chromium。该兼容方式绑定当前 Playwright 版本，升级后应重新验证发行版支持情况。

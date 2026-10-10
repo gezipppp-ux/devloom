@@ -220,7 +220,7 @@ CLI 默认监听 `0.0.0.0`，可用 `--host 127.0.0.1` 限制本机。远程部�
 
 ## 验证
 
-代码目录与模块依赖见 [模块与目录规范](docs/engineering/architecture.md)。后端按职责分层，前端按功能分组；测试分别位于 `test/architecture`、`test/unit`、`test/integration` 和 `test/browser`，运行命令保持如下。
+代码目录与模块依赖见 [模块与目录规范](docs/engineering/architecture.md)。后端按职责分层，前端按功能分组；测试分别位于 `test/architecture`、`test/unit`、`test/integration` 和 `test/browser`，统一命名为 `<kebab-case>.test.cjs`，例如 `test/browser/account-preferences.test.cjs`。`test/fixtures` 和 `test/support` 中的夹具及辅助模块使用 `<kebab-case>.cjs`。浏览器断言模块由对应测试入口调用，运行命令如下。
 
 界面沿用 C 方案，统一视觉规范见 [UI 设计契约](docs/engineering/ui-design.md)。全页面生图原型和提示词位于 `output/imagegen/unified-pages-20260917/`；Jenkins 的视觉检查会生成纯模拟数据的桌面、平板和移动端实现截图，索引为 `state/browser/unified/index.html`。
 
@@ -228,11 +228,11 @@ CLI 默认监听 `0.0.0.0`，可用 `--host 127.0.0.1` 限制本机。远程部�
 npx eslint src test web/src web/vite.config.mjs
 node --test test/architecture/*.test.cjs test/unit/*.test.cjs test/integration/*.test.cjs
 npm run build
-node test/browser/session.cjs
-node test/browser/workspaces.cjs
-node test/browser/dev.cjs
-node test/browser/accounts.cjs
-node test/browser/visual.cjs
+node test/browser/session.test.cjs
+node test/browser/workspaces.test.cjs
+node test/browser/dev.test.cjs
+node test/browser/accounts.test.cjs
+node test/browser/visual.test.cjs
 ```
 
 测试使用模拟 TAPD/Codex 和临时 Git 仓库，覆盖工作区隔离、同需求跨工作区执行、凭据维护/检测、需求模型选择、图片及 SSE 隔离、创建/切换/重命名、刷新和移动布局。不会执行真实需求或修改真实 TAPD。Windows 使用本机 Edge，Linux/macOS 使用 Playwright Chromium；截图在忽略的 `state/browser/`。

@@ -87,7 +87,7 @@ Channel-specific validation and credential maintenance live in `src/channels/tap
 
 ## Verification
 
-Run lint, unit tests, build and browser suites with the direct commands in Jenkinsfile. `test/integration/workspaces.test.cjs` exercises same-requirement execution in shared repositories with real temporary worktrees and separate fake clients, interruption independence, settings and uploads, SSE/HTTP scope, credential masking/preservation/clearing, draft checks, expired/non-JSON responses, atomic persisted reload and invalid IDs. `test/browser/workspaces.cjs` exercises the actual create/switch/rename/settings flows, Cookie draft success/failure, bound TAPD project, per-task model selection, manual images and background execution across switching/reloading. No live requirement or TAPD mutation is permitted for validation.
+Run lint, unit tests, build and browser suites with the direct commands in Jenkinsfile. `test/integration/workspaces.test.cjs` exercises same-requirement execution in shared repositories with real temporary worktrees and separate fake clients, interruption independence, settings and uploads, SSE/HTTP scope, credential masking/preservation/clearing, draft checks, expired/non-JSON responses, atomic persisted reload and invalid IDs. `test/browser/workspaces.test.cjs` exercises the actual create/switch/rename/settings flows, Cookie draft success/failure, bound TAPD project, per-task model selection, manual images and background execution across switching/reloading. No live requirement or TAPD mutation is permitted for validation.
 
 
 ## Repository updates and Worktree deletion

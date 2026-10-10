@@ -115,10 +115,10 @@ npx eslint src test web/src web/vite.config.mjs
 node --test test/architecture/*.test.cjs test/unit/*.test.cjs test/integration/*.test.cjs
 npm run build
 npx playwright install --with-deps chromium
-node test/browser/session.cjs
-node test/browser/workspaces.cjs
-node test/browser/dev.cjs
-node test/browser/accounts.cjs
+node test/browser/session.test.cjs
+node test/browser/workspaces.test.cjs
+node test/browser/dev.test.cjs
+node test/browser/accounts.test.cjs
 ```
 
 浏览器 smoke 在 Linux/macOS 默认使用 Playwright Chromium；Windows 默认使用本机 Edge。`BROWSER_CHANNEL` 可显式选择已安装的浏览器渠道。执行核心与 HTTP 测试不依赖浏览器、真实模型或 TAPD 写入。

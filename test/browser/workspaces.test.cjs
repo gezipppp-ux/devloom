@@ -11,13 +11,13 @@ const { readOptional } = require("../../src/storage/json-files.cjs");
 const { seedWorkspaceProject } = require("../support/workspace-project.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const { temporary, png, json } = require("../support/helpers.cjs");
-const { verifyLateImageUpload } = require("./session-images.cjs");
-const { verifyPromptSettings } = require("./prompt-settings.cjs");
-const { verifyWorkspaceNavigation } = require("./workspace-navigation.cjs");
-const { verifySystemSettings } = require("./system-settings.cjs");
-const { verifyGit } = require("./git.cjs");
+const { verifyLateImageUpload } = require("./session-images.test.cjs");
+const { verifyPromptSettings } = require("./prompt-settings.test.cjs");
+const { verifyWorkspaceNavigation } = require("./workspace-navigation.test.cjs");
+const { verifySystemSettings } = require("./system-settings.test.cjs");
+const { verifyGit } = require("./git.test.cjs");
 const { fixtureWorkspaceClones } = require("../support/workspace-clones.cjs");
-const { verifyWorkspaceClones } = require("./workspace-clones.cjs");
+const { verifyWorkspaceClones } = require("./workspace-clones.test.cjs");
 
 async function main() {
   const cleanup = [];

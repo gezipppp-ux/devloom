@@ -9,17 +9,17 @@ const { RunStore } = require('../../src/storage/run-store.cjs');
 const { SessionManager } = require('../../src/application/session-manager.cjs');
 const { createWebServer } = require('../../src/http/server.cjs');
 const { FakeClient } = require('../fixtures/web-client.cjs');
-const { verifySessionFiles } = require('./session-files.cjs');
+const { verifySessionFiles } = require('./session-files.test.cjs');
 const { temporary, png } = require('../support/helpers.cjs');
 const { ChannelRegistry } = require('../../src/channels/channel-registry.cjs');
 const { createManualChannel } = require('../../src/channels/manual/adapter.cjs');
-const { verifySessionImages } = require('./session-images.cjs');
-const { verifySessionDeletion } = require('./session-deletion.cjs');
-const { verifySessionArchiveTitle } = require('./session-archive-title.cjs');
-const { verifyStartTaskLock } = require('./start-task.cjs');
-const { verifySessionMarkdown } = require('./session-markdown.cjs');
-const { verifySessionScroll } = require('./session-scroll.cjs');
-const { verifyTapdFusion } = require('./tapd-fusion.cjs');
+const { verifySessionImages } = require('./session-images.test.cjs');
+const { verifySessionDeletion } = require('./session-deletion.test.cjs');
+const { verifySessionArchiveTitle } = require('./session-archive-title.test.cjs');
+const { verifyStartTaskLock } = require('./start-task.test.cjs');
+const { verifySessionMarkdown } = require('./session-markdown.test.cjs');
+const { verifySessionScroll } = require('./session-scroll.test.cjs');
+const { verifyTapdFusion } = require('./tapd-fusion.test.cjs');
 
 async function choosePermission(page, mode) {
   await page.getByRole('combobox', { name: '权限模式', exact: true }).click();

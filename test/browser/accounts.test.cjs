@@ -5,8 +5,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { createServer } = require("node:http");
 const { chromium } = require("playwright");
-const { verifyAccountPreferenceRaces } = require("./account-preferences.cjs");
-const { verifyGitAccounts } = require("./git-accounts.cjs");
+const { verifyAccountPreferenceRaces } = require("./account-preferences.test.cjs");
+const { verifyGitAccounts } = require("./git-accounts.test.cjs");
 
 async function main() {
   const staticRoot = path.resolve("web/dist");

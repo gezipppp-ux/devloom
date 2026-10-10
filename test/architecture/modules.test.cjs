@@ -191,15 +191,17 @@ test("backend directories, modules and classes use matching responsibility names
   }
 });
 
-test("tests and fixtures stay in their declared directories with kebab-case names", () => {
+test("tests use kebab-case .test.cjs names while fixtures and helpers use .cjs", () => {
   const testRoot = path.join(root, "test");
   for (const file of filesIn(testRoot)) {
     const parts = path.relative(testRoot, file).split(path.sep);
     assert.ok(["architecture", "unit", "integration", "browser", "fixtures", "support"].includes(parts[0]),
       `${file}: select a declared test category`);
     assert.ok(parts.slice(0, -1).every((part) => /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(part)));
-    const suffix = ["architecture", "unit", "integration"].includes(parts[0]) ? "\\.test\\.cjs" : "\\.cjs";
-    assert.match(parts.at(-1), new RegExp(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*${suffix}$`));
+    const isTest = ["architecture", "unit", "integration", "browser"].includes(parts[0]);
+    const suffix = isTest ? "\\.test\\.cjs" : "\\.cjs";
+    assert.match(parts.at(-1), new RegExp(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*${suffix}$`),
+      `${file}: use <kebab-case>${isTest ? ".test.cjs" : ".cjs"} in ${parts[0]}`);
   }
 });
 

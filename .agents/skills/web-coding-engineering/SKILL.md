@@ -46,6 +46,7 @@ description: 在 web-coding 项目开发、重构或 review 后端与 Vue 前端
 ## 名称表达实际职责
 
 - 目录、JS/CJS 和测试文件用 kebab-case，Vue 组件及类用 PascalCase；本地导入显式写扩展名。
+- `test/architecture`、`test/unit`、`test/integration`、`test/browser` 中的测试文件统一命名为 `<kebab-case>.test.cjs`，包括浏览器入口和被入口调用的断言模块，例如 `account-preferences.test.cjs`。纯夹具和共享辅助模块放在 `test/fixtures`、`test/support`，使用 `<kebab-case>.cjs`，不添加 `.test` 后缀。
 - 每个后端命名类放在对应的 kebab-case 文件中，如 `SessionManager` → `application/session-manager.cjs`、`AppServerClient` → `codex/app-server-client.cjs`、`WorkspaceStore` → `storage/workspace-store.cjs`。
 - Manager 表示生命周期协调，Store 表示持久化，Client 表示外部协议客户端，Presenter 表示公开结构转换。按真实职责选名，不把所有模块强制改成类。
 - 迁移文件时一并更新调用方、测试、脚本入口和契约链接；只有职责、依赖或生命周期不同才拆分，不按文件行数机械拆分。
