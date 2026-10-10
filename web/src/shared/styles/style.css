@@ -33,6 +33,10 @@
   .authentication-page { padding: 16px; }
   .authentication-card { padding: 24px; }
 }
+@media (max-width: 480px) {
+  .authenticated-app { --account-bar-height: 152px; }
+  .account-bar nav { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+}
 
 /* Shared foundations */
 :root {

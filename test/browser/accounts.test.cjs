@@ -7,6 +7,7 @@ const { createServer } = require("node:http");
 const { chromium } = require("playwright");
 const { verifyAccountPreferenceRaces } = require("./account-preferences.test.cjs");
 const { verifyGitAccounts } = require("./git-accounts.test.cjs");
+const { verifyEnvironment } = require("./environment.test.cjs");
 
 async function main() {
   const staticRoot = path.resolve("web/dist");
@@ -107,6 +108,7 @@ async function main() {
     await page.getByText("个人设置已保存。", { exact: true }).waitFor();
     assert.equal(savedSettings.get("admin").model, "fixture-model");
     await verifyGitAccounts(page, output);
+    await verifyEnvironment(page, output);
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 1000 });
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
@@ -198,6 +200,7 @@ async function main() {
     await page.waitForFunction(() => window.accountResponseMarkers.includes("late"));
     assert.equal(await page.getByText("不应展示的旧账号响应", { exact: true }).count(), 0);
     assert.equal(await page.getByRole("button", { name: "系统设置", exact: true }).count(), 0);
+    assert.equal(await page.getByRole("button", { name: "环境检测", exact: true }).count(), 0);
     assert.equal(await page.getByRole("button", { name: "账号管理", exact: true }).count(), 0);
     await page.goto(`${origin}/accounts`);
     await page.getByRole("heading", { name: "个人设置", exact: true }).waitFor();

@@ -12,6 +12,7 @@ export const router = createRouter({
     { path: "/", name: "workspace", component: WorkbenchApp },
     { path: "/personal", name: "personal", component: WorkbenchApp },
     { path: "/system", name: "system", component: WorkbenchApp, meta: { admin: true } },
+    { path: "/environment", redirect: to => ({ name: "system", query: { ...to.query, tab: "environment" }, hash: to.hash }) },
     { path: "/accounts", name: "accounts", component: WorkbenchApp, meta: { admin: true } },
     { path: "/:pathMatch(.*)*", redirect: "/" },
   ],

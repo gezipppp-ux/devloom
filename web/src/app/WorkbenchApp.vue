@@ -61,7 +61,7 @@ async function logout() {
     <div v-if="accountPage" class="system-settings-view account-page-view">
       <WorkspacePicker v-if="ready && !standalone" ref="picker" rail :workspaces="workspaces" :current="current" :unread-workspace-ids="unreadWorkspaceIds" :system-settings-open="true" :show-system-settings="false" :create-workspace="createWorkspace" @clone-started="cloneStarted" @select="navigate" @saved="workspaceSaved" />
       <main class="system-settings-main">
-        <div class="page-breadcrumb"><button class="text-button" @click="page('workspace')">工作台</button><span aria-hidden="true">/</span><strong>{{ route.name === 'personal' ? '个人设置' : route.name === 'system' ? '系统设置' : '账号管理' }}</strong></div>
+        <div class="page-breadcrumb"><button class="text-button" @click="page('workspace')">工作台</button><span aria-hidden="true">/</span><strong>{{ { personal: '个人设置', system: '系统设置', accounts: '账号管理' }[route.name] }}</strong></div>
         <PersonalSettings v-if="route.name === 'personal'" :notifications="desktopNotifications" />
         <SystemSettings v-else-if="route.name === 'system' && admin" />
         <AccountManagement v-else-if="route.name === 'accounts' && admin" />

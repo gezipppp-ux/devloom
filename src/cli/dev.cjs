@@ -16,7 +16,7 @@ async function main(argv = process.argv.slice(2)) {
   const application = createWebServer({
     host,
     pageHandler(request, response, url) {
-      if (["/login", "/password", "/personal", "/system", "/accounts"].includes(url.pathname))
+      if (["/login", "/password", "/personal", "/system", "/accounts", "/environment"].includes(url.pathname))
         request.url = `/index.html${url.search}`;
       // Only development pages need Vite's HMR socket and reconnect worker.
       // The HTTP adapter has already validated this request's host and origin.

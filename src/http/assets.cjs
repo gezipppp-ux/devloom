@@ -27,7 +27,7 @@ function serveStatic(request, response, url, staticDirectory) {
   if (request.method !== "GET")
     return json(response, 405, { error: "不支持该请求方法" });
   const relative =
-    ["/", "/login", "/password", "/personal", "/system", "/accounts"].includes(url.pathname)
+    ["/", "/login", "/password", "/personal", "/system", "/accounts", "/environment"].includes(url.pathname)
       ? "index.html"
       : decodeURIComponent(url.pathname.slice(1));
   const file = path.resolve(staticDirectory, relative);

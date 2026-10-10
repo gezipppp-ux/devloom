@@ -10,6 +10,7 @@ const { root, dataRoot } = require("../config/runtime.cjs");
 const { WorkspaceManager } = require("../application/workspace-manager.cjs");
 const { WorkspaceCloneManager } = require("../application/workspace-clone-manager.cjs");
 const { SystemServices } = require("../application/system-services.cjs");
+const { EnvironmentServices } = require("../application/environment-services.cjs");
 const { GitAccountServices } = require("../application/git-account-services.cjs");
 const {
   AccountServices,
@@ -55,6 +56,7 @@ function createWebServer({
   channels = manager?.channels,
   workspaces: suppliedWorkspaces,
   workspaceClones: suppliedWorkspaceClones,
+  environment: suppliedEnvironment,
   database,
   dataDirectory = database?.dataRoot || dataRoot,
   testIdentity = false,
@@ -84,6 +86,7 @@ function createWebServer({
   const fixturePreferences = new Map();
   let workspaces = suppliedWorkspaces;
   let workspaceClones = suppliedWorkspaceClones;
+  let environment = suppliedEnvironment;
   let accounts,
     gitAccounts,
     systemServices,
@@ -129,6 +132,7 @@ function createWebServer({
         ? path.dirname(workspaces.directory)
         : dataDirectory,
     );
+    environment ||= new EnvironmentServices({ dataDirectory, manager, workspaces, workspaceClones });
     instance.removeAllContentTypeParsers();
     instance.addContentTypeParser("*", (_request, payload, done) =>
       done(null, payload),
@@ -300,6 +304,8 @@ function createWebServer({
           403,
           "PASSWORD_CHANGE_REQUIRED",
         );
+      if (request.method === "POST" && environment.status().busy && !url.pathname.startsWith("/api/auth/"))
+        throw accountError("环境工具正在更新，请完成后再提交操作。", 409);
       if (url.pathname === "/api/account/settings") {
         if (request.method === "POST") {
           if (testIdentity) fixtureSettings = { ...fixtureSettings, ...input };
@@ -421,6 +427,17 @@ function createWebServer({
       }
       if (url.pathname.startsWith("/api/system/")) {
         if (!testIdentity) accounts.requireAdmin(actor);
+        if (request.method === "GET" && url.pathname === "/api/system/environment")
+          return json(response, 200, await environment.read());
+        if (request.method === "POST" && url.pathname === "/api/system/environment/check")
+          return json(response, 200, await environment.checkLatest());
+        if (url.pathname === "/api/system/environment/update") {
+          if (request.method === "GET") return json(response, 200, environment.status());
+          if (request.method === "POST") return json(response, 202, await environment.start(input, () => {
+            const current = authorize();
+            if (!testIdentity) accounts.requireAdmin(current);
+          }));
+        }
         if (url.pathname === "/api/system/settings") {
           if (request.method === "GET")
             return json(response, 200, await systemServices.readSettings());
@@ -523,6 +540,7 @@ function createWebServer({
         Promise.resolve().then(() => manager?.close()),
         Promise.resolve().then(() => workspaces?.close()),
         Promise.resolve().then(() => workspaceClones?.close()),
+        Promise.resolve().then(() => environment?.close()),
         Promise.resolve().then(() => accounts?.close()),
       ]).then((results) => {
         if (ownedDatabase) accounts?.closeDatabase();

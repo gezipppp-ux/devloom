@@ -24,6 +24,28 @@ const { saveSystemSettings } = require("../../src/config/system-settings.cjs");
 
 const password = "fixture-password-123";
 
+test("environment endpoints require administrator and CSRF, and maintenance blocks writes", async t => {
+  let busy = false, starts = 0;
+  const environment = {
+    read: async () => ({ tools: [] }), checkLatest: async () => ({ tools: [] }),
+    status: () => ({ busy }), close: async () => {},
+    start: async (_input, authorize) => { authorize(); starts++; busy = true; return { status: "running" }; },
+  };
+  const { client } = await fixture(t, { environment });
+  const admin = client(), member = client();
+  assert.equal((await admin.request("/api/system/environment")).status, 401);
+  await admin.login("admin"); await member.login("member");
+  for (const [url, input] of [["/api/system/environment", undefined], ["/api/system/environment/check", {}], ["/api/system/environment/update", undefined], ["/api/system/environment/update", { id: "npm", version: "2.0.0" }]])
+    assert.equal((await member.request(url, input)).status, 403);
+  assert.equal((await admin.request("/api/system/environment")).status, 200);
+  assert.equal((await admin.request("/api/system/environment/update", {}, { headers: { "x-tapd-token": "invalid" } })).status, 403);
+  assert.equal((await admin.request("/api/system/environment/update", { id: "npm", version: "2.0.0" })).status, 202);
+  assert.equal((await admin.request("/api/account/settings", {})).status, 409);
+  assert.equal((await admin.request("/api/system/environment/update")).status, 200);
+  assert.equal(starts, 1);
+  assert.equal((await admin.request("/api/auth/logout", {})).status, 200);
+});
+
 test("Git HTTP endpoints test drafts before saving and expose only generated SSH public keys", async t => {
   const { client } = await fixture(t);
   const browser = client();

@@ -96,10 +96,13 @@ npm start -- --host 127.0.0.1 --port 4317
 - `/api/account/settings`：个人设置；`/api/account/git-accounts`：Git 账号维护与连接测试；`/api/account/preferences`：当前成员某工作区的未读记录。
 - `/api/admin/accounts`：管理员维护账号。
 - `/api/system/settings`：系统级设置；工作区接口保持 `/api/workspaces/:id/...`。
+- `/api/system/environment`（GET）：管理员环境检测；`/check`（POST）：查询四种工具的官方更新版本；`/update`（POST/GET）：确认工具更新／读取更新状态。写操作沿用 CSRF 与正文读取后权限复核，异步更新预检结束后再次复核管理员身份。
 
 本机 HTTP 和开发服务器保留 IP/Host/Origin 校验。正式远程部署建议通过 HTTPS 反代，设置 `PUBLIC_ORIGIN=https://coding.example.com` 并将应用绑定 `127.0.0.1`；代理必须保留公开 Host。代理模式仅接受本机代理连接，不信任任意客户端提供的转发头。HTTPS 模式使用 Secure Cookie。
 
-Vue 页面路径 `/login`、`/password`、`/personal`、`/system`、`/accounts` 支持直接刷新；未知文件路径不回退到页面入口。开发源码访问范围仍受 Vite 文件白名单限制。
+环境更新只接受 `codex`、`npm`、`git`、`node` 与确切稳定版本（Git 支持 Windows 构建后缀），不接受客户端命令或源地址；重新查询最新版本并核对实际 npm 全局入口后才安装。使用 `--engine-strict` 校验目标 Node.js 要求，安装结束复查实际版本；拒绝降级、并发更新和活动任务／克隆。预检与安装期间阻止新业务 POST（认证接口除外），页面离开不取消安装。进程内状态可供页面重新进入时查询；关闭服务等待已开始安装，服务重启后不恢复或重放更新。失败不保证安装器回滚，必须重新检测。Windows 的 Node.js 支持 nvm 1/2 或已登记的 winget 安装，Git 支持 winget 的 Git.Git；先核对当前二进制归属，固定包标识及版本，拒绝缺少对应发行版的安装。nvm 安装后验证目标二进制和默认版本，当前服务仍使用旧进程，状态为 restart-required；新版本不会被当作已运行。无法识别的安装（包括桌面应用内置 Codex）和未接入的系统安装器只禁用更新并说明原因，不提供指引弹窗。不自动提权、重启或重新执行任务；跨 Node.js 主版本变更需重新安装原生依赖后重启。
+
+Vue 页面路径 `/login`、`/password`、`/personal`、`/system`、`/accounts`、`/environment` 支持直接刷新（旧环境检测地址跳转到 `/system?tab=environment`）；系统设置通过「目录设置 / 环境检测」分类切换内容；未知文件路径不回退到页面入口。开发源码访问范围仍受 Vite 文件白名单限制。
 
 ## 验证
 
