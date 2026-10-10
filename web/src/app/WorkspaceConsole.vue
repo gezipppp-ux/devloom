@@ -154,10 +154,16 @@ onUnmounted(() =>
 );
 
 async function scroll(force = true) {
+  const key = active.value;
+  const previous = timeline.value;
+  // SSE has updated Vue state, but the DOM still has the previous height.
+  // Decide whether to follow before a long message grows the scroll range.
+  const follow = force || (previous &&
+    previous.scrollHeight - previous.scrollTop - previous.clientHeight < 180);
   await nextTick();
   const el = timeline.value;
-  if (el && (force || el.scrollHeight - el.scrollTop - el.clientHeight < 180))
-    el.scrollTop = el.scrollHeight;
+  if (follow && el && active.value === key && (force || el === previous))
+    el.scrollTo({ top: el.scrollHeight, behavior: "instant" });
 }
 async function send() {
   if (

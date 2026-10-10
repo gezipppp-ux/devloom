@@ -1564,7 +1564,6 @@ main {
   min-height: 140px;
   overflow: auto;
   padding: 24px max(32px, calc((100% - var(--conversation-width)) / 2));
-  scroll-behavior: smooth;
 }
 .message {
   padding: 16px 0 24px;

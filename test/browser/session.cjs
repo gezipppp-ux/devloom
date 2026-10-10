@@ -18,6 +18,7 @@ const { verifySessionDeletion } = require('./session-deletion.cjs');
 const { verifySessionArchiveTitle } = require('./session-archive-title.cjs');
 const { verifyStartTaskLock } = require('./start-task.cjs');
 const { verifySessionMarkdown } = require('./session-markdown.cjs');
+const { verifySessionScroll } = require('./session-scroll.cjs');
 const { verifyTapdFusion } = require('./tapd-fusion.cjs');
 
 async function choosePermission(page, mode) {
@@ -1167,6 +1168,7 @@ async function main() {
     await verifyRefreshConsistency(browser, origin, manager, client, key, errors);
     await verifyLanManualCreation(browser, directory, errors);
     await verifySessionMarkdown(browser, origin, client, key, errors);
+    await verifySessionScroll(browser, origin, manager, key, errors, output);
     await verifySessionFiles(browser, origin, key, errors, output);
     await verifySessionImages(browser, origin, manager, client, key, errors, output);
     await verifySessionDeletion(browser, origin, manager, directory, errors, output);
