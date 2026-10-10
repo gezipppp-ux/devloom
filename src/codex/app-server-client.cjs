@@ -106,7 +106,9 @@ class AppServerClient extends EventEmitter {
         title: 'TAPD Web CLI',
         version: '0.1.0',
       },
-      capabilities: { experimentalApi: false },
+      // request_user_input is an experimental app-server request, even when
+      // the model offers it during an ordinary turn.
+      capabilities: { experimentalApi: true },
     });
     if (this.child !== child) throw new Error('Codex 初始化连接已关闭。');
     this.write({ method: 'initialized', params: {} });

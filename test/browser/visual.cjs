@@ -129,12 +129,15 @@ async function main() {
                   questions: [
                     {
                       id: "scope",
+                      header: "搜索范围",
                       question: "搜索范围包含哪些字段？",
                       options: [
                         { label: "姓名和手机号", description: "支持两个字段" },
                         { label: "仅姓名", description: "只搜索姓名" },
                       ],
                     },
+                    { id: "details", header: "补充说明", question: "是否需要保留已有筛选条件和分页行为？请补充验收细节。", options: null },
+                    { id: "timing", header: "实施时间", question: "请说明希望完成的时间，以及需要协调的其他事项。", options: null },
                   ],
                 },
               },
@@ -616,6 +619,14 @@ async function main() {
       .getByRole("button", { name: "提交回答", exact: true })
       .scrollIntoViewIfNeeded();
     await capture("08-clarification");
+    for (const width of [768, 390, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.getByRole('button', { name: '提交回答', exact: true }).scrollIntoViewIfNeeded();
+      await capture('08-clarification-' + width);
+      const box = await page.getByRole('button', { name: '提交回答', exact: true }).boundingBox();
+      assert.ok(box.y >= 0 && box.y + box.height <= 900, 'question submit remains reachable');
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await load("readonly");
     await capture("08-readonly");
     await load("git-deleted");

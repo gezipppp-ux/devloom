@@ -911,6 +911,56 @@ async function main() {
           call.result.answers.scope.answers[0] === '充值模块',
       ),
     );
+    const questionParams = {
+      threadId: 'original', turnId: `turn-${client.turn}`, itemId: 'modern-question', isBlocking: true,
+      questions: [
+        { id: 'scope', header: '范围', question: '确认实施范围', isOther: true,
+          options: [{ label: '全部模块（推荐）', description: '检查所有模块和相关回归测试' }, { label: '当前模块', description: '仅修改当前需求' }] },
+        { id: 'details', header: '补充', question: '填写补充说明', options: null },
+        { id: 'secret', header: '验证', question: '填写测试口令', isSecret: true },
+      ],
+    };
+    client.emit('request', { id: 42, method: 'item/tool/requestUserInput', params: questionParams });
+    const questions = page.getByRole('dialog', { name: 'Codex 的问题', exact: true });
+    await questions.waitFor();
+    await questions.getByText('检查所有模块和相关回归测试', { exact: true }).waitFor();
+    assert.equal(await questions.getByLabel('确认实施范围', { exact: true }).inputValue(), '');
+    await questions.getByRole('button', { name: '提交回答', exact: true }).click();
+    assert.equal(client.calls.some((call) => call.response === 42), false, 'no automatic/default answer');
+    await page.keyboard.press('Escape');
+    await questions.waitFor({ state: 'hidden' });
+    assert.equal(await page.getByRole('button', { name: '回答问题', exact: true }).evaluate((el) => el === document.activeElement), true);
+    await page.reload();
+    await questions.waitFor();
+    await questions.getByRole('button', { name: '全部模块（推荐）', exact: true }).click();
+    await questions.getByLabel('填写补充说明', { exact: true }).fill('自定义说明\n保留已有行为');
+    const secret = questions.getByLabel('填写测试口令', { exact: true });
+    assert.equal(await secret.getAttribute('type'), 'password');
+    await secret.fill('fixture-only');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.getByRole('button', { name: '补充指令 ↑', exact: true }).isDisabled(), true);
+    await page.getByRole('button', { name: '回答问题', exact: true }).click();
+    assert.equal(await secret.inputValue(), 'fixture-only');
+    await page.route('**/api/runs/1-2/responses', (route) => route.fulfill({ status: 503, json: { error: '模拟提交失败，请重试' } }), { times: 1 });
+    await questions.getByRole('button', { name: '提交回答', exact: true }).click();
+    await questions.getByRole('alert').getByText('模拟提交失败，请重试', { exact: true }).waitFor();
+    assert.equal(await secret.inputValue(), 'fixture-only');
+    await questions.getByRole('button', { name: '提交回答', exact: true }).click();
+    await questions.waitFor({ state: 'hidden' });
+    assert.deepEqual(client.calls.find((call) => call.response === 42).result, { answers: {
+      scope: { answers: ['全部模块（推荐）'] }, details: { answers: ['自定义说明\n保留已有行为'] }, secret: { answers: ['fixture-only'] },
+    } });
+    client.emit('request', { id: 43, method: 'item/tool/requestUserInput', params: { ...questionParams, isBlocking: false } });
+    await page.getByRole('button', { name: '回答问题', exact: true }).waitFor();
+    assert.equal(await questions.isVisible(), false);
+    await input.fill('异步问题期间继续检查');
+    await input.press('Enter');
+    await page.getByText('补充指令已发送至当前一轮。', { exact: true }).waitFor();
+    await page.getByRole('button', { name: '回答问题', exact: true }).click();
+    await questions.waitFor();
+    client.notify('serverRequest/resolved', { requestId: 43 });
+    await questions.waitFor({ state: 'hidden' });
+    assert.equal(client.calls.some((call) => call.response === 43), false);
     await page.getByRole('button', { name: '■ 停止', exact: true }).click();
     await page
       .getByRole('button', { name: '■ 停止', exact: true })

@@ -63,6 +63,9 @@ test('app-server correlates parallel RPC, notifications, server requests, errors
   const approval = once(client, 'request');
   await client.request('approval', {});
   client.respond((await approval)[0].id, { decision: 'decline' });
+  const question = once(client, 'request');
+  await client.request('question', {});
+  assert.equal((await question)[0].method, 'item/tool/requestUserInput');
   await assert.rejects(client.request('fail', {}), /fixture failure/);
   await assert.rejects(client.request('hang', {}, 15), /超时/);
   await assert.rejects(client.request('exit', {}), /连接已关闭/);
@@ -199,6 +202,63 @@ test('questions and approvals require explicit valid answers; unsupported reques
     params: { threadId: 'original' },
   });
   assert.equal(client.calls.at(-1).rejected, 10);
+});
+
+test('modern optional questions allow steering while blocking questions and approvals still fence it', async (t) => {
+  const { manager, client, key } = setup(t);
+  const { turnId } = await manager.send(key, 'start');
+  const params = { threadId: 'original', turnId, itemId: 'ask', isBlocking: false,
+    questions: [
+      { id: 'scope', header: '范围', question: '选择范围', options: [{ label: '全部', description: '覆盖全部模块' }] },
+      { id: 'notes', header: '说明', question: '补充说明', options: null, isOther: true },
+      { id: '__proto__', header: '密文', question: '输入密文', isSecret: true },
+    ] };
+  client.emit('request', { id: 80, method: 'item/tool/requestUserInput', params });
+  assert.equal((await manager.view(key)).requests[0].params.isBlocking, false);
+  await manager.send(key, '继续检查');
+  assert.equal(client.calls.at(-1).method, 'turn/steer');
+  await assert.rejects(manager.respond(key, '80', { answers: { scope: '全部' } }), /回答/);
+  await manager.respond(key, '80', { answers: JSON.parse('{"scope":"全部","notes":" 自定义范围 ","__proto__":"密文"}') });
+  assert.deepEqual(client.calls.at(-1), { response: 80, result: { answers: JSON.parse('{"scope":{"answers":["全部"]},"notes":{"answers":["自定义范围"]},"__proto__":{"answers":["密文"]}}') } });
+  await assert.rejects(manager.respond(key, '80', { answers: {} }), /失效/);
+  for (const blocking of [true, undefined]) {
+    client.emit('request', { id: 81, method: 'item/tool/requestUserInput', params: { ...params, isBlocking: blocking } });
+    await assert.rejects(manager.send(key, '不要绕过'), /先处理/);
+    client.notify('serverRequest/resolved', { requestId: 81 });
+    assert.equal((await manager.view(key)).requests.length, 0);
+  }
+  client.emit('request', { id: 82, method: 'item/fileChange/requestApproval', params: { threadId: 'original', isBlocking: false } });
+  await assert.rejects(manager.send(key, '不要绕过审批'), /先处理/);
+});
+
+test('invalid, stale and foreign questions cannot be answered; completion and disconnect clear pending questions', async (t) => {
+  const { manager, client, key } = setup(t);
+  const { turnId } = await manager.send(key, 'start');
+  const params = { threadId: 'original', turnId, questions: [{ id: 'a', question: '回答？' }] };
+  for (const patch of [
+    { questions: null }, { questions: [] }, { questions: [null] },
+    { questions: [{ id: 'a', question: 'A' }, { id: 'a', question: 'B' }] },
+    { questions: [{ id: 'a', question: 'A', options: [null] }] },
+    { threadId: 'foreign' }, { turnId: 'old-turn' },
+  ]) {
+    client.emit('request', { id: 90, method: 'item/tool/requestUserInput', params: { ...params, ...patch } });
+    assert.equal(client.calls.at(-1).rejected, 90);
+    assert.equal((await manager.view(key)).requests.length, 0);
+  }
+  client.emit('request', { id: 91, method: 'item/tool/requestUserInput', params });
+  for (const answers of [null, [], { a: ' ' }, { a: ['A'] }, { a: 'x'.repeat(20001) }])
+    await assert.rejects(manager.respond(key, '91', { answers }), /回答/);
+  client.notify('serverRequest/resolved', { threadId: 'foreign', requestId: 91 });
+  assert.equal((await manager.view(key)).requests.length, 1);
+  await manager.interrupt(key);
+  await assert.rejects(manager.respond(key, '91', { answers: { a: 'A' } }), /失效/);
+  const next = await manager.send(key, 'continue');
+  client.emit('request', { id: 92, method: 'item/tool/requestUserInput', params: { ...params, turnId: next.turnId, isBlocking: false } });
+  const events = [];
+  manager.on('event', (event) => events.push(event));
+  client.emit('disconnected', new Error('offline'));
+  await assert.rejects(manager.respond(key, '92', { answers: { a: 'A' } }), /失效/);
+  assert.deepEqual(events.at(-1).requests, []);
 });
 
 test('removed worktrees, external CLI locks, active clients and duplicate web ownership fence mutations', async (t) => {

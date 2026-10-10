@@ -79,6 +79,7 @@ const {
   running,
   initializing,
   canSend,
+  waitingForInput,
   refreshList,
   refreshSession,
   open,
@@ -331,10 +332,10 @@ async function worktreeDeleted() {
           <div class="session-toolbar">
             <span
               class="status"
-              :data-status="session.requests?.length ? 'waiting' : session.status"
+              :data-status="waitingForInput ? 'waiting' : session.status"
               >Codex ·
               {{
-                session.requests?.length
+                waitingForInput
                   ? "等待你的输入"
                   : statusLabel(session.status)
               }}</span
@@ -383,14 +384,16 @@ async function worktreeDeleted() {
                 @open-file="openFile"
               /><SessionRequest
                 v-for="request in session.requests"
-                :key="request.id"
+                :key="`${session.key}:${request.id}`"
                 :request="request"
                 :disabled="busy || !online"
+                :error="error"
+                :auto-open="request.id === session.requests.find((entry) => entry.method === 'item/tool/requestUserInput' && entry.params.isBlocking !== false)?.id"
                 @respond="(data) => action('responses', data)"
               />
               <p v-if="running" class="working-line">
                 <span class="connection online"></span>Codex
-                正在执行，可以补充指令或停止当前一轮。
+                {{ waitingForInput ? '等待你的回答或审批，可停止当前一轮。' : '正在执行，可以补充指令或停止当前一轮。' }}
               </p>
               <p v-if="initializing" class="working-line">
                 <span class="connection online"></span>正在初始化

@@ -1,5 +1,6 @@
 const { EventEmitter } = require("node:events");
 const { AppServerClient } = require("../codex/app-server-client.cjs");
+const { isBlockingRequest } = require("../codex/user-input.cjs");
 const { RunStore } = require("../storage/run-store.cjs");
 const { initializationItem } = require("../domain/session-item.cjs");
 const { validateSessionMessage } = require("../domain/session-message.cjs");
@@ -229,7 +230,7 @@ class SessionManager extends EventEmitter {
     let dispatchedTurnId;
     const runtime = await this.attach(key);
     this.assertOpen();
-    if (runtime.requests.size)
+    if ([...runtime.requests.values()].some(isBlockingRequest))
       throw new Error("请先处理当前等待中的问题或审批。");
     const activeTurn = runtime.turnId;
     if (activeTurn) {
@@ -303,7 +304,7 @@ class SessionManager extends EventEmitter {
         ["preparing", "initializing", "starting"].includes(runtime?.status)
       )
         throw new Error("正在准备会话，请稍候再上传图片。");
-      if (runtime?.requests.size)
+      if (runtime && [...runtime.requests.values()].some(isBlockingRequest))
         throw new Error("请先处理当前等待中的问题或审批。");
       if (this.store.isExecutionLocked(key) && !runtime?.initial)
         throw new Error("原 CLI 仍持有任务锁，不能上传会话图片。");

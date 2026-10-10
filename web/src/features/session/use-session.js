@@ -23,6 +23,8 @@ export function useSession({
     executionEventRevision = 0;
   const running = computed(() => Boolean(session.value?.turnId));
   const initializing = computed(() => session.value?.status === "initializing");
+  const waitingForInput = computed(() => session.value?.requests?.some((request) =>
+    request.method !== 'item/tool/requestUserInput' || request.params?.isBlocking !== false));
   const executionSettings = computed(
     () =>
       session.value?.executionSettings || {
@@ -51,7 +53,7 @@ export function useSession({
       !busy.value &&
       !settingsBusy.value &&
       online.value &&
-      !session.value.requests?.length,
+      !waitingForInput.value,
   );
 
   function beginViewRequest(key) {
@@ -273,6 +275,7 @@ export function useSession({
     running,
     initializing,
     canSend,
+    waitingForInput,
     executionSettings,
     canEditSettings,
     settingsBusy,

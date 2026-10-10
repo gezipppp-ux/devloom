@@ -2200,6 +2200,51 @@ main {
   background: var(--selected);
   border-color: var(--focus);
 }
+.workspace-dialog.session-question-dialog {
+  width: min(640px, calc(100vw - 32px));
+}
+.question-field {
+  min-width: 0;
+  margin: 24px 0 0;
+  padding: 0;
+  border: 0;
+}
+.question-field legend {
+  max-width: 100%;
+  margin-bottom: 12px;
+  font-size: 14px;
+  line-height: 1.8;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.question-header {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.question-field .answer-options {
+  flex-direction: column;
+}
+.question-field .answer-options button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  white-space: normal;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.question-field .answer-options span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.question-field textarea {
+  min-height: 80px;
+}
+.session-question-dialog .actions {
+  flex-wrap: wrap;
+}
 
 /* Welcome and workspace dialogs */
 .empty-state {

@@ -1,5 +1,6 @@
 const { OUTPUT_LIMIT } = require("../domain/session-item.cjs");
 const { SessionPresenter } = require("./session-presenter.cjs");
+const { USER_INPUT_METHOD, validateUserInput, userInputResponse } = require("../codex/user-input.cjs");
 
 // Projects Codex notifications and interactive requests into one workspace's runtime.
 class SessionEvents {
@@ -32,7 +33,7 @@ class SessionEvents {
       clearTimeout(runtime.initial?.timer);
       runtime.initial?.reject(error);
       runtime.initial = null;
-      this.publish(runtime, { type: "state" });
+      this.publish(runtime, { type: "state", requests: [] });
     }
   }
 
@@ -114,7 +115,7 @@ class SessionEvents {
       (entry) =>
         (typeof params.threadId === "string" &&
           entry.sessionId === params.threadId) ||
-        (method === "serverRequest/resolved" &&
+        (method === "serverRequest/resolved" && !params.threadId &&
           entry.requests.has(String(params.requestId))),
     );
     if (!runtime) return;
@@ -297,7 +298,7 @@ class SessionEvents {
     const supported = [
       "item/commandExecution/requestApproval",
       "item/fileChange/requestApproval",
-      "item/tool/requestUserInput",
+      USER_INPUT_METHOD,
     ];
     if (!runtime || !supported.includes(message.method)) {
       this.client.reject(
@@ -310,6 +311,17 @@ class SessionEvents {
           error: `暂不支持交互请求 ${message.method}，已拒绝。`,
         });
       return;
+    }
+    if (message.method === USER_INPUT_METHOD) {
+      try {
+        validateUserInput(message.params);
+        if (message.params.turnId && message.params.turnId !== runtime.turnId)
+          throw new Error("该问题所属轮次已结束，无法提交回答。");
+      } catch (error) {
+        this.client.reject(message.id, error.message);
+        this.publish(runtime, { type: "error", error: error.message });
+        return;
+      }
     }
     const request = {
       id: String(message.id),
@@ -330,19 +342,10 @@ class SessionEvents {
     if (!request || !runtime.connected)
       throw new Error("该请求已失效，请刷新会话。");
     let result;
-    if (request.method === "item/tool/requestUserInput") {
-      const answers = {};
-      for (const question of request.params.questions) {
-        const answer = response.answers?.[question.id];
-        if (
-          typeof answer !== "string" ||
-          !answer.trim() ||
-          answer.length > 20000
-        )
-          throw new Error("请回答每个问题。");
-        answers[question.id] = { answers: [answer.trim()] };
-      }
-      result = { answers };
+    if (request.method === USER_INPUT_METHOD) {
+      if (request.params.turnId && request.params.turnId !== runtime.turnId)
+        throw new Error("该请求已失效，请刷新会话。");
+      result = userInputResponse(request.params, response);
     } else {
       if (!["accept", "decline"].includes(response.decision))
         throw new Error("无效的审批决定。");
