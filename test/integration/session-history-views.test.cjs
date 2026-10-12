@@ -17,6 +17,7 @@ async function fixture(t, { persisted = true, sessionId = "saved-thread" } = {})
   const key = "1-2";
   const initialization = { command: "fixture setup", status: "completed", output: "saved setup" };
   const state = {
+    source: { channel: "manual", scope: "1", id: "2" },
     agent: { provider: "codex" },
     workitem: { id: "2", workspace_id: "1", title: "history fixture" },
     session_id: sessionId,

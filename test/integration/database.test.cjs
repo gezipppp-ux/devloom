@@ -36,7 +36,7 @@ test("explicit nested data roots initialize independently from parent resource r
   assert.equal(await initializeTestDatabase(t, nestedRoot), nested);
 });
 
-test("PostgreSQL initializes once, skips old files, encrypts credentials and isolates member workspaces", async (t) => {
+test("PostgreSQL initializes once, skips old files and isolates member workspaces", async (t) => {
   let database;
   let reopened;
   t.after(async () => { await database?.close(); await reopened?.close(); });
@@ -66,13 +66,10 @@ test("PostgreSQL initializes once, skips old files, encrypts credentials and iso
   (await assert.rejects(async () => (await workspaces.save({ name: "同名项目" }, undefined, alice)), /已存在/));
   (await assert.rejects(async () => (await workspaces.save({ name: "越权" }, first.id, bob)), /不存在/));
   const file = workspaces.configFile(first.id);
-  (await updateConfig(file, (config) => ({ ...config, workspace: { ...config.workspace, owner_username: "bob" }, tapd: { session: { cookie_header: "private-cookie" } } })));
-  assert.equal((await readOptional(file)).tapd.session.cookie_header, "private-cookie");
+  (await updateConfig(file, (config) => ({ ...config, workspace: { ...config.workspace, owner_username: "bob" } })));
   assert.equal((await database.readWorkspace(first.id, alice.id)).workspace.owner_username, "alice");
   assert.equal((await readOptional(file)).workspace.owner_username, "alice", "stored configuration cannot replace the owning account name");
   assert.equal((await database.readWorkspace(second.id, bob.id)).workspace.owner_username, "bob");
-  const serialized = JSON.stringify((await database.client.workspaceSetting.findUniqueOrThrow({ where: { workspaceId: first.id } })).data);
-  assert.equal(serialized.includes("private-cookie"), false);
   assert.equal(fs.existsSync(file), false);
   const settingsFile = path.join(root, "system-settings.json");
   (await writeConfig(settingsFile, { memberStorageRoot: root }));
@@ -84,7 +81,6 @@ test("PostgreSQL initializes once, skips old files, encrypts credentials and iso
   (await assert.rejects(async () => (await executionConfig(missingUsername, file)), /账号|用户|所有者/));
   await database.close();
   reopened = await initializeTestDatabase(t, root);
-  assert.equal((await readOptional(file)).tapd.session.cookie_header, "private-cookie");
   assert.equal((await readOptional(file)).workspace.owner_username, "alice");
   assert.equal((await readSettings(file)).memberRoot, path.join(root, "alice"));
   assert.equal((await readOptional(settingsFile)).memberStorageRoot, root);
@@ -101,11 +97,11 @@ test("database documents, run projections and binary attachments remain authorit
   const workspace = (await workspaces.save({ name: "存储测试" }, undefined, actor));
   const directory = path.join(root, "workspaces", workspace.id, "runs", "1-2");
   const file = path.join(directory, "run.json");
-  (await writeConfig(file, { agent: { provider: "codex" }, source: { channel: "tapd", scope: "1", id: "2" }, session_id: "session-id", status: "running" }));
-  (await updateConfig(file, (value) => ({ ...value, status: "finished" })));
+  (await writeConfig(file, { agent: { provider: "codex" }, source: { channel: "manual", scope: "1", id: "2" }, session_id: "session-id", execution: { status: "running" } }));
+  (await updateConfig(file, (value) => ({ ...value, execution: { status: "completed" } })));
   const row = await database.client.run.findFirstOrThrow();
   assert.equal(row.ownerUserId, actor.id);
-  assert.equal(row.executionState, "finished");
+  assert.equal(row.executionState, "completed");
   assert.equal(row.sessionId, "session-id");
   const snapshot = path.join(directory, "requirement.json");
   (await writeConfig(snapshot, { title: "保留资料" }));

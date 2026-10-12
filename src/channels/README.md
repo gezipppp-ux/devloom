@@ -25,7 +25,7 @@
 
 - PNG/JPEG/WebP 签名校验与大小限制是所有渠道共用的能力。无法访问或不支持的实际图片应阻止准备，不能静默省略。
 - 手动上传 ID 属于当前应用工作区，不能作为路径使用，也不能跨工作区读取。准备时按上传顺序复制到任务目录，保留历史素材。
-- 保留 `source={channel,scope,id}`、已有 session、记录中的 worktree 路径及分支。源码目录调整不改变渠道 ID、HTTP 路由、运行 key 或历史 `requirement.json` / `tapd-task.json` 文件名。
+- 保留 `source={channel,scope,id}`、已有 session、记录中的 worktree 路径及分支。新任务统一生成渠道前缀加来源哈希的 key，必须显式保存来源；不推断缺失的渠道。只读取 `requirement.json`，不提供 `tapd-task.json` 回退。源码目录调整不改写已记录的 key 和路径。
 
 ## 验证
 

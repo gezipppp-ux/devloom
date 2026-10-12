@@ -699,6 +699,7 @@ async function main() {
     path.join(store.dir(key), 'run.json'),
     JSON.stringify({
       workitem: { title: '【演示】套餐充值入口', id: '2', workspace_id: '1' },
+      source: { channel: 'manual', scope: '1', id: '2' },
       agent: { provider: 'codex' },
       session_id: 'original',
       worktree: {
@@ -727,6 +728,7 @@ async function main() {
     fs.mkdirSync(store.dir(otherKey));
     fs.writeFileSync(path.join(store.dir(otherKey), 'run.json'), JSON.stringify({
       workitem: { title, id: otherKey.slice(2), workspace_id: '1' },
+      source: { channel: 'manual', scope: '1', id: otherKey.slice(2) },
       agent: { provider: 'codex' },
       execution: { status: 'completed' },
       updated_at: '2025-01-01T00:00:00Z',

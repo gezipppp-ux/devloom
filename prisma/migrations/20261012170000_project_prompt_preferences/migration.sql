@@ -1,7 +1,0 @@
-BEGIN;
-
-ALTER TABLE "project_members"
-  ADD COLUMN "prompts" JSONB NOT NULL DEFAULT '{}',
-  ADD COLUMN "prompt_revision" INTEGER NOT NULL DEFAULT 1;
-
-COMMIT;

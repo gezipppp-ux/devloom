@@ -1,7 +1,6 @@
 const path = require("node:path");
 const { createHash } = require("node:crypto");
 const { PostgresDatabase } = require("./postgres-database.cjs");
-const { encodeSettings, decodeSettings } = require("./database-secrets.cjs");
 const { unregisterDatabase } = require("./database-registry.cjs");
 
 function missing() { return Object.assign(new Error("工作区不存在。"), { code: "ENOENT", statusCode: 404 }); }
@@ -33,7 +32,7 @@ class ApplicationDatabase extends PostgresDatabase {
 
   workspaceRecord(row) {
     if (!row?.settings) throw missing();
-    const config = decodeSettings(JSON.stringify(row.settings.data), this.encryptionKey);
+    const config = row.settings.data;
     return { ...config, workspace: { ...config.workspace, id: row.id, name: row.name, icon: row.icon,
       owner_user_id: row.ownerUserId, owner_username: row.owner.username } };
   }
@@ -58,7 +57,7 @@ class ApplicationDatabase extends PostgresDatabase {
         throw new Error("工作区所有者不可缺失或更改。");
       const data = { name: config.workspace.name, icon: config.workspace.icon ?? null };
       await this.client.workspace.upsert({ where: { id }, create: { id, ownerUserId, ...data }, update: data });
-      const settings = JSON.parse(encodeSettings(config, this.encryptionKey));
+      const settings = json(config);
       await this.client.workspaceSetting.upsert({ where: { workspaceId: id },
         create: { workspaceId: id, data: settings }, update: { data: settings } });
       return config;
@@ -90,8 +89,8 @@ class ApplicationDatabase extends PostgresDatabase {
     const data = json(value);
     if (runKey && name === "run.json") {
       const owner = workspaceId ? await this.client.workspace.findUniqueOrThrow({ where: { id: workspaceId }, select: { ownerUserId: true } }) : null;
-      const fields = { sessionId: value.session_id ?? value.session?.id ?? null,
-        executionState: typeof value.execution === "string" ? value.execution : value.execution?.status ?? value.status ?? null,
+      const fields = { sessionId: value.session_id ?? null,
+        executionState: value.execution?.status ?? null,
         source: value.source ? json(value.source) : this.jsonNull, data };
       await this.client.run.upsert({ where: { path: relative }, create: {
         path: relative, workspaceId, ownerUserId: owner?.ownerUserId || null, runKey, ...fields,

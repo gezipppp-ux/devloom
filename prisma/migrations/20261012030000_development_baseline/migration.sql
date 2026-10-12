@@ -1,3 +1,0 @@
-BEGIN;
-ALTER TABLE "project_issues" ADD COLUMN "base_branch" TEXT NOT NULL DEFAULT '';
-COMMIT;

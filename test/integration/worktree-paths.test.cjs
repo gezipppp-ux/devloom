@@ -46,8 +46,9 @@ test("task paths have one compact directory and retain full identity in their st
   const renamed = worktreePlan(repository, {}, "main", { root, workspaceId, source, name: "custom" });
   assert.equal(renamed.branch, plan.branch);
   assert.equal(renamed.path, path.join(root, `custom-${id}`));
-  const cli = worktreePlan(repository, { workspace_id: "1", id: "2" }, "main", { root });
-  assert.match(path.basename(cli.path), /^tapd-[a-f0-9]{12}$/);
+  assert.throws(() => worktreePlan(repository, { workspace_id: "1", id: "2" }, "main", { root }), /source identity/);
+  const cli = worktreePlan(repository, {}, "main", { root, source });
+  assert.match(path.basename(cli.path), /^manual-[a-f0-9]{12}$/);
   assert.match(cli.branch, /^codex\/[a-f0-9]{12}$/);
   const identities = [
     { workspaceId: "21111111-1111-4111-8111-111111111111", source },

@@ -6,7 +6,7 @@ CLI Agent 已通过独立适配层接入，目前仅支持 Codex。项目协作�
 
 项目采用 **Node.js 22.13+ / CommonJS + Fastify + PostgreSQL + Prisma + Vue 3 + Vite**，前后端由同一个服务提供。依赖在本仓库独立管理，需要单独运行 PostgreSQL，不依赖 NestJS、Vben 或其他项目。
 
-项目协作改造依据 [PRD](docs/prd/project-collaboration.md) 和[实施清单](docs/prd/project-collaboration-implementation.md)实施，采用 **PostgreSQL + Prisma**，只支持全新部署，不兼容或迁移旧 SQLite。生成、迁移和测试说明见 [PostgreSQL 接入](docs/engineering/postgresql.md)。完成情况见实施清单，验证证据见[验收记录](docs/prd/project-collaboration-verification.md)。
+项目协作改造依据 [PRD](docs/prd/project-collaboration.md) 和[实施清单](docs/prd/project-collaboration-implementation.md)实施，采用 **PostgreSQL + Prisma**，只支持全新部署，不兼容或迁移旧 PostgreSQL／SQLite 数据。安装基线和测试说明见 [PostgreSQL 接入](docs/engineering/postgresql.md)。完成情况见实施清单，验证证据见[验收记录](docs/prd/project-collaboration-verification.md)。
 
 ## 目录
 
@@ -262,7 +262,7 @@ npm run dev -- --host 0.0.0.0 --port 5173
 | --- | --- | --- |
 | 个人设置 | Git 账号、通知、分组、默认模型、思考强度、执行权限 | 当前成员全部工作区 |
 | 系统设置 | 成员目录基础路径、Git 环境检测 | 系统，由管理员维护 |
-| 工作区设置 | 默认开发分支、初始化命令、提示词模板 | 当前工作区 |
+| 项目设置 | Git 仓库地址、初始化命令、默认提示词及个人提示词覆盖 | 当前项目；开发分支在任务启动时选择 |
 
 启动环境变量如下：
 
@@ -276,7 +276,7 @@ npm run dev -- --host 0.0.0.0 --port 5173
 | `RUNNER_ENCRYPTION_KEY` | 自动生成并读取 `secrets/database.key` | 需要外部托管凭据主密钥时设置，格式为 64 位十六进制；已有数据须保持原密钥 |
 | `BROWSER_CHANNEL` | Windows 测试使用 Edge，Linux/macOS 测试使用 Chromium | 仅浏览器测试选择渠道时使用，例如 `chromium` |
 
-这些变量通过终端或服务管理器传给进程，修改后需重启。仓库没有要求创建 `.env` 的安装步骤，不要仅把变量写入文件便认为已经生效。Web 和开发服务均不接受 `--config`；不要照旧版本说明维护生产 JSON 配置。
+这些变量可通过终端、服务管理器或安装目录中的可选 `.env` 提供；npm 初始化、迁移、开发和启动命令会读取该文件，进程已有环境变量优先。修改后需重启，`.env` 不提交版本控制。Web 和开发服务均不接受 `--config`；不要照旧版本说明维护生产 JSON 配置。
 
 Codex 需要由服务账号访问自己的认证与配置；systemd 不会自动加载交互式 shell 的 nvm 或 `.bashrc`。若终端能找到 Codex、服务却找不到，应检查服务的 `PATH` 或设置 `CODEX_BIN`，详细定位规则见 [部署说明](docs/deployment.md)。
 
@@ -289,9 +289,9 @@ Codex 需要由服务账号访问自己的认证与配置；systemd 不会自动
   workspaces/              # Codex 图片缓存及必要执行锁
 
 <成员目录基础路径>/
-  <用户名>/
-    projects/<项目名>/     # 克隆得到的项目仓库
-    worktree/<项目名>/     # 各任务的独立 worktree
+  projects/<项目ID>/members/<用户ID>/
+    repository-<准备修订号>/  # 克隆得到的项目仓库
+    worktree/<任务前缀>-<12位任务标识>/  # 各任务的独立 worktree
 ```
 
 PostgreSQL 是唯一业务数据来源，账号、设置、任务、历史、日志和附件均入库。Git 项目、worktree 和 Codex 自身的会话资料仍在文件系统中，静态资源始终从应用安装目录的 `web/dist` 读取。
@@ -305,7 +305,7 @@ PostgreSQL 是唯一业务数据来源，账号、设置、任务、历史、日
 
 恢复时应使用对应的数据、密钥与业务目录，保留记录中的实际路径。仅恢复数据库不能重新创建任务代码和可执行会话。修改应用安装目录或系统基础目录不会搬移既有 worktree，旧任务继续使用记录的路径。
 
-本版本不导入旧版生产 JSON/JSONL、旧工作区配置、runs 或 uploads；历史 Git／目录模型重构没有自动迁移方案。旧版部署请使用新的独立数据目录，旧资料保留原位。后续 PostgreSQL 升级显式运行 `npm run db:deploy`；启动只校验版本，不自动迁移。
+本版本只支持全新部署，不兼容旧 PostgreSQL、SQLite、JSON/JSONL、工作区配置、runs 或 uploads。旧迁移链已合并为唯一基线 `20261012200000_baseline`；旧部署必须使用新的空数据库/schema 和新的独立数据目录，旧数据库、密钥及业务目录保留原位，不转换、不自动删除。`npm run db:deploy` 只部署当前基线及其后续迁移；启动校验版本并拒绝旧迁移历史。
 
 ## 服务器部署与访问
 
@@ -328,7 +328,7 @@ ssh -N -L 4317:127.0.0.1:4317 runner@your-server
 
 ## 更新与升级
 
-适用于已经采用当前数据库模型的安装：
+以下步骤仅适用于已经采用 `20261012200000_baseline` 的安装。使用旧迁移链的部署请按「初始化与首次启动」重新部署到新的空数据库/schema 和数据目录，不能原地升级或伪造已执行迁移：
 
 1. 等待当前任务完成，停止旧 Web 服务及相关 CLI 进程。
 2. 备份数据、主密钥、业务目录及需要保留的 Codex 资料。

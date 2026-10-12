@@ -22,12 +22,12 @@ function verifyPostgresMigrations(expected, applied) {
     throw new Error("PostgreSQL 存在失败或未完成的迁移，请由运维处理后重试。");
   const completed = new Map(applied.filter((row) => row.finished_at && !row.rolled_back_at)
     .map((row) => [row.migration_name, row.checksum]));
+  if ([...completed.keys()].some((name) => !expected.some((entry) => entry.name === name)))
+    throw new Error("PostgreSQL 数据库版本不属于当前应用，请使用新的数据库/schema 和数据目录；旧数据不兼容、不迁移。");
   if (expected.some((entry) => !completed.has(entry.name)))
     throw new Error("PostgreSQL 存在待执行迁移，请先运行 npm run db:deploy。");
   if (expected.some((entry) => completed.get(entry.name) !== entry.checksum))
     throw new Error("PostgreSQL 已执行迁移的校验值不匹配，不允许修改已发布的迁移。");
-  if ([...completed.keys()].some((name) => !expected.some((entry) => entry.name === name)))
-    throw new Error("PostgreSQL 数据库版本高于或不属于当前应用，拒绝启动。");
 }
 
 module.exports = { readPostgresMigrations, verifyPostgresMigrations };

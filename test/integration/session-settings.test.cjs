@@ -20,7 +20,7 @@ const next = {
 
 function saveRun(store, key, directory) {
   const state = {
-    source: { channel: 'tapd', workspace: '1', id: key.slice(2) },
+    source: { channel: 'manual', scope: '1', id: key.slice(2) },
     agent: { provider: "codex" },
     workitem: { title: '设置回归测试', id: key.slice(2), workspace_id: '1' },
     worktree: { path: directory, repository: directory, branch: 'codex/fixture' },

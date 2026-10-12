@@ -88,6 +88,17 @@ test('channel execution skips status writes, persists results and prevents dupli
   assert.deepEqual(calls, ['worktree', 'session']);
 });
 
+test('existing runs require the exact recorded source without inference or redispatch', async t => {
+  const { calls, input, dependencies } = setup(t);
+  const state = await runRequirement(input, dependencies);
+  const file = path.join(input.directory, 'run.json');
+  for (const source of [undefined, { ...state.source, scope: 'another-scope' }, { ...state.source, id: 'another-id' }]) {
+    await saveState(file, { ...state, source });
+    await assert.rejects(runRequirement(input, dependencies), /source identity|Run identity/);
+    assert.deepEqual(calls, ['worktree', 'session']);
+  }
+});
+
 test('initialization runs between worktree creation and Codex; failure prevents session and transition', async (t) => {
   for (const fail of [false, true]) {
     const { calls, input, dependencies } = setup(t);
@@ -168,6 +179,7 @@ test('transition retry preserves a concurrent Web followup on success and failur
     fs.mkdirSync(directory, { recursive: true });
     const workitem = { id: '2', workspace_id: '1', title: 'retry fixture' };
     (await saveState(file, {
+      source: { channel: "tapd", scope: "1", id: "2" },
       agent: { provider: "codex" },
       workitem,
       worktree: { path: directory },

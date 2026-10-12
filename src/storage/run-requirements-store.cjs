@@ -1,6 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
-const { RUN_KEY, sourceFor, runKey } = require("../domain/run-identity.cjs");
+const { RUN_KEY, recordedSources, runKey } = require("../domain/run-identity.cjs");
 const { MAX_REQUIREMENTS } = require("../domain/requirement-fusion.cjs");
 const { databaseForPath } = require("./database-registry.cjs");
 const { readOptional, writeConfig } = require("./json-files.cjs");
@@ -41,8 +41,7 @@ class RunRequirementsStore {
     const result = new Map();
     for (const { path: file, value } of documents) {
       const key = path.basename(path.dirname(file));
-      const sources = value.sources || value.workitem?.sources ||
-        (value.workitem ? [value.source || sourceFor("tapd", value.workitem)] : []);
+      const sources = recordedSources(value);
       for (const source of sources) result.set(runKey(source), key);
     }
     return result;
@@ -66,8 +65,7 @@ class RunRequirementsStore {
           throw new Error(`需求 ${source.id} 已归属任务 ${owner}，请打开原任务。`);
       }
       const state = addition ? (await readOptional(path.join(this.directory, key, "run.json"))) : {};
-      const previousSources = saved.sources || state.workitem?.sources ||
-        (state.workitem ? [state.source || sourceFor("tapd", state.workitem)] : []);
+      const previousSources = saved.sources || recordedSources(state);
       const members = addition ? [...previousSources, ...sources] : sources;
       if (members.length > MAX_REQUIREMENTS)
         throw new Error("一个任务最多关联 20 条需求。");

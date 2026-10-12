@@ -9,7 +9,7 @@ const { ApplicationDatabase } = require("../../src/storage/application-database.
 const options = { skip: !process.env.TEST_DATABASE_URL && !process.env.CI
   ? "设置独立 TEST_DATABASE_URL 后执行 PostgreSQL 集成测试。" : false };
 
-test("PostgreSQL workspace documents preserve ownership and encrypt TAPD credentials", options, async (t) => {
+test("PostgreSQL workspace documents preserve ownership and current execution settings", options, async (t) => {
   const fixture = await postgresFixture(t);
   await fixture.deploy();
   const directory = temporary(t);
@@ -20,15 +20,15 @@ test("PostgreSQL workspace documents preserve ownership and encrypt TAPD credent
   const bob = await database.client.user.create({ data: { username: "bob", displayName: "bob", passwordHash: "fixture" } });
   const id = randomUUID();
   const config = { workspace: { id, name: "应用", owner_user_id: alice.id, owner_username: "forged" },
-    tapd: { session: { cookie_header: "private-tapd-cookie" } }, agent: { provider: "codex" }, execution: {} };
+    agent: { provider: "codex" }, execution: { initCommands: ["npm ci"] } };
   const file = path.join(directory, "workspaces", id, "config.json");
   await database.writeDocument(file, config);
   assert.equal((await database.readWorkspace(id, alice.id)).workspace.owner_username, "alice");
-  assert.equal((await database.readDocument(file)).tapd.session.cookie_header, "private-tapd-cookie");
+  assert.deepEqual((await database.readDocument(file)).execution, config.execution);
   await assert.rejects((database.readWorkspace(id, bob.id)), { statusCode: 404 });
   await assert.rejects((database.writeWorkspace(id, { ...config, workspace: { ...config.workspace, owner_user_id: bob.id } })), /所有者/);
   const persisted = await database.client.workspaceSetting.findUnique({ where: { workspaceId: id } });
-  assert.equal(JSON.stringify(persisted).includes("private-tapd-cookie"), false);
+  assert.deepEqual(persisted.data, config);
   assert.deepEqual(await database.listWorkspaces(bob.id), []);
   await assert.rejects((database.readDocument(path.join(directory, "..", "outside.json"))), /当前数据目录/);
 });

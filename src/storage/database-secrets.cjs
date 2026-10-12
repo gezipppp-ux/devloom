@@ -20,31 +20,6 @@ function loadEncryptionKey(dataRoot) {
   return key;
 }
 
-function encodeSettings(value, key) {
-  const copy = structuredClone(value);
-  if (copy.tapd?.session) {
-    const nonce = randomBytes(12);
-    const cipher = createCipheriv("aes-256-gcm", key, nonce);
-    const encrypted = Buffer.concat([cipher.update(JSON.stringify(copy.tapd.session), "utf8"), cipher.final()]);
-    copy.tapd.session = { encrypted: 1, nonce: nonce.toString("base64"),
-      tag: cipher.getAuthTag().toString("base64"), data: encrypted.toString("base64") };
-  }
-  return JSON.stringify(copy);
-}
-
-function decodeSettings(serialized, key) {
-  const value = JSON.parse(serialized);
-  const secret = value.tapd?.session;
-  if (secret?.encrypted === 1) {
-    const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(secret.nonce, "base64"));
-    decipher.setAuthTag(Buffer.from(secret.tag, "base64"));
-    value.tapd.session = JSON.parse(Buffer.concat([
-      decipher.update(Buffer.from(secret.data, "base64")), decipher.final(),
-    ]).toString("utf8"));
-  }
-  return value;
-}
-
 function encodeSecret(value, key) {
   const nonce = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, nonce);
@@ -63,4 +38,4 @@ function decodeSecret(serialized, key) {
   ]).toString("utf8"));
 }
 
-module.exports = { loadEncryptionKey, encodeSettings, decodeSettings, encodeSecret, decodeSecret };
+module.exports = { loadEncryptionKey, encodeSecret, decodeSecret };

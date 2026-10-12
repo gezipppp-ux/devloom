@@ -10,7 +10,7 @@ const { resolveAccountRemote } = require("../domain/git-account.cjs");
 const { readSystemSettings } = require("../config/system-settings.cjs");
 const { cloneProject } = require("../git/project-clone.cjs");
 const { testGitConnection } = require("../git/account-credentials.cjs");
-const { defaultChannelConfig } = require("../channels/channel-registry.cjs");
+const { executionOptions } = require("../domain/agent-config.cjs");
 const { presentDepartment, presentProject, presentMember, presentSpace, presentProjectPrompts } = require("./project-presenter.cjs");
 const { presentError } = require("./error-presenter.cjs");
 
@@ -82,9 +82,7 @@ class ProjectServices {
     return { permissionContext: { administratorAccess: user.role === "admin", departmentName: department?.name || "", ceiling: department?.permissions || [], grants: membership?.permissions || [] }, project: presentProject(project, permissions), membership: presentMember(membership && { ...membership, user }), permissions, space: presentSpace(await this.store.space(id, actor.id)) };
   }
   settings(input = {}, previous = {}) {
-    const value = { initCommands: previous.initCommands || [], ...input, prompts: getPromptTemplates({ prompt_templates: previous.prompts || {} }) };
-    delete value.baseRef;
-    delete value.baseBranch;
+    const value = { initCommands: input.initCommands ?? previous.initCommands ?? [], prompts: getPromptTemplates({ prompt_templates: previous.prompts || {} }) };
     if (input.prompts) {
       for (const [type, template] of Object.entries(input.prompts)) {
         value.prompts[type] = template === null ? promptTemplateCatalog[type].defaultTemplate : template;
@@ -273,13 +271,9 @@ class ProjectServices {
     }
   }
   workspaceConfig(workspaceId, project, space, accountId, remote, target, previous = {}) {
-    const retained = { ...previous };
-    delete retained.tapd;
-    const execution = { ...previous.execution };
-    delete execution.baseRef;
-    return { ...defaultChannelConfig(), ...retained, version: 5,
+    return { version: 5,
       workspace: { ...previous.workspace, id: workspaceId, name: `project-${project.id}`, owner_user_id: space.userId, project_id: project.id },
-      execution: { ...execution, repository: target, projectName: project.id, gitAccountId: accountId, remoteUrl: remote,
+      execution: { ...executionOptions(previous), repository: target, projectName: project.id, gitAccountId: accountId, remoteUrl: remote,
         baseBranch: "", initCommands: project.settings.initCommands || [] },
       agent: previous.agent || { provider: "codex", model: "", reasoningEffort: "", permissionMode: "ask", options: {} },
       prompt_templates: storedPromptOverrides(project.settings.prompts) };

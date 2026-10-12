@@ -209,9 +209,9 @@ test('manual names preserve English, transliterate Chinese, isolate duplicates a
   );
   assert.match(
     path.basename(
-      worktreePlan(repo, { id: '2', workspace_id: '1' }, 'main', { root }).path,
+      worktreePlan(repo, { id: '2', workspace_id: '1' }, 'main', { root, source: sourceFor('manual', { id: '2', workspace_id: '1' }) }).path,
     ),
-    /^tapd-[a-f0-9]{12}$/,
+    /^manual-[a-f0-9]{12}$/,
   );
 });
 

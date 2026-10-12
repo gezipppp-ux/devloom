@@ -257,11 +257,7 @@ class RunStore {
   }
 
   taskFile(key) {
-    const current = path.join(this.dir(key), "requirement.json");
-    if (this.database) return current;
-    return fs.existsSync(current)
-      ? current
-      : path.join(this.dir(key), "tapd-task.json");
+    return path.join(this.dir(key), "requirement.json");
   }
 
   async readTask(key) {

@@ -21,6 +21,7 @@ function setup(t) {
   const key = '1-2';
   fs.mkdirSync(store.dir(key));
   const state = {
+    source: { channel: "manual", scope: "1", id: "2" },
     agent: { provider: "codex" },
     workitem: { title: '测试需求', id: '2', workspace_id: '1' },
     worktree: { path: directory, repository: directory, branch: 'codex/test' },

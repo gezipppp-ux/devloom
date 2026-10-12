@@ -1,5 +1,5 @@
 const path = require("node:path");
-const { sourceFor } = require("../domain/run-identity.cjs");
+const { runKey, recordedSources } = require("../domain/run-identity.cjs");
 const { agentConfig } = require("../domain/agent-config.cjs");
 const { describeAgent } = require("./agent-presenter.cjs");
 
@@ -19,16 +19,16 @@ class SessionPresenter {
   }
 
   async summary(key, state) {
+    runKey(state.source);
     const originalTitle = text(state.workitem.title).trim() || text(state.workitem.name).trim();
-    const sources = (await this.store.requirements.read(key)).sources || state.workitem.sources ||
-      [state.source || sourceFor("tapd", state.workitem)];
+    const sources = (await this.store.requirements.read(key)).sources || recordedSources(state);
     return {
       key,
       sources,
       requirementCount: sources.length,
       title: (await this.store.readSessionTitle(key, originalTitle || `未命名会话 · ${state.workitem.id || key}`)),
       archivedAt: (await this.store.readArchive(key)).archivedAt || null,
-      source: state.source || sourceFor("tapd", state.workitem),
+      source: state.source,
       storyId: state.workitem.id,
       workspaceId: state.workitem.workspace_id,
       sessionId: state.session_id,

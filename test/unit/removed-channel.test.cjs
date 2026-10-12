@@ -10,6 +10,23 @@ const { savePromptSettings } = require("../../src/config/prompt-settings.cjs");
 const { ProjectServices } = require("../../src/application/project-services.cjs");
 const { presentProject } = require("../../src/application/project-presenter.cjs");
 const { serveProjectContent } = require("../../src/http/project-content-api.cjs");
+const { RunStore } = require("../../src/storage/run-store.cjs");
+const { SessionPresenter } = require("../../src/application/session-presenter.cjs");
+
+test("retired task files and missing source identities are never inferred", async t => {
+  const store = new RunStore(temporary(t));
+  const key = "manual-" + "a".repeat(32);
+  fs.mkdirSync(store.dir(key));
+  const previous = path.join(store.dir(key), "tapd-task.json");
+  fs.writeFileSync(previous, JSON.stringify({ prompt: "obsolete" }));
+  await assert.rejects(store.readTask(key), { code: "ENOENT" });
+  await assert.rejects(new SessionPresenter({ store }).summary(key, {
+    workitem: { workspace_id: "1", id: "2" }, agent: { provider: "codex" },
+  }), /source identity/);
+  fs.writeFileSync(store.taskFile(key), JSON.stringify({ prompt: "current" }));
+  assert.equal((await store.readTask(key)).prompt, "current");
+  assert.equal(JSON.parse(fs.readFileSync(previous, "utf8")).prompt, "obsolete");
+});
 
 test("retired source and manual templates are rejected without compatibility conversion", async t => {
   const directory = temporary(t);

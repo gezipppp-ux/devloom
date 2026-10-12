@@ -107,7 +107,7 @@ function resolveCodex(config = {}, options = {}) {
         : null;
     if (result) return result;
     throw new Error(
-      `无法启动 Codex：指定的命令不可用：${explicit}。请修正 codex.command / CODEX_BIN；迁移系统后移除旧路径可启用自动查找。脚本启动器仅支持标准 npm codex.cmd，其他情况请配置 node 与 command_args。`,
+      `无法启动 Codex：指定的命令不可用：${explicit}。请修正 agent.options.command / CODEX_BIN；迁移系统后移除旧路径可启用自动查找。脚本启动器仅支持标准 npm codex.cmd，其他情况请配置 node 与 command_args。`,
     );
   }
   let result = search('codex', directories);

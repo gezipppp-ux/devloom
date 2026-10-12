@@ -361,6 +361,7 @@ test("HTTP requires explicit workspace context and isolates lists, images, SSE a
     path.join(first.sessions.store.dir("1-2"), "run.json"),
     JSON.stringify({
       workitem: { title: "A 的任务", id: "2", workspace_id: "1" },
+      source: { channel: "manual", scope: "1", id: "2" },
       agent: { provider: "codex", model: "", reasoningEffort: "", permissionMode: "ask" },
       execution: { status: "completed" },
     }),
