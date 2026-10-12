@@ -5,9 +5,11 @@ function presentDevelopment(task, actorId, execution = null, { detail = false, p
   const privateSession = own && permissions.includes("session.view");
   const writable = projectStatus === "active" && task.release?.status !== "archived";
   const canManage = writable && (own ? permissions.includes("session.start") : permissions.includes("issue.assign"));
-  const open = !["completed", "cancelled"].includes(task.status);
+  const open = !["completed", "cancelled", "merged"].includes(task.status);
   const idle = !task.runKey || ["completed", "failed", "interrupted", "cancelled"].includes(execution?.status);
   return { id: task.id, projectId: task.projectId, executorId: task.executorId, title: snapshot.title,
+    mergedIntoTaskId: snapshot.mergedIntoTaskId || null, mergedFromTaskIds: snapshot.mergedFromTaskIds || [],
+    canMerge: writable && own && permissions.includes("session.start") && task.status === "planned",
     executor: task.executor || null, releaseId: task.releaseId, release: task.release ? { id: task.release.id, name: task.release.name, status: task.release.status } : null,
     workspaceId: privateSession ? task.workspaceId : null, runKey: privateSession ? task.runKey : null, status: task.status, error: privateSession ? task.error : null, revision: task.revision,
     canStart: writable && own && permissions.includes("session.start") && task.status === "planned", canEdit: canManage && task.status === "planned", canComplete: canManage && open && idle && task.status !== "planned", canCancel: canManage && open && idle,

@@ -38,7 +38,10 @@ class ProjectContentServices {
     if (input.releaseId !== undefined) page.releaseId = ["none", "unassigned"].includes(input.releaseId) ? null : identifier(input.releaseId, "发布版本");
     page.includeArchived = input.includeArchived === "true" || input.includeArchived === "1";
     if (input.status) page.status = text(input.status, "状态", 100);
-    return this.read(projectId, actor, ["issue.view"], async () => presentPage(await this.store.issues(projectId, page), presentIssue));
+    return this.read(projectId, actor, ["issue.view"], async () => {
+      const result = await this.store.issues(projectId, page);
+      return { ...presentPage(result, presentIssue), people: await this.store.people(result.items.map(issue => issue.assigneeId)) };
+    });
   }
   async readIssue(projectId, id, actor) {
     return this.read(projectId, actor, ["issue.view"], async () => {
@@ -50,9 +53,9 @@ class ProjectContentServices {
     const data = issueInput(input);
     const requestId = issueRequestId(input);
     const attachments = issueAttachments(input);
-    const permissions = ["issue.create", ...(data.assigneeId || data.participantIds.length ? ["issue.assign"] : [])];
+    const permissions = ["issue.create", ...(data.participantIds.length ? ["issue.assign"] : [])];
     return this.mutate(projectId, actor, permissions, async () => {
-      await this.store.members(projectId, [data.assigneeId, ...data.participantIds]);
+      await this.store.members(projectId, data.participantIds);
       const issue = await this.store.createIssue(projectId, actor.id, data, undefined, { requestId, attachments });
       for (const file of attachments) await this.store.addFile(projectId, "issues", issue.id, actor.id, file);
       return { ...presentIssue(issue), images: presentIssueImages(await this.store.issuePreviewFiles(projectId, issue.id), issue.source) };
@@ -67,7 +70,7 @@ class ProjectContentServices {
       const current = await this.store.issue(projectId, id);
       const data = issueInput(input, current);
       const attachments = issueAttachments(input);
-      await this.store.members(projectId, [data.assigneeId, ...(data.participantIds || [])]);
+      await this.store.members(projectId, data.participantIds || []);
       const issue = await this.store.updateIssue(projectId, id, actor.id, input.revision, data);
       for (const file of attachments) await this.store.addFile(projectId, "issues", id, actor.id, file);
       return { ...presentIssue(issue), images: presentIssueImages(await this.store.issuePreviewFiles(projectId, issue.id), issue.source) };

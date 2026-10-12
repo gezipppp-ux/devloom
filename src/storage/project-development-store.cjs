@@ -3,6 +3,7 @@ const { randomUUID } = require("node:crypto");
 const { isDeepStrictEqual } = require("node:util");
 const { accountError } = require("../domain/account.cjs");
 const { runKey } = require("../domain/run-identity.cjs");
+const { ProjectContentStore } = require("./project-content-store.cjs");
 
 function missing() { return accountError("开发任务不存在。", 404); }
 function conflict() { return accountError("开发任务已变更，请刷新后重试。", 409); }
@@ -39,23 +40,54 @@ class ProjectDevelopmentStore {
   async existing(projectId, creatorId, requestId) {
     return this.database.client.developmentTask.findUnique({ where: { projectId_creatorId_requestId: { projectId, creatorId, requestId } }, include: { executor: { select: { id: true, displayName: true } }, release: true } });
   }
+  async assignmentBatch(projectId, creatorId, requestId) {
+    return this.database.client.developmentTask.findMany({ where: { projectId, creatorId, requestId: { startsWith: `${requestId}:` } }, include: { executor: { select: { id: true, displayName: true } }, release: true }, orderBy: { createdAt: "asc" } });
+  }
+  sameAssignment(tasks, request) {
+    if (tasks.length !== request.issueIds.length || tasks.some(task => !isDeepStrictEqual(task.snapshot.request.assignmentRequest, request))) throw accountError("相同请求标识不能提交不同事项或执行人。", 409);
+  }
+  async assign(projectId, actorId, request, issues) {
+    const tasks = [];
+    for (const issue of issues) tasks.push(await this.create(projectId, actorId, { ...request, requestId: `${request.requestId}:${issue.id}`, assignmentRequest: request }, [issue]));
+    return tasks;
+  }
+  async assignIssues(projectId, issues, executorId, actorId) {
+    const content = new ProjectContentStore(this.database);
+    for (const issue of issues) if (issue.assigneeId !== executorId) await content.updateIssue(projectId, issue.id, actorId, issue.revision, { assigneeId: executorId }, "assigned");
+    return this.issues(projectId, issues.map(issue => issue.id));
+  }
   sameRequest(task, input) {
     if (!isDeepStrictEqual(task.snapshot.request, input)) throw accountError("相同请求标识不能提交不同事项或执行选项。", 409);
   }
   async create(projectId, actorId, request, issues) {
+    issues = await this.assignIssues(projectId, issues, request.executorId, actorId);
     const id = randomUUID();
     const task = await this.database.client.developmentTask.create({ data: { id, projectId, creatorId: actorId, executorId: request.executorId, releaseId: issues[0].releaseId,
       requestId: request.requestId, status: "planned",
-      snapshot: json({ request, title: request.title || issues[0].title, issues, additions: [] }) } });
+      snapshot: json({ request, title: issues[0].title, issues, additions: [] }) } });
     await this.database.client.taskIssueLink.createMany({ data: issues.map(issue => ({ projectId, taskId: id, issueId: issue.id, snapshot: issue })) });
     await this.claim(task, issues);
     await this.audit(actorId, "development.planned", projectId, id);
     return this.task(projectId, id);
   }
+  async merge(projectId, actorId, request, tasks, issues) {
+    const id = randomUUID();
+    for (const task of tasks) await this.update(task, { status: "merged", snapshot: json({ ...task.snapshot, mergedIntoTaskId: id }) });
+    await this.database.client.issueDevelopmentClaim.deleteMany({ where: { projectId, taskId: { in: tasks.map(task => task.id) } } });
+    const task = await this.database.client.developmentTask.create({ data: { id, projectId, creatorId: actorId, executorId: actorId, releaseId: tasks[0].releaseId,
+      requestId: request.requestId, snapshot: json({ request, title: request.title, issues, additions: [], mergedFromTaskIds: tasks.map(task => task.id) }) } });
+    await this.database.client.taskIssueLink.createMany({ data: issues.map(issue => ({ projectId, taskId: id, issueId: issue.id, snapshot: issue })) });
+    await this.claim(task, issues);
+    await this.audit(actorId, "development.merged", projectId, id);
+    return this.task(projectId, id);
+  }
   async claim(task, issues) {
     await this.database.client.issueDevelopmentClaim.createMany({ data: issues.map(issue => ({ projectId: task.projectId, taskId: task.id, issueId: issue.id })) });
   }
-  async replacePlan(task, request, issues) {
+  async replacePlan(task, request, issues, actorId) {
+    const removed = task.snapshot.issues.filter(issue => !issues.some(next => next.id === issue.id));
+    if (removed.length) await this.assignIssues(task.projectId, await this.issues(task.projectId, removed.map(issue => issue.id)), null, actorId);
+    issues = await this.assignIssues(task.projectId, issues, request.executorId ?? task.executorId, actorId);
     const updated = await this.update(task, { executorId: request.executorId ?? task.executorId, releaseId: issues[0].releaseId,
       snapshot: json({ ...task.snapshot, title: request.title ?? task.snapshot.title, issues }) });
     await this.database.client.issueDevelopmentClaim.deleteMany({ where: { taskId: task.id } });
@@ -70,6 +102,7 @@ class ProjectDevelopmentStore {
       snapshot: json({ ...task.snapshot, issues, prompt, selection, baseBranch: request.baseBranch, startRequest: request }) });
   }
   async finish(task, status, actorId) {
+    if (status === "cancelled") await this.assignIssues(task.projectId, await this.issues(task.projectId, [...task.snapshot.issues.map(issue => issue.id), ...task.snapshot.additions.flatMap(batch => batch.issueIds)]), null, actorId);
     const updated = await this.update(task, { status });
     await this.database.client.issueDevelopmentClaim.deleteMany({ where: { taskId: task.id } });
     await this.audit(actorId, `development.${status}`, task.projectId, task.id);
@@ -79,10 +112,10 @@ class ProjectDevelopmentStore {
     if (!(await this.database.client.developmentTask.updateMany({ where: { id: task.id, projectId: task.projectId, revision: task.revision }, data: { ...data, revision: { increment: 1 } } })).count) throw conflict();
     return this.task(task.projectId, task.id);
   }
-  async list(projectId, { limit, offset, issueId }) {
+  async list(projectId, { limit, offset, issueId, executorId }) {
     if (issueId && !await this.database.client.projectIssue.findFirst({ where: { projectId, id: issueId }, select: { id: true } }))
       throw accountError("事项不存在或不属于当前项目。", 404);
-    const rows = await this.database.client.developmentTask.findMany({ where: { projectId, ...(issueId ? { issueLinks: { some: { projectId, issueId } } } : {}) }, include: { executor: { select: { id: true, displayName: true } }, release: true }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: offset, take: limit + 1 });
+    const rows = await this.database.client.developmentTask.findMany({ where: { projectId, ...(executorId ? { executorId } : {}), ...(!issueId ? { status: { not: "merged" } } : {}), ...(issueId ? { issueLinks: { some: { projectId, issueId } } } : {}) }, include: { executor: { select: { id: true, displayName: true } }, release: true }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: offset, take: limit + 1 });
     return { tasks: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
   }
   async addIssues(task, input, issues, prompt) {

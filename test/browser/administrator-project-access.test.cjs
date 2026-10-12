@@ -33,7 +33,7 @@ async function verifyAdministratorProjectAccess({ page, origin, projects, accoun
   await page.getByLabel("标题", { exact: true }).fill("管理员创建协作事项");
   const issue = await save("保存事项", "/issues");
   await page.getByRole("heading", { name: "管理员创建协作事项", exact: true }).waitFor();
-  assert.equal(await page.getByRole("button", { name: "认领到开发任务", exact: true }).count(), 0);
+  assert.equal(await page.getByRole("button", { name: "认领", exact: true }).count(), 0);
   assert.equal(await page.getByRole("button", { name: "准备开发空间", exact: true }).count(), 0);
   await page.getByRole("button", { name: "编辑事项", exact: true }).click();
   await page.getByLabel("标题", { exact: true }).fill("管理员更新协作事项");

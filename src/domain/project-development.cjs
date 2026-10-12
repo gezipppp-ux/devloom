@@ -4,7 +4,7 @@ const { object, text, identifiers, identifier, revision } = require("./project-i
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
 function developmentInput(input, addition = false) {
-  object(input, addition ? ["requestId", "issueIds", "send"] : ["requestId", "issueIds", "title", "executorId"]);
+  object(input, addition ? ["requestId", "issueIds", "send"] : ["requestId", "issueIds", "executorId"]);
   if (!UUID.test(input.requestId || "")) throw accountError("开发请求标识无效，请重新打开表单。", 400);
   const issueIds = identifiers(input.issueIds, "事项", 20);
   if (!issueIds.length) throw accountError("请选择至少一条事项。", 400);
@@ -12,10 +12,17 @@ function developmentInput(input, addition = false) {
   const result = { requestId: input.requestId, issueIds };
   if (addition) result.send = input.send === true;
   else {
-    if (Object.hasOwn(input, "title")) result.title = text(input.title, "任务标题", 200, { required: true });
     if (Object.hasOwn(input, "executorId")) result.executorId = identifier(input.executorId, "执行人");
   }
   return result;
+}
+function developmentMergeInput(input) {
+  object(input, ["requestId", "tasks", "title"]);
+  if (!UUID.test(input.requestId || "")) throw accountError("合并请求标识无效。", 400);
+  if (!Array.isArray(input.tasks) || input.tasks.length < 2 || input.tasks.length > 20) throw accountError("请选择 2 至 20 个待开发任务。", 400);
+  const tasks = input.tasks.map(task => { object(task, ["id", "revision"]); return { id: identifier(task.id, "开发任务"), revision: revision(task.revision) }; });
+  identifiers(tasks.map(task => task.id), "开发任务", 20);
+  return { requestId: input.requestId, tasks, title: text(input.title, "合并后的任务标题", 200, { required: true }) };
 }
 function developmentStartInput(input) {
   object(input, ["requestId", "revision", "baseBranch", "model", "reasoningEffort", "permissionMode"]);
@@ -52,4 +59,4 @@ function developmentPrompt(issues, addition = false) {
   return content;
 }
 
-module.exports = { developmentInput, developmentStartInput, developmentEditInput, developmentPrompt };
+module.exports = { developmentInput, developmentMergeInput, developmentStartInput, developmentEditInput, developmentPrompt };

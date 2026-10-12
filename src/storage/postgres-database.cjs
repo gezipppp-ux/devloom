@@ -64,7 +64,12 @@ class PostgresDatabase {
         if (scope.failure) throw scope.failure;
         return result;
       });
-    }, { isolationLevel: "Serializable", maxWait: 5000, timeout: 5000 });
+    }, { isolationLevel: "Serializable", maxWait: 5000, timeout: 5000 }).catch(error => {
+      // Conflicts at COMMIT can escape Prisma's normal P2034 conversion.
+      if (error.name === "DriverAdapterError" && error.cause?.kind === "TransactionWriteConflict")
+        throw Object.assign(new Error("PostgreSQL transaction conflicted.", { cause: error }), { code: "P2034" });
+      throw error;
+    });
   }
 
   async close() {

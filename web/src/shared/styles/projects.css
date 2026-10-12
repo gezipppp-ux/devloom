@@ -91,9 +91,10 @@
 .project-facts { display: grid; grid-template-columns: 100px 1fr; gap: 16px; margin: 24px 0; }
 .project-facts dd { margin: 0; overflow-wrap: anywhere; }
 .project-facts dt { color: var(--muted); }
-.project-filter { display: flex; gap: 12px; margin: 24px 0; }
-.project-filter input { flex: 1; min-width: 0; }
-.project-filter select { max-width: 180px; }
+.project-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 24px 0; }
+.project-filter > input { flex: 1 1 200px; min-width: 0; }
+.project-filter > select { flex: 1 1 140px; max-width: 180px; min-width: 0; }
+.project-filter > .permission-choice { flex: 0 0 auto; white-space: nowrap; }
 .project-development-action { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 20px; }
 .project-issue-list, .project-file-list, .project-records { list-style: none; padding: 0; margin: 16px 0; }
 .project-issue-list > li { display: flex; gap: 12px; align-items: center; border-bottom: 1px solid var(--line); }
@@ -155,4 +156,4 @@
   .release-detail-heading { gap: 12px; margin-bottom: 20px; }
   .release-detail-heading > .release-title { flex-basis: 100%; }
 }
-@media (max-width: 480px) { .project-card, .project-detail { padding: 16px; } .project-filter { flex-wrap: wrap; } .project-filter input { flex-basis: 100%; } .project-filter select { flex: 1; max-width: none; } .project-facts { grid-template-columns: 80px 1fr; } }
+@media (max-width: 480px) { .project-card, .project-detail { padding: 16px; } .project-filter > input { flex-basis: 100%; } .project-filter > select { flex-basis: 120px; max-width: none; } .project-facts { grid-template-columns: 80px 1fr; } }

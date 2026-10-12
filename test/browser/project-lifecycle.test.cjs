@@ -64,8 +64,8 @@ async function verifyProjectLifecycle({ page, origin, project, database, output,
   const second = await database.client.projectIssue.findFirst({ where: { projectId: other.id, title: "跨项目系统流程事项" } });
   assert.equal(second.workflowVersionId, first.workflowVersionId, "new issues across projects bind the same system workflow version");
   await page.goto(sourceIssueUrl);
-  await page.getByRole("button", { name: "认领到开发任务", exact: true }).click();
-  await page.getByRole("button", { name: "保存待开发任务", exact: true }).click();
+  await page.getByRole("button", { name: "认领", exact: true }).click();
+  await page.getByRole("button", { name: "确认认领", exact: true }).click();
   await page.getByRole("button", { name: "取消任务并释放认领", exact: true }).waitFor();
   const taskId = new URL(page.url()).searchParams.get("task");
   const task = await database.client.developmentTask.findUnique({ where: { id: taskId } });
@@ -89,7 +89,7 @@ async function verifyProjectLifecycle({ page, origin, project, database, output,
   await page.goto(`${origin}/projects/${project.id}?tab=issues&issue=${issue.id}`);
   await page.getByText("版本已归档，内容只读。", { exact: true }).waitFor();
   assert.equal(await page.getByRole("button", { name: "编辑事项", exact: true }).count(), 0);
-  assert.equal(await page.getByRole("button", { name: "认领到开发任务", exact: true }).count(), 0);
+  assert.equal(await page.getByRole("button", { name: "认领", exact: true }).count(), 0);
   assert.equal(await page.getByRole("button", { name: "发表评论", exact: true }).count(), 0);
   await page.goto(`${origin}/projects/${project.id}?tab=issues`);
   await page.getByRole("button", { name: "查询", exact: true }).waitFor();

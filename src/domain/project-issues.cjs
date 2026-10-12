@@ -4,7 +4,7 @@ const ISSUE_TYPES = ["requirement", "bug"];
 const PRIORITIES = ["low", "normal", "high", "urgent"];
 const SEVERITIES = ["minor", "normal", "major", "critical"];
 const contentFields = ["releaseId", "title", "description", "priority", "acceptanceCriteria", "reproductionSteps", "expectedResult", "actualResult", "severity"];
-const assignmentFields = ["assigneeId", "participantIds"];
+const assignmentFields = ["participantIds"];
 
 function text(value, label, limit, { required = false } = {}) {
   if (typeof value !== "string" || value.length > limit || (required && !value.trim()))
@@ -50,7 +50,6 @@ function issueInput(input, current) {
         : text(input[field], field === "title" ? "标题" : "内容", field === "title" ? 200 : 60000, { required: field === "title" });
   }
   if (!current && !value.title) throw accountError("请填写事项标题。", 400);
-  if (Object.hasOwn(input, "assigneeId")) value.assigneeId = input.assigneeId === null ? null : identifier(input.assigneeId, "负责人");
   if (Object.hasOwn(input, "participantIds")) value.participantIds = identifiers(input.participantIds, "参与人");
   return value;
 }

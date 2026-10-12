@@ -171,7 +171,7 @@ test("project additions persist ready snapshots without sending and fence unknow
   const prepared = await services.append(project.id, task.id, actor, { requestId, issueIds: [added.id] });
   assert.equal(prepared.task.additions[0].status, "ready");
   assert.equal(calls.sends.length, 0);
-  await content.updateIssue(project.id, added.id, actor, { revision: 1, description: "新编辑不改快照" });
+  await content.updateIssue(project.id, added.id, actor, { revision: prepared.task.additions[0].issues[0].revision, description: "新编辑不改快照" });
   sessions.preflightFailure = true;
   await assert.rejects(services.continueAddition(project.id, task.id, actor, requestId), /尚未空闲/);
   assert.equal((await services.read(project.id, task.id, actor)).task.additions[0].status, "ready");
@@ -192,14 +192,74 @@ test("project additions persist ready snapshots without sending and fence unknow
 
 async function launch(services, projectId, actor, input) {
   const planned = await services.create(projectId, actor, input);
-  return services.start(projectId, planned.task.id, actor, { requestId: randomUUID(), revision: planned.task.revision, baseBranch: "main" });
+  return services.start(projectId, planned.tasks[0].id, actor, { requestId: randomUUID(), revision: planned.tasks[0].revision, baseBranch: "main" });
 }
+
+test("assigning separate issues and merging my plans preserves sources and starts exactly one session", async t => {
+  const { database, actor, other, project, services, calls, content, issue } = await fixture(t);
+  const requirement = await issue("合并需求");
+  const bug = await content.createIssue(project.id, actor, { type: "bug", title: "合并缺陷", reproductionSteps: "复现步骤" });
+  const input = { requestId: randomUUID(), issueIds: [requirement.id, bug.id], executorId: actor.id };
+  const { tasks } = await services.create(project.id, other, input);
+  assert.equal(tasks.length, 2);
+  assert.equal(calls.starts.length, 0);
+  for (const task of tasks) {
+    assert.equal(task.issueIds.length, 1);
+    assert.equal(task.executorId, actor.id);
+    assert.equal(task.runKey, null);
+  }
+  assert.equal((await services.list(project.id, other, { scope: "mine" })).tasks.length, 0);
+  assert.equal((await services.list(project.id, actor, { scope: "mine" })).tasks.length, 2);
+  assert.equal((await content.readIssue(project.id, requirement.id, actor)).assigneeId, actor.id);
+  assert.equal((await services.create(project.id, other, input)).reused, true);
+  await assert.rejects(services.create(project.id, other, { ...input, issueIds: [requirement.id] }), { statusCode: 409 });
+  const merge = { requestId: randomUUID(), title: "统一修复", tasks: tasks.map(({ id, revision }) => ({ id, revision })) };
+  await assert.rejects(services.merge(project.id, other, merge), { statusCode: 403 });
+  const merged = (await services.merge(project.id, actor, merge)).task;
+  assert.deepEqual(new Set(merged.issueIds), new Set(input.issueIds));
+  assert.equal((await services.merge(project.id, actor, merge)).task.id, merged.id);
+  await assert.rejects(services.merge(project.id, actor, { ...merge, title: "不同内容" }), { statusCode: 409 });
+  assert.equal((await services.list(project.id, actor, { scope: "mine" })).tasks.length, 1);
+  for (const source of tasks) {
+    const historical = (await services.read(project.id, source.id, actor)).task;
+    assert.equal(historical.status, "merged");
+    assert.equal(historical.mergedIntoTaskId, merged.id);
+    assert.equal(historical.canStart || historical.canEdit || historical.canCancel || historical.canComplete, false);
+    await assert.rejects(services.finish(project.id, source.id, actor, { revision: historical.revision }, "cancelled"), { statusCode: 409 });
+  }
+  assert.equal(await database.client.taskIssueLink.count(), 4, "original links remain as history");
+  assert.equal(await database.client.issueDevelopmentClaim.count({ where: { taskId: merged.id } }), 2);
+  assert.equal((await content.readIssue(project.id, bug.id, actor)).development.taskId, merged.id);
+  const start = { requestId: randomUUID(), revision: merged.revision, baseBranch: "main" };
+  await services.start(project.id, merged.id, actor, start);
+  await services.start(project.id, merged.id, actor, start);
+  assert.equal(calls.starts.length, 1);
+  assert.match(calls.starts[0].content, /合并需求/);
+  assert.match(calls.starts[0].content, /复现步骤/);
+});
+
+test("batch assignment and concurrent merging are atomic and reject stale or foreign plans", async t => {
+  const { database, actor, other, project, services, issue } = await fixture(t);
+  const first = await issue("原任务"), second = await issue("第二任务"), third = await issue("未认领");
+  const { tasks } = await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [first.id, second.id] });
+  await assert.rejects(services.create(project.id, other, { requestId: randomUUID(), issueIds: [third.id, first.id] }), { statusCode: 409 });
+  assert.equal((await database.client.projectIssue.findUnique({ where: { id: third.id } })).assigneeId, null);
+  assert.equal(await database.client.developmentTask.count(), 2);
+  const request = { requestId: randomUUID(), title: "原子合并", tasks: tasks.map(({ id, revision }) => ({ id, revision })) };
+  await assert.rejects(services.merge(project.id, actor, { ...request, tasks: [request.tasks[0], { ...request.tasks[1], revision: 999 }] }), { statusCode: 409 });
+  await assert.rejects(services.merge(project.id, actor, { ...request, tasks: [request.tasks[0], { id: randomUUID(), revision: 1 }] }), { statusCode: 404 });
+  const results = await Promise.allSettled([request, { ...request, requestId: randomUUID() }].map(input => services.merge(project.id, actor, input)));
+  assert.equal(results.filter(result => result.status === "fulfilled").length, 1);
+  assert.equal(results.find(result => result.status === "rejected").reason.statusCode, 409);
+  assert.equal(await database.client.developmentTask.count({ where: { status: "planned" } }), 1);
+  assert.equal(await database.client.issueDevelopmentClaim.count(), 2);
+});
 
 test("planning needs no Git, reserves each issue once, supports reassignment and preserves history on release", async t => {
   const { database, actor, other, project, services, calls, issue } = await fixture(t);
   const first = await issue("规划事项"), extra = await issue("补充事项");
   const input = { requestId: randomUUID(), issueIds: [first.id] };
-  const planned = (await services.create(project.id, other, input)).task;
+  const planned = (await services.create(project.id, other, input)).tasks[0];
   assert.equal(planned.status, "planned");
   assert.equal(planned.workspaceId, null);
   assert.equal(planned.runKey, null);
@@ -207,14 +267,14 @@ test("planning needs no Git, reserves each issue once, supports reassignment and
   assert.equal(planned.canComplete, false);
   await assert.rejects(services.finish(project.id, planned.id, other, { revision: planned.revision }, "completed"), /只能取消/);
   assert.equal(calls.starts.length, 0);
-  assert.equal((await services.create(project.id, other, input)).task.id, planned.id);
+  assert.equal((await services.create(project.id, other, input)).tasks[0].id, planned.id);
   await assert.rejects(services.create(project.id, actor, { requestId: randomUUID(), issueIds: [first.id] }), { statusCode: 409 });
   await assert.rejects(services.start(project.id, planned.id, actor, { requestId: randomUUID(), revision: planned.revision, baseBranch: "main" }), { statusCode: 403 });
   await assert.rejects(services.start(project.id, planned.id, other, { requestId: randomUUID(), revision: planned.revision, baseBranch: "main" }), /开发空间/);
   const updated = (await services.update(project.id, planned.id, actor, { revision: planned.revision, executorId: actor.id, issueIds: [first.id, extra.id], title: "重新指派" })).task;
   assert.equal(updated.executor.displayName, actor.displayName);
   await assert.rejects(services.update(project.id, planned.id, actor, { revision: planned.revision, title: "过期修订" }), { statusCode: 409 });
-  assert.equal((await services.create(project.id, other, input)).task.id, planned.id, "reassignment preserves creator idempotency");
+  assert.equal((await services.create(project.id, other, input)).tasks[0].id, planned.id, "reassignment preserves creator idempotency");
   const cancelled = (await services.finish(project.id, planned.id, actor, { revision: updated.revision }, "cancelled")).task;
   assert.equal(cancelled.status, "cancelled");
   assert.equal(await database.client.issueDevelopmentClaim.count(), 0);
@@ -229,7 +289,7 @@ test("concurrent claims and stale revisions are atomic", async t => {
   const claims = await Promise.allSettled([actor, other].map(user => services.create(project.id, user, { requestId: randomUUID(), issueIds: [first.id] })));
   assert.equal(claims.filter(result => result.status === "fulfilled").length, 1);
   assert.equal(await database.client.issueDevelopmentClaim.count(), 1);
-  const task = claims.find(result => result.status === "fulfilled").value.task;
+  const task = claims.find(result => result.status === "fulfilled").value.tasks[0];
   const edits = await Promise.allSettled([
     services.update(project.id, task.id, actor, { revision: task.revision, issueIds: [first.id, extra.id] }),
     services.finish(project.id, task.id, actor, { revision: task.revision }, "cancelled"),
@@ -243,7 +303,7 @@ test("product planners see tasks without session access and only assign eligible
   const { database, actor, other, project, services, calls, issue } = await fixture(t);
   const selected = await issue("产品协作");
   await database.client.projectMember.update({ where: { projectId_userId: { projectId: project.id, userId: other.id } }, data: { permissions: ["project.view", "issue.view", "issue.assign"] } });
-  const planned = (await services.create(project.id, other, { requestId: randomUUID(), issueIds: [selected.id], executorId: actor.id })).task;
+  const planned = (await services.create(project.id, other, { requestId: randomUUID(), issueIds: [selected.id], executorId: actor.id })).tasks[0];
   assert.equal(planned.canStart, false);
   assert.equal(planned.canEdit, true);
   assert.equal((await services.list(project.id, other)).tasks.length, 1);
@@ -256,8 +316,8 @@ test("product planners see tasks without session access and only assign eligible
 test("explicit start freezes current content and selections and never replays unknown execution", async t => {
   const { database, actor, other, project, services, sessions, calls, content, issue } = await fixture(t);
   const selected = await issue("冻结快照");
-  const planned = (await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [selected.id] })).task;
-  await content.updateIssue(project.id, selected.id, actor, { revision: selected.revision, description: "开始前更新" });
+  const planned = (await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [selected.id] })).tasks[0];
+  await content.updateIssue(project.id, selected.id, actor, { revision: planned.issues[0].revision, description: "开始前更新" });
   const input = { requestId: randomUUID(), revision: planned.revision, baseBranch: "main" };
   const started = (await services.start(project.id, planned.id, actor, input)).task;
   assert.equal(started.status, "started");
@@ -268,10 +328,10 @@ test("explicit start freezes current content and selections and never replays un
   const publicTask = (await services.read(project.id, planned.id, other)).task;
   assert.equal(publicTask.workspaceId, null);
   assert.equal(publicTask.runKey, null);
-  await content.updateIssue(project.id, selected.id, actor, { revision: 2, description: "开始后更新" });
+  await content.updateIssue(project.id, selected.id, actor, { revision: planned.issues[0].revision + 1, description: "开始后更新" });
   assert.equal((await services.read(project.id, planned.id, actor)).task.issues[0].description, "开始前更新");
   const failedIssue = await issue("启动不明");
-  const failedPlan = (await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [failedIssue.id] })).task;
+  const failedPlan = (await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [failedIssue.id] })).tasks[0];
   sessions.start = async () => { throw new Error("RPC outcome unknown"); };
   const failedInput = { requestId: randomUUID(), revision: failedPlan.revision, baseBranch: "main" };
   await assert.rejects(services.start(project.id, failedPlan.id, actor, failedInput), /unknown/);
@@ -292,12 +352,14 @@ test("workflow and release rules gate starting and archiving independently from 
   const release = await lifecycle.saveRelease(project.id, null, actor, { name: "v1.0" });
   const selected = await issue("版本事项"), unscheduled = await issue("未排期事项");
   await content.updateIssue(project.id, selected.id, actor, { revision: 1, releaseId: release.id });
-  await assert.rejects(services.create(project.id, actor, { requestId: randomUUID(), issueIds: [selected.id, unscheduled.id] }), /同一发布版本/);
+  const batch = await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [selected.id, unscheduled.id] });
+  await assert.rejects(services.merge(project.id, actor, { requestId: randomUUID(), tasks: batch.tasks.map(({ id, revision }) => ({ id, revision })), title: "跨版本合并" }), /同一发布版本/);
+  for (const task of batch.tasks) await services.finish(project.id, task.id, actor, { revision: task.revision }, "cancelled");
   await database.client.projectIssue.update({ where: { id: selected.id }, data: { status: "pending_verification" } });
-  const planned = (await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [selected.id] })).task;
+  const planned = (await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [selected.id] })).tasks[0];
   await assert.rejects(services.start(project.id, planned.id, actor, { requestId: randomUUID(), revision: planned.revision, baseBranch: "main" }), /流程节点/);
-  await content.updateIssue(project.id, selected.id, actor, { revision: 2, description: "普通内容可编辑" });
-  await assert.rejects(content.updateIssue(project.id, selected.id, actor, { revision: 3, releaseId: null }), /开发任务/);
+  await content.updateIssue(project.id, selected.id, actor, { revision: planned.issues[0].revision, description: "普通内容可编辑" });
+  await assert.rejects(content.updateIssue(project.id, selected.id, actor, { revision: planned.issues[0].revision + 1, releaseId: null }), /开发任务/);
   await database.client.projectIssue.update({ where: { id: selected.id }, data: { status: "implemented" } });
   await assert.rejects(lifecycle.archiveRelease(project.id, release.id, actor, { revision: release.revision }, true), /开发任务/);
   await services.finish(project.id, planned.id, actor, { revision: planned.revision }, "cancelled");
@@ -306,7 +368,7 @@ test("workflow and release rules gate starting and archiving independently from 
 });
 
 test("running execution and pending approvals prevent completing a task and releasing its claim", async t => {
-  const { database, actor, project, services, sessions, issue } = await fixture(t);
+  const { database, actor, project, services, sessions, content, issue } = await fixture(t);
   const selected = await issue("执行门禁");
   const task = (await launch(services, project.id, actor, { requestId: randomUUID(), issueIds: [selected.id] })).task;
   const runPath = path.join(database.dataRoot, "workspaces", task.workspaceId, "runs", task.runKey, "run.json");
@@ -319,6 +381,15 @@ test("running execution and pending approvals prevent completing a task and rele
   assert.equal((await services.finish(project.id, task.id, actor, { revision: task.revision }, "completed")).task.status, "completed");
   assert.equal(await database.client.issueDevelopmentClaim.count(), 0);
   assert.equal(await database.client.taskIssueLink.count(), 1);
+  const listed = await content.listIssues(project.id, actor, {});
+  assert.equal(listed.items[0].assigneeId, actor.id, "completion retains the responsible developer");
+  assert.equal(listed.items[0].development, null, "completion releases only the active task claim");
+  assert.equal(listed.people.find(person => person.id === actor.id)?.displayName, actor.displayName);
+  const reopened = (await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [selected.id] })).tasks[0];
+  await services.finish(project.id, reopened.id, actor, { revision: reopened.revision }, "cancelled");
+  const cancelled = await content.listIssues(project.id, actor, {});
+  assert.equal(cancelled.items[0].assigneeId, null, "cancellation clears the responsible developer");
+  assert.deepEqual(cancelled.people, []);
 });
 
 test("global workflow publication preserves planned task issue versions and applies the same development gates across projects", async t => {
@@ -328,7 +399,7 @@ test("global workflow publication preserves planned task issue versions and appl
   const admin = await database.client.user.create({ data: { username: "workflow-admin", displayName: "系统流程管理员", passwordHash: "unused", role: "admin" } });
   const workflows = new SystemWorkflowServices(database, accounts, services.projects);
   const before = await content.createIssue(project.id, actor, { type: "requirement", title: "发布前规划" });
-  const beforeTask = (await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [before.id] })).task;
+  const beforeTask = (await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [before.id] })).tasks[0];
   let { workflow } = await workflows.readWorkflow("requirement", admin);
   const definition = {
     nodes: [
@@ -358,9 +429,9 @@ test("global workflow publication preserves planned task issue versions and appl
   const beforeRecord = await database.client.projectIssue.findUnique({ where: { id: before.id } });
   assert.equal(firstRecord.workflowVersionId, secondRecord.workflowVersionId, "projects bind the same immutable system workflow version");
   assert.notEqual(beforeRecord.workflowVersionId, firstRecord.workflowVersionId);
-  const newTask = (await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [firstNew.id] })).task;
+  const newTask = (await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [firstNew.id] })).tasks[0];
   await assert.rejects(services.start(project.id, newTask.id, actor, { requestId: randomUUID(), revision: newTask.revision, baseBranch: "main" }), /流程节点/);
-  await content.transitionIssue(project.id, firstNew.id, actor, { revision: firstNew.revision, transitionId: "approve" });
+  await content.transitionIssue(project.id, firstNew.id, actor, { revision: newTask.issues[0].revision, transitionId: "approve" });
   await services.start(project.id, newTask.id, actor, { requestId: randomUUID(), revision: newTask.revision, baseBranch: "main" });
   assert.equal(calls.starts.length, 2);
   const publicTask = (await services.read(project.id, newTask.id, other)).task;

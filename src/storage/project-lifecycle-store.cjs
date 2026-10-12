@@ -36,7 +36,7 @@ class ProjectLifecycleStore {
     if (archive) {
       const issues = await this.database.client.projectIssue.findMany({ where: { projectId, releaseId: id }, include: { workflowVersion: true } });
       if (issues.some(issue => !issueCompleted(issue))) throw accountError("版本仍有未完成或未取消事项。", 409);
-      if (await this.database.client.developmentTask.count({ where: { projectId, releaseId: id, status: { notIn: ["completed", "cancelled"] } } })) throw accountError("版本仍有未结束开发任务。", 409);
+      if (await this.database.client.developmentTask.count({ where: { projectId, releaseId: id, status: { notIn: ["completed", "cancelled", "merged"] } } })) throw accountError("版本仍有未结束开发任务。", 409);
     }
     return this.changeRelease(projectId, id, revision, { status: archive ? "archived" : "active" });
   }

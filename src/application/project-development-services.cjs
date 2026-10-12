@@ -1,7 +1,7 @@
 const { isDeepStrictEqual } = require("node:util");
 const { ProjectDevelopmentStore } = require("../storage/project-development-store.cjs");
 const { AccountStore } = require("../storage/account-store.cjs");
-const { developmentInput, developmentStartInput, developmentEditInput, developmentPrompt } = require("../domain/project-development.cjs");
+const { developmentInput, developmentMergeInput, developmentStartInput, developmentEditInput, developmentPrompt } = require("../domain/project-development.cjs");
 const { issueDevelopmentAllowed, assertIssueWritable } = require("../domain/issue-workflows.cjs");
 const { pageInput, identifier, object, revision } = require("../domain/project-issues.cjs");
 const { accountError } = require("../domain/account.cjs");
@@ -27,7 +27,8 @@ class ProjectDevelopmentServices {
   }
   async list(projectId, actor, input = {}) {
     await this.authorize(projectId, actor, "issue.view");
-    const page = await this.store.list(projectId, { ...pageInput(input), ...(input.issueId ? { issueId: identifier(input.issueId, "事项") } : {}) });
+    if (input.scope && !["mine", "all"].includes(input.scope)) throw accountError("任务范围无效。", 400);
+    const page = await this.store.list(projectId, { ...pageInput(input), ...(input.scope === "mine" ? { executorId: actor.id } : {}), ...(input.issueId ? { issueId: identifier(input.issueId, "事项") } : {}) });
     const tasks = await Promise.all(page.tasks.map(task => this.present(task, actor)));
     await this.authorize(projectId, actor, "issue.view");
     return { tasks, nextOffset: page.nextOffset };
@@ -64,11 +65,34 @@ class ProjectDevelopmentServices {
     const request = { ...developmentInput(input), executorId: input.executorId || actor.id };
     const accepted = await this.store.transaction(async () => {
       await this.authorizePlan(projectId, actor, request.executorId);
+      const existing = await this.store.assignmentBatch(projectId, actor.id, request.requestId);
+      if (existing.length) { this.store.sameAssignment(existing, request); return { tasks: existing, reused: true }; }
+      const issues = await this.store.issues(projectId, request.issueIds);
+      for (const issue of issues) this.assertIssues([issue], issue.releaseId);
+      return { tasks: await this.store.assign(projectId, actor.id, request, issues), reused: false };
+    });
+    return { tasks: await Promise.all(accepted.tasks.map(task => this.present(task, actor, true))), reused: accepted.reused };
+  }
+  async merge(projectId, actor, input) {
+    const request = developmentMergeInput(input);
+    const accepted = await this.store.transaction(async () => {
+      await this.authorizePlan(projectId, actor, actor.id);
       const existing = await this.store.existing(projectId, actor.id, request.requestId);
       if (existing) { this.store.sameRequest(existing, request); return { task: existing, reused: true }; }
-      const issues = await this.store.issues(projectId, request.issueIds);
-      this.assertIssues(issues, issues[0].releaseId);
-      return { task: await this.store.create(projectId, actor.id, request, issues), reused: false };
+      const tasks = [];
+      for (const entry of request.tasks) {
+        const task = await this.store.task(projectId, entry.id);
+        this.assertRevision(task, entry.revision);
+        if (task.executorId !== actor.id) throw accountError("只能合并自己的开发任务。", 403);
+        if (task.status !== "planned" || task.runKey) throw accountError("只能合并尚未启动的待开发任务。", 409);
+        tasks.push(task);
+      }
+      if (tasks.some(task => task.releaseId !== tasks[0].releaseId)) throw accountError("只能合并同一发布版本的开发任务。", 409);
+      const ids = tasks.flatMap(task => task.snapshot.issues.map(issue => issue.id));
+      if (ids.length > 20) throw accountError("合并后的任务最多包含 20 条事项。", 400);
+      const issues = await this.store.issues(projectId, ids);
+      this.assertIssues(issues, tasks[0].releaseId);
+      return { task: await this.store.merge(projectId, actor.id, request, tasks, issues), reused: false };
     });
     return { task: await this.present(accepted.task, actor, true), reused: accepted.reused };
   }
@@ -86,7 +110,7 @@ class ProjectDevelopmentServices {
       }
       const issues = await this.store.issues(projectId, request.issueIds || current.snapshot.issues.map(issue => issue.id));
       this.assertIssues(issues, current.releaseId);
-      return this.store.replacePlan(current, request, issues);
+      return this.store.replacePlan(current, request, issues, actor.id);
     });
     return { task: await this.present(task, actor, true) };
   }
@@ -151,7 +175,7 @@ class ProjectDevelopmentServices {
       const task = await this.store.task(projectId, id);
       await this.authorize(projectId, actor, task.executorId === actor.id ? "session.start" : "issue.assign");
       this.assertRevision(task, expected);
-      if (["completed", "cancelled"].includes(task.status)) throw accountError("开发任务已结束。", 409);
+      if (["completed", "cancelled", "merged"].includes(task.status)) throw accountError("开发任务已结束。", 409);
       if (status === "completed" && task.status === "planned") throw accountError("待开发任务只能取消；开始开发后才能完成。", 409);
       if (this.starting.has(task.id)) throw accountError("开发任务正在准备，请等待执行结束。", 409);
       const issues = await this.store.issues(projectId, [...task.snapshot.issues.map(issue => issue.id), ...task.snapshot.additions.flatMap(batch => batch.issueIds)]);
@@ -183,9 +207,10 @@ class ProjectDevelopmentServices {
       const task = await this.store.task(projectId, id);
       this.assertExecutor(task, actor);
       const existing = task.snapshot.additions.find(batch => batch.requestId === request.requestId);
-      const issues = existing?.issues || await this.store.issues(projectId, request.issueIds);
+      let issues = existing?.issues || await this.store.issues(projectId, request.issueIds);
       if (!existing) {
         this.assertIssues(issues, task.releaseId, true);
+        issues = await this.store.assignIssues(projectId, issues, task.executorId, actor.id);
       }
       const result = await this.store.addIssues(task, request, issues, existing?.prompt || developmentPrompt(issues, true));
       await this.authorize(projectId, actor, "session.continue");

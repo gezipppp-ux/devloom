@@ -99,7 +99,7 @@ npm start -- --host 127.0.0.1 --port 4317
 - 事项绑定项目 `releaseId` 和不可变的系统 `workflowVersionId`，状态为该版本节点 ID。流程草稿保存与发布使用 revision；发布校验唯一初始节点、节点可达且均能到达终态、权限白名单，完成／取消节点禁止开发。所有项目的新事项使用该类型当前系统发布版本，在途事项不切换。
 - `/api/system/workflows/:type` 和 `/:type/publish` 由 `SystemWorkflowServices` 复核管理员身份；`GET /api/projects/:id/issue-workflows/:type` 按 `issue.view` 仅返回已发布版本，不公开草稿。旧 `/api/projects/:id/workflows` 管理接口删除，不保留路由别名。系统流程表和版本表不含 projectId。
 - 发布版本归档要求所有事项结束且无未结束开发任务。归档后事项编辑、流转、评论、交付、附件及资产关联变更均被后端拒绝；读取和幂等只读复用不改历史。
-- `POST /api/projects/:id/tasks` 仅认领／指派待开发任务；按 `issue.assign` 指派有效且有 `session.start` 权限的执行人，无需 Git。任务仅关联同一发布版本的事项。数据库 `issue_development_claims` 的唯一约束和串行化事务防止重复认领。
+- `POST /api/projects/:id/tasks` 为每条事项分别认领／指派待开发任务；按 `issue.assign` 指派有效且有 `session.start` 权限的执行人，无需 Git。批量分配可跨版本，合并任务仅关联同一发布版本的事项。数据库 `issue_development_claims` 的唯一约束和串行化事务防止重复认领。
 - `POST /tasks/:taskId/start` 由执行人提交 revision、requestId 与从实时远端列表选择的 baseBranch，持久化启动意图后准备和执行。GET `/api/projects/:id/branches` 使用本人已准备空间的凭据读取 origin，网络返回后复核授权及空间、账号修订号。Git、网络与 Agent 等待均在事务外。
 - 完成／取消任务前校验会话互斥、待处理审批、执行器状态及持久状态，再释放活跃认领。已结束任务的原会话仍可读，禁止续聊和审批启动执行。项目 `issue.view` 可查看计划，执行人之外的成员不获得私有 runKey、工作区或会话 ID。
 - 新模型不提供旧状态、旧启动接口或旧数据库格式的运行时兼容。已有业务库需先备份并按明确的数据处置方案更新；迁移不会自动删除旧事项和执行记录。
@@ -134,3 +134,12 @@ Vue 页面路径 `/login`、`/password`、`/personal`、`/system`、`/accounts`�
 Jenkinsfile 运行 eslint、Node 测试、`npm run build` 和浏览器脚本。数据库测试使用独立 PostgreSQL 的随机 schema，执行测试使用假 Codex/TAPD 和临时 Git。覆盖成员越权、登录撤销、SSE/图片隔离、完整执行、离线历史、图片缓存重建、迁移版本校验、事务回滚及连接失败，以及开发种子隔离。
 
 执行配置与任务记录采用 [Agent 契约](./agents.md) 的新格式，不提供旧 `codex` 字段回退。Git 账号引用查询使用 `execution.gitAccountId`，会话固定使用记录中的 `agent.provider`。
+
+### 开发任务分配与合并接口
+
+- POST /api/projects/:id/tasks 接受 requestId、issueIds 和可选 executorId，返回 { tasks, reused }。一条事项对应一个初始待开发任务；整批原子提交，可跨版本，不再接受合并标题。省略 executorId 为认领本人，指派他人要求 issue.assign；执行人仍须有效成员且具备 session.start。
+- 事项创建／编辑不接受 assigneeId；负责人由任务认领、指派、转派和释放维护，事项参与人仍可独立编辑。事项 DTO 的 development 只含当前任务 ID、开发负责人 ID 和显示名称。
+- 事项列表同时返回本页负责人对应的 people，姓名按 assigneeId 展示；development 只表示活跃开发任务。完成任务后仍展示保留的负责人，并注明无进行中的开发任务，不能将其误标为待认领。
+- GET /api/projects/:id/tasks 支持 scope=mine|all，mine 在服务端按当前账号过滤并分页；普通列表隐藏已合并源任务，事项关联历史和源任务详情仍可读取。
+- POST /api/projects/:id/tasks/merge 接受 requestId、title、tasks: [{ id, revision }]。仅合并本人、同项目、同版本、planned 且无运行记录的任务，最多 20 个任务／20 条事项。事务检查当前权限、来源修订和归档状态，创建新任务并转移唯一活跃认领；source.snapshot.mergedIntoTaskId 与 target.snapshot.mergedFromTaskIds 保存双向追踪，status=merged 为终态。重复请求只返回原结果，参数不同返回 409。
+- PostgreSQL COMMIT 阶段的 DriverAdapterError/TransactionWriteConflict 与查询阶段 P2034 统一为存储冲突，不自动重试业务操作，避免重复派发执行。

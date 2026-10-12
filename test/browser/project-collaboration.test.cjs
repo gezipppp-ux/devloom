@@ -99,7 +99,6 @@ async function main() {
       await setMarkdown(page, "描述", markdown.split("\n\n<script>")[0]);
       await setMarkdown(page, type === "需求" ? "验收标准" : "复现步骤", "首次保存即可重复验证的标准");
       await page.getByLabel("优先级", { exact: true }).selectOption("high");
-      await page.getByRole("combobox", { name: /^事项负责人/ }).selectOption(product.id);
       await page.getByLabel("参与人", { exact: true }).selectOption([admin.id]);
       if (type === "Bug") {
         await setMarkdown(page, "预期结果", "**预期完整显示**");
@@ -164,7 +163,7 @@ async function main() {
         assert.equal((await database.client.project.findUnique({ where: { id: project.id } })).issueSequence, 2, "retry consumes no extra issue number");
       }
       assert.equal(stored.priority, "high");
-      assert.equal(stored.assigneeId, product.id);
+      assert.equal(stored.assigneeId, null);
       assert.deepEqual(stored.participantIds, [admin.id]);
       assert.equal(stored[type === "需求" ? "acceptanceCriteria" : "reproductionSteps"], "首次保存即可重复验证的标准");
       if (type === "Bug") { assert.equal(stored.severity, "major"); assert.equal(stored.expectedResult, "**预期完整显示**"); assert.equal(stored.actualResult, "实际出现错误"); }
@@ -184,7 +183,7 @@ async function main() {
       assert.equal(await editor(page).getByRole("button", { name: "撤销", exact: true }).isDisabled(), true, "opening saved content establishes the history baseline");
       await setMarkdown(page, type === "需求" ? "验收标准" : "复现步骤", "可重复验证的标准");
       await visual(page); await editor(page).locator('img[alt="pasted-proof.png"]').waitFor(); await captureEditor(page, output, `edit-${type === "Bug" ? "bug" : "requirement"}`);
-      await page.getByRole("combobox", { name: /^事项负责人/ }).selectOption(product.id);
+      await page.getByRole("listbox", { name: "参与人", exact: true }).selectOption(product.id);
       await page.getByRole("button", { name: "保存事项", exact: true }).click();
       await page.getByText("可重复验证的标准", { exact: true }).waitFor();
       assert.equal(await database.client.developmentTask.count(), 0, "editing and assignment cannot start Codex");
@@ -330,8 +329,8 @@ async function main() {
     await tab("需求");
     await page.getByRole("button", { name: /支持验收的需求/ }).click();
     const sourceIssueUrl = page.url();
-    await page.getByRole("button", { name: "认领到开发任务", exact: true }).click();
-    const confirmation = page.getByRole("dialog", { name: "认领到开发任务" });
+    await page.getByRole("button", { name: "认领", exact: true }).click();
+    const confirmation = page.getByRole("dialog", { name: "认领" });
     await confirmation.waitFor();
     await page.locator(".operation-message-close").evaluateAll(buttons => buttons.forEach(button => button.click()));
     await page.waitForFunction(() => document.querySelectorAll(".operation-message").length === 0);
@@ -342,7 +341,7 @@ async function main() {
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
     assert.equal(await database.client.developmentTask.count(), 0);
-    await confirmation.getByRole("button", { name: "保存待开发任务", exact: true }).click();
+    await confirmation.getByRole("button", { name: "确认认领", exact: true }).click();
     await page.getByRole("button", { name: "准备我的开发环境", exact: true }).waitFor();
     assert.equal(await database.client.developmentTask.count(), 1);
     assert.equal(clients.flatMap(client => client.calls).filter(call => call.method === "turn/start").length, 0, "claiming without Git does not execute");
@@ -416,7 +415,8 @@ async function main() {
     await page.getByRole("button", { name: "编辑研发与产品", exact: true }).click();
     assert.equal(await page.getByLabel("部门名称", { exact: true }).inputValue(), department.name);
     assert.equal(await page.getByRole("button", { name: "仓库目录", exact: true }).count(), 0);
-    await page.goto(sourceIssueUrl);
+    const unclaimed = await content.createIssue(project.id, admin, { type: "requirement", title: "迟到响应测试" });
+    await page.goto(sourceIssueUrl.replace(/issue=[^&]+/, `issue=${unclaimed.id}`));
     const tasksUrl = `${origin}/api/projects/${project.id}/tasks`;
     let releaseStart, markStarted;
     const started = new Promise(resolve => { markStarted = resolve; });
@@ -426,18 +426,19 @@ async function main() {
       markStarted(); await release;
       await route.fulfill({ json: { task: { workspaceId: "late-fixture", runKey: "late-run" } } });
     });
-    await page.getByRole("button", { name: "认领到开发任务", exact: true }).click();
-    await page.getByRole("dialog", { name: "认领到开发任务" }).waitFor();
-    await page.getByRole("button", { name: "保存待开发任务", exact: true }).waitFor();
-    await page.getByRole("button", { name: "保存待开发任务", exact: true }).click();
+    await page.getByRole("button", { name: "认领", exact: true }).click();
+    await page.getByRole("dialog", { name: "认领" }).waitFor();
+    await page.getByRole("button", { name: "确认认领", exact: true }).waitFor();
+    await page.getByRole("button", { name: "确认认领", exact: true }).click();
     await started;
     await page.getByRole("navigation", { name: "项目功能" }).getByRole("button", { name: new URL(sourceIssueUrl).searchParams.get("tab") === "bugs" ? "Bug" : "需求", exact: true }).evaluate(button => button.click());
-    await page.getByRole("dialog", { name: "认领到开发任务" }).waitFor({ state: "detached" });
+    await page.getByRole("dialog", { name: "认领" }).waitFor({ state: "detached" });
     const listAfterStart = page.url();
     const lateResponse = page.waitForResponse(response => response.url() === tasksUrl && response.request().method() === "POST");
     releaseStart(); await lateResponse;
     assert.equal(page.url(), listAfterStart, "late start responses do not pull the user away from their new context");
     await page.unroute(tasksUrl);
+    await require("./project-task-merging.test.cjs").verifyProjectTaskMerging({ page, origin, project, database, content, admin, output, clients });
     await require("./project-lifecycle.test.cjs").verifyProjectLifecycle({ page, origin, project, database, output, projects, admin });
     await page.getByRole("button", { name: "退出登录", exact: true }).click();
     await page.getByLabel("账号", { exact: true }).waitFor();

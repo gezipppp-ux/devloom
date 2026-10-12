@@ -8,7 +8,7 @@ export function emptyIssue() {
 export function issueFieldsInput(form, { edit = true, assign = true } = {}) {
   const input = {};
   if (edit) for (const key of issueContentFields) input[key] = form[key];
-  if (assign) { input.assigneeId = form.assigneeId || null; input.participantIds = [...form.participantIds]; }
+  if (assign) input.participantIds = [...form.participantIds];
   return input;
 }
 

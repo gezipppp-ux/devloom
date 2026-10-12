@@ -24,7 +24,7 @@ const details = computed(() => props.type === "bug"
     <label v-if="type === 'bug'">严重程度<select aria-label="严重程度" :value="modelValue.severity" @change="update('severity', $event.target.value)"><option value="minor">轻微</option><option value="normal">普通</option><option value="major">严重</option><option value="critical">致命</option></select></label>
   </fieldset>
   <fieldset v-if="canAssign" :disabled="disabled">
-    <label>事项负责人<select aria-label="事项负责人" :value="modelValue.assigneeId || ''" @change="update('assigneeId', $event.target.value || null)"><option value="">未分派</option><option v-for="p in members" :key="p.userId" :value="p.userId">{{ p.displayName }}（{{ p.username }}）</option></select></label>
+    <p class="field-hint">保存事项后，通过「认领」或「指派」确定开发负责人并加入其待开发任务。</p>
     <label>参与人<select aria-label="参与人" multiple @change="update('participantIds', [...$event.target.selectedOptions].map(option => option.value))"><option v-for="p in members" :key="p.userId" :value="p.userId" :selected="modelValue.participantIds.includes(p.userId)">{{ p.displayName }}（{{ p.username }}）</option></select></label>
   </fieldset>
 </template>

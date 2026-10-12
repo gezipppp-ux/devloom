@@ -17,6 +17,8 @@ function hashCreationRequest(data, attachments) {
 }
 const fileMetadata = { id: true, projectId: true, issueId: true, assetId: true, authorId: true, name: true, mimeType: true, size: true, sha256: true, createdAt: true };
 
+const issueRelations = { source: true, release: true, workflowVersion: true, developmentClaim: { select: { task: { select: { id: true, executorId: true, executor: { select: { displayName: true } } } } } } };
+
 class ProjectContentStore {
   constructor(database) { this.database = database; }
   async transaction(operation) {
@@ -33,14 +35,14 @@ class ProjectContentStore {
     return this.database.client.user.findMany({ where: { id: { in: [...new Set(ids.filter(Boolean))] } }, select: { id: true, username: true, displayName: true } });
   }
   async issue(projectId, id) {
-    const value = await this.database.client.projectIssue.findFirst({ where: { projectId, id }, include: { source: true, release: true, workflowVersion: true } });
+    const value = await this.database.client.projectIssue.findFirst({ where: { projectId, id }, include: issueRelations });
     if (!value) throw missing();
     return value;
   }
   async issues(projectId, { type, status, releaseId, includeArchived, query, limit, offset }) {
     const where = { projectId, ...(releaseId !== undefined ? { releaseId } : {}), ...(!includeArchived ? { OR: [{ releaseId: null }, { release: { status: "active" } }] } : {}), ...(type ? { type } : {}), ...(status ? { status } : {}),
       ...(query ? { AND: [{ OR: [{ title: { contains: query, mode: "insensitive" } }, { description: { contains: query, mode: "insensitive" } }] }] } : {}) };
-    const rows = await this.database.client.projectIssue.findMany({ where, orderBy: [{ number: "desc" }], skip: offset, take: limit + 1, include: { source: true, release: true, workflowVersion: true } });
+    const rows = await this.database.client.projectIssue.findMany({ where, orderBy: [{ number: "desc" }], skip: offset, take: limit + 1, include: issueRelations });
     return { items: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
   }
   async createIssue(projectId, actorId, data, source, { requestId, attachments = [] } = {}) {
@@ -50,10 +52,8 @@ class ProjectContentStore {
       if (existing) {
         if (existing.projectId !== projectId || existing.createdById !== actorId) throw conflict();
         const history = await this.database.client.issueHistory.findFirst({ where: { projectId, issueId: requestId, actorId, action: "created" } });
-        // Older requests included the empty branch default after type, even when
-        // omitted by the caller. Recreate only its hash; never persist the field.
         const storedHash = history?.data?.creationRequestHash;
-        if (storedHash !== creationRequestHash && storedHash !== hashCreationRequest({ type: data.type, baseBranch: "", ...data }, attachments)) throw conflict();
+        if (storedHash !== creationRequestHash) throw conflict();
         return this.issue(projectId, requestId);
       }
     }
@@ -85,7 +85,7 @@ class ProjectContentStore {
     return this.database.client.issueHistory.create({ data: { projectId, issueId, actorId, action, data: serializable(data) } });
   }
   async source(projectId, scope, type, externalId) {
-    return this.database.client.issueSource.findUnique({ where: { projectId_channel_scope_type_externalId: { projectId, channel: "tapd", scope, type, externalId } }, include: { issue: { include: { source: true, release: true, workflowVersion: true } } } });
+    return this.database.client.issueSource.findUnique({ where: { projectId_channel_scope_type_externalId: { projectId, channel: "tapd", scope, type, externalId } }, include: { issue: { include: issueRelations } } });
   }
   async childList(kind, projectId, issueId, { limit, offset }) {
     await this.issue(projectId, issueId);
