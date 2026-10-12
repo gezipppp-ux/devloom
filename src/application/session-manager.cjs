@@ -388,6 +388,7 @@ class SessionManager extends EventEmitter {
     await this.agent.assertPermissionAvailable(selection.permissionMode);
     this.assertOpen();
     const sourceInput = { ...input };
+    sourceInput.taskType = input.metadata?.type;
     delete sourceInput.model;
     delete sourceInput.reasoningEffort;
     delete sourceInput.permissionMode;

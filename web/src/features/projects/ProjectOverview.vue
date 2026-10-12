@@ -8,6 +8,7 @@ import { useResource } from "../../shared/api/use-resource.js";
 import ProjectIssues from "./ProjectIssues.vue";
 import ProjectAssets from "./ProjectAssets.vue";
 import ProjectMembers from "./ProjectMembers.vue";
+import ProjectPromptSettings from "./ProjectPromptSettings.vue";
 import ProjectSettings from "./ProjectSettings.vue";
 import ProjectDevelopment from "./ProjectDevelopment.vue";
 import ProjectReleases from "./ProjectReleases.vue";
@@ -29,6 +30,7 @@ const tabs = computed(() => [
   { id: "development", label: "代码与环境", show: can("code.view") },
   { id: "assets", label: "资产", show: can("asset.view") },
   { id: "members", label: "成员", show: true },
+  { id: "prompts", label: "提示词", show: true },
   { id: "settings", label: "设置", show: can("project.configure") && !archived.value },
 ].filter(item => item.show));
 const currentTab = computed(() => tabs.value.some(item => item.id === props.tab) ? props.tab : "overview");
@@ -93,6 +95,7 @@ function returnToIssue() {
       <ProjectReleases v-else-if="currentTab === 'releases'" :project-id="projectId" :can-manage="contentPermissions.includes('release.manage')" />
       <ProjectAssets v-else-if="currentTab === 'assets'" :project-id="projectId" :permissions="contentPermissions" />
       <ProjectMembers v-else-if="currentTab === 'members'" :project-id="projectId" :can-manage="can('project.members.manage') && !archived" @saved="reload" />
+      <ProjectPromptSettings v-else-if="currentTab === 'prompts'" :key="projectId" :project-id="projectId" @saved="reload" />
       <ProjectSettings v-else-if="currentTab === 'settings'" :project="data.project" @saved="reload" />
       <ProjectDevelopment v-else-if="currentTab === 'development'" :project-id="projectId" :remote-url="data.project.remoteUrl" :space="data.space" :can-view-session="can('session.view')" :can-start="can('code.operate') && !archived" @refresh="reload" @return-to-issue="returnToIssue" @open-workspace="(id, key) => emit('open-workspace', id, key)" />
     </template>

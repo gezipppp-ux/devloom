@@ -98,6 +98,8 @@ test("project tasks and image additions use the real session manager with tempor
     agent: { provider: "codex" }, execution: { repository, projectName: project.id, baseBranch: "main", initCommands: [] } });
   const services = new ProjectDevelopmentServices(database, projects, workspaces);
   const first = await issue("图示需求"), added = await issue("追加图示");
+  const personalTemplate = "个人需求模板 {{title}}\n{{content}}\n{{images}}";
+  await projects.savePrompts(project.id, actor, { scope: "personal", revision: 1, templates: { requirement: personalTemplate } });
   for (const selected of [first, added]) await content.updateIssue(project.id, selected.id, actor, { revision: 1, attachments: [{ id: randomUUID(), name: "资料.png", mimeType: "image/png", data: png.toString("base64") }] });
   const { task } = await launch(services, project.id, actor, { requestId: randomUUID(), issueIds: [first.id] });
   const { sessions } = await workspaces.get(space.workspaceId, actor);
@@ -106,6 +108,9 @@ test("project tasks and image additions use the real session manager with tempor
   while (!runtime.turnId && !runtime.error && Date.now() < deadline) await immediate();
   assert.ok(runtime.turnId, runtime.error || "fake Codex turn did not start");
   assert.equal(client.calls.find(call => call.method === "turn/start").params.input.filter(part => part.type === "localImage").length, 1);
+  const firstText = client.calls.find(call => call.method === "turn/start").params.input[0].text;
+  assert.match(firstText, /个人需求模板 图示需求/);
+  assert.equal(firstText.match(/个人需求模板/g).length, 1, "project prompts are not wrapped in a second template");
   client.notify("turn/completed", { turn: { id: runtime.turnId, status: "completed" } });
   await sessions.events.drain();
   await runtime.operation;
@@ -114,8 +119,12 @@ test("project tasks and image additions use the real session manager with tempor
   assert.equal(fs.readFileSync(path.join(repository, "tracked.txt"), "utf8"), "preserve dirty root");
   await database.client.projectIssue.update({ where: { id: first.id }, data: { status: "pending_verification" } });
   const requestId = randomUUID();
+  await projects.savePrompts(project.id, actor, { scope: "personal", revision: 2, templates: { requirement: "追加模板 {{title}}\n{{content}}\n{{images}}" } });
   await services.append(project.id, task.id, actor, { requestId, issueIds: [added.id] });
+  await projects.savePrompts(project.id, actor, { scope: "personal", revision: 3, templates: { requirement: "后续修改 {{title}}\n{{content}}\n{{images}}" } });
+  assert.equal((await sessions.store.readTask(task.runKey)).prompt, firstText, "settings never rewrite a started task snapshot");
   const sent = await services.continueAddition(project.id, task.id, actor, requestId);
+  assert.match(client.calls.filter(call => call.method === "turn/start").at(-1).params.input[0].text, /追加模板 追加图示/);
   await sessions.events.drain();
   assert.equal(sent.task.additions[0].status, "sent");
   assert.equal(client.calls.filter(call => call.method === "turn/start").length, 2);
@@ -230,12 +239,17 @@ test("assigning separate issues and merging my plans preserves sources and start
   assert.equal(await database.client.taskIssueLink.count(), 4, "original links remain as history");
   assert.equal(await database.client.issueDevelopmentClaim.count({ where: { taskId: merged.id } }), 2);
   assert.equal((await content.readIssue(project.id, bug.id, actor)).development.taskId, merged.id);
+  await services.projects.savePrompts(project.id, actor, { scope: "personal", revision: 1, templates: { bug: "执行人的 Bug 模板 {{title}}\n{{content}}\n{{images}}" } });
+  await services.projects.savePrompts(project.id, other, { scope: "personal", revision: 1, templates: { bug: "指派人的模板 {{title}}\n{{content}}\n{{images}}" } });
   const start = { requestId: randomUUID(), revision: merged.revision, baseBranch: "main" };
   await services.start(project.id, merged.id, actor, start);
   await services.start(project.id, merged.id, actor, start);
   assert.equal(calls.starts.length, 1);
   assert.match(calls.starts[0].content, /合并需求/);
   assert.match(calls.starts[0].content, /复现步骤/);
+  assert.match(calls.starts[0].content, /执行人的 Bug 模板 合并缺陷/);
+  assert.match(calls.starts[0].content, /请根据以下需求完成开发/);
+  assert.doesNotMatch(calls.starts[0].content, /指派人的模板/);
 });
 
 test("batch assignment and concurrent merging are atomic and reject stale or foreign plans", async t => {

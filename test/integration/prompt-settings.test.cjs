@@ -109,7 +109,7 @@ test("workspace prompt settings guard writes, isolate credentials and persist te
   const { app, origin, get, post, token } = await httpFixture(t, workspaces);
   const defaults = await (await get(a.id)).json();
   assert.deepEqual(Object.keys(defaults).sort(), ["catalog", "maxLength", "templates"]);
-  assert.deepEqual(Object.keys(defaults.templates).sort(), ["manual"]);
+  assert.deepEqual(Object.keys(defaults.templates).sort(), ["bug", "requirement"]);
   assert.equal(defaults.maxLength, 20000);
   assert.doesNotMatch(JSON.stringify(defaults), /private-template-secret|private-session|cookie_header|dsc_token/);
   assert.deepEqual((await (await get(b.id)).json()).templates, defaults.templates);
@@ -118,7 +118,7 @@ test("workspace prompt settings guard writes, isolate credentials and persist te
   assert.equal((await fetch(`${origin}/api/settings/prompts`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-csrf-token": token },
-    body: JSON.stringify({ manual: manualTemplate }),
+    body: JSON.stringify({ requirement: manualTemplate }),
   })).status, 404);
   assert.equal((await get(randomUUID())).status, 404);
   assert.equal((await get("invalid-workspace")).status, 400);
@@ -130,34 +130,34 @@ test("workspace prompt settings guard writes, isolate credentials and persist te
     { "x-csrf-token": "invalid" },
     { origin: "https://other.invalid" },
   ]) {
-    assert.equal((await post(a.id, { manual: manualTemplate }, headers)).status, 403);
+    assert.equal((await post(a.id, { requirement: manualTemplate }, headers)).status, 403);
     assert.equal(fs.readFileSync(file, "utf8"), before);
   }
-  const saved = await post(a.id, { manual: manualTemplate });
+  const saved = await post(a.id, { requirement: manualTemplate });
   assert.equal(saved.status, 200);
   const response = await saved.json();
-  assert.deepEqual(response.templates, { manual: manualTemplate });
+  assert.deepEqual(response.templates, { ...defaults.templates, requirement: manualTemplate });
   assert.doesNotMatch(JSON.stringify(response), /private-template-secret|private-session|cookie_header|dsc_token/);
   assert.deepEqual((await (await get(a.id)).json()).templates, response.templates);
   assert.deepEqual((await (await get(b.id)).json()).templates, defaults.templates);
   const changedConfig = (await readOptional(file));
   for (const field of ["workspace", "execution", "agent", "tapd", "workflow"])
     assert.deepEqual(changedConfig[field], originalConfig[field]);
-  assert.deepEqual(changedConfig.prompt_templates, response.templates);
+  assert.deepEqual(changedConfig.prompt_templates, { requirement: manualTemplate });
   assert.equal(fs.readFileSync(workspaces.configFile(b.id), "utf8"), otherConfig);
 
   const persisted = fs.readFileSync(file, "utf8");
   for (const input of [
     { unknown: manualTemplate },
-    { manual: manualTemplate, tapd: "{{title}}\n{{content}}\n{{images}}" },
-    { manual: `${manualTemplate}\n{{cookie}}` },
-    { manual: `${manualTemplate}\n{{unknown}}` },
-    { manual: "{{title}}\n{{images}}" },
-    { manual: 7 },
+    { requirement: manualTemplate, tapd: "{{title}}\n{{content}}\n{{images}}" },
+    { requirement: `${manualTemplate}\n{{cookie}}` },
+    { requirement: `${manualTemplate}\n{{unknown}}` },
+    { requirement: "{{title}}\n{{images}}" },
+    { requirement: 7 },
     { tapd: [] },
     { tapd_fusion: "{{title}}{{images}}{{supplement}}" },
-    { manual: "" },
-    { manual: `${manualTemplate}${"x".repeat(20000)}` },
+    { requirement: "" },
+    { requirement: `${manualTemplate}${"x".repeat(20000)}` },
   ]) {
     assert.equal((await post(a.id, input)).status, 400, JSON.stringify(input).slice(0, 160));
     assert.equal(fs.readFileSync(file, "utf8"), persisted);
@@ -168,10 +168,10 @@ test("workspace prompt settings guard writes, isolate credentials and persist te
   const restarted = await httpFixture(t, reloaded);
   assert.deepEqual((await (await restarted.get(a.id)).json()).templates, response.templates);
   assert.deepEqual((await (await restarted.get(b.id)).json()).templates, defaults.templates);
-  const resetManual = await restarted.post(a.id, { manual: null });
+  const resetManual = await restarted.post(a.id, { requirement: null });
   assert.equal(resetManual.status, 200);
   assert.deepEqual((await resetManual.json()).templates, {
-    manual: defaults.templates.manual,
+    ...defaults.templates,
   });
   assert.deepEqual((await readPromptSettings(file)), defaults.templates);
   assert.deepEqual((await readOptional(file)).tapd, originalConfig.tapd);
@@ -188,8 +188,8 @@ test("new fake sessions use saved prompts while existing snapshots and continuat
   (await saveSettings({ baseBranch: settings.baseBranch, initCommands: settings.initCommands }, second.configFile));
   const { get, post } = await httpFixture(t, workspaces);
   const secondTemplate = manualTemplate.replace("自定义手动模板", "项目 B 独立模板");
-  assert.equal((await post(a.id, { manual: manualTemplate })).status, 200);
-  assert.equal((await post(b.id, { manual: secondTemplate })).status, 200);
+  assert.equal((await post(a.id, { requirement: manualTemplate })).status, 200);
+  assert.equal((await post(b.id, { requirement: secondTemplate })).status, 200);
   const upload = (await context.channels.get("manual").uploadImage(png));
   const input = {
     channel: "manual",
@@ -214,9 +214,9 @@ test("new fake sessions use saved prompts while existing snapshots and continuat
   const snapshot = fs.readFileSync(snapshotFile, "utf8");
 
   const changedTemplate = manualTemplate.replace("自定义手动模板", "新保存的模板");
-  assert.equal((await post(a.id, { manual: changedTemplate })).status, 200);
-  assert.equal((await (await get(a.id)).json()).templates.manual, changedTemplate);
-  assert.equal((await (await get(b.id)).json()).templates.manual, secondTemplate);
+  assert.equal((await post(a.id, { requirement: changedTemplate })).status, 200);
+  assert.equal((await (await get(a.id)).json()).templates.requirement, changedTemplate);
+  assert.equal((await (await get(b.id)).json()).templates.requirement, secondTemplate);
   assert.equal((await manager.view(key)).requirement.prompt, initialPrompt);
   assert.equal(fs.readFileSync(snapshotFile, "utf8"), snapshot);
   await manager.interrupt(key);
@@ -255,7 +255,7 @@ test("manual preparation uses the template captured when the requirement was res
   const { directory, workspaces, a } = (await fixture(t));
   t.after(() => workspaces.close());
   const context = (await workspaces.get(a.id));
-  (await savePromptSettings(context.configFile, { manual: manualTemplate }));
+  (await savePromptSettings(context.configFile, { requirement: manualTemplate }));
   const channel = context.channels.get("manual");
   const resolved = await channel.resolve({
     requestId: randomUUID(),
@@ -263,9 +263,9 @@ test("manual preparation uses the template captured when the requirement was res
     content: "准备之前保存了另一份模板。",
   });
   (await savePromptSettings(context.configFile, {
-    manual: manualTemplate.replace("自定义手动模板", "准备期间更改的模板"),
+    requirement: manualTemplate.replace("自定义手动模板", "准备期间更改的模板"),
   }));
   const prepared = await channel.prepare({ ...resolved, directory: path.join(directory, "prepared") });
   assert.ok(prepared.task.prompt.startsWith("自定义手动模板\n已解析需求\n"));
-  assert.ok((await readPromptSettings(context.configFile)).manual.startsWith("准备期间更改的模板\n"));
+  assert.ok((await readPromptSettings(context.configFile)).requirement.startsWith("准备期间更改的模板\n"));
 });

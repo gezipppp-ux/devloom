@@ -1,4 +1,4 @@
-const { storedPromptOverrides } = require("../domain/prompt-templates.cjs");
+const { getPromptTemplates, storedPromptOverrides, promptTemplateCatalog, MAX_PROMPT_TEMPLATE_LENGTH } = require("../domain/prompt-templates.cjs");
 const { projectContextPermissions, grantableProjectPermissions } = require("../domain/project-permissions.cjs");
 function dates(row) { return { createdAt: row.createdAt?.toISOString(), updatedAt: row.updatedAt?.toISOString() }; }
 function presentDepartment(row) { return { id: row.id, name: row.name, status: row.status, permissions: row.permissions, revision: row.revision, ...dates(row) }; }
@@ -6,7 +6,7 @@ function presentProject(row, permissions = []) {
   const settings = row.settings || {};
   return { id: row.id, name: row.name, description: row.description, ownerUserId: row.ownerUserId,
     remoteUrl: row.remoteUrl, repositoryEditable: row._count?.spaces === 0, status: row.status, revision: row.revision,
-    settings: permissions.includes("project.configure") ? { initCommands: settings.initCommands || [], prompts: storedPromptOverrides(settings.prompts) } : undefined,
+    settings: permissions.includes("project.configure") ? { initCommands: settings.initCommands || [], prompts: getPromptTemplates({ prompt_templates: settings.prompts || {} }) } : undefined,
     ...dates(row) };
 }
 function presentMember(row) { if (!row) return null; return { projectId: row.projectId, userId: row.userId, status: row.status, permissions: row.permissions, revision: row.revision,
@@ -14,4 +14,13 @@ function presentMember(row) { if (!row) return null; return { projectId: row.pro
     administratorAccess: row.user.status === "active" && row.user.role === "admin", grantablePermissions: grantableProjectPermissions(row.user),
     effectivePermissions: projectContextPermissions({ user: row.user, department: row.user.department, membership: row, project: { id: row.projectId } }) } : {}) }; }
 function presentSpace(row) { return row ? { id: row.id, projectId: row.projectId, userId: row.userId, workspaceId: row.workspaceId, gitAccountId: row.gitAccountId, status: row.status, error: row.error, revision: row.revision, requestId: row.requestId, ...dates(row) } : null; }
-module.exports = { presentDepartment, presentProject, presentMember, presentSpace };
+function presentProjectPrompts(project, membership, permissions) {
+  const projectTemplates = getPromptTemplates({ prompt_templates: project.settings.prompts || {} });
+  const overrides = storedPromptOverrides(membership?.prompts);
+  return { projectTemplates, overrides, templates: { ...projectTemplates, ...overrides },
+    projectRevision: project.revision, personalRevision: membership?.promptRevision || null,
+    canConfigure: project.status === "active" && permissions.includes("project.configure"),
+    canPersonalize: project.status === "active" && membership?.status === "active",
+    catalog: promptTemplateCatalog, maxLength: MAX_PROMPT_TEMPLATE_LENGTH };
+}
+module.exports = { presentDepartment, presentProject, presentMember, presentSpace, presentProjectPrompts };

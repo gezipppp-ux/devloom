@@ -129,7 +129,7 @@ class ProjectDevelopmentServices {
       const space = await this.store.space(projectId, actor.id);
       const issues = await this.store.issues(projectId, current.snapshot.issues.map(issue => issue.id));
       this.assertIssues(issues, current.releaseId, true);
-      const prompt = developmentPrompt(issues);
+      const prompt = developmentPrompt(issues, false, await this.projects.effectivePrompts(projectId, actor));
       const defaults = await this.accounts.settings(actor.id);
       const selection = Object.fromEntries(["model", "reasoningEffort", "permissionMode"].map(field => [field,
         Object.hasOwn(request, field) ? request[field] : defaults[field] ?? ""]));
@@ -150,7 +150,8 @@ class ProjectDevelopmentServices {
       await this.authorize(projectId, actor, "session.start");
       await this.store.space(projectId, actor.id);
       const started = await context.sessions.start({ channel: "manual", requestId: task.id,
-        baseBranch: task.snapshot.baseBranch, title: task.snapshot.title, content: task.snapshot.prompt, images: imageIds, ...task.snapshot.selection });
+        baseBranch: task.snapshot.baseBranch, title: task.snapshot.title, content: task.snapshot.prompt, renderedPrompt: true,
+        metadata: { type: task.snapshot.issues.every(issue => issue.type === "bug") ? "bug" : "requirement" }, images: imageIds, ...task.snapshot.selection });
       if (started.key !== task.runKey) throw new Error("开发任务与会话身份不一致，请检查已记录任务。");
       task = await this.store.transaction(async () => this.store.update(await this.store.task(projectId, task.id), { status: "started" }));
     } catch (error) {
@@ -212,7 +213,8 @@ class ProjectDevelopmentServices {
         this.assertIssues(issues, task.releaseId, true);
         issues = await this.store.assignIssues(projectId, issues, task.executorId, actor.id);
       }
-      const result = await this.store.addIssues(task, request, issues, existing?.prompt || developmentPrompt(issues, true));
+      const prompt = existing ? existing.prompt : developmentPrompt(issues, true, await this.projects.effectivePrompts(projectId, actor));
+      const result = await this.store.addIssues(task, request, issues, prompt);
       await this.authorize(projectId, actor, "session.continue");
       return result;
     });

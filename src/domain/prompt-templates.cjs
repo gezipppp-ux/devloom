@@ -2,16 +2,18 @@ const promptTemplateCatalog = require("../../shared/prompt-templates.json");
 
 const MAX_PROMPT_TEMPLATE_LENGTH = 20000;
 
-// Retired templates in saved settings do not become public options or block new tasks.
 function storedPromptOverrides(value = {}) {
-  return Object.fromEntries(Object.entries(value || {}).filter(([channel]) => Object.hasOwn(promptTemplateCatalog, channel)));
+  if (!value || typeof value !== "object" || Array.isArray(value) ||
+      Object.keys(value).some(type => !Object.hasOwn(promptTemplateCatalog, type)))
+    throw new Error("提示词配置仅支持 Bug 和需求模板。");
+  return Object.fromEntries(Object.entries(value).map(([type, template]) => [type, validatePromptTemplate(type, template)]));
 }
 const PLACEHOLDER = /\{\{([\s\S]*?)\}\}/g;
 
-function validatePromptTemplate(channel, template) {
-  if (!Object.hasOwn(promptTemplateCatalog, channel))
-    throw new Error("不支持的提示词渠道。");
-  const definition = promptTemplateCatalog[channel];
+function validatePromptTemplate(type, template) {
+  if (!Object.hasOwn(promptTemplateCatalog, type))
+    throw new Error("不支持的提示词类型。");
+  const definition = promptTemplateCatalog[type];
   if (
     typeof template !== "string" ||
     !template.trim() ||
@@ -44,30 +46,22 @@ function getPromptTemplates(config = {}) {
   const overrides = Object.hasOwn(config, "prompt_templates")
     ? config.prompt_templates
     : {};
-  if (
-    !overrides ||
-    typeof overrides !== "object" ||
-    Array.isArray(overrides) ||
-    Object.keys(overrides).some(
-      (channel) => !Object.hasOwn(promptTemplateCatalog, channel) && !["tapd", "tapd_fusion"].includes(channel),
-    )
-  )
-    throw new Error("提示词配置仅支持手动需求模板。");
+  storedPromptOverrides(overrides);
   return Object.fromEntries(
-    Object.entries(promptTemplateCatalog).map(([channel, definition]) => [
-      channel,
+    Object.entries(promptTemplateCatalog).map(([type, definition]) => [
+      type,
       validatePromptTemplate(
-        channel,
-        Object.hasOwn(overrides, channel)
-          ? overrides[channel]
+        type,
+        Object.hasOwn(overrides, type)
+          ? overrides[type]
           : definition.defaultTemplate,
       ),
     ]),
   );
 }
 
-function renderPromptTemplate(channel, template, values) {
-  validatePromptTemplate(channel, template);
+function renderPromptTemplate(type, template, values) {
+  validatePromptTemplate(type, template);
   // A replacement callback preserves literal $ sequences and never re-parses
   // user content or evaluates expressions embedded in a requirement.
   return template.replace(PLACEHOLDER, (_, name) => {

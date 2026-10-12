@@ -1,4 +1,5 @@
 const { projectPermissionCatalog } = require('../../src/domain/project-permissions.cjs');
+const { getPromptTemplates, promptTemplateCatalog, MAX_PROMPT_TEMPLATE_LENGTH } = require('../../src/domain/prompt-templates.cjs');
 
 function projectVisual(workspaceId) {
   const permissions = projectPermissionCatalog.filter(p => p.scope === 'project').map(p => p.id);
@@ -20,6 +21,7 @@ function projectVisual(workspaceId) {
   const task = { id: 'search-task', revision: 1, releaseId: release.id, release, executorId: 'visual-admin', executor: { id: 'visual-admin', displayName: '演示管理员' }, issueIds: ['search'], canStart: false, canEdit: false, canComplete: true, canCancel: true, baseBranch: 'main', baseCommit: '1234567890abcdef1234567890abcdef12345678', fetchedAt: '2026-10-12T08:00:00Z', title: '客户搜索与空结果提示', status: 'started', canOpenSession: true, workspaceId, runKey: '1-1', execution: { status: 'completed', sessionId: 'fixture-session' }, issues: [issues[0]], additions: [{ requestId: 'append-fixture', status: 'ready', issues: [issues[2]] }] };
   function response(url) {
     const endpoint = url.pathname;
+    if (endpoint.endsWith('/prompts')) return { projectTemplates: getPromptTemplates(), overrides: {}, templates: getPromptTemplates(), projectRevision: 1, personalRevision: 1, canConfigure: true, canPersonalize: true, catalog: promptTemplateCatalog, maxLength: MAX_PROMPT_TEMPLATE_LENGTH };
     if (endpoint === '/api/projects') return { projects: [project, { ...project, id: 'operations', name: '运营后台', description: '运营指标、客户跟进与业务配置。' }], canCreateProjects: true };
     if (endpoint === '/api/admin/departments') return { departments: [department] };
     if (endpoint === '/api/projects/00000000-0000-4000-8000-000000000001') return { project, permissions, space: { status: 'ready', workspaceId, gitAccountId: 'fixture-account' } };

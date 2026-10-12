@@ -34,6 +34,8 @@
 
 ## 事务与生命周期
 
+`20261012170000_project_prompt_preferences` 为 `project_members` 增加个人模板 `prompts` 与独立 `prompt_revision`。项目默认仍存放于 `projects.settings.prompts`。新代码只接受 `bug`、`requirement`，迁移不转换历史手动或 TAPD 模板，也不修改已保存的任务资料、会话与目录。
+
 `20261012030000_development_baseline` 曾为事项增加 `base_branch`。`20261012160000_remove_project_issue_branch_defaults` 删除该列、移除项目 settings JSON 中的 `baseBranch`，清空项目空间配置里复制的默认分支，并清除事项快照副本。任务受理时选择的实际分支仍保存在不可变任务 snapshot，实际 commit 保存在运行 worktree.baseline；已有任务身份、路径及执行基线不变。
 
 通过 `PostgresDatabase.transaction()` 运行短事务，默认 Serializable，等待和执行各最多 5 秒。回调只包含数据库操作，不等待网络、Git 或 Codex。冲突由上层按业务幂等性处理，不自动重放任意回调。

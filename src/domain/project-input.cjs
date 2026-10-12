@@ -47,6 +47,12 @@ function projectSettings(input) {
   }
   return value;
 }
+function projectPromptsInput(input) {
+  object(input, ["scope", "revision", "templates"]);
+  if (!["project", "personal"].includes(input.scope)) throw accountError("请选择项目默认或我的配置。");
+  if (!input.templates || !Object.keys(input.templates).length) throw accountError("请提供要保存的提示词。");
+  return { scope: input.scope, revision: revision(input.revision), templates: projectSettings({ prompts: input.templates }).prompts };
+}
 function projectInput(input, updating = false) {
   object(input, ["name", "description", "remoteUrl", "ownerUserId", "settings", "revision"]);
   const value = {};
@@ -74,4 +80,4 @@ function prepareSpaceInput(input) {
   object(input, ["gitAccountId", "requestId"]);
   return { gitAccountId: id(input.gitAccountId), requestId: id(input.requestId) };
 }
-module.exports = { projectId: id, projectRevision: revision, departmentInput, projectInput, memberInput, prepareSpaceInput };
+module.exports = { projectId: id, projectRevision: revision, departmentInput, projectInput, projectPromptsInput, memberInput, prepareSpaceInput };

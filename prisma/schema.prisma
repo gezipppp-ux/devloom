@@ -286,6 +286,8 @@ model ProjectMember {
   status      String   @default("active")
   permissions String[] @default([])
   revision    Int      @default(1)
+  prompts     Json     @default("{}")
+  promptRevision Int   @default(1) @map("prompt_revision")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
   project     Project @relation(fields: [projectId], references: [id], onDelete: Restrict)

@@ -17,6 +17,8 @@
 | `shared/api/` | HTTP 请求、页面令牌、工作区 API 路径、模型/权限能力发现和共享执行状态文案。 |
 | `shared/styles/` | 全站设计变量、布局与基础控件样式。 |
 
+项目「提示词」由 `ProjectPromptSettings` 管理两种模板的项目默认和当前成员覆盖，独立保存、修订号冲突合并和卸载请求隔离沿用项目功能基础。`shared/components/PromptTemplateEditor` 提供占位符插入及纯文本预览，不读写任何项目数据。
+
 依赖方向为 `main.js → app → features → shared`。应用壳层组合各功能；功能内的组件与辅助模块放在同一目录，功能之间通过壳层传入数据和事件协作。共享模块不引用应用或功能组件。
 
 需求／Bug 新增与编辑共用 `features/projects/IssueFields.vue`；五类正文通过共享 `MarkdownEditor`、`MarkdownContent` 和 `shared/components/markdown-content.js` 安全渲染。原 `features/session/requirement-content.js` 保留会话入口及图片／链接规则。项目附件草稿由 `use-project-attachments.js` 管理，读取完成后生成正文链接并同步序列化；保存前不上传，取消、卸载和上下文切换撤销 blob URL，迟到读取不得插回其他草稿。保存冲突保留附件并支持原有逐字段合并。

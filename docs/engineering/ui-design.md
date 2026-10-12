@@ -25,7 +25,7 @@ Operation feedback uses `FeedbackMessage` and one `OperationMessages` host in `A
    Icon choices open in a separate keyboard-accessible modal from the compact preview. Background clone progress is available from the account bar across pages and restored from the server on reload; show stage-specific percentages, indeterminate waiting, and explicit failure/interruption states without claiming browser closure cancels a job.
 2. New manual task: type, title/content/images, optional directory, model/effort/permissions.
 3. Requirement and Bug lists provide local creation, filtering and planning without external import actions.
-4. Workspace settings with independently saved project environment, prompt templates; placeholder insertion, plain-text preview and reset/save feedback. Templates remain isolated across workspaces.
+4. Project prompt settings separate Bug and requirement templates, project defaults and personal overrides. Reuse placeholder insertion, plain-text preview, reset/save feedback and revision conflict merging; ordinary members can change only their own project overrides. Explicit standalone workspace settings retain type-based templates. Validate inherited, custom, read-only, loading, error and narrow-screen states.
 5. Conversation: human progress, Codex state, message/tool timeline, composer.
 6. Expanded session context, requirement body/table/attachments, original prompt.
 7. Approval and clarification requests, empty, disconnected, read-only and error states.

@@ -45,7 +45,8 @@ async function buildManualTaskPackage({ item, directory, readImage, config = {} 
     `附带 ${images.length} 张本地图片，顺序与用户上传顺序一致，请结合图片理解需求。`,
     ...(imageList ? [imageList] : []),
   ].join('\n');
-  const prompt = renderPromptTemplate('manual', getPromptTemplates(config).manual, {
+  const type = item.type === 'bug' ? 'bug' : 'requirement';
+  const prompt = item.rendered_prompt ? [item.markdown_description, imageDescription].join('\n\n') : renderPromptTemplate(type, getPromptTemplates(config)[type], {
     title: item.title,
     content: item.markdown_description,
     images: imageDescription,

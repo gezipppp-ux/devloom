@@ -16,7 +16,8 @@ const { SessionManager } = require("../support/session-manager.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { saveSystemSettings } = require("../../src/config/system-settings.cjs");
 const { projectPermissionCatalog, productTemplate } = require("../../src/domain/project-permissions.cjs");
-const { promptTemplateCatalog } = require("../../src/domain/prompt-templates.cjs");
+const { getPromptTemplates } = require("../../src/domain/prompt-templates.cjs");
+const { verifyProjectPromptSettings } = require("./project-prompts.test.cjs");
 const { verifyAdministratorProjectAccess } = require("./administrator-project-access.test.cjs");
 const { verifyProjectReleases } = require("./project-releases.test.cjs");
 const { verifyProjectPermissions, verifyDepartmentCapabilities } = require("./project-permissions.test.cjs");
@@ -74,6 +75,19 @@ async function main() {
     }
     const tab = name => page.getByRole("navigation", { name: "项目功能" }).getByRole("button", { name, exact: true }).click();
     await login("product");
+    await tab("提示词");
+    const memberBugPrompt = page.getByRole("textbox", { name: "Bug提示词", exact: true });
+    await memberBugPrompt.waitFor();
+    await page.getByRole("group", { name: "提示词作用域" }).getByRole("button", { name: "项目默认", exact: true }).click();
+    assert.equal(await memberBugPrompt.isDisabled(), true, "ordinary project members cannot edit project defaults");
+    await page.getByRole("group", { name: "提示词作用域" }).getByRole("button", { name: "我的配置", exact: true }).click();
+    await page.getByRole("checkbox", { name: "自定义此提示词，仅对我生效" }).check();
+    await memberBugPrompt.fill("产品成员独立模板 {{title}}\n{{content}}\n{{images}}");
+    const memberPromptSaved = page.waitForResponse(response => response.url() === `${origin}/api/projects/${project.id}/prompts` && response.request().method() === "POST");
+    await page.getByRole("button", { name: "保存我的提示词", exact: true }).click();
+    assert.equal((await memberPromptSaved).status(), 200, "personal templates do not require project configuration or a development space");
+    assert.deepEqual((await projects.promptSettings(project.id, admin)).overrides, {});
+    await tab("概览");
     assert.equal(await page.getByLabel("账号导航").getByRole("button", { name: "系统设置", exact: true }).count(), 0, "ordinary members have no system workflow management entry");
     assert.equal(await page.getByRole("navigation", { name: "项目功能" }).getByRole("button", { name: "流程", exact: true }).count(), 0);
     assert.equal((await page.request.get(`${origin}/api/system/workflows/requirement`)).status(), 403);
@@ -286,30 +300,14 @@ async function main() {
         assert.equal(status, 404, `${method} ${endpoint}`);
       }
     }
-    const manualPrompt = page.getByLabel("手动任务提示词", { exact: true });
     assert.equal(await page.getByText(/TAPD/).count(), 0);
-    assert.equal(await manualPrompt.inputValue(), "");
-    async function saveProjectSettings() {
-      const response = page.waitForResponse(response => response.url() === `${origin}/api/projects/${project.id}` && response.request().method() === "POST");
-      await page.getByRole("button", { name: "保存项目设置", exact: true }).click();
-      assert.equal((await response).status(), 200, "blank prompt fields must allow project settings to save");
-      await page.locator('.operation-message[data-type="success"]').filter({ hasText: "已保存。" }).last().waitFor();
-      return (await database.client.project.findUnique({ where: { id: project.id } })).settings;
-    }
-    await page.getByLabel("说明", { exact: true }).fill("未配置模板的新项目可以保存设置");
-    let savedSettings = await saveProjectSettings();
-    assert.equal("baseBranch" in savedSettings, false);
-    assert.deepEqual(savedSettings.prompts, {});
-    const customManual = `  手动任务自定义模板\n${promptTemplateCatalog.manual.defaultTemplate}  `;
-    await manualPrompt.fill(customManual);
-    savedSettings = await saveProjectSettings();
-    assert.deepEqual(savedSettings.prompts, { manual: customManual });
-    await manualPrompt.fill("");
-    savedSettings = await saveProjectSettings();
-    assert.deepEqual(savedSettings.prompts, {}, "clearing prompt overrides restores channel defaults");
-    await tab("概览");
-    await tab("设置");
-    assert.equal(await manualPrompt.inputValue(), "");
+    await page.getByLabel("说明", { exact: true }).fill("项目默认提供两类模板");
+    const settingsResponse = page.waitForResponse(response => response.url() === `${origin}/api/projects/${project.id}` && response.request().method() === "POST");
+    await page.getByRole("button", { name: "保存项目设置", exact: true }).click();
+    assert.equal((await settingsResponse).status(), 200);
+    assert.deepEqual((await database.client.project.findUnique({ where: { id: project.id } })).settings.prompts, getPromptTemplates());
+    await tab("提示词");
+    await verifyProjectPromptSettings({ page, origin, project, projects, admin, output });
     await tab("资产");
     await page.getByRole("button", { name: /测试登录凭据/ }).click();
     await page.getByRole("button", { name: "显示敏感值", exact: true }).click();

@@ -16,12 +16,12 @@ async function savePromptSettings(configFile, input) {
     typeof input !== "object" ||
     Array.isArray(input) ||
     Object.keys(input).some(
-      (channel) => !Object.hasOwn(promptTemplateCatalog, channel),
+      (type) => !Object.hasOwn(promptTemplateCatalog, type),
     )
   )
-    throw new Error("仅允许修改手动需求提示词模板。");
-  for (const [channel, template] of Object.entries(input)) {
-    if (template !== null) validatePromptTemplate(channel, template);
+    throw new Error("仅允许修改 Bug 和需求提示词模板。");
+  for (const [type, template] of Object.entries(input)) {
+    if (template !== null) validatePromptTemplate(type, template);
   }
   const config = (await updateConfig(configFile, (current) => {
     if (
@@ -30,11 +30,11 @@ async function savePromptSettings(configFile, input) {
         typeof current.prompt_templates !== "object" ||
         Array.isArray(current.prompt_templates))
     )
-      throw new Error("提示词配置必须是渠道模板对象。");
+      throw new Error("提示词配置必须是类型模板对象。");
     const overrides = storedPromptOverrides(current.prompt_templates);
-    for (const [channel, template] of Object.entries(input)) {
-      if (template === null) delete overrides[channel];
-      else overrides[channel] = template;
+    for (const [type, template] of Object.entries(input)) {
+      if (template === null) delete overrides[type];
+      else overrides[type] = template;
     }
     const next = { ...current, prompt_templates: overrides };
     getPromptTemplates(next);

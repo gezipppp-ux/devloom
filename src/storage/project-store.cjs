@@ -25,6 +25,13 @@ class ProjectStore {
     }
   }
   async spaceCount(projectId) { return this.database.client.developmentSpace.count({ where: { projectId } }); }
+  async savePromptPreferences(projectId, userId, promptRevision, prompts) {
+    const result = await this.database.client.projectMember.updateMany({
+      where: { projectId, userId, promptRevision, status: "active" },
+      data: { prompts, promptRevision: { increment: 1 } },
+    });
+    if (!result.count) throw accountError("个人提示词已变更，请保留草稿并加载最新配置。", 409, "REVISION_CONFLICT");
+  }
   async saveProject(value, id) {
     const data = { ...value };
     if (data.settings) data.settings = JSON.parse(encodeSettings(data.settings, this.database.encryptionKey));

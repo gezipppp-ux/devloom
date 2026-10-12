@@ -1,17 +1,17 @@
-const { storedPromptOverrides } = require("../domain/prompt-templates.cjs");
+const { storedPromptOverrides, getPromptTemplates, promptTemplateCatalog } = require("../domain/prompt-templates.cjs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { ProjectStore } = require("../storage/project-store.cjs");
 const { GitAccountStore } = require("../storage/git-account-store.cjs");
 const { accountError } = require("../domain/account.cjs");
-const { departmentInput, projectInput, memberInput, prepareSpaceInput, projectId, projectRevision } = require("../domain/project-input.cjs");
+const { departmentInput, projectInput, projectPromptsInput, memberInput, prepareSpaceInput, projectId, projectRevision } = require("../domain/project-input.cjs");
 const { assertProjectPermission, effectivePermissions, administratorPermissions, grantableProjectPermissions, projectContextPermissions, validatePermissions, canCreateProject, projectCreationReadiness, projectPermissionCatalog, productTemplate, developerTemplate } = require("../domain/project-permissions.cjs");
 const { resolveAccountRemote } = require("../domain/git-account.cjs");
 const { readSystemSettings } = require("../config/system-settings.cjs");
 const { cloneProject } = require("../git/project-clone.cjs");
 const { testGitConnection } = require("../git/account-credentials.cjs");
 const { defaultChannelConfig } = require("../channels/channel-registry.cjs");
-const { presentDepartment, presentProject, presentMember, presentSpace } = require("./project-presenter.cjs");
+const { presentDepartment, presentProject, presentMember, presentSpace, presentProjectPrompts } = require("./project-presenter.cjs");
 const { presentError } = require("./error-presenter.cjs");
 
 class ProjectServices {
@@ -82,17 +82,42 @@ class ProjectServices {
     return { permissionContext: { administratorAccess: user.role === "admin", departmentName: department?.name || "", ceiling: department?.permissions || [], grants: membership?.permissions || [] }, project: presentProject(project, permissions), membership: presentMember(membership && { ...membership, user }), permissions, space: presentSpace(await this.store.space(id, actor.id)) };
   }
   settings(input = {}, previous = {}) {
-    const value = { initCommands: previous.initCommands || [], prompts: storedPromptOverrides(previous.prompts), ...input };
+    const value = { initCommands: previous.initCommands || [], ...input, prompts: getPromptTemplates({ prompt_templates: previous.prompts || {} }) };
     delete value.baseRef;
     delete value.baseBranch;
     if (input.prompts) {
-      value.prompts = storedPromptOverrides(previous.prompts);
-      for (const [channel, template] of Object.entries(input.prompts)) {
-        if (template === null) delete value.prompts[channel];
-        else value.prompts[channel] = template;
+      for (const [type, template] of Object.entries(input.prompts)) {
+        value.prompts[type] = template === null ? promptTemplateCatalog[type].defaultTemplate : template;
       }
     }
     return value;
+  }
+  async promptSettings(id, actor) {
+    const { project, membership, permissions } = await this.authorize(id, actor, "project.view");
+    return presentProjectPrompts(project, membership, permissions);
+  }
+  async effectivePrompts(id, actor) {
+    const { project, membership } = await this.authorize(id, actor, "project.view");
+    return { ...getPromptTemplates({ prompt_templates: project.settings.prompts || {} }), ...storedPromptOverrides(membership?.prompts) };
+  }
+  async savePrompts(id, actor, input) {
+    const value = projectPromptsInput(input);
+    if (value.scope === "project") {
+      await this.update(id, actor, { revision: value.revision, settings: { prompts: value.templates } });
+    } else {
+      await this.store.transaction(async () => {
+        const { project, membership } = await this.authorize(id, actor, "project.view");
+        if (project.status !== "active") throw accountError("项目已归档，不能修改提示词。", 409);
+        if (membership?.status !== "active") throw accountError("只有项目成员可以维护自己的提示词。", 403);
+        const prompts = storedPromptOverrides(membership.prompts);
+        for (const [type, template] of Object.entries(value.templates)) {
+          if (template === null) delete prompts[type];
+          else prompts[type] = template;
+        }
+        await this.store.savePromptPreferences(id, actor.id, value.revision, prompts);
+      });
+    }
+    return this.promptSettings(id, actor);
   }
   async create(actor, input) {
     const value = projectInput(input);
