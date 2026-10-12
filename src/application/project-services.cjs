@@ -84,6 +84,7 @@ class ProjectServices {
   settings(input = {}, previous = {}) {
     const value = { ...previous, ...input };
     delete value.baseRef;
+    delete value.baseBranch;
     if (input.prompts) {
       value.prompts = { ...previous.prompts };
       for (const [channel, template] of Object.entries(input.prompts)) {
@@ -260,7 +261,7 @@ class ProjectServices {
     return { ...defaultChannelConfig(), ...previous, version: 5,
       workspace: { ...previous.workspace, id: workspaceId, name: `project-${project.id}`, owner_user_id: space.userId, project_id: project.id },
       execution: { ...execution, repository: target, projectName: project.id, gitAccountId: accountId, remoteUrl: remote,
-        baseBranch: project.settings.baseBranch || "", initCommands: project.settings.initCommands || [] },
+        baseBranch: "", initCommands: project.settings.initCommands || [] },
       agent: previous.agent || { provider: "codex", model: "", reasoningEffort: "", permissionMode: "ask", options: {} },
       ...(project.settings.tapd ? { tapd: project.settings.tapd } : {}),
       prompt_templates: project.settings.prompts || {} };

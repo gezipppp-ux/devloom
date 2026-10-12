@@ -9,6 +9,12 @@ const { encodeSecret, decodeSecret } = require("./database-secrets.cjs");
 function missing() { return accountError("项目资料不存在。", 404); }
 function serializable(value) { return JSON.parse(JSON.stringify(value)); }
 function conflict() { return accountError("资料已被其他人修改，请刷新后重试。", 409); }
+function hashCreationRequest(data, attachments) {
+  return createHash("sha256").update(JSON.stringify({ data,
+    attachments: attachments.map(({ id, name, mimeType, data: bytes }) => ({ id, name, mimeType, size: bytes.length,
+      sha256: createHash("sha256").update(bytes).digest("hex") })).sort((left, right) => left.id.localeCompare(right.id)),
+  })).digest("hex");
+}
 const fileMetadata = { id: true, projectId: true, issueId: true, assetId: true, authorId: true, name: true, mimeType: true, size: true, sha256: true, createdAt: true };
 
 class ProjectContentStore {
@@ -38,16 +44,16 @@ class ProjectContentStore {
     return { items: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
   }
   async createIssue(projectId, actorId, data, source, { requestId, attachments = [] } = {}) {
-    const creationRequestHash = requestId ? createHash("sha256").update(JSON.stringify({ data,
-      attachments: attachments.map(({ id, name, mimeType, data: bytes }) => ({ id, name, mimeType, size: bytes.length,
-        sha256: createHash("sha256").update(bytes).digest("hex") })).sort((left, right) => left.id.localeCompare(right.id)),
-    })).digest("hex") : null;
+    const creationRequestHash = requestId ? hashCreationRequest(data, attachments) : null;
     if (requestId) {
       const existing = await this.database.client.projectIssue.findUnique({ where: { id: requestId } });
       if (existing) {
         if (existing.projectId !== projectId || existing.createdById !== actorId) throw conflict();
         const history = await this.database.client.issueHistory.findFirst({ where: { projectId, issueId: requestId, actorId, action: "created" } });
-        if (history?.data?.creationRequestHash !== creationRequestHash) throw conflict();
+        // Older requests included the empty branch default after type, even when
+        // omitted by the caller. Recreate only its hash; never persist the field.
+        const storedHash = history?.data?.creationRequestHash;
+        if (storedHash !== creationRequestHash && storedHash !== hashCreationRequest({ type: data.type, baseBranch: "", ...data }, attachments)) throw conflict();
         return this.issue(projectId, requestId);
       }
     }

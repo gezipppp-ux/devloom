@@ -27,7 +27,7 @@ async function fixture(t) {
   const department = await database.client.department.create({ data: { name: "开发测试", permissions } });
   const actor = await database.client.user.create({ data: { username: "developer", displayName: "developer", passwordHash: "unused", departmentId: department.id } });
   const other = await database.client.user.create({ data: { username: "other-dev", displayName: "other-dev", passwordHash: "unused", departmentId: department.id } });
-  const project = await database.client.project.create({ data: { name: "开发项目", settings: { baseBranch: "main" }, ownerUserId: actor.id, remoteUrl: "https://example.test/team/repo.git" } });
+  const project = await database.client.project.create({ data: { name: "开发项目", ownerUserId: actor.id, remoteUrl: "https://example.test/team/repo.git" } });
   for (const user of [actor, other]) await database.client.projectMember.create({ data: { projectId: project.id, userId: user.id, permissions } });
   const account = await database.client.gitAccount.create({ data: { name: "开发凭据", userId: actor.id, authType: "http", remoteUrl: project.remoteUrl, host: "example.test", credentials: "not-read-by-fake-session" } });
   const workspace = await database.client.workspace.create({ data: { name: "开发空间", ownerUserId: actor.id } });
@@ -164,10 +164,9 @@ test("project tasks and image additions use the real session manager with tempor
 });
 
 test("project additions persist ready snapshots without sending and fence unknown outcomes against replay", async t => {
-  const { database, actor, project, content, services, sessions, calls, issue } = await fixture(t);
+  const { actor, project, content, services, sessions, calls, issue } = await fixture(t);
   const first = await issue("原始事项"), added = await issue("追加事项"), uncertain = await issue("不确定追加");
   const { task } = await launch(services, project.id, actor, { requestId: randomUUID(), issueIds: [first.id] });
-  await database.client.project.update({ where: { id: project.id }, data: { settings: { baseBranch: "changed-project-default" } } });
   const requestId = randomUUID();
   const prepared = await services.append(project.id, task.id, actor, { requestId, issueIds: [added.id] });
   assert.equal(prepared.task.additions[0].status, "ready");

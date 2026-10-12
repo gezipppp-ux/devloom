@@ -325,7 +325,6 @@ model ProjectIssue {
   workflowVersionId  String @map("workflow_version_id")
   release            ProjectRelease? @relation(fields: [projectId, releaseId], references: [projectId, id], onDelete: Restrict)
   workflowVersion    SystemWorkflowVersion @relation(fields: [workflowVersionId], references: [id], onDelete: Restrict)
-  baseBranch         String   @default("") @map("base_branch")
   id                 String   @id @default(uuid())
   projectId          String   @map("project_id")
   number             Int

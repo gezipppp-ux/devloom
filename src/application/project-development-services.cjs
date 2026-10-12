@@ -186,8 +186,6 @@ class ProjectDevelopmentServices {
       const issues = existing?.issues || await this.store.issues(projectId, request.issueIds);
       if (!existing) {
         this.assertIssues(issues, task.releaseId, true);
-        if (issues.some(issue => issue.baseBranch && issue.baseBranch !== task.snapshot.baseBranch))
-          throw accountError("追加事项的开发基线与当前任务不同，请先修改事项基线；已有任务不会切换分支。", 409);
       }
       const result = await this.store.addIssues(task, request, issues, existing?.prompt || developmentPrompt(issues, true));
       await this.authorize(projectId, actor, "session.continue");

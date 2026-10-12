@@ -15,7 +15,7 @@ async function prepareHttpProject(request, { name, remoteUrl, gitAccountId }) {
     return result.data;
   };
   const session = await call("/api/auth/session");
-  const project = await call("/api/projects", { name, remoteUrl, settings: { baseBranch: "main" } });
+  const project = await call("/api/projects", { name, remoteUrl });
   await call(`/api/projects/${project.project.id}/members/${session.user.id}`, {
     permissions: permissions.filter(item => item.scope !== "department").map(item => item.id), revision: project.membership.revision,
   });

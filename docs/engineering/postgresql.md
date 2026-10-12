@@ -34,7 +34,7 @@
 
 ## 事务与生命周期
 
-`20261012030000_development_baseline` 为事项增加 `base_branch`，空字符串表示继承项目默认分支。项目默认值仍保存于 settings JSON，任务受理分支保存于不可变 snapshot，实际 commit 保存于运行 worktree.baseline。不会为已有任务补造基线或改动其身份、路径。
+`20261012030000_development_baseline` 曾为事项增加 `base_branch`。`20261012160000_remove_project_issue_branch_defaults` 删除该列、移除项目 settings JSON 中的 `baseBranch`，清空项目空间配置里复制的默认分支，并清除事项快照副本。任务受理时选择的实际分支仍保存在不可变任务 snapshot，实际 commit 保存在运行 worktree.baseline；已有任务身份、路径及执行基线不变。
 
 通过 `PostgresDatabase.transaction()` 运行短事务，默认 Serializable，等待和执行各最多 5 秒。回调只包含数据库操作，不等待网络、Git 或 Codex。冲突由上层按业务幂等性处理，不自动重放任意回调。
 

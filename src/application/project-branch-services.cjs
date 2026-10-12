@@ -13,7 +13,7 @@ class ProjectBranchServices {
   }
   async list(projectId, actor) {
     await this.projects.authorize(projectId, actor, "issue.view");
-    const { project } = await this.projects.authorize(projectId, actor, "session.start");
+    await this.projects.authorize(projectId, actor, "session.start");
     const space = await this.store.space(projectId, actor.id);
     if (!space || space.status !== "ready" || !space.workspaceId || !space.gitAccountId)
       throw accountError("请先准备自己的开发空间，再获取远端分支。", 409);
@@ -26,7 +26,7 @@ class ProjectBranchServices {
     if (current?.revision !== space.revision || current?.workspaceId !== space.workspaceId ||
         (await this.accounts.read(space.gitAccountId, actor.id)).revision !== account.revision)
       throw accountError("开发空间或 Git 账号已变化，请重新获取分支。", 409);
-    return presentProjectBranches(result, project.settings?.baseBranch);
+    return presentProjectBranches(result);
   }
 }
 

@@ -1,4 +1,3 @@
-const { validateBaseBranch } = require("./development-baseline.cjs");
 const { accountError } = require("./account.cjs");
 const { remoteUrl } = require("./git-account.cjs");
 const { validatePermissions } = require("./project-permissions.cjs");
@@ -38,9 +37,8 @@ function departmentInput(input, updating = false) {
   return value;
 }
 function projectSettings(input) {
-  object(input, ["baseBranch", "initCommands", "prompts", "tapd"]);
+  object(input, ["initCommands", "prompts", "tapd"]);
   const value = {};
-  if (input.baseBranch !== undefined) value.baseBranch = validateBaseBranch(input.baseBranch, { allowEmpty: true });
   if (input.initCommands !== undefined) value.initCommands = validateInitCommands(input.initCommands);
   if (input.prompts !== undefined) {
     object(input.prompts, Object.keys(promptTemplateCatalog));

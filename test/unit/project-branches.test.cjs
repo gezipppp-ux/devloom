@@ -12,7 +12,7 @@ function fixture() {
     assert.equal(project, "project"); assert.equal(selected, actor);
     assert.ok(["session.start", "issue.view"].includes(permission));
     if (!permitted) throw new Error("revoked");
-    return { project: { settings: { baseBranch: "main" } } };
+    return { project: {} };
   } };
   service.store = {
     async space(project, owner) { assert.equal(project, "project"); assert.equal(owner, actor.id); return { ...space }; },
@@ -29,7 +29,7 @@ function fixture() {
 test("project branches require the caller's ready development space and expose no credentials", async () => {
   const f = fixture();
   const result = await f.service.list("project", f.actor);
-  assert.equal(result.defaultBranch, "main");
+  assert.equal("defaultBranch" in result, false);
   assert.doesNotMatch(JSON.stringify(result), /private|repository|password/);
   f.space.status = "pending";
   await assert.rejects(f.service.list("project", f.actor), /准备自己的开发空间/);

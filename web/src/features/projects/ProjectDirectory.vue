@@ -8,10 +8,10 @@ import FormSection from "../../shared/components/FormSection.vue";
 const emit = defineEmits(["open"]);
 const { data, loading, saving, error, notice, reload, save } = useResource(() => appApi("/projects"));
 const creating = ref(false);
-const form = reactive({ name: "", description: "", remoteUrl: "", baseBranch: "" });
+const form = reactive({ name: "", description: "", remoteUrl: "" });
 const projects = computed(() => data.value?.projects || []);
 const administrator = computed(() => accountSession.user?.role === "admin");
-function create() { return save("/projects", { name: form.name, description: form.description, remoteUrl: form.remoteUrl, settings: { baseBranch: form.baseBranch } }, result => { creating.value = false; emit("open", result.project.id); }, "项目已创建。"); }
+function create() { return save("/projects", { name: form.name, description: form.description, remoteUrl: form.remoteUrl }, result => { creating.value = false; emit("open", result.project.id); }, "项目已创建。"); }
 </script>
 <template>
   <section class="project-page">
@@ -28,7 +28,6 @@ function create() { return save("/projects", { name: form.name, description: for
     <FormSection v-if="creating" title="创建项目">
       <form class="project-form" @submit.prevent="create"><label>项目名称<input v-model="form.name" :disabled="saving" required maxlength="80" /></label><label>项目说明<textarea v-model="form.description" :disabled="saving" rows="3" maxlength="8000" /></label>
         <label>Git 仓库地址<input v-model="form.remoteUrl" aria-label="Git 仓库地址" required :disabled="saving" placeholder="https://git.example.com/team/repository.git" aria-describedby="project-repository-hint" /><small id="project-repository-hint" class="field-hint">新建项目即引入一个 Git 仓库。支持 HTTP(S) 或 SSH 克隆地址，请勿填写密码或令牌；个人 Git 账号在开发空间中配置。</small></label>
-        <label>默认开发分支<input v-model="form.baseBranch" aria-label="默认开发分支" :disabled="saving" placeholder="main / master / release/1.0" /><small class="field-hint">可留空，表示尚未配置；开发人员启动任务时确认实际分支。</small></label>
         <p class="field-hint">{{ administrator ? '创建后可直接维护需求、Bug 和普通资产。请到“成员”分配参与者；本人需要开发时也须取得相应部门和项目权限。' : '创建者初始仅有查看项目、项目配置和成员管理权限。创建后请先到“成员”设置本人及参与者的工作内容组合，再维护事项或准备开发空间。' }}</p><div class="actions"><button type="submit" class="primary" :disabled="saving">{{ saving ? '正在创建…' : '保存项目' }}</button><button type="button" :disabled="saving" @click="creating = false">取消</button></div>
       </form>
     </FormSection>

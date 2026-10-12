@@ -10,12 +10,4 @@ function validateBaseBranch(value, { allowEmpty = false } = {}) {
   return value;
 }
 
-function resolveBaseBranch(issues, projectBranch, explicitBranch) {
-  if (explicitBranch !== undefined) return validateBaseBranch(explicitBranch);
-  const branches = issues.map(issue => issue.baseBranch || projectBranch || "");
-  if (branches.some(branch => !branch)) throw accountError("请配置项目或事项的开发基线，或为本次开发明确选择分支。", 400);
-  if (new Set(branches).size !== 1) throw accountError("所选事项的开发基线不同，请为本次开发明确选择分支。", 400);
-  return validateBaseBranch(branches[0]);
-}
-
-module.exports = { validateBaseBranch, resolveBaseBranch };
+module.exports = { validateBaseBranch };

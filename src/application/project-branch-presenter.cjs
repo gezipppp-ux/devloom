@@ -1,6 +1,6 @@
-function presentProjectBranches(result, defaultBranch) {
+function presentProjectBranches(result) {
   return { branches: result.branches.map(({ name, commit }) => ({ name, commit })),
-    fetchedAt: result.fetchedAt, defaultBranch: defaultBranch || "" };
+    fetchedAt: result.fetchedAt };
 }
 
 module.exports = { presentProjectBranches };

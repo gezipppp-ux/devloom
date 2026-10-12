@@ -4,8 +4,8 @@ function presentDepartment(row) { return { id: row.id, name: row.name, status: r
 function presentProject(row, permissions = []) {
   const settings = row.settings || {};
   return { id: row.id, name: row.name, description: row.description, ownerUserId: row.ownerUserId,
-    remoteUrl: row.remoteUrl, baseBranch: settings.baseBranch || "", repositoryEditable: row._count?.spaces === 0, status: row.status, revision: row.revision,
-    settings: permissions.includes("project.configure") ? { baseBranch: settings.baseBranch || "", initCommands: settings.initCommands || [], prompts: settings.prompts || {},
+    remoteUrl: row.remoteUrl, repositoryEditable: row._count?.spaces === 0, status: row.status, revision: row.revision,
+    settings: permissions.includes("project.configure") ? { initCommands: settings.initCommands || [], prompts: settings.prompts || {},
       tapd: { workspaceId: settings.tapd?.session?.request_body?.group_id || "", hasCookie: Boolean(settings.tapd?.session?.cookie_header), imageHosts: settings.tapd?.image_hosts || [] } } : undefined,
     ...dates(row) };
 }

@@ -296,9 +296,8 @@ async function main() {
       return (await database.client.project.findUnique({ where: { id: project.id } })).settings;
     }
     await page.getByLabel("说明", { exact: true }).fill("未配置模板的新项目可以保存设置");
-    await page.getByLabel("默认开发分支", { exact: true }).fill("main");
     let savedSettings = await saveProjectSettings();
-    assert.equal(savedSettings.baseBranch, "main");
+    assert.equal("baseBranch" in savedSettings, false);
     assert.deepEqual(savedSettings.prompts, {});
     const customManual = `  手动任务自定义模板\n${promptTemplateCatalog.manual.defaultTemplate}  `;
     const customTapd = `  TAPD 自定义模板\n${promptTemplateCatalog.tapd.defaultTemplate}  `;
@@ -308,7 +307,6 @@ async function main() {
     assert.deepEqual(savedSettings.prompts, { manual: customManual, tapd: customTapd });
     await manualPrompt.fill("");
     await tapdPrompt.fill("  \n  ");
-    await page.getByLabel("默认开发分支", { exact: true }).fill("main");
     savedSettings = await saveProjectSettings();
     assert.deepEqual(savedSettings.prompts, {}, "clearing prompt overrides restores channel defaults");
     await tab("概览");

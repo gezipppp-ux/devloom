@@ -4,7 +4,6 @@ import { computed, reactive, ref } from "vue";
 import { appApi } from "../../shared/api/api.js";
 import { useResource } from "../../shared/api/use-resource.js";
 import { priorityLabels } from "./project-labels.js";
-import WorkflowGraph from "../../shared/components/WorkflowGraph.vue";
 import EditConflict from "./EditConflict.vue";
 import ProjectFiles from "./ProjectFiles.vue";
 import IssueDiscussion from "./IssueDiscussion.vue";
@@ -17,8 +16,8 @@ const props = defineProps({ projectId: { type: String, required: true }, issueId
 const emit = defineEmits(["back", "changed", "open-task", "start-development", "assign-development", "prepare-development"]);
 const endpoint = `/projects/${props.projectId}/issues/${props.issueId}`;
 const { data, loading, saving, error, notice, reload, save, perform } = useResource(async () => {
-  const [issue, members, project] = await Promise.all([appApi(endpoint), appApi(`/projects/${props.projectId}/members`), appApi(`/projects/${props.projectId}`)]);
-  return { ...issue, projectBaseBranch: project.project.baseBranch || "", members: members.members.filter(m => m.status === "active" && m.userStatus === "active"), people: [...issue.people, ...members.members.map(m => ({ id: m.userId, username: m.username, displayName: m.displayName }))] };
+  const [issue, members] = await Promise.all([appApi(endpoint), appApi(`/projects/${props.projectId}/members`)]);
+  return { ...issue, members: members.members.filter(m => m.status === "active" && m.userStatus === "active"), people: [...issue.people, ...members.members.map(m => ({ id: m.userId, username: m.username, displayName: m.displayName }))] };
 });
 const baseline = ref(null), latest = ref(null);
 const editing = ref(false), form = reactive({}), nextStatus = ref(""), reason = ref("");
@@ -52,7 +51,7 @@ function person(id) { return data.value?.people?.find(p => p.id === id)?.display
         <IssueFields :model-value="form" :type="data.type" :can-edit="can('issue.edit')" :can-assign="can('issue.assign')" :disabled="saving" :context-key="`${projectId}/${issueId}/${draftVersion}`" :members="data.members" :releases="releases.data.value?.items || []" :images="images" :attachments="pending" :attachment-error="attachmentError" :attachment-busy="attachmentBusy" @update:model-value="Object.assign(form, $event)" @files="attach" @remove="removeFile" />
         <div class="actions"><button type="submit" class="primary" :disabled="saving || attachmentBusy || Boolean(latest)">{{ saving ? '正在保存…' : '保存事项' }}</button><button type="button" :disabled="saving" @click="cancelEdit">取消编辑</button></div>
       </form>
-      <template v-else><p v-if="data.release?.status === 'archived'" class="warning">版本已归档，内容只读。</p><section v-if="data.workflow" class="project-section"><h3>事项流程 · 版本 {{ data.workflow.version }}</h3><WorkflowGraph :definition="data.workflow.definition" :current="data.status" /></section><section class="project-section"><p class="project-text">开发基线：{{ data.baseBranch || data.projectBaseBranch || '尚未配置，启动时选择' }}{{ data.baseBranch ? '' : '（继承项目默认）' }}</p><h3>描述</h3><MarkdownContent v-if="data.description" :content="data.description" :images="data.images || []" /><p v-else class="muted">暂无描述。</p>
+      <template v-else><p v-if="data.release?.status === 'archived'" class="warning">版本已归档，内容只读。</p><section class="project-section"><h3>描述</h3><MarkdownContent v-if="data.description" :content="data.description" :images="data.images || []" /><p v-else class="muted">暂无描述。</p>
         <template v-if="data.type === 'requirement'"><h3>验收标准</h3><MarkdownContent v-if="data.acceptanceCriteria" :content="data.acceptanceCriteria" :images="data.images || []" /><p v-else class="muted">尚未填写。</p></template>
         <template v-else><template v-for="[key, label] in [['reproductionSteps', '复现步骤'], ['expectedResult', '预期结果'], ['actualResult', '实际结果']]" :key="key"><h3>{{ label }}</h3><MarkdownContent v-if="data[key]" :content="data[key]" :images="data.images || []" /><p v-else class="muted">尚未填写。</p></template><p class="muted">严重程度：{{ { minor: '轻微', normal: '普通', major: '严重', critical: '致命' }[data.severity] }}</p></template>
         <p class="muted">参与人：{{ data.participantIds.map(person).join('、') || '无' }}</p><p v-if="data.source" class="muted">来源：{{ data.source.channel }} · {{ data.source.externalId }}</p></section>

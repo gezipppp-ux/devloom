@@ -146,7 +146,7 @@ test("Gitee project preparation and settings synchronization preserve each membe
       assert.equal(config.execution.gitAccountId, account.id);
       configs.push({ actor, ready, config });
     }
-    const updated = await f.projects.update(project.id, f.admin, { revision: project.revision, settings: { baseBranch: "main", initCommands: ["npm ci"] } });
+    const updated = await f.projects.update(project.id, f.admin, { revision: project.revision, settings: { initCommands: ["npm ci"] } });
     assert.equal(updated.project.remoteUrl, remoteUrl);
     assert.equal((await f.projects.store.project(project.id)).remoteUrl, remoteUrl);
     for (const { actor, ready, config } of configs) {
@@ -155,7 +155,7 @@ test("Gitee project preparation and settings synchronization preserve each membe
       assert.equal(after.execution.gitAccountId, config.execution.gitAccountId);
       assert.equal(after.execution.repository, config.execution.repository);
       assert.deepEqual(after.workspace, config.workspace);
-      assert.equal(after.execution.baseBranch, "main");
+      assert.equal(after.execution.baseBranch, "");
       assert.deepEqual(after.execution.initCommands, ["npm ci"]);
     }
     assert.deepEqual(calls, [], "settings synchronization never reconnects or reclones prepared spaces");
@@ -172,13 +172,13 @@ test("project settings propagate to prepared spaces without exposing secrets or 
   const before = await f.projects.store.readWorkspace(space.workspaceId, f.member.id);
   const template = "Project instructions: {{title}}\n{{content}}\n{{images}}";
   const cookie = "dsc-token=fixture-project-secret; session=fixture-project-cookie";
-  const changed = await f.projects.update(f.project.id, f.admin, { revision: 1, settings: { baseBranch: "main", initCommands: ["npm ci"], prompts: { manual: template }, tapd: { workspaceId: "12345", cookie } } });
+  const changed = await f.projects.update(f.project.id, f.admin, { revision: 1, settings: { initCommands: ["npm ci"], prompts: { manual: template }, tapd: { workspaceId: "12345", cookie } } });
   assert.equal(changed.project.settings.tapd.hasCookie, true);
   assert.ok(!JSON.stringify(changed).includes("fixture-project-secret"));
   const after = await f.projects.store.readWorkspace(space.workspaceId, f.member.id);
   assert.equal(after.execution.repository, before.execution.repository);
   assert.deepEqual(after.workspace, before.workspace);
-  assert.equal(after.execution.baseBranch, "main");
+      assert.equal(after.execution.baseBranch, "");
   assert.deepEqual(after.execution.initCommands, ["npm ci"]);
   assert.equal(after.prompt_templates.manual, template);
   const persisted = await f.database.client.project.findUnique({ where: { id: f.project.id } });

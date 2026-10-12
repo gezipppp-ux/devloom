@@ -36,7 +36,7 @@ Operation feedback uses `FeedbackMessage` and one `OperationMessages` host in `A
 
 ## Verification
 
-Project issue creation and editing share a development branch field; empty values inherit the project default. Starting development opens a native confirmation dialog that shows the selected issues and their effective branches. Conflicting defaults require an explicit branch choice. The dialog shows fresh data, prevents duplicate submission, ignores late responses after navigation, and keeps its input, help text and footer reachable at 320px. Task details distinguish the selected branch, actual fetched commit, preparation failure and established session.
+Project and issue forms do not expose default development branch fields. Starting development requires the executor to choose a branch from the live remote list. The task dialog shows fresh data, prevents duplicate submission, ignores late responses after navigation, and keeps its input, help text and footer reachable at 320px. Task details distinguish the selected branch, actual fetched commit, preparation failure and established session. Requirement and Bug details do not display the workflow graph.
 
 Use fixture data only. Browser regression suites verify behavior; the visual fixture captures all pages and checks viewport overflow, control containment and dialog reachability. Review the resulting screenshots against the prototype set. Generated prototypes and fixture screenshots must never contain live credentials or customer content.
 
