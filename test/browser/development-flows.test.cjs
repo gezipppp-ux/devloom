@@ -6,6 +6,7 @@ const { chromium } = require('playwright');
 const { agentDescriptor } = require('../fixtures/agent-descriptor.cjs');
 const { projectVisual } = require('../../test/fixtures/project-visual.cjs');
 const { verifyReleaseNameForm } = require('./project-releases.test.cjs');
+const { verifyWorkflowCanvas } = require('./workflow-canvas.test.cjs');
 
 async function main() {
   const fixture = projectVisual('ux-workspace');
@@ -18,7 +19,7 @@ async function main() {
   let runs = [], taskStatus = 'running';
   const browser = await chromium.launch({ ...(process.platform === 'win32' ? { channel: 'msedge' } : {}), headless: true });
   try {
-    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, hasTouch: true });
     await page.addInitScript(() => {
       window.EventSource = class {
         constructor() { this.timer = setTimeout(() => this.onopen?.({}), 0); }
@@ -183,6 +184,7 @@ async function main() {
     await page.goBack(); await page.waitForURL('**task=1-1');
     releaseInitialTask();
     await page.getByRole('heading',{name:'不应被替代打开的任务 A',exact:true}).waitFor();
+    await verifyWorkflowCanvas({ page, origin, output });
     assert.deepEqual(errors,[]);
     process.stdout.write('Development flow regression passed.\n');
   } finally {await browser.close();}

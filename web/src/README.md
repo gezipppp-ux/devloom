@@ -74,4 +74,6 @@ ProjectPermissionEditor 在部门模式显示功能上限，在成员模式显�
 
 样式沿用浅绿工作台规范，统一修改 `shared/styles/design-tokens.css` 与 `shared/styles/style.css`。验证遵循仓库契约：lint、单元测试、构建、浏览器回归；视觉改动还需模拟数据截图验证。
 
-项目生命周期由 `ProjectReleases` 与 `PlanDevelopmentDialog` 组合；管理员在系统设置中的 `features/settings/SystemWorkflows` 维护全局需求和 Bug 两套流程，项目没有流程配置入口。`shared/components/WorkflowGraph` 由系统编辑器与项目事项详情共享，项目只读取发布版本。流程选项和可用流转来自服务端发布版本，不再在页面维护固定状态表。事项先认领／指派为待开发任务，由 `ProjectTasks` 单独执行开始、完成和取消；`RemoteBranchSelect` 只接受远端返回的分支选项，刷新立即清空旧选择，失败不得手填回退。流程图支持节点拖动、键盘选取及移动，窄屏在图内滚动；资产、图文事项和已有会话保持原安全渲染边界。
+项目生命周期由 `ProjectReleases` 与 `PlanDevelopmentDialog` 组合；管理员在系统设置中的 `features/settings/SystemWorkflows` 维护全局需求和 Bug 两套流程，项目没有流程配置入口。`shared/components/WorkflowGraph` 呈现系统流程编辑画布；项目事项详情不显示流程图，只读取发布版本用于状态流转。流程选项和可用流转来自服务端发布版本，不再在页面维护固定状态表。事项先认领／指派为待开发任务，由 `ProjectTasks` 单独执行开始、完成和取消；`RemoteBranchSelect` 只接受远端返回的分支选项，刷新立即清空旧选择，失败不得手填回退。流程图按状态类型配色，`workflow-routing.js` 负责节点间距、正式连线及拖线预览的避障和贝塞尔曲线路径；双击空白／Insert 新增状态，拖动或依次点击连接点连线，点击节点／连线在画布内编辑，Delete 在画布内确认删除及关联连线。支持键盘选取、移动与 Esc 取消，保存期间禁用编辑，窄屏图内滚动、属性区移至画布下方；资产、图文事项和已有会话保持原安全渲染边界。
+
+流程画布提供缩放、适应画布和全屏视图；全屏保留草稿、选中项、保存／发布及操作反馈，退出按钮或 Esc 返回。优先使用浏览器 Fullscreen API，不支持时使用视口覆盖层并管理焦点与页面滚动；卸载时清理全屏监听、尺寸观察与滚动锁。坐标经 SVG 屏幕矩阵换算，缩放或全屏不会改变已保存的节点位置。

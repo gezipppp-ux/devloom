@@ -548,7 +548,7 @@ async function main() {
         await capture('15-project-releases-' + width);
         await page.goto(origin + '/system?tab=workflows');
         await page.getByRole('heading', { name: '流程编排', exact: true }).waitFor();
-        await page.getByRole('button', { name: '添加状态', exact: true }).waitFor();
+        await page.getByRole('group', { name: '事项流程图', exact: true }).waitFor();
         await capture('15-system-workflows-' + width);
         await page.goto(origin + '/projects/00000000-0000-4000-8000-000000000001');
         await tabs.getByRole('button', { name: '成员', exact: true }).click();

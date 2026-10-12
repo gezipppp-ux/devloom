@@ -151,8 +151,8 @@ async function main() {
       }
       await page.getByRole("button", { name: "保存事项", exact: true }).click();
       await page.getByRole("heading", { name: title, exact: true }).waitFor();
-      await page.getByRole("group", { name: "事项流程图", exact: true }).waitFor();
-      assert.equal(await page.getByRole("button", { name: "校验并发布流程", exact: true }).count(), 0, "ordinary members read bound workflow without editing it");
+      assert.equal(await page.getByRole("group", { name: "事项流程图", exact: true }).count(), 0, "issue details use the published workflow without rendering the system canvas");
+      assert.equal(await page.getByRole("button", { name: "校验并发布流程", exact: true }).count(), 0, "ordinary members cannot edit the system workflow");
       const issueUrl = page.url();
       const issueId = new URL(issueUrl).searchParams.get("issue");
       const stored = await database.client.projectIssue.findUnique({ where: { id: issueId } });
