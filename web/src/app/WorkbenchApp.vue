@@ -1,83 +1,55 @@
 <script setup>
 import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { UserOutlined, LogoutOutlined, TeamOutlined, SettingOutlined } from "@antdv-next/icons";
+import { UserOutlined, LogoutOutlined, TeamOutlined, SettingOutlined, FolderOpenOutlined } from "@antdv-next/icons";
 import { useWorkspaceSelection } from "./use-workspace-selection.js";
 import { useDesktopNotifications } from "../features/accounts/use-desktop-notifications.js";
 import { accountSession, logoutAccount } from "../shared/api/account-session.js";
 import WorkspaceConsole from "./WorkspaceConsole.vue";
 import SystemSettings from "./SystemSettings.vue";
+import RepositoryGitPanel from "../features/settings/RepositoryGitPanel.vue";
 import PersonalSettings from "../features/accounts/PersonalSettings.vue";
 import AccountManagement from "../features/accounts/AccountManagement.vue";
-import WorkspacePicker from "../features/workspaces/WorkspacePicker.vue";
-import WorkspaceCloneProgress from "../features/workspaces/WorkspaceCloneProgress.vue";
-import { useWorkspaceClones } from "../features/workspaces/use-workspace-clones.js";
-
-const picker = ref();
-const route = useRoute();
-const router = useRouter();
-const { workspaces, current, ready, error, standalone, navigate, workspaceSaved } = useWorkspaceSelection();
-const unreadWorkspaceIds = ref([]);
+import ProjectDirectory from "../features/projects/ProjectDirectory.vue";
+import ProjectOverview from "../features/projects/ProjectOverview.vue";
+import ProjectAdministration from "../features/projects/ProjectAdministration.vue";
+import "../shared/styles/projects.css";
+const route = useRoute(), router = useRouter();
+const { current, ready, error, standalone, navigate } = useWorkspaceSelection();
 const desktopNotifications = useDesktopNotifications();
 const admin = computed(() => accountSession.user?.role === "admin");
-const accountPage = computed(() => ["personal", "system", "accounts"].includes(route.name));
 const logoutError = ref("");
-const cloneProgress = ref();
-const { clones, error: cloneError, start: createWorkspace, dismiss: dismissClone } = useWorkspaceClones({
-  enabled: computed(() => ready.value && !standalone.value),
-  onCompleted(clone) {
-    if (!workspaces.value.some(workspace => workspace.id === clone.workspace.id))
-      workspaceSaved(clone.workspace, false);
-  },
+const personalReturn = computed(() => {
+  const target = typeof route.query.returnTo === "string" ? router.resolve(route.query.returnTo) : null;
+  return target?.name === "project" ? target.fullPath : "";
 });
-function cloneStarted() { cloneProgress.value?.open(); }
-function page(name) { void router.push({ name, query: route.query }); }
-function updateWorkspaceUnread(hasUnread) {
-  const id = current.value?.id;
-  if (!id) return;
-  unreadWorkspaceIds.value = hasUnread
-    ? [...new Set([...unreadWorkspaceIds.value, id])]
-    : unreadWorkspaceIds.value.filter((entry) => entry !== id);
+function selectTask(task) { if (route.query.task !== task) void router[route.query.task ? "push" : "replace"]({ query: { ...route.query, task } }); }
+function page(name) { void router.push({ name }); }
+function project(id, tab = "overview") { void router.push({ name: "project", params: { projectId: id }, query: { tab } }); }
+function tab(value) { void router.push({ query: { tab: value } }); }
+function returnToProject() {
+  const target = typeof route.query.returnTo === "string" ? router.resolve(route.query.returnTo) : null;
+  if (target?.name === "project" && target.params.projectId === current.value?.projectId) void router.push(target.fullPath);
+  else project(current.value.projectId);
 }
-async function logout() {
-  try { await logoutAccount(); }
-  catch (error) { logoutError.value = error.message; }
-}
+async function logout() { try { await logoutAccount(); } catch (failure) { logoutError.value = failure.message; } }
 </script>
-
 <template>
   <div class="authenticated-app">
-    <header class="account-bar">
-      <span class="account-identity" :title="accountSession.user?.username"><UserOutlined aria-hidden="true" />{{ accountSession.user?.username }}</span>
-      <nav aria-label="账号导航">
-        <WorkspaceCloneProgress v-if="!standalone" ref="cloneProgress" :clones="clones" :error="cloneError" :dismiss="dismissClone" @open-workspace="navigate" />
-        <button :class="{ active: route.name === 'personal' }" @click="page('personal')"><UserOutlined aria-hidden="true" /><span>个人设置</span></button>
-        <button v-if="admin" :class="{ active: route.name === 'system' }" @click="page('system')"><SettingOutlined aria-hidden="true" /><span>系统设置</span></button>
-        <button v-if="admin" :class="{ active: route.name === 'accounts' }" @click="page('accounts')"><TeamOutlined aria-hidden="true" /><span>账号管理</span></button>
-        <button @click="logout"><LogoutOutlined aria-hidden="true" /><span>退出登录</span></button>
-      </nav>
-    </header>
+    <header class="account-bar"><span class="account-identity" :title="accountSession.user?.username"><UserOutlined aria-hidden="true" />{{ accountSession.user?.username }}</span><nav aria-label="账号导航">
+      <button :class="{ active: route.name === 'workspace' && !route.query.workspace }" @click="page('workspace')"><FolderOpenOutlined aria-hidden="true" /><span>我的项目</span></button>
+      <button :class="{ active: route.name === 'personal' }" @click="page('personal')"><UserOutlined aria-hidden="true" /><span>个人设置</span></button>
+      <button v-if="admin" :class="{ active: route.name === 'departments' }" @click="page('departments')"><TeamOutlined aria-hidden="true" /><span>部门可用功能</span></button>
+      <button v-if="admin" :class="{ active: route.name === 'repositories' }" @click="page('repositories')"><FolderOpenOutlined aria-hidden="true" /><span>仓库目录</span></button>
+      <button v-if="admin" :class="{ active: route.name === 'accounts' }" @click="page('accounts')"><TeamOutlined aria-hidden="true" /><span>账号管理</span></button>
+      <button v-if="admin" :class="{ active: route.name === 'system' }" @click="page('system')"><SettingOutlined aria-hidden="true" /><span>系统设置</span></button>
+      <button @click="logout"><LogoutOutlined aria-hidden="true" /><span>退出登录</span></button>
+    </nav></header>
     <p v-if="logoutError" class="error" role="alert">{{ logoutError }}</p>
-    <div v-if="accountPage" class="system-settings-view account-page-view">
-      <WorkspacePicker v-if="ready && !standalone" ref="picker" rail :workspaces="workspaces" :current="current" :unread-workspace-ids="unreadWorkspaceIds" :system-settings-open="true" :show-system-settings="false" :create-workspace="createWorkspace" @clone-started="cloneStarted" @select="navigate" @saved="workspaceSaved" />
-      <main class="system-settings-main">
-        <div class="page-breadcrumb"><button class="text-button" @click="page('workspace')">工作台</button><span aria-hidden="true">/</span><strong>{{ { personal: '个人设置', system: '系统设置', accounts: '账号管理' }[route.name] }}</strong></div>
-        <PersonalSettings v-if="route.name === 'personal'" :notifications="desktopNotifications" />
-        <SystemSettings v-else-if="route.name === 'system' && admin" />
-        <AccountManagement v-else-if="route.name === 'accounts' && admin" />
-      </main>
-    </div>
-    <WorkspaceConsole v-else-if="ready && (current || standalone)" :key="current?.id || 'standalone'" :workspace-name="current?.name || ''" :notify-unread-result="desktopNotifications.notifyResult" :can-manage-system="admin" @rename-workspace="picker?.edit(true)" @unread-results-change="updateWorkspaceUnread" @system-settings="page('system')">
-      <template v-if="!standalone" #workspace-rail>
-        <WorkspacePicker ref="picker" rail :workspaces="workspaces" :current="current" :unread-workspace-ids="unreadWorkspaceIds" :show-system-settings="false" :create-workspace="createWorkspace" @clone-started="cloneStarted" @select="navigate" @saved="workspaceSaved" />
-      </template>
-    </WorkspaceConsole>
-    <section v-else class="workspace-welcome">
-      <div class="welcome-mark" aria-hidden="true">t_</div><div class="eyebrow">需求 × CODEX</div>
-      <h1>{{ ready ? "创建或选择工作区" : "正在连接工作台…" }}</h1>
-      <p class="welcome-description">一个项目，一套配置。工作区与需求仅属于你的账号。</p>
-      <p v-if="error" class="error" role="alert">{{ error }}</p>
-      <WorkspacePicker v-if="ready" :workspaces="workspaces" :create-workspace="createWorkspace" @clone-started="cloneStarted" @select="navigate" @saved="workspaceSaved" />
-    </section>
+    <main v-if="['personal', 'system', 'accounts'].includes(route.name)" class="system-settings-main account-page-view"><div class="page-breadcrumb"><button class="text-button" @click="page('workspace')">我的项目</button><span>/</span><strong>{{ { personal: '个人设置', system: '系统设置', accounts: '账号管理' }[route.name] }}</strong></div><button v-if="route.name === 'personal' && personalReturn" class="project-return-button" @click="router.push(personalReturn)">返回开发环境</button><PersonalSettings v-if="route.name === 'personal'" :notifications="desktopNotifications" /><SystemSettings v-else-if="route.name === 'system' && admin" /><AccountManagement v-else-if="route.name === 'accounts' && admin" /></main>
+    <ProjectAdministration v-else-if="['departments', 'repositories'].includes(route.name) && admin" :key="route.name" :kind="route.name" />
+    <ProjectOverview v-else-if="route.name === 'project'" :key="route.params.projectId" :project-id="route.params.projectId" :tab="String(route.query.tab || 'overview')" @tab="tab" @back="page('workspace')" @open-workspace="navigate" />
+    <template v-else-if="route.name === 'workspace' && (route.query.workspace || standalone)"><div v-if="current?.projectId" class="project-back"><button @click="returnToProject">返回项目协作</button></div><WorkspaceConsole v-if="ready && (current || standalone) && (!current?.projectId || current?.permissions?.includes('session.view'))" :key="current?.id || 'standalone'" :initial-task="String(route.query.task || '')" :workspace-name="current?.name || ''" :project-id="current?.projectId || ''" :permissions="current?.permissions" :notify-unread-result="desktopNotifications.notifyResult" :can-manage-system="admin" @task-change="selectTask" @system-settings="page('system')" @open-project="value => project(current.projectId, value || 'issues')" /><RepositoryGitPanel v-else-if="ready && current?.permissions?.includes('code.view')" :key="current.id" :can-operate="current.permissions.includes('code.operate')" /><p v-else-if="error" class="error" role="alert">{{ error }}</p><p v-else role="status">正在读取开发空间…</p></template>
+    <ProjectDirectory v-else @open="project" />
   </div>
 </template>

@@ -1,14 +1,11 @@
-const { validateModelSelection } = require("../codex/models.cjs");
-const { assertPermissionAvailable } = require("../codex/permissions.cjs");
+const { agentConfig } = require("../domain/agent-config.cjs");
+const { assertAgentIdentity } = require("../domain/agent-contract.cjs");
+const { presentError } = require("./error-presenter.cjs");
 const { validatePermissionMode } = require("../domain/permissions.cjs");
 
-function selectionFromCodex(codex = {}) {
-  return {
-    model: typeof codex.model === "string" ? codex.model : "",
-    reasoningEffort:
-      typeof codex.reasoning_effort === "string" ? codex.reasoning_effort : "",
-    permissionMode: validatePermissionMode(codex.permission_mode),
-  };
+function selectionFromAgent(config) {
+  return { model: config.model, reasoningEffort: config.reasoningEffort,
+    permissionMode: validatePermissionMode(config.permissionMode) };
 }
 
 function sameSettings(left, right) {
@@ -19,26 +16,30 @@ function sameSettings(left, right) {
 
 // Desired settings live outside run.json, whose initial pipeline owns its snapshot.
 class SessionSettings {
-  constructor({ store, client, sessions, worktreeReason, emit, assertOpen }) {
+  constructor({ store, agent, sessions, worktreeReason, emit, assertOpen, authorize = async () => {} }) {
+    /** @type {import('../storage/run-store.cjs').RunStore} */
     this.store = store;
-    this.client = client;
+    this.agent = agent;
     this.sessions = sessions;
     this.worktreeReason = worktreeReason;
     this.emit = emit;
     this.assertOpen = assertOpen;
+    this.authorize = authorize;
   }
 
-  read(key, state = this.store.read(key)) {
-    const saved = this.store.readExecutionSettings(key);
-    const initial = selectionFromCodex(state.codex);
+  async read(key, state) {
+    state ??= await this.store.read(key);
+    const saved = (await this.store.readExecutionSettings(key));
+    const initial = selectionFromAgent(agentConfig(state));
     return {
       selection: saved.selection || initial,
       active: saved.active || initial,
     };
   }
 
-  describe(key, state = this.store.read(key)) {
-    const { selection, active } = this.read(key, state);
+  async describe(key, state) {
+    state ??= await this.store.read(key);
+    const { selection, active } = (await this.read(key, state));
     const runtime = this.sessions.get(key);
     const running = Boolean(runtime?.turnId || runtime?.requests.size);
     const applied = runtime?.activeExecutionSettings || active;
@@ -49,8 +50,8 @@ class SessionSettings {
     };
   }
 
-  publish(key) {
-    const settings = this.describe(key);
+  async publish(key) {
+    const settings = (await this.describe(key));
     this.emit({
       key,
       type: "execution-settings",
@@ -60,27 +61,26 @@ class SessionSettings {
     return settings;
   }
 
-  initialize(key, codex) {
-    const selection = selectionFromCodex(codex);
-    this.store.writeExecutionSettings(key, { selection, active: selection });
+  async initialize(key, config) {
+    const selection = selectionFromAgent(config);
+    (await this.store.writeExecutionSettings(key, { selection, active: selection }));
   }
 
   starting(key, selection) {
     this.sessions.get(key).activeExecutionSettings = selection;
   }
 
-  applied(key, selection) {
+  async applied(key, selection) {
     try {
-      const current = this.read(key);
-      this.store.writeExecutionSettings(key, { ...current, active: selection });
-      this.publish(key);
+      (await this.store.updateExecutionSettings(key, current => ({ ...current, active: selection })));
+      (await this.publish(key));
     } catch (error) {
       // Native execution has already started. A local snapshot failure must not
       // disconnect that live turn or prevent the user from interrupting it.
       this.emit({
         key,
         type: "error",
-        error: `本轮设置已应用，但保存执行设置快照失败：${error.message}`,
+        error: `本轮设置已应用，但保存执行设置快照失败：${presentError(error).message}`,
         at: new Date().toISOString(),
       });
     }
@@ -97,7 +97,8 @@ class SessionSettings {
       )
     )
       throw new Error("仅允许修改模型、思考强度和权限。");
-    const state = this.store.read(key);
+    const state = await this.store.read(key);
+    assertAgentIdentity(this.agent, state);
     const runtime = this.sessions.get(key);
     const reason = this.worktreeReason(state);
     if (reason) throw new Error(reason);
@@ -109,20 +110,21 @@ class SessionSettings {
     if (this.store.isExecutionLocked(key) && !runtime?.initial)
       throw new Error("原 CLI 仍持有任务锁，不能并发修改执行设置。");
     this.store.claim(key);
-    const current = this.read(key, state);
+    const current = (await this.read(key, state));
     const requested = { ...current.selection, ...input };
     const permissionMode = validatePermissionMode(requested.permissionMode);
-    const model = await validateModelSelection(this.client, requested);
+    const model = await this.agent.validateSelection(requested);
     this.assertOpen();
-    await assertPermissionAvailable(this.client, permissionMode);
+    await this.agent.assertPermissionAvailable(permissionMode);
     this.assertOpen();
     const selection = {
       model: model.model,
-      reasoningEffort: model.reasoning_effort,
+      reasoningEffort: model.reasoningEffort,
       permissionMode,
     };
-    this.store.writeExecutionSettings(key, { ...this.read(key), selection });
-    const settings = this.publish(key);
+    await this.authorize();
+    (await this.store.updateExecutionSettings(key, saved => ({ ...saved, selection })));
+    const settings = (await this.publish(key));
     return {
       executionSettings: settings.executionSettings,
       pending: settings.settingsPending,

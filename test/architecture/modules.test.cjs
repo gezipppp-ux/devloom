@@ -17,9 +17,10 @@ const dependencies = {
   git: ["git", "domain", "shared"],
   config: ["config", "git", "storage", "domain", "shared"],
   codex: ["codex", "domain", "shared"],
+  agents: ["agents", "codex", "domain", "shared"],
   execution: [
     "execution",
-    "codex",
+    "agents",
     "git",
     "config",
     "storage",
@@ -31,7 +32,7 @@ const dependencies = {
     "application",
     "channels",
     "execution",
-    "codex",
+    "agents",
     "git",
     "config",
     "storage",
@@ -45,7 +46,7 @@ const dependencies = {
     "application",
     "channels",
     "execution",
-    "codex",
+    "agents",
     "config",
     "storage",
     "domain",
@@ -244,11 +245,13 @@ test("backend modules resolve within their declared layers and shared catalogs",
           assert.notEqual(target, path.join(sourceRoot, "git/command.cjs"),
             `${module.name}: use Git operation APIs instead of composing commands in application services`);
       } else {
+        const generatedPrismaClient = module.name === "storage/postgres-database.cjs" &&
+          target === path.join(root, "generated/prisma-runtime/client.cjs");
         assert.ok(
-          module.group === "domain" &&
+          generatedPrismaClient || (module.group === "domain" &&
             isInside(catalogRoot, target) &&
-            path.extname(target) === ".json",
-          `${module.name}: dependencies outside src must be domain catalogs under shared/: ${specifier}`,
+            path.extname(target) === ".json"),
+          `${module.name}: only domain catalogs or the storage-owned generated Prisma client may be imported outside src: ${specifier}`,
         );
       }
     }
@@ -279,7 +282,7 @@ test("only CLI adapters access command arguments, terminal output and process ex
       assert.ok(!module.imports.some((specifier) => /^(?:node:)?fs(?:\/|$)/.test(specifier)),
         `${module.name}: application services use storage APIs instead of owning disk formats`);
     if (module.group !== "storage")
-      assert.ok(!module.imports.some((specifier) => /^(?:better-sqlite3|knex)(?:\/|$)/.test(specifier)),
+      assert.ok(!module.imports.some((specifier) => /^(?:better-sqlite3|knex|pg|prisma|@prisma\/[^/]+)(?:\/|$)/.test(specifier)),
         `${module.name}: database drivers and migrations belong to storage`);
     if (module.name === "execution/runner.cjs")
       assert.ok(!module.imports.some((specifier) => /^(?:node:)?fs(?:\/|$)/.test(specifier)),
@@ -334,6 +337,20 @@ test("backend module dependencies do not contain cycles", () => {
     completed.add(file);
   }
   for (const module of modules) visit(module.file);
+});
+
+test("agent protocol details cannot leak into business modules or Vue", () => {
+  for (const module of inspectModules()) {
+    if (["codex", "agents"].includes(module.group)) continue;
+    const source = fs.readFileSync(module.file, "utf8");
+    assert.doesNotMatch(source, /["'](?:thread\/(?:start|resume|read|items\/list)|turn\/(?:start|steer|interrupt|started|completed)|item\/(?:tool\/requestUserInput|commandExecution\/requestApproval))["']/,
+      `${module.name}: native protocol belongs to a provider`);
+    assert.doesNotMatch(source, /\b(?:config|state|task)\.(?:codex|codex_prompt)\b/,
+      `${module.name}: use neutral execution, agent and prompt records`);
+  }
+  for (const file of filesIn(path.join(root, "web/src")).filter(file => /\.(?:vue|js)$/.test(file)))
+    assert.doesNotMatch(fs.readFileSync(file, "utf8"), /item\/tool\/requestUserInput|request\.method|request\.params|rpcId/,
+      `${file}: consume normalized interactive requests`);
 });
 
 test("package Node entrypoints still resolve after module moves", () => {

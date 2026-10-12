@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from "vue";
 import { renderMessage } from "./message-content.js";
-const props = defineProps({ item: { type: Object, required: true } });
+const props = defineProps({ item: { type: Object, required: true }, agentLabel: { type: String, default: "Agent" } });
 const emit = defineEmits(["open-file"]);
 function openFile(event) {
   const target = event.target.closest("button[data-file-path]");
@@ -43,7 +43,7 @@ const pretty = (value) =>
     :class="{ 'from-user': item.type === 'userMessage' }"
   >
     <div class="message-role">
-      {{ item.type === "userMessage" ? "你" : "CODEX"
+      {{ item.type === "userMessage" ? "你" : agentLabel
       }}<span
         v-if="item.type === 'agentMessage' && item.status === 'inProgress'"
         class="writing"

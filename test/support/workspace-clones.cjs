@@ -3,8 +3,8 @@ const { randomUUID } = require("node:crypto");
 function fixtureWorkspaceClones(workspaces) {
   const clones = new Map();
   return {
-    start(input) {
-      const workspace = workspaces.save({ name: input.name, icon: input.icon ?? null });
+    async start(input) {
+      const workspace = await workspaces.save({ name: input.name, icon: input.icon ?? null });
       const clone = { id: randomUUID(), name: input.name, status: "completed", progress: { stage: "publishing", percent: null }, workspace };
       clones.set(clone.id, clone);
       return clone;

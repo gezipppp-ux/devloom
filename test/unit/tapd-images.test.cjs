@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
 const { test } = require('node:test');
 const {
   collectImages,
@@ -180,7 +181,9 @@ test('image-only requirements are executable and task records match local attach
   );
   assert.equal(task.execution_ready, true);
   assert.equal(task.images.length, 1);
-  assert.match(task.codex_prompt, /--image/);
+  assert.match(task.prompt, /已附带 1 张图片/);
+  assert.ok(task.prompt.includes(path.basename(task.images[0].path)));
+  assert.doesNotMatch(task.prompt, /--image/);
   assert.equal(
     JSON.parse(fs.readFileSync(`${directory}/tapd-task.json`)).images[0].path,
     task.images[0].path,

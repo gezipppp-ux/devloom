@@ -5,12 +5,14 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("playwright");
 const { WorkspaceManager } = require("../../src/application/workspace-manager.cjs");
-const { SessionManager } = require("../../src/application/session-manager.cjs");
+const { SessionManager } = require("../support/session-manager.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
+const { agentDescriptor } = require("../fixtures/agent-descriptor.cjs");
 const { temporary, png } = require("../support/helpers.cjs");
 const { promptTemplateCatalog, MAX_PROMPT_TEMPLATE_LENGTH } = require("../../src/domain/prompt-templates.cjs");
 const { messageMarkdown } = require("../fixtures/message-markdown.cjs");
+const { projectVisual } = require("../fixtures/project-visual.cjs");
 const { structuredPatch } = require("diff");
 
 async function main() {
@@ -21,13 +23,14 @@ async function main() {
     directory: path.join(directory, "workspaces"),
     createManager: (options) => new SessionManager({ ...options, client }),
   });
-  const workspace = workspaces.save({ name: "客户管理系统", icon: "folder" });
-  workspaces.save({ name: "运营后台", icon: "appstore" });
+  const workspace = (await workspaces.save({ name: "客户管理系统", icon: "folder" }));
+  (await workspaces.save({ name: "运营后台", icon: "appstore" }));
   const application = createWebServer({ workspaces, testIdentity: true });
   const origin = await application.listen(0);
   const output = path.resolve("state/browser/unified");
   fs.mkdirSync(output, { recursive: true });
   const captures = [];
+  const projects = projectVisual(workspace.id);
   const errors = [];
   const filePath = "web/src/views/marketing/hotspot-creation-workspace.vue";
   const fileBefore = ['<a-button', '  :loading="refreshing"', '  @click="refreshHotspots"', '>', '  <ReloadOutlined />', '  刷新热点', '</a-button>', ''].join('\n');
@@ -52,6 +55,7 @@ async function main() {
     },
   ].map((run) => ({
     ...run,
+    agent: agentDescriptor,
     status: "completed",
     execution: { status: "completed" },
   }));
@@ -72,6 +76,7 @@ async function main() {
       title: "【生产】发布中心：补齐刷新热点按钮权限，保持需求列表、会话消息与执行状态的布局，在长标题及窄屏下仍可修改标题和继续对话。".repeat(4).slice(0, 200),
     } : {}),
     sessionId: "session-preview-customer-search",
+    agent: { provider: "codex", label: "Codex", capabilities: { history: true, images: true, steer: true, approvals: true, userInput: true, resume: true } },
     status: scenario === "readonly" ? "disconnected" : scenario === "pending" ? "running" : "completed",
     turnId: scenario === "pending" ? "fixture-active-turn" : null,
     items: scenario === "files" ? [{ id: "file-preview-reply", type: "agentMessage", text: '已完成热点刷新按钮的独立菜单权限控制：\n\n- 新增权限 `ai:marketing:hotspot:refresh`，同步种子数据与迁移：[seed.ts](prisma/seed.ts)、[migration.sql](prisma/migrations/menu-v132/migration.sql)。\n- “刷新热点”按钮按权限显示：[hotspot-creation-workspace.vue](' + filePath + ':2)。\n- 增加菜单与迁移回归测试：[menu-v132.test.ts](test/system/menu-v132.test.ts)。\n\n验证通过，可以开始验收。' }] : scenario === "markdown" ? [{
@@ -113,19 +118,16 @@ async function main() {
         ? [
             {
               id: "approval",
-              method: "item/commandExecution/requestApproval",
-              params: {
+              kind: "approval", action: "command", blocking: true,
                 reason: "构建项目，检查页面修改是否可以正常打包。",
                 command: "npm run build",
-              },
             },
           ]
         : scenario === "clarification"
           ? [
               {
                 id: "input",
-                method: "item/tool/requestUserInput",
-                params: {
+                kind: "user-input", blocking: true,
                   questions: [
                     {
                       id: "scope",
@@ -139,14 +141,12 @@ async function main() {
                     { id: "details", header: "补充说明", question: "是否需要保留已有筛选条件和分页行为？请补充验收细节。", options: null },
                     { id: "timing", header: "实施时间", question: "请说明希望完成的时间，以及需要协调的其他事项。", options: null },
                   ],
-                },
               },
             ]
           : [],
     readOnlyReason:
       scenario === "git-deleted" ? "Worktree 文件与本地分支已删除，当前会话仅供查看。" :
       scenario === "readonly" ? "原 worktree 已不可用，当前会话仅供查看。" : "",
-    codex: { model: "", reasoningEffort: "" },
     executionSettings: scenario === "pending" || scenario === "long-model"
       ? { model: "example-model", reasoningEffort: "high", permissionMode: "full" }
       : { model: "", reasoningEffort: "", permissionMode: "ask" },
@@ -202,6 +202,8 @@ async function main() {
           contentType: "application/json",
           body: JSON.stringify(data),
         });
+      const projectResponse = projects.response(url);
+      if (projectResponse) return send(projectResponse);
       if (endpoint === "/events") return route.continue();
       if (endpoint === "/auth/session")
         return send({ user: { id: "visual-admin", username: "演示管理员", role: "admin", status: "active", mustChangePassword: false }, token: "visual-fixture", settings: { model: null, reasoningEffort: null, permissionMode: "ask", notificationsEnabled: true, grouping: "type" } });
@@ -210,7 +212,9 @@ async function main() {
       if (url.pathname === "/api/bootstrap")
         return send({
           token: "visual-fixture",
-          workspaces: scenario === "welcome" ? [] : workspaces.list(),
+          workspaces: scenario === "welcome" ? [] : (await workspaces.list()).map(entry => ({ ...entry,
+            ...(scenario === "project-session" ? { projectId: projects.projectId, permissions: projects.permissions } : {}),
+          })),
         });
       if (endpoint === "/bootstrap")
         return send({ token: "visual-fixture", channels, workspace: "123456" });
@@ -269,7 +273,7 @@ async function main() {
       }
       if (endpoint === "/settings")
         return send({
-          repository: "/srv/wt/admin/projects/customer-system",
+          repository: "/srv/wt/admin/projects/00000000-0000-4000-8000-000000000001-system",
           projectsRoot: "/srv/wt/admin/projects",
           worktreeRoot: "/srv/wt/admin/worktree/customer-system",
           memberStorageRoot: "/srv/wt",
@@ -307,7 +311,7 @@ async function main() {
               ],
             });
       if (endpoint === "/execution-options")
-        return send({ permissionModes: [
+        return send({ agent: { provider: "codex", label: "Codex" }, permissionModes: [
           { id: "ask", label: "默认权限", description: "在工作区内执行，重要操作请求审批。", available: true },
           { id: "auto", label: "自动审批", description: "由 Codex 自动审核权限请求。", available: scenario !== "permission-unavailable", ...(scenario === "permission-unavailable" ? { reason: "当前 Codex 不支持自动审批，请升级后重试。" } : {}) },
           { id: "full", label: "完全访问", description: "可访问工作区之外的文件和网络，无需审批。", available: true },
@@ -343,11 +347,15 @@ async function main() {
         )) {
           if (!hint.getClientRects().length) continue;
           const previous = hint.previousElementSibling;
+          const bounds = hint.getBoundingClientRect();
+          const previousBounds = previous?.getBoundingClientRect();
           if (
             previous &&
             previous.getClientRects().length &&
-            hint.getBoundingClientRect().top <
-              previous.getBoundingClientRect().bottom - 1
+            bounds.left < previousBounds.right - 1 &&
+            bounds.right > previousBounds.left + 1 &&
+            bounds.top < previousBounds.bottom - 1 &&
+            bounds.bottom > previousBounds.top + 1
           )
             issues.push("overlapping hint");
         }
@@ -369,7 +377,7 @@ async function main() {
     }
     async function load(mode = "session") {
       scenario = mode;
-      await page.goto(origin);
+      await page.goto(origin + "/?workspace=" + workspace.id);
       if (mode !== "welcome" && mode !== "empty")
         await page.locator(".session-header").waitFor();
     }
@@ -438,28 +446,6 @@ async function main() {
       await capture("03-system-directory-picker-" + suffix);
       await page.keyboard.press("Escape");
     }
-    async function captureEmptyWorkspaceRail(suffix) {
-      await page.getByRole("button", { name: "系统设置", exact: true }).click();
-      await page.getByRole("textbox", { name: "成员目录基础路径", exact: true }).waitFor();
-      const rail = page.locator(".workspace-rail");
-      assert.equal(await rail.locator(".workspace-icons").count(), 0,
-        "an empty workspace list must not reserve rail space");
-      assert.equal(await rail.locator(".rail-brand + .workspace-add").count(), 1);
-      const brand = await rail.locator(".rail-brand").boundingBox();
-      const add = await rail.locator(".workspace-add").boundingBox();
-      if (page.viewportSize().width > 600) {
-        assert.equal(add.y - brand.y - brand.height, 28,
-          "empty desktop rail keeps only the brand margin and one navigation gap");
-      } else {
-        assert.equal(add.y, brand.y, "empty mobile rail controls stay on one row");
-        assert.ok(add.x >= brand.x + brand.width + 12);
-        assert.ok(add.x + add.width <= page.viewportSize().width);
-      }
-      await capture("07-empty-workspace-rail-" + suffix);
-      await rail.getByRole("button", { name: "＋ 新建工作区", exact: true }).click();
-      await page.getByRole("dialog", { name: "新建工作区", exact: true }).waitFor();
-      await page.keyboard.press("Escape");
-    }
     async function captureGitViews(suffix) {
       await page.getByRole("button", { name: "Worktree Git", exact: true }).click();
       await page.getByRole("button", { name: "删除 Worktree…", exact: true }).waitFor();
@@ -512,9 +498,64 @@ async function main() {
       assert.equal(await input.inputValue(), "打开资料时保留这段草稿");
       await input.fill("");
     }
+    async function captureProjects() {
+      for (const width of [1440, 768, 390, 320]) {
+        scenario = "session";
+        await page.setViewportSize({ width, height: 1000 });
+        await page.goto(origin);
+        await page.locator('.project-card').first().waitFor();
+        await capture('10-project-directory-' + width);
+        await page.getByRole('button', { name: '创建项目', exact: true }).click();
+        await page.getByLabel('项目名称', { exact: true }).fill('客户体验提升计划');
+        await capture('10-project-create-' + width);
+        await page.goto(origin + '/projects/00000000-0000-4000-8000-000000000001');
+        await page.getByRole('heading', { name: '项目概览', exact: true }).waitFor();
+        await capture('11-project-overview-' + width);
+        const tabs = page.getByRole('navigation', { name: '项目功能' });
+        await tabs.getByRole('button', { name: '需求', exact: true }).click();
+        await page.getByRole('button', { name: /#1 优化客户搜索体验/ }).waitFor();
+        await capture('12-project-issues-' + width);
+        await page.getByRole('button', { name: '新建需求', exact: true }).click();
+        await page.getByLabel('标题', { exact: true }).fill('补齐客户详情页面空状态');
+        await capture('12-project-issue-create-' + width);
+        await page.getByRole('button', { name: '取消', exact: true }).click();
+        await page.getByRole('button', { name: /#1 优化客户搜索体验/ }).click();
+        await page.getByRole('button', { name: '编辑事项', exact: true }).waitFor();
+        await capture('12-project-issue-detail-' + width);
+        await page.getByRole('button', { name: '编辑事项', exact: true }).click();
+        await capture('12-project-issue-edit-' + width);
+        await tabs.getByRole('button', { name: 'Bug', exact: true }).click();
+        await page.getByRole('button', { name: /#2 修复导出结果/ }).click();
+        await page.getByRole('heading', { name: '复现步骤', exact: true }).waitFor();
+        await capture('13-project-bug-' + width);
+        await tabs.getByRole('button', { name: '资产', exact: true }).click();
+        await page.getByRole('button', { name: /测试环境演示账号/ }).click();
+        await page.getByRole('button', { name: '显示敏感值', exact: true }).waitFor();
+        await capture('14-project-asset-masked-' + width);
+        await page.getByRole('button', { name: '编辑资产', exact: true }).click();
+        await page.locator('input[type="password"]').waitFor();
+        await capture('14-project-asset-edit-' + width);
+        await tabs.getByRole('button', { name: '开发任务', exact: true }).click();
+        await page.getByRole('button', { name: /客户搜索与空结果提示/ }).click();
+        await page.getByRole('button', { name: '发送追加资料并继续会话', exact: true }).waitFor();
+        await capture('15-project-development-' + width);
+        await tabs.getByRole('button', { name: '成员', exact: true }).click();
+        await page.getByRole('button', { name: '调整张明权限', exact: true }).click();
+        await capture('16-project-members-' + width);
+        await tabs.getByRole('button', { name: '设置', exact: true }).click();
+        await page.getByRole('button', { name: '保存项目设置', exact: true }).waitFor();
+        await capture('17-project-settings-' + width);
+        await page.goto(origin + '/departments');
+        await page.getByLabel('部门名称', { exact: true }).waitFor();
+        await capture('18-department-permissions-' + width);
+        await load('project-session');
+        await page.getByRole('button', { name: '返回项目协作', exact: true }).waitFor();
+        await capture('19-project-session-' + width);
+      }
+    }
+    await captureProjects();
+    await page.setViewportSize({ width: 1440, height: 1200 });
     await load();
-    assert.equal(await page.locator(".workspace-rail .workspace-icons").count(), 1);
-    assert.equal(await page.locator(".workspace-rail .workspace-icon").count(), 2);
     await capture("05-session-desktop");
     await captureMarkdown("desktop");
     await captureFiles("desktop");
@@ -560,51 +601,6 @@ async function main() {
     await page.locator(".requirement-prompt > summary").click();
     await page.locator(".requirement-prompt").scrollIntoViewIfNeeded();
     await capture("06-requirement-prompt");
-    await page
-      .getByRole("button", { name: "＋ 从需求启动", exact: true })
-      .click();
-    await page.getByLabel("需求渠道", { exact: true }).selectOption("manual");
-    await page.getByLabel("需求标题", { exact: true }).fill("优化客户搜索体验");
-    await page
-      .getByLabel("需求内容", { exact: true })
-      .fill(
-        "支持按姓名和手机号搜索客户。\n清空关键词后恢复完整列表；无结果时提供明确提示。",
-      );
-    await page.getByRole("button", { name: "刷新模型列表" }).waitFor();
-    await capture("01-new-manual");
-    await page.getByRole('combobox', { name: '权限模式', exact: true }).scrollIntoViewIfNeeded();
-    await capture('01-new-manual-execution-settings');
-    await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
-    await page.getByRole('listbox', { name: '执行权限选项' }).waitFor();
-    await capture('01-new-manual-permission-menu');
-    await page.keyboard.press('Escape');
-    await page.getByLabel("需求渠道", { exact: true }).selectOption("tapd");
-    await page.getByPlaceholder("输入需求标题关键词").fill("客户");
-    await page.getByRole("button", { name: "检索", exact: true }).click();
-    await page.getByRole("button", { name: /修复客户导出异常/ }).click();
-    await page.getByLabel("补充说明", { exact: true }).fill(
-      "补充验收：导出结果应与当前筛选条件一致。\n指导意见：沿用现有下载流程，并补充空结果提示。",
-    );
-    await capture("02-new-tapd");
-    await page.getByRole("button", { name: "工作区设置", exact: true }).click();
-    await page.getByText("项目代码仓库", { exact: true }).waitFor();
-    await page.locator("main").evaluate((el) => {
-      el.scrollTop = 0;
-    });
-    await capture("03-project-settings");
-    await page.getByRole("link", { name: "TAPD 渠道", exact: true }).click();
-    await page.locator("#tapd-settings").scrollIntoViewIfNeeded();
-    await capture("04-tapd-settings", "#tapd-settings");
-    await page.getByRole("link", { name: "提示词模板", exact: true }).click();
-    await page.getByRole("textbox", { name: "提示词模板内容", exact: true }).waitFor();
-    await capture("04-workspace-prompt-settings");
-    await page.getByRole("button", { name: "TAPD 需求", exact: true }).click();
-    await page.locator(".prompt-preview > summary").click();
-    await page.locator(".prompt-preview").scrollIntoViewIfNeeded();
-    await capture("04-workspace-prompt-preview");
-    await page.getByRole("button", { name: "重命名", exact: true }).click();
-    await capture("07-workspace-edit");
-    await page.keyboard.press("Escape");
     await captureSystemSettings("desktop");
     await load("approval");
     await page
@@ -649,43 +645,8 @@ async function main() {
     await page.locator('.model-option[data-model="example-model"]').click();
     await page.getByText(/模拟执行设置保存失败，请重试。/).waitFor();
     await capture('08-settings-save-error');
-    await load("error");
-    await page
-      .getByRole("button", { name: "＋ 从需求启动", exact: true })
-      .click();
-    await page.getByLabel("需求渠道", { exact: true }).selectOption("manual");
-    await page.getByText(/模型列表加载失败/).waitFor();
-    await page
-      .getByRole("button", { name: "创建 session 并开始开发 →", exact: true })
-      .click();
-    await capture("08-form-error");
-    await load("empty");
-    await page.getByRole("button", { name: "＋ 从需求启动", exact: true }).click();
-    await page.getByRole("button", { name: "取消", exact: true }).click();
-    await capture("08-empty");
-    await load("welcome");
-    await page.getByRole("dialog").waitFor();
-    await capture("07-workspace-create");
-    await page.getByRole("button", { name: "选择图标", exact: true }).click();
-    await capture("07-icon-picker-desktop");
-    await page.keyboard.press("Escape");
-    assert.equal(await page.getByRole("dialog", { name: "新建工作区", exact: true }).isVisible(), true);
-    await page.keyboard.press("Escape");
-    await capture("07-welcome");
-    await captureEmptyWorkspaceRail("desktop");
     for (const width of [768, 390, 320]) {
       await page.setViewportSize({ width, height: 1000 });
-      await load("welcome");
-      await page.getByRole("dialog", { name: "新建工作区", exact: true }).waitFor();
-      await page.getByRole("button", { name: "创建工作区", exact: true }).scrollIntoViewIfNeeded();
-      await capture("07-workspace-create-" + width);
-      const createBox = await page.getByRole("button", { name: "创建工作区", exact: true }).boundingBox();
-      assert.ok(createBox.x >= 0 && createBox.x + createBox.width <= width && createBox.y >= 0 && createBox.y + createBox.height <= 1000);
-      await page.getByRole("button", { name: "选择图标", exact: true }).click();
-      await capture("07-icon-picker-" + width);
-      await page.keyboard.press("Escape");
-      await page.keyboard.press("Escape");
-      await captureEmptyWorkspaceRail(width);
       await load();
       await capture("05-session-" + width);
       if (width === 320) await captureLongSessionTitle(width);
@@ -709,59 +670,7 @@ async function main() {
       await page.getByRole('listbox', { name: '思考强度选项' }).waitFor();
       await capture('05-effort-menu-' + width);
       await page.keyboard.press('Escape');
-      await page
-        .getByRole("button", { name: "工作区设置", exact: true })
-        .click();
-      await page.getByText("项目代码仓库", { exact: true }).waitFor();
-      await page.locator("main").evaluate((el) => {
-        el.scrollTop = 0;
-      });
-      await capture("03-settings-" + width);
-      await page.getByRole("link", { name: "TAPD 渠道", exact: true }).click();
-      await page.locator("#tapd-settings").scrollIntoViewIfNeeded();
-      assert.equal(await page.getByLabel("开发中状态码", { exact: true }).count(), 0);
-      await capture("04-tapd-settings-" + width, "#tapd-settings");
       await captureSystemSettings(width);
-      await page.getByRole("button", { name: "切换工作区：客户管理系统", exact: true }).click();
-      await page.getByRole("button", { name: "工作区设置", exact: true }).click();
-      await page.getByRole("link", { name: "提示词模板", exact: true }).click();
-      await page.getByRole("textbox", { name: "提示词模板内容", exact: true }).waitFor();
-      await capture("04-workspace-prompt-settings-" + width);
-      await page.locator(".prompt-preview > summary").click();
-      await page.locator(".prompt-preview").scrollIntoViewIfNeeded();
-      await capture("04-workspace-prompt-preview-" + width);
-      await page
-        .getByRole("button", { name: "＋ 从需求启动", exact: true })
-        .click();
-      await page.getByLabel("需求渠道", { exact: true }).selectOption("manual");
-      await capture("01-manual-" + width);
-      await page.getByLabel("需求渠道", { exact: true }).selectOption("tapd");
-      await page.getByRole("button", { name: "检索", exact: true }).click();
-      await page.locator(".search-results").getByText("本系统进行中", { exact: true }).waitFor();
-      await page.getByLabel("需求 ID", { exact: true }).fill("1024");
-      await page.getByLabel("补充说明", { exact: true }).fill(
-        "补充验收：导出结果应与当前筛选条件一致。\n指导意见：保留现有下载流程，补充移动端和空结果提示。",
-      );
-      await capture("02-tapd-" + width);
-      await page
-        .getByRole("button", { name: "工作区设置", exact: true })
-        .click();
-      await page.getByRole("button", { name: "重命名", exact: true }).click();
-      await page
-        .getByLabel("工作区名称", { exact: true })
-        .fill("这是一个用于验证窄屏布局和名称截断的很长工作区名称");
-      await page
-        .getByRole("button", { name: "保存工作区", exact: true })
-        .scrollIntoViewIfNeeded();
-      await capture("07-dialog-" + width);
-      const box = await page
-        .getByRole("button", { name: "保存工作区", exact: true })
-        .boundingBox();
-      assert.ok(
-        box.y >= 0 && box.y + box.height <= 1000,
-        "dialog save remains reachable",
-      );
-      await page.keyboard.press("Escape");
     }
     assert.deepEqual(errors, []);
     assert.equal(client.calls.length, 0, "visual fixtures must not call Codex");

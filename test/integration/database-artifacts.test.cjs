@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { test } = require("node:test");
-const { initializeDatabase } = require("../../src/storage/database-lifecycle.cjs");
+const { initializeTestDatabase } = require("../support/database.cjs");
 const { ExecutionStore } = require("../../src/storage/execution-store.cjs");
 const { RunStore } = require("../../src/storage/run-store.cjs");
 const { MessageImageStore } = require("../../src/storage/message-image-store.cjs");
@@ -14,10 +14,10 @@ const { png } = require("../support/helpers.cjs");
 
 async function setup(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "web-coding-db-artifacts-"));
-  let database = await initializeDatabase(directory);
-  t.after(() => { database.close(); fs.rmSync(directory, { recursive: true, force: true }); });
+  let database = await initializeTestDatabase(t, directory);
+  t.after(async () => { await database.close(); fs.rmSync(directory, { recursive: true, force: true }); });
   return { directory, get database() { return database; }, async reopen() {
-    database.close(); database = await initializeDatabase(directory); return database;
+    await database.close(); database = await initializeTestDatabase(t, directory); return database;
   } };
 }
 
@@ -25,18 +25,18 @@ test("database run state and paginated history survive restart without JSON file
   const fixture = await setup(t);
   const directory = path.join(fixture.directory, "runs", "1-2");
   const execution = new ExecutionStore(directory);
-  execution.save({ session_id: "stable", workitem: { title: "DB history" }, execution: { status: "completed" } });
-  execution.writeTask({ workitem: { title: "snapshot" }, codex_prompt: "full prompt", images: [] });
-  execution.append("initialization.log", "database log\n");
+  (await execution.save({ agent: { provider: "codex" }, session_id: "stable", workitem: { title: "DB history" }, execution: { status: "completed" } }));
+  (await execution.writeTask({ workitem: { title: "snapshot" }, prompt: "full prompt", images: [] }));
+  (await execution.append("initialization.log", "database log\n"));
   let store = new RunStore(path.dirname(directory));
-  for (let i = 0; i < 75; i++) store.saveHistoryItem("1-2", { id: `item-${i}`, type: "agentMessage", text: `answer ${i}` });
-  store.saveHistoryItem("1-2", { id: "item-74", type: "agentMessage", text: "complete answer" });
+  for (let i = 0; i < 75; i++) (await execution.saveHistoryItem({ id: `item-${i}`, type: "agentMessage", text: `answer ${i}` }));
+  (await store.saveHistoryItem("1-2", { id: "item-74", type: "agentMessage", text: "complete answer" }));
   assert.equal(fs.existsSync(path.join(directory, "run.json")), false);
   assert.equal(fs.existsSync(path.join(directory, "requirement.json")), false);
   assert.equal(fs.existsSync(path.join(directory, "initialization.log")), false);
   await fixture.reopen();
   store = new RunStore(path.dirname(directory));
-  const views = new SessionViews({ store, client: { connect() { throw new Error("Codex is offline"); } },
+  const views = new SessionViews({ store, agent: { id: "codex", label: "Codex", capabilities: { history: true }, connect() { throw new Error("Codex is offline"); } },
     sessions: new Map(), worktreeReason: () => null, assertOpen() {} });
   const first = await views.history("1-2");
   assert.equal(first.items.length, 50);
@@ -45,28 +45,28 @@ test("database run state and paginated history survive restart without JSON file
   assert.equal(second.items.length, 25);
   assert.equal(second.items[0].id, "item-0");
   assert.equal(second.nextCursor, null);
-  assert.equal(store.list()[0].state.session_id, "stable");
-  assert.equal(store.readTask("1-2").codex_prompt, "full prompt");
-  assert.equal(fixture.database.handle.prepare("SELECT count(*) AS total FROM log_chunks").get().total, 1);
+  assert.equal((await store.list())[0].state.session_id, "stable");
+  assert.equal((await store.readTask("1-2")).prompt, "full prompt");
+  assert.equal(await fixture.database.client.logChunk.count(), 1);
 });
 
 test("archive and restore persist across database reopen while retaining history and run identity", async (t) => {
   const fixture = await setup(t);
   const directory = path.join(fixture.directory, "runs", "1-2");
   const execution = new ExecutionStore(directory);
-  execution.save({ session_id: "stable", workitem: { title: "Archived" }, execution: { status: "completed" } });
+  (await execution.save({ agent: { provider: "codex" }, session_id: "stable", workitem: { title: "Archived" }, execution: { status: "completed" } }));
   let store = new RunStore(path.dirname(directory));
-  store.saveHistoryItem("1-2", { id: "item", type: "agentMessage", text: "retained history" });
-  store.archive("1-2");
+  (await store.saveHistoryItem("1-2", { id: "item", type: "agentMessage", text: "retained history" }));
+  (await store.archive("1-2"));
   await fixture.reopen();
   store = new RunStore(path.dirname(directory));
-  assert.equal(store.isArchived("1-2"), true);
-  store.restore("1-2");
+  assert.equal((await store.isArchived("1-2")), true);
+  (await store.restore("1-2"));
   await fixture.reopen();
   store = new RunStore(path.dirname(directory));
-  assert.equal(store.isArchived("1-2"), false);
-  assert.equal(store.savedHistory("1-2").items[0].text, "retained history");
-  assert.equal(store.read("1-2").session_id, "stable");
+  assert.equal((await store.isArchived("1-2")), false);
+  assert.equal((await store.savedHistory("1-2")).items[0].text, "retained history");
+  assert.equal((await store.read("1-2")).session_id, "stable");
   assert.equal(fs.existsSync(path.join(directory, "session-archive.json")), false);
 });
 
@@ -74,45 +74,44 @@ test("permanently deleting a run removes its database documents, history, logs a
   const fixture = await setup(t);
   const directory = path.join(fixture.directory, "runs", "1-2");
   const execution = new ExecutionStore(directory);
-  execution.save({ session_id: "stable", workitem: { title: "Delete me" }, execution: { status: "completed" } });
-  execution.writeTask({ workitem: { title: "snapshot" }, codex_prompt: "prompt", images: [] });
-  execution.append("initialization.log", "log\n");
+  (await execution.save({ agent: { provider: "codex" }, session_id: "stable", workitem: { title: "Delete me" }, execution: { status: "completed" } }));
+  (await execution.writeTask({ workitem: { title: "snapshot" }, prompt: "prompt", images: [] }));
+  (await execution.append("initialization.log", "log\n"));
   const store = new RunStore(path.dirname(directory));
-  store.saveHistoryItem("1-2", { id: "item", type: "agentMessage", text: "history" });
-  store.messageImages("1-2").save(png);
-  store.deleteRun("1-2");
-  assert.equal(store.hasRun("1-2"), false);
-  assert.equal(fixture.database.handle.prepare("SELECT count(*) AS total FROM run_documents").get().total, 0);
-  assert.equal(fixture.database.handle.prepare("SELECT count(*) AS total FROM session_items").get().total, 0);
-  assert.equal(fixture.database.handle.prepare("SELECT count(*) AS total FROM log_chunks").get().total, 0);
-  assert.equal(fixture.database.handle.prepare("SELECT count(*) AS total FROM attachments").get().total, 0);
+  (await store.saveHistoryItem("1-2", { id: "item", type: "agentMessage", text: "history" }));
+  await (await store.messageImages("1-2")).save(png);
+  (await store.deleteRun("1-2"));
+  assert.equal((await store.hasRun("1-2")), false);
+  assert.equal(await fixture.database.client.runDocument.count(), 0);
+  assert.equal(await fixture.database.client.sessionItem.count(), 0);
+  assert.equal(await fixture.database.client.logChunk.count(), 0);
+  assert.equal(await fixture.database.client.attachment.count(), 0);
 });
 
 test("manual and conversation image blobs rebuild deleted caches and remain scoped", async (t) => {
   const fixture = await setup(t);
   const uploads = new ManualUploadStore(path.join(fixture.directory, "uploads"));
-  const uploaded = uploads.upload(png);
+  const uploaded = (await uploads.upload(png));
   assert.equal(fs.existsSync(path.join(uploads.directory, uploaded.id)), false);
   const runDirectory = path.join(fixture.directory, "runs", "1-2");
-  const { task } = buildManualTaskPackage({ item: { id: "2", title: "images", markdown_description: "body", image_ids: [uploaded.id] },
-    directory: runDirectory, readImage: (id) => uploads.read(id) });
+  const { task } = (await buildManualTaskPackage({ item: { id: "2", title: "images", markdown_description: "body", image_ids: [uploaded.id] },
+    directory: runDirectory, readImage: async (id) => (await uploads.read(id)) }));
   const execution = new ExecutionStore(runDirectory);
-  execution.writeTask(task);
-  execution.save({ session_id: "original", workitem: {}, execution: { status: "completed" } });
+  (await execution.writeTask(task));
+  (await execution.save({ agent: { provider: "codex" }, session_id: "original", workitem: {}, execution: { status: "completed" } }));
   const messages = new MessageImageStore(runDirectory);
-  const message = messages.save(png);
-  const cached = messages.read(message.id).path;
+  const message = (await messages.save(png));
+  const cached = (await messages.read(message.id)).path;
   fs.unlinkSync(cached);
   fs.unlinkSync(task.images[0].path);
   await fixture.reopen();
   const store = new RunStore(path.dirname(runDirectory));
-  assert.deepEqual(fs.readFileSync(store.imagePath("1-2", "0")), png);
-  assert.deepEqual(fs.readFileSync(store.messageImages("1-2").read(message.id).path), png);
-  assert.throws(() => new MessageImageStore(path.join(fixture.directory, "runs", "1-3")).read(message.id), /不存在/);
-  assert.throws(() => store.imagePath("1-2", "../0"), /无效/);
-  fixture.database.handle.prepare("UPDATE attachments SET expires_at=? WHERE path=?")
-    .run("2000-01-01T00:00:00.000Z", `uploads/${uploaded.id}`);
-  assert.throws(() => uploads.read(uploaded.id), /过期/);
-  uploads.cleanup();
-  assert.equal(fixture.database.readBlob(path.join(uploads.directory, uploaded.id)), undefined);
+  assert.deepEqual(fs.readFileSync((await store.imagePath("1-2", "0"))), png);
+  assert.deepEqual(fs.readFileSync((await (await store.messageImages("1-2")).read(message.id)).path), png);
+  (await assert.rejects(async () => (await new MessageImageStore(path.join(fixture.directory, "runs", "1-3")).read(message.id)), /不存在/));
+  (await assert.rejects(async () => (await store.imagePath("1-2", "../0")), /无效/));
+  await fixture.database.client.attachment.update({ where: { path: `uploads/${uploaded.id}` }, data: { expiresAt: new Date("2000-01-01T00:00:00.000Z") } });
+  (await assert.rejects(async () => (await uploads.read(uploaded.id)), /过期/));
+  (await uploads.cleanup());
+  assert.equal(await fixture.database.readBlob(path.join(uploads.directory, uploaded.id)), undefined);
 });

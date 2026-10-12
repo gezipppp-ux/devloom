@@ -4,7 +4,7 @@ const path = require('node:path');
 const { test } = require('node:test');
 const { setImmediate: afterMicrotasks } = require('node:timers/promises');
 const { RunStore } = require('../../src/storage/run-store.cjs');
-const { SessionManager } = require('../../src/application/session-manager.cjs');
+const { SessionManager } = require('../support/session-manager.cjs');
 const { WorkspaceManager } = require('../../src/application/workspace-manager.cjs');
 const { createWebServer } = require('../../src/http/server.cjs');
 const { FakeClient } = require('../fixtures/web-client.cjs');
@@ -21,6 +21,7 @@ const next = {
 function saveRun(store, key, directory) {
   const state = {
     source: { channel: 'tapd', workspace: '1', id: key.slice(2) },
+    agent: { provider: "codex" },
     workitem: { title: '设置回归测试', id: key.slice(2), workspace_id: '1' },
     worktree: { path: directory, repository: directory, branch: 'codex/fixture' },
     session_id: 'original',
@@ -59,7 +60,7 @@ async function setup(t) {
   return { directory, store, key, state, client, manager, configFile, origin, post, settings };
 }
 
-test('legacy sessions default to ask; idle settings persist without starting or resuming a turn', async (t) => {
+test('explicit agent sessions default to ask; idle settings persist without starting or resuming a turn', async (t) => {
   const { manager, key, client, settings, store, state } = await setup(t);
   const initial = await manager.view(key);
   assert.deepEqual(initial.executionSettings, defaults);
@@ -74,10 +75,10 @@ test('legacy sessions default to ask; idle settings persist without starting or 
   assert.equal(event.key, key);
   assert.deepEqual(event.executionSettings, selected);
   assert.equal(event.settingsPending, false);
-  const saved = store.read(key);
+  const saved = (await store.read(key));
   for (const field of ['source', 'workitem', 'worktree', 'session_id', 'execution', 'transition'])
     assert.deepEqual(saved[field], state[field], field + ' must stay unchanged');
-  assert.deepEqual(store.readTaskMetadata(key), { type: 'bug', progress: 'review' });
+  assert.deepEqual((await store.readTaskMetadata(key)), { type: 'bug', progress: 'review' });
   assert.deepEqual((await manager.view(key)).executionSettings, selected);
   await manager.send(key, '使用已保存配置');
   const turn = client.calls.find((entry) => entry.method === 'turn/start');
@@ -96,6 +97,7 @@ test('active settings remain pending through approvals and steer, then apply to 
     method: 'item/commandExecution/requestApproval',
     params: { threadId: 'original', command: 'fixture-command' },
   });
+  await manager.events.drain();
   assert.deepEqual(await settings(next), { executionSettings: next, pending: true });
   let view = await manager.view(key);
   assert.deepEqual(view.executionSettings, next);
@@ -103,7 +105,7 @@ test('active settings remain pending through approvals and steer, then apply to 
   assert.equal(view.settingsPending, true);
   assert.equal(view.requests.length, 1, 'a pending setting must not approve or discard the current request');
   assert.deepEqual(client.calls.find((entry) => entry.method === 'turn/start'), originalTurn);
-  await manager.respond(key, '72', { decision: 'decline' });
+  await manager.respond(key, 'number:72', { decision: 'decline' });
   await manager.send(key, '仍补充第一轮');
   const steer = client.calls.findLast((entry) => entry.method === 'turn/steer');
   assert.equal(steer.params.expectedTurnId, first.turnId);
@@ -123,8 +125,8 @@ test('active settings remain pending through approvals and steer, then apply to 
   view = await manager.view(key);
   assert.deepEqual(view.activeExecutionSettings, next);
   assert.equal(view.settingsPending, false);
-  assert.deepEqual(store.read(key).worktree, state.worktree);
-  assert.deepEqual(store.read(key).transition, state.transition);
+  assert.deepEqual((await store.read(key)).worktree, state.worktree);
+  assert.deepEqual((await store.read(key)).transition, state.transition);
   assert.equal(client.calls.filter((entry) => entry.method === 'thread/start').length, 0);
 });
 
@@ -163,7 +165,7 @@ test('partial settings preserve other fields and explicit defaults clear model, 
   assert.equal(turn.params.approvalPolicy, 'on-request');
   assert.equal(turn.params.approvalsReviewer, 'user');
   assert.deepEqual(turn.params.sandboxPolicy, {
-    type: 'workspaceWrite', writableRoots: [manager.store.read(key).worktree.path],
+    type: 'workspaceWrite', writableRoots: [(await manager.store.read(key)).worktree.path],
     networkAccess: false, excludeTmpdirEnvVar: false, excludeSlashTmp: false,
   });
   assert.deepEqual((await manager.view(key)).activeExecutionSettings, defaults);
@@ -173,7 +175,7 @@ test('invalid, offline and failed settings writes leave disk and current setting
   const { store, key, settings, post, client, manager } = await setup(t);
   await settings(selected);
   const saved = fs.readFileSync(path.join(store.dir(key), 'run.json'), 'utf8');
-  const savedSettings = store.readExecutionSettings(key);
+  const savedSettings = (await store.readExecutionSettings(key));
   for (const input of [
     null, [], { permissionMode: 'unknown' }, { permissionMode: null },
     { permissionMode: false }, { model: null }, { reasoningEffort: null },
@@ -184,7 +186,7 @@ test('invalid, offline and failed settings writes leave disk and current setting
     const response = await post('execution-settings', input);
     assert.equal(response.status, 400, JSON.stringify(input));
     assert.equal(fs.readFileSync(path.join(store.dir(key), 'run.json'), 'utf8'), saved);
-    assert.deepEqual(store.readExecutionSettings(key), savedSettings);
+    assert.deepEqual((await store.readExecutionSettings(key)), savedSettings);
   }
   const request = client.request.bind(client);
   client.request = async (method, params) => {
@@ -193,15 +195,15 @@ test('invalid, offline and failed settings writes leave disk and current setting
   };
   assert.equal((await post('execution-settings', next)).status, 400);
   client.request = request;
-  const writeExecutionSettings = store.writeExecutionSettings.bind(store);
-  store.writeExecutionSettings = () => { throw new Error('fixture settings write failed'); };
+  const updateExecutionSettings = store.updateExecutionSettings.bind(store);
+  store.updateExecutionSettings = () => { throw new Error('fixture settings write failed'); };
   try {
     assert.equal((await post('execution-settings', { permissionMode: 'full' })).status, 400);
   } finally {
-    store.writeExecutionSettings = writeExecutionSettings;
+    store.updateExecutionSettings = updateExecutionSettings;
   }
   assert.equal(fs.readFileSync(path.join(store.dir(key), 'run.json'), 'utf8'), saved);
-  assert.deepEqual(store.readExecutionSettings(key), savedSettings);
+  assert.deepEqual((await store.readExecutionSettings(key)), savedSettings);
   assert.deepEqual((await manager.view(key)).executionSettings, selected);
 });
 
@@ -217,7 +219,7 @@ test('auto requires capabilities before saving settings or preparing new tasks o
     await assert.rejects(manager.start({ channel, permissionMode: 'auto' }), /自动审批/);
     await assert.rejects(manager.start({ channel, permissionMode: 'unknown' }), /无效/);
   }
-  assert.equal(store.list().length, 1);
+  assert.equal((await store.list()).length, 1);
   assert.equal(client.calls.filter(({ method }) => method === 'thread/start').length, 0);
 });
 
@@ -250,8 +252,8 @@ test('a failed applied-settings write leaves the started turn visible and interr
   await settings(next);
   const events = [];
   manager.on('event', (event) => events.push(event));
-  const write = store.writeExecutionSettings.bind(store);
-  store.writeExecutionSettings = () => { throw new Error('fixture applied settings unavailable'); };
+  const write = store.updateExecutionSettings.bind(store);
+  store.updateExecutionSettings = () => { throw new Error('fixture applied settings unavailable'); };
   try {
     const result = await manager.send(key, '设置存盘异常时仍可停止');
     assert.ok(result.turnId);
@@ -262,7 +264,7 @@ test('a failed applied-settings write leaves the started turn visible and interr
     await manager.interrupt(key);
     assert.equal(manager.sessions.get(key).turnId, null);
   } finally {
-    store.writeExecutionSettings = write;
+    store.updateExecutionSettings = write;
   }
 });
 
@@ -272,12 +274,12 @@ test('late initial turn acknowledgement cannot overwrite newer saved and applied
   fs.unlinkSync(file);
   const initialState = {
     ...state,
-    codex: { model: selected.model, reasoning_effort: selected.reasoningEffort, permission_mode: selected.permissionMode },
+    agent: { provider: "codex", ...selected },
   };
   manager.run = async (_input, { startSession }) => {
     await startSession({
       repository: state.worktree.path,
-      task: { codex_prompt: '第一轮延迟响应', images: [] },
+      task: { prompt: '第一轮延迟响应', images: [] },
       onSession(id) {
         initialState.session_id = id;
         fs.writeFileSync(file, JSON.stringify(initialState));
@@ -305,21 +307,22 @@ test('late initial turn acknowledgement cannot overwrite newer saved and applied
     }
     return response;
   };
-  manager.launch(key, state.workitem, { codex: initialState.codex }, {}, {});
+  (await manager.launch(key, state.workitem, { agent: initialState.agent }, {}, {}));
   const runtime = manager.sessions.get(key);
   try {
     await entered;
     assert.deepEqual(await settings(next), { executionSettings: next, pending: true });
     client.notify('turn/completed', { turn: { id: runtime.turnId, status: 'completed' } });
+  await manager.events.drain();
     await runtime.operation;
     assert.deepEqual((await manager.view(key)).executionSettings, next);
     await manager.send(key, '后续一轮');
     await manager.interrupt(key);
-    assert.deepEqual(store.readExecutionSettings(key).active, next);
+    assert.deepEqual((await store.readExecutionSettings(key)).active, next);
     release();
     await acknowledged;
     await afterMicrotasks();
-    assert.deepEqual(store.readExecutionSettings(key).active, next);
+    assert.deepEqual((await store.readExecutionSettings(key)).active, next);
     assert.deepEqual((await manager.view(key)).executionSettings, next);
   } finally {
     release();
@@ -334,17 +337,17 @@ test('execution settings API keeps token, origin, read-only and workspace bounda
   assert.equal((await post('execution-settings', next, { origin: 'https://foreign.invalid' })).status, 403);
   manager.worktreeReason = () => '原 worktree 已不可用';
   assert.equal((await post('execution-settings', next)).status, 400);
-  assert.equal(store.read(key).codex, undefined);
+  assert.equal((await store.read(key)).codex, undefined);
 
   const directory = temporary(t);
   const workspaces = new WorkspaceManager({
     directory: path.join(directory, 'workspaces'),
     createManager: (options) => new SessionManager({ ...options, client: new FakeClient(), worktreeReason: () => null }),
   });
-  const a = workspaces.save({ name: '设置 A' });
-  const b = workspaces.save({ name: '设置 B' });
-  const aContext = workspaces.get(a.id);
-  const bContext = workspaces.get(b.id);
+  const a = (await workspaces.save({ name: '设置 A' }));
+  const b = (await workspaces.save({ name: '设置 B' }));
+  const aContext = (await workspaces.get(a.id));
+  const bContext = (await workspaces.get(b.id));
   saveRun(aContext.sessions.store, key, directory);
   const application = createWebServer({ testIdentity: true, workspaces });
   const origin = await application.listen(0);
@@ -354,7 +357,7 @@ test('execution settings API keeps token, origin, read-only and workspace bounda
     method: 'POST', headers: { 'content-type': 'application/json', 'x-tapd-token': token }, body: JSON.stringify(next),
   });
   assert.equal((await scoped(b.id)).status, 404);
-  assert.equal(bContext.sessions.store.hasRun(key), false);
+  assert.equal(await bContext.sessions.store.hasRun(key), false);
   assert.equal((await scoped(a.id)).status, 200);
   assert.deepEqual((await aContext.sessions.view(key)).executionSettings, next);
   assert.equal(bContext.sessions.client.calls.length, 0);

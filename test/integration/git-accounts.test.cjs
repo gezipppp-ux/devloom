@@ -4,8 +4,9 @@ const os = require("node:os");
 const path = require("node:path");
 const { execFile, execFileSync } = require("node:child_process");
 const { promisify } = require("node:util");
+const { setImmediate } = require("node:timers");
 const { test } = require("node:test");
-const { initializeDatabase } = require("../../src/storage/database-lifecycle.cjs");
+const { initializeTestDatabase } = require("../support/database.cjs");
 const { AccountServices } = require("../../src/application/account-services.cjs");
 const { GitAccountServices } = require("../../src/application/git-account-services.cjs");
 const { WorkspaceManager } = require("../../src/application/workspace-manager.cjs");
@@ -26,47 +27,50 @@ const execute = promisify(execFile);
 async function fixture(t, options) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "web-coding-git-accounts-"));
   let database, remote;
-  t.after(async () => { await remote?.close(); database?.close(); fs.rmSync(directory, { recursive: true, force: true, maxRetries: 3 }); });
-  database = await initializeDatabase(directory);
+  t.after(async () => { await remote?.close(); await database?.close(); fs.rmSync(directory, { recursive: true, force: true, maxRetries: 3 }); });
+  database = await initializeTestDatabase(t, directory);
   remote = await gitRemote(path.join(directory, "git-server"), options);
   const storageRoot = path.join(directory, "members");
-  saveSystemSettings({ memberStorageRoot: storageRoot }, directory);
+  (await saveSystemSettings({ memberStorageRoot: storageRoot }, directory));
   const accounts = new AccountServices(database);
   const actor = await accounts.create({ username: "admin", password: "fixture-password" }, null, true);
-  const other = await accounts.create({ username: "member", password: "fixture-password" }, actor);
-  const services = new GitAccountServices(database);
-  const input = { name: "开发 HTTP Git", authType: "http", remoteUrl: remote.remoteUrl, username: remote.username, password: remote.password };
+  const department = await database.client.department.create({ data: { name: "Fixture department", permissions: [] } });
+  const other = await accounts.create({ departmentId: department.id, username: "member", password: "fixture-password" }, actor);
+  const services = new GitAccountServices(database, { projects: { authorize: async () => ({ project: { repository: { remoteUrl: remote.remoteUrl } } }) } });
+  const input = { name: "开发 HTTP Git", authType: "http", host: new URL(remote.remoteUrl).origin, username: remote.username, password: remote.password };
   return { directory, database, remote, storageRoot, actor, other, services, input };
 }
 
-test("HTTP ordinary passwords with shell characters are tested before encrypted save; edits preserve omitted secrets", async t => {
+test("HTTP credentials are encrypted, explicit project checks use them, and revisioned edits preserve omitted secrets", async t => {
   const { database, actor, other, services, input, remote } = await fixture(t);
-  await assert.rejects(services.save(actor, { ...input, password: "wrong" }), /Git 连接失败/);
-  assert.deepEqual(services.list(actor), []);
+  await assert.rejects(services.check(actor, { ...input, password: "wrong", projectId: "fixture-project" }), /Git 连接失败/);
+  assert.deepEqual((await services.list(actor)), []);
   const saved = await services.save(actor, input);
   assert.equal(saved.username, input.username);
   assert.equal(saved.authType, "http");
-  assert.equal(saved.remoteUrl, remote.remoteUrl);
+  assert.equal(saved.host, new URL(remote.remoteUrl).origin);
+  assert.equal(saved.remoteUrl, undefined);
   assert.equal(saved.password, undefined);
   assert.equal(saved.sshPrivateKey, undefined);
-  assert.equal(database.handle.prepare("SELECT credentials FROM user_git_accounts").get().credentials.includes(input.password), false);
+  assert.equal((await database.client.gitAccount.findFirstOrThrow()).credentials.includes(input.password), false);
+  assert.equal((await services.check(actor, { projectId: "fixture-project" }, saved.id)).ok, true);
   assert.ok(remote.requests.some(request => request.authorization === "Basic " + Buffer.from(input.username + ":" + input.password).toString("base64")));
-  await assert.rejects(services.save(actor, { ...input, name: "invalid draft", password: "bad" }, saved.id), /Git 连接失败/);
-  assert.deepEqual(services.list(actor), [saved]);
+  await assert.rejects(services.check(actor, { ...input, name: "invalid draft", password: "bad", revision: saved.revision, projectId: "fixture-project" }, saved.id), /Git 连接失败/);
+  assert.deepEqual((await services.list(actor)), [saved]);
   const { password: omitted, ...edit } = input;
   assert.ok(omitted);
-  const updated = await services.save(actor, { ...edit, name: "renamed" }, saved.id);
+  const updated = await services.save(actor, { ...edit, name: "renamed", revision: saved.revision }, saved.id);
   assert.equal(updated.name, "renamed");
-  assert.equal(services.store.read(saved.id, actor.id).password, input.password);
-  assert.deepEqual(services.list(other), []);
+  assert.equal((await services.store.read(saved.id, actor.id)).password, input.password);
+  assert.deepEqual((await services.list(other)), []);
   await assert.rejects(services.save(other, edit, saved.id), /不存在/);
-  assert.throws(() => services.remove(other, saved.id), /不存在/);
+  (await assert.rejects(async () => (await services.remove(other, saved.id)), /不存在/));
 });
 
 test("empty Git repositories are a successful connectivity test", async t => {
   const { services, actor, input } = await fixture(t, { empty: true });
-  assert.equal((await services.check(actor, input)).ok, true);
-  assert.equal(services.list(actor).length, 0);
+  assert.equal((await services.check(actor, { ...input, projectId: "fixture-project" })).ok, true);
+  assert.equal((await services.list(actor)).length, 0);
   assert.ok((await services.save(actor, input)).id);
 });
 
@@ -77,48 +81,53 @@ test("generated SSH keys expose only public material, stay owner-scoped and are 
   const draft = await services.generateKey(actor);
   assert.deepEqual(Object.keys(draft).sort(), ["expiresAt", "id", "publicKey"]);
   assert.match(draft.publicKey, /^ssh-ed25519 /);
-  const internal = services.store.keyDraft(draft.id, actor.id);
+  const internal = (await services.store.keyDraft(draft.id, actor.id));
   assert.match(internal.sshPrivateKey, /BEGIN OPENSSH PRIVATE KEY/);
   const derived = await withSshPrivateKey(internal.sshPrivateKey, keyFile => execFileSync("ssh-keygen", ["-y", "-f", keyFile], { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }).trim());
   assert.equal(derived.split(" ").slice(0, 2).join(" "), draft.publicKey.split(" ").slice(0, 2).join(" "));
-  assert.doesNotMatch(database.handle.prepare("SELECT credentials FROM git_key_drafts").get().credentials, /PRIVATE KEY/);
-  assert.throws(() => services.store.keyDraft(draft.id, other.id), /失效/);
-  const input = { name: "SSH", authType: "ssh", remoteUrl: "git@git.example.test:team/project.git", keyDraftId: draft.id };
-  await assert.rejects(services.save(actor, input), /failed/);
-  assert.deepEqual(services.list(actor), []);
-  assert.ok(services.store.keyDraft(draft.id, actor.id));
+  assert.doesNotMatch((await database.client.gitKeyDraft.findFirstOrThrow()).credentials, /PRIVATE KEY/);
+  (await assert.rejects(async () => (await services.store.keyDraft(draft.id, other.id)), /失效/));
+  const input = { name: "SSH", authType: "ssh", host: "git.example.test", keyDraftId: draft.id };
+  await assert.rejects(services.save(actor, input, undefined, async () => { if (fails) throw new Error("fixture authorization failed"); }), /failed/);
+  assert.deepEqual((await services.list(actor)), []);
+  assert.ok((await services.store.keyDraft(draft.id, actor.id)));
   fails = false;
   const saved = await services.save(actor, input);
   assert.equal(saved.publicKey, draft.publicKey);
   assert.equal(saved.sshPrivateKey, undefined);
-  assert.throws(() => services.store.keyDraft(draft.id, actor.id), /失效/);
+  (await assert.rejects(async () => (await services.store.keyDraft(draft.id, actor.id)), /失效/));
   const replacement = await services.generateKey(actor);
   assert.notEqual(replacement.publicKey, saved.publicKey);
   fails = true;
-  await assert.rejects(services.save(actor, { ...input, keyDraftId: replacement.id }, saved.id), /failed/);
-  assert.equal(services.list(actor)[0].publicKey, saved.publicKey);
+  await assert.rejects(services.save(actor, { ...input, keyDraftId: replacement.id, revision: saved.revision }, saved.id, async () => { if (fails) throw new Error("fixture authorization failed"); }), /failed/);
+  assert.equal((await services.list(actor))[0].publicKey, saved.publicKey);
 });
 
-test("save reauthorizes and rejects concurrent account edits or deletion after connectivity completes", async t => {
+test("save reauthorizes and rejects concurrent account edits or deletion before persistence", async t => {
   const { database, actor, input } = await fixture(t);
   const services = new GitAccountServices(database, { checkConnection: async () => {} });
   const saved = await services.save(actor, input);
   let release;
-  services.checkConnection = () => new Promise(resolve => { release = resolve; });
-  const pending = services.save(actor, { ...input, name: "late" }, saved.id);
-  const previous = services.store.read(saved.id, actor.id);
-  services.store.save(actor.id, { ...input, name: "newer" }, previous);
-  release();
+  const releaseConnection = async () => {
+    const deadline = Date.now() + 10000;
+    while (!release && Date.now() < deadline) await new Promise(resolve => setImmediate(resolve));
+    assert.equal(typeof release, "function");
+    const finish = release; release = null; finish();
+  };
+  const authorize = () => new Promise(resolve => { release = resolve; });
+  const pending = services.save(actor, { ...input, name: "late", revision: saved.revision }, saved.id, authorize);
+  const previous = (await services.store.read(saved.id, actor.id));
+  (await services.store.save(actor.id, { ...input, name: "newer" }, previous));
+  await releaseConnection();
   await assert.rejects(pending, /已更改/);
-  assert.equal(services.list(actor)[0].name, "newer");
-  const unauthorized = services.save(actor, input, saved.id, () => { throw new Error("permission revoked"); });
-  release();
+  assert.equal((await services.list(actor))[0].name, "newer");
+  const unauthorized = services.save(actor, { ...input, revision: saved.revision + 1 }, saved.id, () => { throw new Error("permission revoked"); });
   await assert.rejects(unauthorized, /permission revoked/);
-  const removed = services.save(actor, input, saved.id);
-  services.remove(actor, saved.id);
-  release();
+  const removed = services.save(actor, { ...input, revision: saved.revision + 1 }, saved.id, authorize);
+  (await services.remove(actor, saved.id));
+  await releaseConnection();
   await assert.rejects(removed, /已更改/);
-  assert.deepEqual(services.list(actor), []);
+  assert.deepEqual((await services.list(actor)), []);
 });
 
 test("real HTTP clone creates fixed member paths and fetch uses stored credentials", async t => {
@@ -126,47 +135,48 @@ test("real HTTP clone creates fixed member paths and fetch uses stored credentia
   const account = await services.save(actor, input);
   const manager = new WorkspaceManager({ database, directory: path.join(directory, "workspaces") });
   t.after(() => manager.close());
-  const create = { name: "项目 A", remoteUrl: input.remoteUrl, gitAccountId: account.id };
+  const create = { name: "项目 A", remoteUrl: input.host + "/remote.git", gitAccountId: account.id };
   await assert.rejects(manager.createFromGit({ ...create, name: "" }, actor), /名称/);
   assert.equal(fs.existsSync(path.join(storageRoot, "admin")), false);
   const workspace = await manager.createFromGit(create, actor);
-  const config = manager.store.read(workspace.id, actor.id);
-  assert.equal(config.codex.repository, path.join(storageRoot, "admin", "projects", "remote"));
-  const settings = readSettings(manager.configFile(workspace.id));
+  const config = (await manager.store.read(workspace.id, actor.id));
+  assert.equal(config.execution.repository, path.join(storageRoot, "admin", "projects", "remote"));
+  const settings = (await readSettings(manager.configFile(workspace.id)));
   assert.equal(settings.worktreeRoot, path.join(storageRoot, "admin", "worktree", "remote"));
-  assert.equal(fs.existsSync(path.join(config.codex.repository, "README.md")), true);
-  assert.doesNotMatch(fs.readFileSync(path.join(config.codex.repository, ".git", "config"), "utf8"), /Authorization|password|extraHeader/);
-  assert.throws(() => saveSettings({ repository: directory }, manager.configFile(workspace.id)), /仅允许/);
-  assert.throws(() => services.remove(actor, account.id), /工作区/);
+  assert.equal(fs.existsSync(path.join(config.execution.repository, "README.md")), true);
+  assert.doesNotMatch(fs.readFileSync(path.join(config.execution.repository, ".git", "config"), "utf8"), /Authorization|password|extraHeader/);
+  (await assert.rejects(async () => (await saveSettings({ repository: directory }, manager.configFile(workspace.id))), /仅允许/));
+  (await assert.rejects(async () => (await services.remove(actor, account.id)), /工作区/));
   await assert.rejects(manager.createFromGit({ ...create, name: "duplicate directory" }, actor), /目录已存在/);
   fs.writeFileSync(path.join(remote.repository, "next.txt"), "next fixture change");
   remote.git("add", ".");
   remote.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "core.hooksPath=/dev/null", "commit", "-m", "next");
   await mutateRepository(manager.configFile(workspace.id), "fetch", { remote: "origin" });
-  const head = execFileSync("git", ["-C", config.codex.repository, "rev-parse", "origin/main"], { encoding: "utf8", windowsHide: true }).trim();
+  const head = execFileSync("git", ["-C", config.execution.repository, "rev-parse", "origin/main"], { encoding: "utf8", windowsHide: true }).trim();
   assert.equal(head, remote.git("rev-parse", "HEAD"));
   const nextStorageRoot = path.join(directory, "next-members");
-  saveSystemSettings({ memberStorageRoot: nextStorageRoot }, directory);
-  const changed = readSettings(manager.configFile(workspace.id));
-  assert.equal(changed.repository, config.codex.repository, "changing system root never relocates a clone");
-  assert.equal(changed.projectsRoot, path.dirname(config.codex.repository));
+  (await saveSystemSettings({ memberStorageRoot: nextStorageRoot }, directory));
+  const changed = (await readSettings(manager.configFile(workspace.id)));
+  assert.equal(changed.repository, config.execution.repository, "changing system root never relocates a clone");
+  assert.equal(changed.projectsRoot, path.dirname(config.execution.repository));
   assert.equal(changed.worktreeRoot, path.join(nextStorageRoot, "admin", "worktree", "remote"));
-  execFileSync("git", ["-C", config.codex.repository, "remote", "set-url", "origin", input.remoteUrl + "-changed"], { windowsHide: true });
+  execFileSync("git", ["-C", config.execution.repository, "remote", "set-url", "origin", input.host + "/remote.git" + "-changed"], { windowsHide: true });
   await assert.rejects(mutateRepository(manager.configFile(workspace.id), "fetch", { remote: "origin" }), /远程|远端/);
 });
 
 test("a workspace provides its saved HTTP Git account to Codex worktree processes without changing origin", async t => {
   const { directory, database, actor, services, input, storageRoot, remote } = await fixture(t);
   const account = await services.save(actor, input);
-  const manager = new WorkspaceManager({ database, directory: path.join(directory, "workspaces") });
+  const manager = new WorkspaceManager({ database, directory: path.join(directory, "workspaces"),
+    createManager: options => ({ ...options, close: async () => {} }) });
   t.after(() => manager.close());
-  const workspace = await manager.createFromGit({ name: "推送凭据", remoteUrl: input.remoteUrl, gitAccountId: account.id }, actor);
-  const config = manager.store.read(workspace.id, actor.id);
+  const workspace = await manager.createFromGit({ name: "推送凭据", remoteUrl: input.host + "/remote.git", gitAccountId: account.id }, actor);
+  const config = (await manager.store.read(workspace.id, actor.id));
   const worktree = path.join(storageRoot, "admin", "worktree", "remote", "push-credential");
-  execFileSync("git", ["-C", config.codex.repository, "worktree", "add", "-b", "codex/push-credential", worktree, "HEAD"], { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
-  const context = manager.get(workspace.id, actor);
-  assert.equal(context.sessions.client.gitCredentialRevision(), 1);
-  const credentials = await context.sessions.client.gitCredentialProvider();
+  execFileSync("git", ["-C", config.execution.repository, "worktree", "add", "-b", "codex/push-credential", worktree, "HEAD"], { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+  const context = (await manager.get(workspace.id, actor));
+  assert.equal(await context.sessions.gitCredentialRevision(), 1);
+  const credentials = await context.sessions.gitCredentialProvider();
   try {
     await execute("git", ["-C", worktree, "ls-remote", "--exit-code", "origin", "refs/heads/main"], {
       encoding: "utf8",
@@ -178,10 +188,10 @@ test("a workspace provides its saved HTTP Git account to Codex worktree processe
     credentials.dispose?.();
   }
   assert.ok(remote.requests.some(request => request.authorization === "Basic " + Buffer.from(input.username + ":" + input.password).toString("base64")));
-  assert.doesNotMatch(fs.readFileSync(path.join(config.codex.repository, ".git", "config"), "utf8"), /Authorization|password|extraHeader/);
-  services.store.save(actor.id, { ...input, password: "rotated-fixture-password" }, services.store.read(account.id, actor.id));
-  assert.equal(context.sessions.client.gitCredentialRevision(), 2, "cached workspace contexts observe account revisions");
-  const rotated = await context.sessions.client.gitCredentialProvider();
+  assert.doesNotMatch(fs.readFileSync(path.join(config.execution.repository, ".git", "config"), "utf8"), /Authorization|password|extraHeader/);
+  (await services.store.save(actor.id, { ...input, password: "rotated-fixture-password" }, (await services.store.read(account.id, actor.id))));
+  assert.equal(await context.sessions.gitCredentialRevision(), 2, "cached workspace contexts observe account revisions");
+  const rotated = await context.sessions.gitCredentialProvider();
   try {
     assert.equal(rotated.revision, 2);
     assert.ok(Object.values(rotated.env).includes("Authorization: Basic " + Buffer.from(input.username + ":rotated-fixture-password").toString("base64")));
@@ -203,9 +213,9 @@ test("Codex SSH credential environments clean their private key when the client 
 test("failed or competing clones clean only their own directory; symlinks and existing code are preserved", async t => {
   const { storageRoot, services, actor, input } = await fixture(t);
   const saved = await services.save(actor, input);
-  const account = services.store.read(saved.id, actor.id);
+  const account = (await services.store.read(saved.id, actor.id));
   const target = path.join(storageRoot, "admin", "projects", "repo");
-  const request = { target, memberStorageRoot: storageRoot, account, remote: input.remoteUrl };
+  const request = { target, memberStorageRoot: storageRoot, account, remote: input.host + "/remote.git" };
   await assert.rejects(cloneProject({ ...request, account: { ...account, password: "wrong" } }), /Git 克隆失败/);
   assert.equal(fs.existsSync(target), false);
   const results = await Promise.allSettled([cloneProject(request), cloneProject(request)]);
@@ -229,14 +239,14 @@ test("workspace publication rechecks authorization and credentials inside the sh
   const saved = await services.save(actor, input);
   for (const scenario of ["revoked", "account-changed"]) {
     const manager = new WorkspaceManager({ database, directory: path.join(directory, "workspaces"), cloneProject: async request => {
-      if (scenario === "account-changed") services.store.save(actor.id, { ...input, name: "changed" }, services.store.read(saved.id, actor.id));
+      if (scenario === "account-changed") (await services.store.save(actor.id, { ...input, name: "changed" }, (await services.store.read(saved.id, actor.id))));
       return cloneProject(request);
     } });
-    await assert.rejects(manager.createFromGit({ name: "pending", remoteUrl: input.remoteUrl, gitAccountId: saved.id }, actor, () => {
-      assert.equal(database.handle.inTransaction, true);
+    await assert.rejects(manager.createFromGit({ name: "pending", remoteUrl: input.host + "/remote.git", gitAccountId: saved.id }, actor, () => {
+      assert.notEqual(database.client, database.baseClient);
       if (scenario === "revoked") throw new Error("authorization revoked");
     }), scenario === "revoked" ? /revoked/ : /Git 账号已更改/);
-    assert.deepEqual(manager.list(actor), []);
+    assert.deepEqual((await manager.list(actor)), []);
     assert.equal(fs.existsSync(path.join(storageRoot, "admin", "projects", "remote")), false);
   }
 });
@@ -250,8 +260,8 @@ test("HTTP and SSH address validation is explicit and rejects secret-bearing URL
     assert.throws(() => remoteUrl(remote), /地址/);
   for (const name of ["..", "CON", "aux.txt"]) assert.throws(() => projectName("http://host/" + name + ".git"), /项目目录/);
   assert.throws(() => validateGitAccount({ name: "old", protocol: "http" }), /未知字段/);
-  assert.throws(() => validateGitAccount({ name: "old", authType: "ssh", remoteUrl: "git@host:repo.git", sshPrivateKey: "private" }), /未知字段/);
-  assert.throws(() => validateGitAccount({ name: "mismatch", authType: "ssh", remoteUrl: "http://host/repo.git" }), /不匹配/);
+  assert.throws(() => validateGitAccount({ name: "old", authType: "ssh", host: "host", sshPrivateKey: "private" }), /未知字段/);
+  assert.throws(() => validateGitAccount({ name: "mismatch", authType: "ssh", host: "http://host" }), /主机/);
 });
 
 test("connection failures never expose URLs, passwords or subprocess diagnostics", async () => {
@@ -263,35 +273,38 @@ test("connection failures never expose URLs, passwords or subprocess diagnostics
   });
 });
 
-test("referenced accounts cannot switch protocol even if a workspace is published during connection testing", async t => {
+test("referenced accounts cannot switch protocol even if a workspace is published during asynchronous authorization", async t => {
   const { directory, database, actor, input } = await fixture(t);
   const services = new GitAccountServices(database, { checkConnection: async () => {} });
   const manager = new WorkspaceManager({ database, directory: path.join(directory, "workspaces"), cloneProject: async ({ publish }) => publish() });
   t.after(() => manager.close());
   for (const type of ["http", "ssh"]) {
-    const draft = services.store.createKeyDraft(actor.id, { sshPrivateKey: "fixture-private", publicKey: "fixture-public" });
-    const ssh = { name: `SSH ${type}`, authType: "ssh", remoteUrl: "git@git.example.invalid:team/repo.git", keyDraftId: draft.id };
+    const draft = (await services.store.createKeyDraft(actor.id, { sshPrivateKey: "fixture-private", publicKey: "fixture-public" }));
+    const ssh = { name: `SSH ${type}`, authType: "ssh", host: "git.example.invalid", keyDraftId: draft.id };
     const http = { ...input, name: `HTTP ${type}` };
     const initial = type === "http" ? http : ssh;
     const replacement = type === "http" ? ssh : http;
     const saved = await services.save(actor, initial);
-    const before = services.store.read(saved.id, actor.id);
+    const before = (await services.store.read(saved.id, actor.id));
     let release;
-    services.checkConnection = () => new Promise(resolve => { release = resolve; });
-    const pending = services.save(actor, replacement, saved.id);
-    await manager.createFromGit({ name: `workspace ${type}`, remoteUrl: initial.remoteUrl, gitAccountId: saved.id }, actor);
+    const authorize = () => new Promise(resolve => { release = resolve; });
+    const pending = services.save(actor, { ...replacement, revision: saved.revision }, saved.id, authorize);
+    await manager.createFromGit({ name: `workspace ${type}`, remoteUrl: initial.authType === "http" ? initial.host + "/remote.git" : "git@" + initial.host + ":repo.git", gitAccountId: saved.id }, actor);
+    const deadline = Date.now() + 10000;
+    while (!release && Date.now() < deadline) await new Promise(resolve => setImmediate(resolve));
+    assert.equal(typeof release, "function");
     release();
-    await assert.rejects(pending, error => error.statusCode === 409 && /不能切换认证方式/.test(error.message));
-    assert.deepEqual(services.store.read(saved.id, actor.id), before);
-    if (type === "http") assert.ok(services.store.keyDraft(draft.id, actor.id), 'a rejected update must not consume the new key');
+    await assert.rejects(pending, error => error.statusCode === 409 && /不能切换主机或认证方式/.test(error.message));
+    assert.deepEqual((await services.store.read(saved.id, actor.id)), before);
+    if (type === "http") assert.ok((await services.store.keyDraft(draft.id, actor.id)), 'a rejected update must not consume the new key');
     services.checkConnection = async () => {};
     const { keyDraftId, ...sameType } = initial;
     assert.ok(keyDraftId || type === "http");
-    const updated = await services.save(actor, { ...sameType, name: `renamed ${type}` }, saved.id);
+    const updated = await services.save(actor, { ...sameType, name: `renamed ${type}`, revision: saved.revision }, saved.id);
     assert.equal(updated.authType, type);
   }
   const unreferenced = await services.save(actor, { ...input, name: "unreferenced" });
-  const draft = services.store.createKeyDraft(actor.id, { sshPrivateKey: "fixture-private", publicKey: "fixture-public" });
-  const changed = await services.save(actor, { name: "unreferenced", authType: "ssh", remoteUrl: "git@git.example.invalid:team/repo.git", keyDraftId: draft.id }, unreferenced.id);
+  const draft = (await services.store.createKeyDraft(actor.id, { sshPrivateKey: "fixture-private", publicKey: "fixture-public" }));
+  const changed = await services.save(actor, { name: "unreferenced", authType: "ssh", host: "git.example.invalid", keyDraftId: draft.id, revision: unreferenced.revision }, unreferenced.id);
   assert.equal(changed.authType, "ssh");
 });

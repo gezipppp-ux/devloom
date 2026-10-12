@@ -11,8 +11,8 @@ function sessionFromConfig(config) {
   return session;
 }
 
-function loadSession(value) {
-  return sessionFromConfig(loadConfig(value));
+async function loadSession(value) {
+  return sessionFromConfig((await loadConfig(value)));
 }
 
 function workspaceId(session, value) {

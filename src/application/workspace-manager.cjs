@@ -19,6 +19,7 @@ const {
 const { validateWorkspaceInput } = require("../domain/workspace.cjs");
 const { cloneProject } = require("../git/project-clone.cjs");
 const { createGitCredentialEnvironment } = require("../git/account-credentials.cjs");
+const { agentConfig } = require("../domain/agent-config.cjs");
 
 function presentWorkspace(config) {
   return {
@@ -41,6 +42,7 @@ class WorkspaceManager {
     this.createManager = createManager;
     this.cloneProject = clone;
     this.contexts = new Map();
+    this.closing = false;
   }
 
   configFile(id) {
@@ -53,31 +55,32 @@ class WorkspaceManager {
     return actor?.id;
   }
 
-  read(id, actor) {
-    return presentWorkspace(this.store.read(id, this.owner(actor)));
+  async read(id, actor) {
+    return presentWorkspace((await this.store.read(id, this.owner(actor))));
   }
 
-  list(actor) {
-    return this.store
-      .list(this.owner(actor))
+  async list(actor) {
+    return (await this.store
+      .list(this.owner(actor)))
       .map(presentWorkspace)
       .sort((left, right) => left.name.localeCompare(right.name));
   }
 
-  save(input, id, actor, createConfig) {
+  async save(input, id, actor, createConfig) {
     const owner = this.owner(actor);
     return presentWorkspace(
-      this.store.save(
+      (await this.store.save(
         input,
         id,
-        (key) =>
-          createConfig?.(key) || {
+        async (key) =>
+          (await createConfig?.(key)) || {
             version: 3,
-            codex: { project_name: defaultProjectName(key) },
+            execution: { projectName: defaultProjectName(key) },
+            agent: { provider: "codex", model: "", reasoningEffort: "", permissionMode: "ask", options: {} },
             ...defaultChannelConfig(),
           },
         owner,
-      ),
+      )),
     );
   }
 
@@ -99,16 +102,16 @@ class WorkspaceManager {
       name: input.name,
       ...(input.icon === undefined ? {} : { icon: input.icon }),
     });
-    if (this.list(actor).some((entry) => entry.name === workspace.name))
+    if ((await this.list(actor)).some((entry) => entry.name === workspace.name))
       throw new Error("工作区名称已存在。");
     const gitAccounts = new GitAccountStore(this.store.database);
-    const account = gitAccounts.read(gitAccountId(input.gitAccountId), owner);
+    const account = (await gitAccounts.read(gitAccountId(input.gitAccountId), owner));
     if (account.authType !== remoteAuthType(remote))
       throw new Error("所选 Git 账号的认证方式与远程地址协议不匹配。");
     const directory = projectName(remote);
-    const { memberStorageRoot } = readSystemSettings(
+    const { memberStorageRoot } = (await readSystemSettings(
       path.dirname(this.directory),
-    );
+    ));
     const member = memberDirectoryName(actor.username);
     const projectPath = path.join(
       memberStorageRoot,
@@ -116,72 +119,76 @@ class WorkspaceManager {
       "projects",
       directory,
     );
-    return this.cloneProject({
+    return (await this.cloneProject({
       account,
       remote,
       target: projectPath,
       memberStorageRoot,
       signal: options.signal,
       onProgress: options.onProgress,
-      publish: () => {
-        const create = () => this.save(workspace, undefined, actor, () => {
+      publish: async () => {
+        const create = async () => (await this.save(workspace, undefined, actor, async () => {
           // WorkspaceStore invokes this inside its short write transaction,
           // serializing publication with account updates and deletion.
-          authorize?.();
-          if (gitAccounts.read(account.id, owner).revision !== account.revision)
+          await authorize?.();
+          if ((await gitAccounts.read(account.id, owner)).revision !== account.revision)
             throw new Error("Git 账号已更改，请重新创建工作区。");
           return {
             version: 4,
-            codex: {
+            execution: {
               repository: projectPath,
-              project_name: directory,
-              git_account_id: account.id,
-              remote_url: remote,
-              base_ref: "HEAD",
-              init_commands: [],
+              projectName: directory,
+              gitAccountId: account.id,
+              remoteUrl: remote,
+              baseRef: "HEAD",
+              initCommands: [],
             },
+            agent: { provider: "codex", model: "", reasoningEffort: "", permissionMode: "ask", options: {} },
             ...defaultChannelConfig(),
           };
-        });
-        return options.publish ? options.publish(create) : create();
+        }));
+        return options.publish ? options.publish(create) : (await create());
       },
-    });
+    }));
   }
 
-  get(id, actor) {
-    const config = this.store.read(id, this.owner(actor));
+  async get(id, actor) {
+    const config = (await this.store.read(id, this.owner(actor)));
+    if (this.closing) throw new Error("工作区服务正在关闭，不能继续操作。");
     if (!this.contexts.has(id)) {
       const { configFile, uploadDirectory, runsDirectory } =
         this.store.paths(id);
       const channels = defaultChannels(configFile, { uploadDirectory });
       const gitCredentialProvider =
         this.store.database &&
-        config.codex?.git_account_id &&
-        config.codex?.remote_url &&
+        config.execution?.gitAccountId &&
+        config.execution?.remoteUrl &&
         config.workspace?.owner_user_id
           ? async () => {
-              const account = new GitAccountStore(this.store.database).read(
-                config.codex.git_account_id,
+              const account = (await new GitAccountStore(this.store.database).read(
+                config.execution.gitAccountId,
                 config.workspace.owner_user_id,
-              );
-              return createGitCredentialEnvironment(
+              ));
+              return (await createGitCredentialEnvironment(
                 account,
-                config.codex.remote_url,
-              );
+                config.execution.remoteUrl,
+              ));
             }
           : undefined;
       const gitCredentialRevision = gitCredentialProvider
-        ? () => new GitAccountStore(this.store.database).read(
-            config.codex.git_account_id, config.workspace.owner_user_id,
-          ).revision
+        ? async () => (await new GitAccountStore(this.store.database).read(
+            config.execution.gitAccountId, config.workspace.owner_user_id,
+          )).revision
         : undefined;
       const sessions = this.createManager({
         configFile,
+        agentConfig: agentConfig(config),
         channels,
         runsDirectory,
         apiPrefix: `/api/workspaces/${id}`,
         gitCredentialProvider,
         gitCredentialRevision,
+        authorize: permission => this.authorizeProject?.(id, { id: config.workspace.owner_user_id }, permission),
       });
       this.contexts.set(id, {
         configFile,
@@ -193,6 +200,7 @@ class WorkspaceManager {
   }
 
   async close() {
+    this.closing = true;
     await Promise.all(
       [...this.contexts.values()].map(({ sessions }) => sessions.close()),
     );

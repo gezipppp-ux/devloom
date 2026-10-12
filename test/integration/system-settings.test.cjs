@@ -16,24 +16,24 @@ const { listDirectories } = require("../../src/storage/directories.cjs");
 const { WorkspaceManager } = require("../../src/application/workspace-manager.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 
-test("system base directory is canonical, persisted separately and validated before saving", (t) => {
+test("system base directory is canonical, persisted separately and validated before saving", async (t) => {
   const directory = temporary(t);
   const file = path.join(directory, "system-settings.json");
   assert.equal(
-    readSystemSettings(directory).memberStorageRoot,
-    path.join(os.homedir(), ".codex-workspaces"),
+    (await readSystemSettings(directory)).memberStorageRoot,
+    path.join(os.homedir(), ".web-coding-workspaces"),
   );
   assert.equal(fs.existsSync(file), false);
-  writeConfig(file, { unrelated: { keep: true } });
+  (await writeConfig(file, { unrelated: { keep: true } }));
   const base = path.join(directory, "测试目录 with spaces", "trees");
-  const result = saveSystemSettings(
+  const result = (await saveSystemSettings(
     { memberStorageRoot: `${base}${path.sep}` },
     directory,
-  );
+  ));
   assert.equal(result.memberStorageRoot, fs.realpathSync.native(base));
   assert.equal(result.platform, process.platform);
-  assert.deepEqual(readSystemSettings(directory), result);
-  assert.deepEqual(readOptional(file).unrelated, { keep: true });
+  assert.deepEqual((await readSystemSettings(directory)), result);
+  assert.deepEqual((await readOptional(file)).unrelated, { keep: true });
   assert.deepEqual(fs.readdirSync(base), []);
   const saved = fs.readFileSync(file, "utf8");
   for (const memberStorageRoot of [
@@ -44,22 +44,22 @@ test("system base directory is canonical, persisted separately and validated bef
     12,
     `${base}\ninvalid`,
   ])
-    assert.throws(
-      () => saveSystemSettings({ memberStorageRoot }, directory),
+    (await assert.rejects(
+      async () => (await saveSystemSettings({ memberStorageRoot }, directory)),
       /绝对路径/,
-    );
+    ));
   for (const input of [
     null,
     [],
     {},
     { memberStorageRoot: base, repository: base },
   ])
-    assert.throws(() => saveSystemSettings(input, directory));
+    (await assert.rejects(async () => (await saveSystemSettings(input, directory))));
   const regularFile = path.join(directory, "file.txt");
   fs.writeFileSync(regularFile, "fixture");
-  assert.throws(() =>
-    saveSystemSettings({ memberStorageRoot: regularFile }, directory),
-  );
+  (await assert.rejects(async () =>
+    (await saveSystemSettings({ memberStorageRoot: regularFile }, directory)),
+  ));
   assert.equal(fs.readFileSync(file, "utf8"), saved);
 });
 
@@ -184,5 +184,5 @@ test("global system endpoints work before workspace creation and enforce origin 
     400,
   );
   assert.equal((await fetch(`${origin}/api/settings`)).status, 400);
-  assert.deepEqual(workspaces.list(), []);
+  assert.deepEqual((await workspaces.list()), []);
 });

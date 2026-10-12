@@ -1,4 +1,6 @@
+const { assertAgentIdentity } = require("../domain/agent-contract.cjs");
 const { repositoryCommonDirectory } = require("../git/repository.cjs");
+const { presentError } = require("./error-presenter.cjs");
 const {
   readTaskGit,
   deleteTaskWorktree,
@@ -15,6 +17,7 @@ const ACTIVE = new Set([
 ]);
 
 class SessionGit {
+  /** @param {import('./session-manager.cjs').SessionManager} manager */
   constructor(manager) {
     this.manager = manager;
     this.store = manager.store;
@@ -38,62 +41,61 @@ class SessionGit {
   async assertIdle(key, state) {
     const reason = this.activeReason(key);
     if (reason) throw new Error(reason);
+    assertAgentIdentity(this.manager.agent, state);
     this.store.claim(key);
     if (state.session_id) {
       try {
-        await this.manager.client.connect();
-        const result = await this.manager.client.request("thread/read", {
-          threadId: state.session_id,
-          includeTurns: false,
-        });
-        if (!result.thread?.status?.type || result.thread.status.type === "active")
+        await this.manager.agent.connect();
+        const result = await this.manager.agent.readSession(state.session_id);
+        if (result.status !== "idle")
           throw new Error("active");
       } catch {
-        throw new Error("无法确认 Codex 会话已空闲，请确认本轮已结束且 Codex 连接正常后重试。");
+        throw new Error("无法确认执行器会话已空闲，请确认本轮已结束且连接正常后重试。");
       }
     }
     this.manager.assertOpen();
+    await this.manager.authorize("code.operate");
     const afterRead = this.activeReason(key);
     if (afterRead) throw new Error(afterRead);
   }
 
   // Called only while the manager holds the per-session operation lock.
   async forceRemove(key, confirmBranch) {
-    const state = this.store.read(key);
+    const state = (await this.store.read(key));
     if (!state.worktree?.path) return;
     if (typeof confirmBranch !== "string" || confirmBranch !== state.worktree.branch)
       throw new Error("请输入完整的任务分支名称以确认强制删除。");
     await this.assertIdle(key, state);
     const common = repositoryCommonDirectory(state.worktree.repository);
-    return withRepositoryOperation(common, async () => {
-      const previous = this.store.readWorktreeDeletion(key);
+    return (await withRepositoryOperation(common, async () => {
+      const previous = (await this.store.readWorktreeDeletion(key));
       let record = { ...previous, status: "deleting", force: true,
         path: state.worktree.path, branch: state.worktree.branch,
         startedAt: previous.startedAt || new Date().toISOString(), error: null };
-      const persist = (progress) => {
+      const persist = async (progress) => {
         record = { ...record, ...progress, updatedAt: new Date().toISOString() };
-        this.store.writeWorktreeDeletion(key, record);
+        (await this.store.writeWorktreeDeletion(key, record));
       };
-      persist({});
+      (await persist({}));
       try {
         const result = await forceDeleteTaskWorktree(state, previous, persist);
-        persist({ status: "deleted", worktreeRemoved: true, branchDeleted: true });
+        (await persist({ status: "deleted", worktreeRemoved: true, branchDeleted: true }));
         const runtime = this.manager.sessions.get(key);
         if (runtime) runtime.connected = false;
         this.publish(key, record);
         return result;
       } catch (error) {
-        persist({ ...error.partial, status: record.worktreeRemoved || error.partial?.worktreeRemoved ? "partial" : "failed", error: error.message });
+        (await persist({ ...error.partial, status: record.worktreeRemoved || error.partial?.worktreeRemoved ? "partial" : "failed", error: presentError(error).message }));
         this.publish(key, record);
         throw error;
       }
-    });
+    }));
   }
 
-  read(key) {
+  async read(key) {
     this.manager.assertOpen();
-    const state = this.store.read(key);
-    const deletion = this.store.readWorktreeDeletion(key);
+    const state = (await this.store.read(key));
+    const deletion = (await this.store.readWorktreeDeletion(key));
     if (deletion.status === "deleted")
       return {
         deleted: true,
@@ -120,8 +122,8 @@ class SessionGit {
     };
   }
 
-  remove(key, input) {
-    return this.manager.exclusive(key, async () => {
+  async remove(key, input) {
+    return (await this.manager.exclusive(key, async () => {
       if (
         !input ||
         typeof input !== "object" ||
@@ -141,13 +143,13 @@ class SessionGit {
         typeof input.discardChanges !== "boolean"
       )
         throw new Error("删除确认信息无效，请重新打开删除确认窗口。");
-      const state = this.store.read(key);
-      const previous = this.store.readWorktreeDeletion(key);
+      const state = (await this.store.read(key));
+      const previous = (await this.store.readWorktreeDeletion(key));
       if (previous.status === "deleted")
         return { deleted: true, deletion: previous };
       await this.assertIdle(key, state);
       const common = repositoryCommonDirectory(state.worktree.repository);
-      return withRepositoryOperation(common, async () => {
+      return (await withRepositoryOperation(common, async () => {
         // Validate a fresh snapshot before persisting deletion intent. A later
         // Git operation revalidates it again immediately before removing files.
         const snapshot = readTaskGit(state, previous);
@@ -159,7 +161,7 @@ class SessionGit {
             branchDeleted: true,
             updatedAt: new Date().toISOString(),
           };
-          this.store.writeWorktreeDeletion(key, deletion);
+          (await this.store.writeWorktreeDeletion(key, deletion));
           this.publish(key, deletion);
           return { deleted: true, deletion };
         }
@@ -181,15 +183,15 @@ class SessionGit {
           startedAt: new Date().toISOString(),
           error: null,
         };
-        const persist = (progress) => {
+        const persist = async (progress) => {
           record = {
             ...record,
             ...progress,
             updatedAt: new Date().toISOString(),
           };
-          this.store.writeWorktreeDeletion(key, record);
+          (await this.store.writeWorktreeDeletion(key, record));
         };
-        persist({});
+        (await persist({}));
         try {
           const result = await deleteTaskWorktree(
             state,
@@ -197,29 +199,29 @@ class SessionGit {
             previous,
             persist,
           );
-          persist({
+          (await persist({
             status: "deleted",
             worktreeRemoved: true,
             branchDeleted: true,
-          });
+          }));
           const runtime = this.manager.sessions.get(key);
           if (runtime) runtime.connected = false;
           this.publish(key, record);
           return { ...result, deleted: true, deletion: record };
         } catch (error) {
-          persist({
+          (await persist({
             ...error.partial,
             status:
               record.worktreeRemoved || error.partial?.worktreeRemoved
                 ? "partial"
                 : "failed",
-            error: error.message,
-          });
+            error: presentError(error).message,
+          }));
           this.publish(key, record);
           throw error;
         }
-      });
-    });
+      }));
+    }));
   }
 
   publish(key, deletion) {

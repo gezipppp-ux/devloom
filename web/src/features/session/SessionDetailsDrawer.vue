@@ -24,6 +24,8 @@ defineProps({
   session: { type: Object, required: true },
   active: Boolean,
   requirementsDisabled: Boolean,
+  canManage: { type: Boolean, default: true },
+  canOperate: { type: Boolean, default: true },
 });
 const emit = defineEmits(["archived", "deleted", "worktree-deleted", "open-file", "opened", "continue-requirements"]);
 const panels = [
@@ -137,9 +139,9 @@ onUnmounted(() => {
               <dt>Session</dt>
               <dd>{{ session.sessionId || "创建中" }}</dd>
               <dt>创建时模型</dt>
-              <dd>{{ session.codex?.model || "Codex 默认配置" }}</dd>
+              <dd>{{ session.agent?.model || `${session.agent?.label || 'Agent'} 默认配置` }}</dd>
               <dt>创建时思考强度</dt>
-              <dd>{{ session.codex?.reasoningEffort || "默认思考强度" }}</dd>
+              <dd>{{ session.agent?.reasoningEffort || "默认思考强度" }}</dd>
               <dt>渠道同步</dt>
               <dd>
                 {{
@@ -152,6 +154,8 @@ onUnmounted(() => {
             </dl>
           </section>
           <SessionLifecycleControls
+            v-if="canManage"
+            :can-delete="canOperate"
             :task-key="session.key"
             :title="session.title"
             :worktree="session.worktree"
@@ -169,6 +173,7 @@ onUnmounted(() => {
           <SessionGitPanel
             v-if="panel === 'git' && session.worktree?.path"
             :task-key="session.key"
+            :can-operate="canOperate"
             :worktree="session.worktree"
             :deletion="session.worktreeDeletion"
             :status="session.status"

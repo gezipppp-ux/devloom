@@ -54,6 +54,16 @@ function gitAccountEnvironment(account, remote) {
     "credential.interactive": "false",
     "http.followRedirects": "false",
   };
+  if (account.authorName) {
+    config["user.name"] = account.authorName;
+    env.GIT_AUTHOR_NAME = account.authorName;
+    env.GIT_COMMITTER_NAME = account.authorName;
+  }
+  if (account.authorEmail) {
+    config["user.email"] = account.authorEmail;
+    env.GIT_AUTHOR_EMAIL = account.authorEmail;
+    env.GIT_COMMITTER_EMAIL = account.authorEmail;
+  }
   if (account.authType === "http") {
     const url = new URL(remote);
     config["http.extraHeader"] = "";

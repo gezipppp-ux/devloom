@@ -21,7 +21,7 @@ description: 在 web-coding 项目新增或调整 Vue 页面、表单、会话�
 - 保留账号、工作区、任务切换的身份与代际判断，卸载后清理监听、订阅和对象 URL；迟到请求不得恢复已清空草稿或写入新账号。
 - 统一原生控件和组件库控件的高度、字体及焦点样式；输入、只读和禁用状态不应产生布局跳动。
 - 弹窗支持键盘、Escape、焦点恢复和可到达的底部操作；删除类操作保留项目约定的明确确认步骤。
-- 需求富文本仅走现有 `requirement-content.js` 的安全渲染入口，不能为了展示改成未过滤 HTML 或加载任意远程图片。
+- 需求富文本走 `shared/components/markdown-content.js` 安全基础；会话仍经 `features/session/requirement-content.js` 保留原有约束。项目正文使用 `MarkdownContent`／`MarkdownEditor`，不能为了展示改成未过滤 HTML 或加载任意远程图片。
 - 响应式改变呈现方式，不改变当前工作区、选中任务或后台执行。
 
 ## 验证

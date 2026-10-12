@@ -4,7 +4,8 @@ const readline = require('node:readline');
 const { spawn } = require('node:child_process');
 const { resolveCodex } = require('./command.cjs');
 const { stopProcessTree } = require('../shared/process-tree.cjs');
-const { childEnvironment } = require('./environment.cjs');
+const { childEnvironment } = require('../shared/child-environment.cjs');
+const { normalizeItem } = require('./session-item.cjs');
 
 function commandFor(config, repository, directory, images) {
   const resolved = resolveCodex(config);
@@ -40,6 +41,7 @@ async function startSession({
   onSession,
   onStarted,
   onEvent,
+  onItem,
   onStderr,
   onFinal,
 }) {
@@ -69,6 +71,13 @@ async function startSession({
     let startupFailure;
     let callbackError;
     let startCallback = Promise.resolve();
+    let writes = Promise.resolve();
+    const enqueue = (operation) => {
+      writes = writes.then(operation).catch((error) => {
+        startupFailure ||= error;
+        void stopProcessTree(child);
+      });
+    };
     const timer = setTimeout(() => {
       startupFailure = new Error(
         'Codex did not begin execution before the startup timeout.',
@@ -91,9 +100,9 @@ async function startSession({
       void stopProcessTree(child);
     });
     const lines = readline.createInterface({ input: child.stdout });
-    lines.on('line', (line) => {
+    lines.on('line', (line) => enqueue(async () => {
       try {
-        if (onEvent) onEvent(`${line}\n`);
+        if (onEvent) await onEvent(`${line}\n`);
         else fs.appendFileSync(path.join(directory, 'events.jsonl'), `${line}\n`, {
           mode: 0o600,
         });
@@ -105,7 +114,7 @@ async function startSession({
         }
         if (event.type === 'thread.started' && event.thread_id && !sessionId) {
           sessionId = event.thread_id;
-          onSession(sessionId);
+          await onSession(sessionId);
         }
         if (event.type === 'turn.started' && sessionId && !started) {
           started = true;
@@ -118,16 +127,18 @@ async function startSession({
             });
         }
         if (event.type === 'turn.completed') completed = true;
+        if (event.type === 'item.completed' && event.item)
+          await onItem?.(normalizeItem(event.item, event.turn_id));
         if (event.type === 'turn.failed')
           failure = event.error?.message || 'Codex turn failed.';
       } catch (error) {
         startupFailure = error;
         void stopProcessTree(child);
       }
-    });
-    child.stderr.on('data', (chunk) => {
+    }));
+    child.stderr.on('data', (chunk) => enqueue(async () => {
       try {
-        if (onStderr) onStderr(chunk);
+        if (onStderr) await onStderr(chunk);
         else fs.appendFileSync(path.join(directory, 'stderr.log'), chunk, {
           mode: 0o600,
         });
@@ -135,13 +146,14 @@ async function startSession({
         startupFailure = error;
         void stopProcessTree(child);
       }
-    });
+    }));
     child.once('close', async (code, signal) => {
       clearTimeout(timer);
       process.removeListener('SIGINT', stop);
       process.removeListener('SIGTERM', stop);
+      await writes;
       await startCallback;
-      try { onFinal?.(); } catch (error) { startupFailure ||= error; }
+      try { await onFinal?.(); } catch (error) { startupFailure ||= error; }
       if (startupFailure) return reject(startupFailure);
       if (callbackError) return reject(callbackError);
       if (!started)
@@ -164,7 +176,7 @@ async function startSession({
               : null),
       });
     });
-    child.stdin.end(task.codex_prompt);
+    child.stdin.end(task.prompt);
   });
 }
 

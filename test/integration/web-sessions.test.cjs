@@ -7,9 +7,9 @@ const { execFileSync } = require('node:child_process');
 const { test } = require('node:test');
 const { AppServerClient } = require('../../src/codex/app-server-client.cjs');
 const { RunStore } = require('../../src/storage/run-store.cjs');
-const { normalizeItem } = require('../../src/domain/session-item.cjs');
+const { normalizeItem } = require('../../src/codex/session-item.cjs');
 const { worktreeReason } = require('../../src/git/worktree-access.cjs');
-const { SessionManager } = require('../../src/application/session-manager.cjs');
+const { SessionManager } = require('../support/session-manager.cjs');
 const { createWebServer } = require('../../src/http/server.cjs');
 const { temporary } = require('../support/helpers.cjs');
 
@@ -21,6 +21,7 @@ function setup(t) {
   const key = '1-2';
   fs.mkdirSync(store.dir(key));
   const state = {
+    agent: { provider: "codex" },
     workitem: { title: '测试需求', id: '2', workspace_id: '1' },
     worktree: { path: directory, repository: directory, branch: 'codex/test' },
     session_id: 'original',
@@ -73,7 +74,7 @@ test('app-server correlates parallel RPC, notifications, server requests, errors
   assert.equal((await client.request('again', {})).method, 'again');
 });
 
-test('Web launch validates Codex before claiming a run or creating a worktree', (t) => {
+test('Web launch validates Codex before claiming a run or creating a worktree', async (t) => {
   const { manager, store, directory } = setup(t);
   manager.configFile = path.join(directory, 'config.json');
   manager.client.validateCommand = () => {
@@ -82,10 +83,10 @@ test('Web launch validates Codex before claiming a run or creating a worktree', 
   manager.run = () => {
     assert.fail('must not create worktree');
   };
-  assert.throws(
-    () => manager.launch('1-3', { id: '3', workspace_id: '1' }, {}, {}),
+  (await assert.rejects(
+    async () => (await manager.launch('1-3', { id: '3', workspace_id: '1' }, { agent: { provider: 'codex' } }, {})),
     /未找到 Codex/,
-  );
+  ));
   assert.equal(fs.existsSync(store.dir('1-3')), false);
   assert.equal(manager.sessions.has('1-3'), false);
 });
@@ -122,7 +123,7 @@ test('initialization progress is streamed, can be interrupted, and remains visib
     onInitialization(state.initialization, 0);
     return state;
   };
-  manager.launch(key, state.workitem, {}, {});
+  (await manager.launch(key, state.workitem, { agent: { provider: "codex" } }, {}));
   assert.equal((await manager.view(key)).status, 'initializing');
   assert.ok(events.some((event) => event.item?.output === 'installing'));
   await manager.interrupt(key);
@@ -148,6 +149,7 @@ test('same session supports resume, streamed tool output, steering, interruption
     itemId: 'command',
     delta: '测试通过',
   });
+  await manager.events.drain();
   await manager.send(key, '请补充测试');
   assert.equal(client.calls.at(-1).method, 'turn/steer');
   assert.equal(client.calls.at(-1).params.expectedTurnId, first.turnId);
@@ -156,7 +158,7 @@ test('same session supports resume, streamed tool output, steering, interruption
     '测试通过',
   );
   await manager.interrupt(key);
-  assert.equal(store.read(key).execution.status, 'interrupted');
+  assert.equal((await store.read(key)).execution.status, 'interrupted');
   const next = await manager.send(key, '继续');
   assert.equal(next.sessionId, first.sessionId);
   assert.notEqual(next.turnId, first.turnId);
@@ -179,9 +181,10 @@ test('questions and approvals require explicit valid answers; unsupported reques
       questions: [{ id: 'choice', question: '选择？' }],
     },
   });
+  await manager.events.drain();
   await assert.rejects(manager.send(key, 'another'), /先处理/);
-  await assert.rejects(manager.respond(key, '8', { answers: {} }), /回答/);
-  await manager.respond(key, '8', { answers: { choice: '选项一' } });
+  await assert.rejects(manager.respond(key, 'number:8', { answers: {} }), /回答/);
+  await manager.respond(key, 'number:8', { answers: { choice: '选项一' } });
   assert.deepEqual(client.calls.at(-1).result, {
     answers: { choice: { answers: ['选项一'] } },
   });
@@ -190,10 +193,11 @@ test('questions and approvals require explicit valid answers; unsupported reques
     method: 'item/fileChange/requestApproval',
     params: { threadId: 'original' },
   });
-  await manager.respond(key, '9', { decision: 'decline' });
+  await manager.events.drain();
+  await manager.respond(key, 'string:9', { decision: 'decline' });
   assert.deepEqual(client.calls.at(-1).result, { decision: 'decline' });
   await assert.rejects(
-    manager.respond(key, '9', { decision: 'accept' }),
+    manager.respond(key, 'string:9', { decision: 'accept' }),
     /失效/,
   );
   client.emit('request', {
@@ -201,6 +205,7 @@ test('questions and approvals require explicit valid answers; unsupported reques
     method: 'unknown',
     params: { threadId: 'original' },
   });
+  await manager.events.drain();
   assert.equal(client.calls.at(-1).rejected, 10);
 });
 
@@ -214,20 +219,24 @@ test('modern optional questions allow steering while blocking questions and appr
       { id: '__proto__', header: '密文', question: '输入密文', isSecret: true },
     ] };
   client.emit('request', { id: 80, method: 'item/tool/requestUserInput', params });
-  assert.equal((await manager.view(key)).requests[0].params.isBlocking, false);
+  await manager.events.drain();
+  assert.equal((await manager.view(key)).requests[0].blocking, false);
   await manager.send(key, '继续检查');
   assert.equal(client.calls.at(-1).method, 'turn/steer');
-  await assert.rejects(manager.respond(key, '80', { answers: { scope: '全部' } }), /回答/);
-  await manager.respond(key, '80', { answers: JSON.parse('{"scope":"全部","notes":" 自定义范围 ","__proto__":"密文"}') });
+  await assert.rejects(manager.respond(key, 'number:80', { answers: { scope: '全部' } }), /回答/);
+  await manager.respond(key, 'number:80', { answers: JSON.parse('{"scope":"全部","notes":" 自定义范围 ","__proto__":"密文"}') });
   assert.deepEqual(client.calls.at(-1), { response: 80, result: { answers: JSON.parse('{"scope":{"answers":["全部"]},"notes":{"answers":["自定义范围"]},"__proto__":{"answers":["密文"]}}') } });
-  await assert.rejects(manager.respond(key, '80', { answers: {} }), /失效/);
+  await assert.rejects(manager.respond(key, 'number:80', { answers: {} }), /失效/);
   for (const blocking of [true, undefined]) {
     client.emit('request', { id: 81, method: 'item/tool/requestUserInput', params: { ...params, isBlocking: blocking } });
+  await manager.events.drain();
     await assert.rejects(manager.send(key, '不要绕过'), /先处理/);
     client.notify('serverRequest/resolved', { requestId: 81 });
+  await manager.events.drain();
     assert.equal((await manager.view(key)).requests.length, 0);
   }
   client.emit('request', { id: 82, method: 'item/fileChange/requestApproval', params: { threadId: 'original', isBlocking: false } });
+  await manager.events.drain();
   await assert.rejects(manager.send(key, '不要绕过审批'), /先处理/);
 });
 
@@ -242,22 +251,27 @@ test('invalid, stale and foreign questions cannot be answered; completion and di
     { threadId: 'foreign' }, { turnId: 'old-turn' },
   ]) {
     client.emit('request', { id: 90, method: 'item/tool/requestUserInput', params: { ...params, ...patch } });
+  await manager.events.drain();
     assert.equal(client.calls.at(-1).rejected, 90);
     assert.equal((await manager.view(key)).requests.length, 0);
   }
   client.emit('request', { id: 91, method: 'item/tool/requestUserInput', params });
+  await manager.events.drain();
   for (const answers of [null, [], { a: ' ' }, { a: ['A'] }, { a: 'x'.repeat(20001) }])
-    await assert.rejects(manager.respond(key, '91', { answers }), /回答/);
+    await assert.rejects(manager.respond(key, 'number:91', { answers }), /回答/);
   client.notify('serverRequest/resolved', { threadId: 'foreign', requestId: 91 });
+  await manager.events.drain();
   assert.equal((await manager.view(key)).requests.length, 1);
   await manager.interrupt(key);
-  await assert.rejects(manager.respond(key, '91', { answers: { a: 'A' } }), /失效/);
+  await assert.rejects(manager.respond(key, 'number:91', { answers: { a: 'A' } }), /失效/);
   const next = await manager.send(key, 'continue');
   client.emit('request', { id: 92, method: 'item/tool/requestUserInput', params: { ...params, turnId: next.turnId, isBlocking: false } });
+  await manager.events.drain();
   const events = [];
   manager.on('event', (event) => events.push(event));
   client.emit('disconnected', new Error('offline'));
-  await assert.rejects(manager.respond(key, '92', { answers: { a: 'A' } }), /失效/);
+  await manager.events.drain();
+  await assert.rejects(manager.respond(key, 'number:92', { answers: { a: 'A' } }), /失效/);
   assert.deepEqual(events.at(-1).requests, []);
 });
 
@@ -290,7 +304,7 @@ test('first Web turn sends images and transitions only after turn started, prese
   manager.run = async (_input, { startSession }) => {
     const execution = await startSession({
       repository: state.worktree.path,
-      task: { codex_prompt: '图文需求', images: [{ path: 'C:/image.png' }] },
+      task: { prompt: '图文需求', images: [{ path: 'C:/image.png' }] },
       onSession(id) {
         state.session_id = id;
         fs.writeFileSync(
@@ -312,7 +326,7 @@ test('first Web turn sends images and transitions only after turn started, prese
     }
     return original(method, params);
   };
-  manager.launch(key, state.workitem, { workflow: {} }, {}, {});
+  (await manager.launch(key, state.workitem, { workflow: {}, agent: { provider: "codex" } }, {}, {}));
   const runtime = manager.sessions.get(key);
   while (!runtime.turnId)
     await new Promise((resolve) => setTimeout(resolve, 1));
@@ -320,9 +334,10 @@ test('first Web turn sends images and transitions only after turn started, prese
   client.notify('turn/completed', {
     turn: { id: runtime.turnId, status: 'completed' },
   });
+  await manager.events.drain();
   await runtime.operation;
   assert.equal(runtime.status, 'completed');
-  assert.equal(store.read(key).transition.status, 'succeeded');
+  assert.equal((await store.read(key)).transition.status, 'succeeded');
 });
 
 test('disconnect rejects startup and clears pending questions; reconnect resumes original identity', async (t) => {
@@ -333,7 +348,9 @@ test('disconnect rejects startup and clears pending questions; reconnect resumes
     method: 'item/fileChange/requestApproval',
     params: { threadId: 'original' },
   });
+  await manager.events.drain();
   client.close();
+  await manager.events.drain();
   assert.equal(manager.sessions.get(key).status, 'disconnected');
   assert.equal(manager.sessions.get(key).requests.size, 0);
   assert.equal((await manager.send(key, 'reconnect')).sessionId, 'original');
@@ -347,7 +364,7 @@ test('unconfirmed first turn times out without TAPD transition or a connected co
     try {
       await startSession({
         repository: state.worktree.path,
-        task: { codex_prompt: 'test', images: [] },
+        task: { prompt: 'test', images: [] },
         onSession(id) {
           state.session_id = id;
           fs.writeFileSync(
@@ -372,13 +389,13 @@ test('unconfirmed first turn times out without TAPD transition or a connected co
     method === 'turn/start'
       ? Promise.resolve({ turn: { id: 'unconfirmed', status: 'inProgress' } })
       : original(method, params);
-  manager.launch(
+  (await manager.launch(
     key,
     state.workitem,
-    { workflow: {}, codex: { startup_timeout_ms: 15 } },
+    { workflow: {}, agent: { provider: "codex", startupTimeoutMs: 15 } },
     {},
     {},
-  );
+  ));
   const runtime = manager.sessions.get(key);
   await runtime.operation;
   assert.equal(started, false);
@@ -399,6 +416,7 @@ test('completion before turn/start response cannot resurrect a completed turn', 
     return result;
   };
   await manager.send(key, 'fast');
+  await manager.events.drain();
   assert.equal(manager.sessions.get(key).turnId, null);
   assert.equal(manager.sessions.get(key).status, 'completed');
 });

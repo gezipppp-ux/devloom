@@ -5,11 +5,11 @@ const {
   validatePromptTemplate,
 } = require("../domain/prompt-templates.cjs");
 
-function readPromptSettings(configFile) {
-  return getPromptTemplates(readOptional(configFile));
+async function readPromptSettings(configFile) {
+  return getPromptTemplates((await readOptional(configFile)));
 }
 
-function savePromptSettings(configFile, input) {
+async function savePromptSettings(configFile, input) {
   if (
     !input ||
     typeof input !== "object" ||
@@ -22,7 +22,7 @@ function savePromptSettings(configFile, input) {
   for (const [channel, template] of Object.entries(input)) {
     if (template !== null) validatePromptTemplate(channel, template);
   }
-  const config = updateConfig(configFile, (current) => {
+  const config = (await updateConfig(configFile, (current) => {
     if (
       Object.hasOwn(current, "prompt_templates") &&
       (!current.prompt_templates ||
@@ -39,7 +39,7 @@ function savePromptSettings(configFile, input) {
     getPromptTemplates(next);
     if (!Object.keys(overrides).length) delete next.prompt_templates;
     return next;
-  });
+  }));
   return getPromptTemplates(config);
 }
 

@@ -11,6 +11,7 @@ import SessionChangedFiles from "./SessionChangedFiles.vue";
 
 const props = defineProps({
   taskKey: { type: String, required: true },
+  canOperate: { type: Boolean, default: true },
   worktree: { type: Object, default: () => ({}) },
   deletion: { type: Object, default: null },
   active: Boolean,
@@ -135,7 +136,7 @@ onUnmounted(() => {
           <ReloadOutlined aria-hidden="true" /> 刷新 Git 状态
         </button>
         <button
-          v-if="!deleted"
+          v-if="!deleted && canOperate"
           type="button"
           class="git-delete-button"
           :disabled="loading || active || !git?.canDelete || Boolean(error)"

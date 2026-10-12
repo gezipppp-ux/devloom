@@ -12,6 +12,7 @@ async function cloneProject({
   publish = () => target,
   signal,
   onProgress = () => {},
+  preserveOnFailure = false,
 }) {
   if (signal?.aborted) throw new Error("克隆已中断。");
   assertDirectoryBoundary(memberStorageRoot, target);
@@ -26,14 +27,15 @@ async function cloneProject({
   }
   const owned = fs.lstatSync(target);
   try {
-    onProgress({ stage: "connecting", percent: null });
+    await onProgress({ stage: "connecting", percent: null });
     await cloneGitRepository(account, remote, target, { signal, onProgress });
     if (signal?.aborted) throw new Error("克隆已中断。");
-    onProgress({ stage: "publishing", percent: null });
+    await onProgress({ stage: "publishing", percent: null });
     assertDirectoryBoundary(memberStorageRoot, target);
     repositoryGit(target);
     return await publish();
   } catch (error) {
+    if (preserveOnFailure) throw error;
     // Only remove the exact directory claimed by this attempt, never a contender's checkout.
     try {
       assertDirectoryBoundary(memberStorageRoot, target);

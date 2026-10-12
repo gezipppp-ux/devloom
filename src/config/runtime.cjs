@@ -13,12 +13,12 @@ function runsPath(config, file) {
     : path.join(dataRoot, "runs");
 }
 
-function loadConfig(file) {
+async function loadConfig(file) {
   if (typeof file !== "string" || !path.isAbsolute(file))
     throw new Error("An absolute configuration file path is required.");
   const database = databaseForPath(file);
   if (database) {
-    const value = database.readDocument(file);
+    const value = (await database.readDocument(file));
     if (value === undefined) throw new Error("数据库中没有所选配置。");
     return value;
   }

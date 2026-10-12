@@ -31,7 +31,7 @@ class MessageImageStore {
       throw new Error("图片目录不属于当前任务。");
   }
 
-  list() {
+  async list() {
     if (!this.database && !fs.existsSync(this.directory)) return [];
     if (!this.database) this.assertDirectory();
     if (
@@ -42,7 +42,7 @@ class MessageImageStore {
       )
     )
       throw new Error("图片索引不属于当前任务。");
-    const saved = readOptional(this.indexFile);
+    const saved = (await readOptional(this.indexFile));
     const images = saved.images || [];
     if (
       !Array.isArray(images) ||
@@ -61,7 +61,7 @@ class MessageImageStore {
     return images;
   }
 
-  save(bytes) {
+  async save(bytes) {
     if (
       !Buffer.isBuffer(bytes) ||
       !bytes.length ||
@@ -71,15 +71,15 @@ class MessageImageStore {
     const extension = imageExtension(bytes);
     if (this.database) {
       const image = { id: randomUUID(), extension, size: bytes.length, sha256: digest(bytes), createdAt: new Date().toISOString() };
-      this.database.handle.transaction(() => {
-        writeArtifact(this.filename(image), bytes, { mimeType: extension === "jpg" ? "image/jpeg" : `image/${extension}` });
-        updateConfig(this.indexFile, (saved) => ({ images: [...(saved.images || []), image] }));
-      })();
+      (await this.database.transaction(async () => {
+        (await writeArtifact(this.filename(image), bytes, { mimeType: extension === "jpg" ? "image/jpeg" : `image/${extension}` }));
+        (await updateConfig(this.indexFile, (saved) => ({ images: [...(saved.images || []), image] })));
+      }));
       return image;
     }
     fs.mkdirSync(this.directory, { recursive: true });
     this.assertDirectory();
-    this.list();
+    (await this.list());
     const image = {
       id: randomUUID(),
       extension,
@@ -90,7 +90,7 @@ class MessageImageStore {
     const file = this.filename(image);
     fs.writeFileSync(file, bytes, { flag: "wx", mode: 0o600 });
     try {
-      updateConfig(this.indexFile, () => ({ images: [...this.list(), image] }));
+      (await updateConfig(this.indexFile, async () => ({ images: [...(await this.list()), image] })));
     } catch (error) {
       fs.unlinkSync(file);
       throw error;
@@ -102,15 +102,15 @@ class MessageImageStore {
     return path.join(this.directory, `${image.id}.${image.extension}`);
   }
 
-  read(id) {
+  async read(id) {
     if (typeof id !== "string" || !MESSAGE_IMAGE_ID.test(id))
       throw new Error("无效的会话图片标识。");
-    const image = this.list().find((entry) => entry.id === id);
+    const image = (await this.list()).find((entry) => entry.id === id);
     if (!image)
       throw Object.assign(new Error("当前任务中不存在该会话图片。"), {
         code: "ENOENT",
       });
-    if (this.database) materializeArtifact(this.filename(image));
+    if (this.database) (await materializeArtifact(this.filename(image)));
     const file = fs.realpathSync.native(this.filename(image));
     if (!samePath(path.dirname(file), fs.realpathSync.native(this.directory)))
       throw new Error("图片不属于当前任务。");
@@ -126,39 +126,14 @@ class MessageImageStore {
     return { ...image, path: file };
   }
 
-  match(content) {
-    if (
-      !Array.isArray(content) ||
-      !content.some((part) =>
-        ["localImage", "local_image", "image"].includes(part?.type),
-      )
-    )
-      return [];
-    const images = this.list();
-    if (!images.length) return [];
-    return content.flatMap((part) => {
-      let image;
-      if (
-        ["localImage", "local_image"].includes(part?.type) &&
-        typeof part.path === "string"
-      )
-        image = images.find((entry) =>
-          samePath(this.filename(entry), part.path),
-        );
-      else if (
-        part?.type === "image" &&
-        typeof part.url === "string" &&
-        part.url.length <= MAX_IMAGE_BYTES * 1.4 + 100
-      ) {
-        const encoded =
-          /^data:image\/(?:png|jpe?g|webp);base64,([a-zA-Z0-9+/=\r\n]+)$/.exec(
-            part.url,
-          );
-        if (encoded) {
-          const sha256 = digest(Buffer.from(encoded[1], "base64"));
-          image = images.find((entry) => entry.sha256 === sha256);
-        }
-      }
+  async match(sources) {
+    if (!Array.isArray(sources) || !sources.length) return [];
+    const images = await this.list();
+    return sources.flatMap(source => {
+      const image = typeof source?.path === "string"
+        ? images.find(entry => samePath(this.filename(entry), source.path))
+        : typeof source?.sha256 === "string"
+          ? images.find(entry => entry.sha256 === source.sha256) : null;
       return image ? [image] : [];
     });
   }

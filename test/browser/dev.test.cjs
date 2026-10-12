@@ -6,6 +6,8 @@ const os = require("node:os");
 const path = require("node:path");
 const { fork, execFileSync } = require("node:child_process");
 const { chromium } = require("playwright");
+const { seedProjectDepartment, prepareHttpProject } = require("../support/project-http.cjs");
+const { postgresFixture } = require("../support/postgres.cjs");
 const { gitRemote } = require("../support/git-remote.cjs");
 
 const root = path.resolve(__dirname, "../..");
@@ -42,7 +44,7 @@ function alive(pid) {
 
 function createFixture(directory) {
   // Copy only source files: never read credentials, runs, uploads or dist.
-  for (const name of ["src", "shared"])
+  for (const name of ["src", "shared", "prisma", "generated/prisma-runtime"])
     fs.cpSync(path.join(root, name), path.join(directory, name), {
       recursive: true,
     });
@@ -118,6 +120,7 @@ async function main() {
           .filter(Boolean)
           .map(JSON.parse)
       : [];
+  const databaseCleanup = [];
   let child;
   let browser;
   let remote;
@@ -125,15 +128,20 @@ async function main() {
   let exited = false;
   let exitCode;
   try {
+    const database = await postgresFixture({ after: callback => databaseCleanup.push(callback) });
+    await database.deploy();
     createFixture(directory);
     remote = await gitRemote(path.join(directory, "git-server"));
     execFileSync(process.execPath, [path.join(directory, "src", "cli", "init-admin.cjs")], {
       cwd: directory,
       windowsHide: true,
-      env: { ...process.env, RUNNER_DATA_DIR: path.join(directory, "data") },
+      env: { ...process.env, DATABASE_URL: database.url, RUNNER_DATA_DIR: path.join(directory, "data") },
       input: "development-fixture-password\ndevelopment-fixture-password\n",
       stdio: ["pipe", "pipe", "pipe"],
     });
+    const seeding = await database.open();
+    const department = await seedProjectDepartment(seeding);
+    await seeding.close();
     const port = await availablePort();
     const origin = `http://127.0.0.1:${port}`;
     child = fork(
@@ -144,6 +152,7 @@ async function main() {
         windowsHide: true,
         env: {
           ...process.env,
+          DATABASE_URL: database.url,
           RUNNER_DATA_DIR: path.join(directory, "data"),
           NODE_OPTIONS: `--require ${JSON.stringify(path.join(directory, "preload.cjs"))}`,
         },
@@ -234,48 +243,17 @@ async function main() {
       "Backend restart must reload the document once.",
     );
     await page.getByRole("heading", { name: "After hot update" }).waitFor();
-    const created = await page.evaluate(async ({ memberStorageRoot, account }) => {
-      const headers = { "content-type": "application/json", "x-tapd-token": document.querySelector("#token").textContent };
-      const system = await fetch("/api/system/settings", { method: "POST", headers, body: JSON.stringify({ memberStorageRoot }) });
-      if (!system.ok) throw new Error(await system.text());
-      const saved = await fetch("/api/account/git-accounts", { method: "POST", headers, body: JSON.stringify(account) });
-      if (!saved.ok) throw new Error(await saved.text());
-      const gitAccountId = (await saved.json()).account.id;
-      const response = await fetch("/api/workspaces", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-tapd-token": document.querySelector("#token").textContent,
-        },
-        body: JSON.stringify({ requestId: globalThis.crypto.randomUUID(), name: "Temporary development workspace", gitAccountId, remoteUrl: account.remoteUrl }),
-      });
-      const accepted = await response.json();
-      if (!response.ok) throw new Error(JSON.stringify(accepted));
-      let clone = accepted.clone;
-      const deadline = Date.now() + 15000;
-      while (clone.status === "running" && Date.now() < deadline) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        clone = (await (await fetch(`/api/workspace-clones/${clone.id}`)).json()).clone;
-      }
-      if (clone.status !== "completed") throw new Error(JSON.stringify(clone));
-      return { status: response.status, workspace: clone.workspace };
-    }, { memberStorageRoot: path.join(directory, "members"), account: { name: "fixture", authType: "http", remoteUrl: remote.remoteUrl, username: remote.username, password: remote.password } });
-    assert.equal(
-      created.status,
-      202,
-      "The refreshed page must use the replacement token for POST.",
-    );
-    assert.equal(created.workspace.name, "Temporary development workspace");
-    assert.ok(
-      fs.existsSync(
-        path.join(
-          directory,
-          "data",
-          "db",
-          "web-coding.sqlite",
-        ),
-      ),
-    );
+    const request = async (route, input) => {
+      const headers = { "x-tapd-token": await page.locator("#token").textContent() };
+      const response = input === undefined ? await page.request.get(origin + route) : await page.request.post(origin + route, { headers, data: input });
+      return { status: response.status(), data: await response.json() };
+    };
+    assert.equal((await request("/api/system/settings", { memberStorageRoot: path.join(directory, "members") })).status, 200);
+    const account = await request("/api/account/git-accounts", { name: "fixture", authType: "http", host: new URL(remote.remoteUrl).origin, username: remote.username, password: remote.password });
+    assert.equal(account.status, 201);
+    const workspace = await prepareHttpProject(request, { name: "Temporary development workspace", departmentId: department.id, gitAccountId: account.data.account.id, remoteUrl: remote.remoteUrl });
+    const created = { workspace };
+    assert.equal(fs.existsSync(path.join(directory, "data", "db", "web-coding.sqlite")), false);
     const storedWorkspaces = await (await page.request.get(`${origin}/api/workspaces`)).json();
     assert.ok(storedWorkspaces.workspaces.some((workspace) => workspace.id === created.workspace.id));
     assert.deepEqual(errors, []);
@@ -344,6 +322,7 @@ async function main() {
         );
       }
     }
+    for (const cleanup of databaseCleanup) await cleanup();
     const resolved = path.resolve(directory);
     assert.equal(path.dirname(resolved), path.resolve(os.tmpdir()));
     assert.ok(path.basename(resolved).startsWith("web-coding-dev-"));

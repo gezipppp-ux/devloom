@@ -1,4 +1,4 @@
-const PERMISSION_MODES = require("../../shared/codex-permissions.json");
+const PERMISSION_MODES = require("../../shared/agent-permissions.json");
 
 function validatePermissionMode(value = "ask") {
   if (

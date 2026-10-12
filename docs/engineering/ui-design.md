@@ -1,6 +1,6 @@
 # Web console visual system
 
-The approved workspace rail (prototype C) is the shared shell for every page. The full-page reference set and generation prompts are in `output/imagegen/unified-pages-20260917/`. Generated images describe visual hierarchy; existing API, execution, source, and session contracts remain authoritative.
+The approved sage visual language (prototype C) is shared across the project directory, collaboration pages and development console. Production starts in the project directory; personal workspace creation is disabled. Project tabs expose only authorized actions. The full-page reference set and generation prompts are in `output/imagegen/unified-pages-20260917/`. Generated images describe visual hierarchy; API, execution, source, and session contracts remain authoritative.
 
 ## Shared language
 
@@ -30,6 +30,7 @@ The approved workspace rail (prototype C) is the shared shell for every page. Th
 10. Workspace repository page and per-task Git status: fetch and fast-forward update feedback, unpublished/unknown states, and a destructive Worktree deletion dialog with branch-name confirmation, local-content acknowledgement, stale-state recovery and read-only history. No merge/conflict controls are exposed.
 11. Login, required password change, personal defaults, multiple Git accounts and administrator account management. Git forms use shared vertical labels, HTTP warnings, generated public keys and test-before-save feedback. Reuse the same form surfaces and states; keep account identity and workspace ownership distinct.
 12. Administrator environment page: runtime requirements, installed/latest versions, unknown and network error states, update confirmation and installer availability and pending-restart states. Account browser fixtures cover 1440/768/390/320px and native dialogs; fixture updates never install real tools.
+13. Issue Markdown editing defaults to a visual document with inline attachment images, a compact formatting toolbar and thumbnail/file cards. Markdown source and preview remain explicit modes. Preserve source text when conversion would lose syntax, never load unapproved images, and keep paste, IME composition, undo/redo and image insertion safe across draft changes.
 
 ## Verification
 

@@ -8,7 +8,7 @@ const { execFileSync } = require("node:child_process");
 const { temporary, png, json } = require("../support/helpers.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const { WorkspaceManager } = require("../../src/application/workspace-manager.cjs");
-const { SessionManager } = require("../../src/application/session-manager.cjs");
+const { SessionManager } = require("../support/session-manager.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { writeConfig, readOptional } = require("../../src/storage/json-files.cjs");
 const { readSettings, saveSettings } = require("../../src/config/execution-settings.cjs");
@@ -23,19 +23,19 @@ const {
   checkTapdSettings,
 } = require("../../src/channels/tapd/settings.cjs");
 
-function fixtures(t) {
+async function fixtures(t) {
   const directory = temporary(t);
-  writeConfig(path.join(directory, "system-settings.json"), {
+  (await writeConfig(path.join(directory, "system-settings.json"), {
     version: 1,
     memberStorageRoot: path.join(directory, "trees"),
-  });
+  }));
   const workspaces = new WorkspaceManager({
     directory: path.join(directory, "workspaces"),
     createManager: (options) =>
       new SessionManager({ ...options, client: new FakeClient() }),
   });
-  const a = workspaces.save({ name: "项目 A" }),
-    b = workspaces.save({ name: "项目 B" });
+  const a = (await workspaces.save({ name: "项目 A" })),
+    b = (await workspaces.save({ name: "项目 B" }));
   const repository = path.join(directory, "repo");
   fs.mkdirSync(repository);
   const git = (...args) =>
@@ -62,50 +62,50 @@ function fixtures(t) {
     baseRef: "main",
     initCommands: [],
   };
-  for (const workspace of [a, b]) seedWorkspaceProject(workspaces.configFile(workspace.id), repository, `w-${workspace.id.slice(0, 8)}`);
+  for (const workspace of [a, b]) (await seedWorkspaceProject(workspaces.configFile(workspace.id), repository, `w-${workspace.id.slice(0, 8)}`));
   return { directory, workspaces, a, b, settings, git, repository };
 }
 
 test("workspaces isolate settings, credentials and restart state; names never become paths", async (t) => {
-  const { workspaces, a, b, settings, directory } = fixtures(t);
+  const { workspaces, a, b, settings, directory } = (await fixtures(t));
   t.after(() => workspaces.close());
-  saveSettings(settings, workspaces.configFile(a.id));
-  saveTapdSettings(workspaces.configFile(a.id), {
+  (await saveSettings(settings, workspaces.configFile(a.id)));
+  (await saveTapdSettings(workspaces.configFile(a.id), {
     workspaceId: "42",
     cookie: "dsc-token=secret-a; auth=private",
-  });
-  assert.equal(readSettings(workspaces.configFile(a.id)).model, undefined);
-  assert.throws(
-    () =>
-      saveSettings({ ...settings, model: "a" }, workspaces.configFile(a.id)),
+  }));
+  assert.equal((await readSettings(workspaces.configFile(a.id))).model, undefined);
+  (await assert.rejects(
+    async () =>
+      (await saveSettings({ ...settings, model: "a" }, workspaces.configFile(a.id))),
     /仅允许/,
-  );
-  assert.throws(
-    () =>
-      saveSettings(
+  ));
+  (await assert.rejects(
+    async () =>
+      (await saveSettings(
         { ...settings, reasoningEffort: "high" },
         workspaces.configFile(a.id),
-      ),
+      )),
     /仅允许/,
-  );
-  assert.equal(readSettings(workspaces.configFile(b.id)).baseRef, "HEAD");
-  assert.equal(readTapdSettings(workspaces.configFile(b.id)).hasCookie, false);
-  saveSettings({ ...settings, baseRef: "HEAD" }, workspaces.configFile(a.id));
+  ));
+  assert.equal((await readSettings(workspaces.configFile(b.id))).baseRef, "HEAD");
+  assert.equal((await readTapdSettings(workspaces.configFile(b.id))).hasCookie, false);
+  (await saveSettings({ ...settings, baseRef: "HEAD" }, workspaces.configFile(a.id)));
   assert.equal(
-    readOptional(workspaces.configFile(a.id)).tapd.session.cookie_header,
+    (await readOptional(workspaces.configFile(a.id))).tapd.session.cookie_header,
     "dsc-token=secret-a; auth=private",
   );
-  workspaces.save({ name: "重命名 A" }, a.id);
-  assert.equal(readSettings(workspaces.configFile(a.id)).baseRef, "HEAD");
-  assert.throws(() => workspaces.save({ name: "项目 B" }), /已存在/);
-  assert.throws(() => workspaces.get("../outside"), /无效/);
-  assert.throws(() => workspaces.get(randomUUID()), /不存在/);
-  assert.throws(() => workspaces.save({ name: "x", repository: "x" }), /名称/);
+  (await workspaces.save({ name: "重命名 A" }, a.id));
+  assert.equal((await readSettings(workspaces.configFile(a.id))).baseRef, "HEAD");
+  (await assert.rejects(async () => (await workspaces.save({ name: "项目 B" })), /已存在/));
+  (await assert.rejects(async () => (await workspaces.get("../outside")), /无效/));
+  (await assert.rejects(async () => (await workspaces.get(randomUUID())), /不存在/));
+  (await assert.rejects(async () => (await workspaces.save({ name: "x", repository: "x" })), /名称/));
   const restarted = new WorkspaceManager({ directory: workspaces.directory });
-  assert.deepEqual(restarted.list(), workspaces.list());
+  assert.deepEqual((await restarted.list()), (await workspaces.list()));
   assert.equal(
     runsPath(
-      readOptional(workspaces.configFile(a.id)),
+      (await readOptional(workspaces.configFile(a.id))),
       workspaces.configFile(a.id),
     ),
     path.join(directory, "workspaces", a.id, "runs"),
@@ -114,33 +114,33 @@ test("workspaces isolate settings, credentials and restart state; names never be
 });
 
 test("workspace directories compose system base paths and validate before changing configuration", async (t) => {
-  const { workspaces, a, b, settings, directory } = fixtures(t);
+  const { workspaces, a, b, settings, directory } = (await fixtures(t));
   t.after(() => workspaces.close());
   const file = workspaces.configFile(a.id);
-  const initial = readSettings(file);
+  const initial = (await readSettings(file));
   assert.equal(initial.projectName, `w-${a.id.slice(0, 8)}`);
   assert.equal(initial.worktreeRoot, path.join(directory, "trees", "worktree", `w-${a.id.slice(0, 8)}`));
-  assert.equal(readSettings(workspaces.configFile(b.id)).projectName, `w-${b.id.slice(0, 8)}`);
-  const saved = saveSettings(settings, file);
+  assert.equal((await readSettings(workspaces.configFile(b.id))).projectName, `w-${b.id.slice(0, 8)}`);
+  const saved = (await saveSettings(settings, file));
   assert.equal(saved.projectName, initial.projectName);
   assert.equal(saved.worktreeRoot, initial.worktreeRoot);
-  assert.equal(readOptional(file).codex.project_name, initial.projectName);
-  assert.equal(readOptional(file).codex.worktree_root, undefined);
+  assert.equal((await readOptional(file)).execution.projectName, initial.projectName);
+  assert.equal((await readOptional(file)).execution.worktreeRoot, undefined);
   const before = fs.readFileSync(file, "utf8");
   for (const projectName of ["", "..", "../outside", "a/../b", "/outside", "C:\\outside", "C:outside", "a/NUL", "a//b", "a "])
-    assert.throws(() => saveSettings({ ...settings, projectName }, file), /仅允许/);
-  assert.throws(() => saveSettings({ ...settings, repository: initial.repository }, file), /仅允许/);
-  assert.throws(() => saveSettings({ ...settings, worktreeRoot: path.join(directory, "old-root") }, file), /仅允许/);
+    (await assert.rejects(async () => (await saveSettings({ ...settings, projectName }, file)), /仅允许/));
+  (await assert.rejects(async () => (await saveSettings({ ...settings, repository: initial.repository }, file)), /仅允许/));
+  (await assert.rejects(async () => (await saveSettings({ ...settings, worktreeRoot: path.join(directory, "old-root") }, file)), /仅允许/));
   assert.equal(fs.readFileSync(file, "utf8"), before);
   const changedBase = path.join(directory, "new-base");
-  saveSystemSettings({ memberStorageRoot: changedBase }, directory);
-  assert.equal(readSettings(file).worktreeRoot, path.join(changedBase, "worktree", initial.projectName));
-  assert.equal(readSettings(workspaces.configFile(b.id)).worktreeRoot, path.join(changedBase, "worktree", `w-${b.id.slice(0, 8)}`));
+  (await saveSystemSettings({ memberStorageRoot: changedBase }, directory));
+  assert.equal((await readSettings(file)).worktreeRoot, path.join(changedBase, "worktree", initial.projectName));
+  assert.equal((await readSettings(workspaces.configFile(b.id))).worktreeRoot, path.join(changedBase, "worktree", `w-${b.id.slice(0, 8)}`));
   assert.equal(fs.readFileSync(file, "utf8"), before);
 });
 
 test("workspace settings and full execution paths reject symlink escapes without creating outside worktrees", async (t) => {
-  const { workspaces, a, settings, directory, repository } = fixtures(t);
+  const { workspaces, a, settings, directory, repository } = (await fixtures(t));
   t.after(() => workspaces.close());
   const file = workspaces.configFile(a.id);
   const base = path.join(directory, "trees");
@@ -149,13 +149,13 @@ test("workspace settings and full execution paths reject symlink escapes without
   fs.mkdirSync(outside);
   fs.symlinkSync(outside, path.join(base, "worktree"), process.platform === "win32" ? "junction" : "dir");
   const before = fs.readFileSync(file, "utf8");
-  assert.throws(() => saveSettings(settings, file), /符号链接/);
+  (await assert.rejects(async () => (await saveSettings(settings, file)), /符号链接/));
   assert.deepEqual(fs.readdirSync(outside), []);
   assert.equal(fs.readFileSync(file, "utf8"), before);
   fs.unlinkSync(path.join(base, "worktree"));
 
-  const saved = saveSettings(settings, file);
-  const context = workspaces.get(a.id);
+  const saved = (await saveSettings(settings, file));
+  const context = (await workspaces.get(a.id));
   const input = { channel: "manual", requestId: randomUUID(), title: "拒绝越界", content: "模拟需求" };
   const item = { id: input.requestId, workspace_id: "local" };
   const plan = worktreePlan(repository, item, "main", {
@@ -167,17 +167,17 @@ test("workspace settings and full execution paths reject symlink escapes without
   fs.symlinkSync(outside, plan.path, process.platform === "win32" ? "junction" : "dir");
   const { key } = await context.sessions.start({ ...input, worktreeName: "escape-task" });
   await context.sessions.sessions.get(key).operation;
-  assert.equal(context.sessions.store.read(key).execution.status, "failed");
-  assert.match(context.sessions.store.read(key).execution.error, /符号链接/);
+  assert.equal((await context.sessions.store.read(key)).execution.status, "failed");
+  assert.match((await context.sessions.store.read(key)).execution.error, /符号链接/);
   assert.equal(context.sessions.client.calls.some((call) => call.method === "thread/start"), false);
   assert.deepEqual(fs.readdirSync(outside), []);
 });
 
 test("new tasks use changed system bases while recorded sessions retain their original paths", async (t) => {
-  const { workspaces, a, settings, directory } = fixtures(t);
+  const { workspaces, a, settings, directory } = (await fixtures(t));
   t.after(() => workspaces.close());
-  const context = workspaces.get(a.id);
-  const configured = saveSettings(settings, context.configFile);
+  const context = (await workspaces.get(a.id));
+  const configured = (await saveSettings(settings, context.configFile));
   const manager = context.sessions;
   const start = async () => {
     const { key } = await manager.start({ channel: "manual", requestId: randomUUID(), title: "路径保存", content: "模拟需求" });
@@ -186,35 +186,36 @@ test("new tasks use changed system bases while recorded sessions retain their or
     assert.ok(manager.sessions.get(key).turnId, manager.sessions.get(key).error);
     await manager.interrupt(key);
     await manager.sessions.get(key).operation;
-    return { key, state: manager.store.read(key) };
+    return { key, state: (await manager.store.read(key)) };
   };
   const original = await start();
   assert.ok(original.state.worktree.path.startsWith(configured.worktreeRoot + path.sep));
   const changedBase = path.join(directory, "another-base");
-  saveSystemSettings({ memberStorageRoot: changedBase }, directory);
+  (await saveSystemSettings({ memberStorageRoot: changedBase }, directory));
   const created = await start();
   assert.ok(created.state.worktree.path.startsWith(path.join(changedBase, "worktree", configured.projectName) + path.sep));
   assert.notEqual(created.state.worktree.path, original.state.worktree.path);
   manager.client.close();
+  await manager.events.drain();
   await manager.send(original.key, "继续原来的任务");
   const resumed = manager.client.calls.filter((call) => call.method === "thread/resume").at(-1).params;
   assert.equal(resumed.cwd, original.state.worktree.path);
   assert.equal(resumed.threadId, original.state.session_id);
-  assert.equal(manager.store.read(original.key).worktree.path, original.state.worktree.path);
+  assert.equal((await manager.store.read(original.key)).worktree.path, original.state.worktree.path);
   await manager.interrupt(original.key);
 });
 
 test("Cookie maintenance preserves secrets, checks drafts without saving, and sanitizes failures", async (t) => {
-  const { workspaces, a } = fixtures(t);
+  const { workspaces, a } = (await fixtures(t));
   const file = workspaces.configFile(a.id);
   const draft = {
     workspaceId: "42",
     cookie: "dsc-token=secret-a; auth=private",
   };
-  saveTapdSettings(file, draft);
+  (await saveTapdSettings(file, draft));
   const saved = fs.readFileSync(file, "utf8");
   assert.equal(
-    JSON.stringify(readTapdSettings(file)).includes("secret-a"),
+    JSON.stringify((await readTapdSettings(file))).includes("secret-a"),
     false,
   );
   const calls = [];
@@ -248,34 +249,34 @@ test("Cookie maintenance preserves secrets, checks drafts without saving, and sa
     (await checkTapdSettings(file, { workspaceId: "42", cookie: "" })).ok,
     true,
   );
-  saveTapdSettings(file, { workspaceId: "42", cookie: "" });
-  assert.equal(readOptional(file).tapd.session.cookie_header, draft.cookie);
-  assert.throws(
-    () => saveTapdSettings(file, { ...draft, cookie: "bad\nheader" }),
+  (await saveTapdSettings(file, { workspaceId: "42", cookie: "" }));
+  assert.equal((await readOptional(file)).tapd.session.cookie_header, draft.cookie);
+  (await assert.rejects(
+    async () => (await saveTapdSettings(file, { ...draft, cookie: "bad\nheader" })),
     /格式/,
-  );
-  assert.throws(
-    () => saveTapdSettings(file, { ...draft, cookie: "no-token=1" }),
+  ));
+  (await assert.rejects(
+    async () => (await saveTapdSettings(file, { ...draft, cookie: "no-token=1" })),
     /dsc-token/,
-  );
-  assert.throws(
-    () =>
-      saveTapdSettings(file, { ...draft, imageHosts: ["https://example.com"] }),
+  ));
+  (await assert.rejects(
+    async () =>
+      (await saveTapdSettings(file, { ...draft, imageHosts: ["https://example.com"] })),
     /域名/,
-  );
-  saveTapdSettings(file, { workspaceId: "42", clearCookie: true });
-  assert.equal(readTapdSettings(file).hasCookie, false);
+  ));
+  (await saveTapdSettings(file, { workspaceId: "42", clearCookie: true }));
+  assert.equal((await readTapdSettings(file)).hasCookie, false);
   await assert.rejects(checkTapdSettings(file, { workspaceId: "42" }), /填写/);
 });
 
 test("same requirement runs independently in two workspaces with isolated uploads, branches and model", async (t) => {
-  const { workspaces, a, b, settings, git } = fixtures(t);
+  const { workspaces, a, b, settings, git } = (await fixtures(t));
   t.after(() => workspaces.close());
-  const first = workspaces.get(a.id),
-    second = workspaces.get(b.id);
-  saveSettings(settings, first.configFile);
-  saveSettings(settings, second.configFile);
-  const upload = first.channels.get("manual").uploadImage(png);
+  const first = (await workspaces.get(a.id)),
+    second = (await workspaces.get(b.id));
+  (await saveSettings(settings, first.configFile));
+  (await saveSettings(settings, second.configFile));
+  const upload = (await first.channels.get("manual").uploadImage(png));
   const input = {
     channel: "manual",
     requestId: randomUUID(),
@@ -308,8 +309,8 @@ test("same requirement runs independently in two workspaces with isolated upload
       await new Promise((resolve) => setTimeout(resolve, 10));
     assert.ok(context.sessions.sessions.get(key).turnId);
   }
-  const stateA = first.sessions.store.read(key),
-    stateB = second.sessions.store.read(key);
+  const stateA = (await first.sessions.store.read(key)),
+    stateB = (await second.sessions.store.read(key));
   assert.equal(stateA.workspace_id, a.id);
   assert.equal(stateB.workspace_id, b.id);
   assert.notEqual(stateA.worktree.path, stateB.worktree.path);
@@ -338,7 +339,7 @@ test("same requirement runs independently in two workspaces with isolated upload
       .params.effort,
     "low",
   );
-  assert.equal(stateA.codex.reasoning_effort, "high");
+  assert.equal(stateA.agent.reasoningEffort, "high");
   const view = await first.sessions.view(key);
   assert.equal(
     view.requirement.images[0].url,
@@ -347,7 +348,7 @@ test("same requirement runs independently in two workspaces with isolated upload
   await first.sessions.interrupt(key);
   assert.ok(second.sessions.sessions.get(key).turnId);
   await first.sessions.sessions.get(key).operation;
-  saveSettings({ ...settings, baseRef: "HEAD" }, first.configFile);
+  (await saveSettings({ ...settings, baseRef: "HEAD" }, first.configFile));
   await first.sessions.send(key, "继续原任务");
   assert.equal(
     first.sessions.client.calls
@@ -363,6 +364,7 @@ test("same requirement runs independently in two workspaces with isolated upload
   );
   await first.sessions.interrupt(key);
   first.sessions.client.close();
+  await first.sessions.events.drain();
   await first.sessions.send(key, "重新连接后继续");
   assert.equal(
     first.sessions.client.calls
@@ -385,7 +387,7 @@ test("same requirement runs independently in two workspaces with isolated upload
 });
 
 test("HTTP requires explicit workspace context and isolates lists, images, SSE and bound TAPD projects", async (t) => {
-  const { workspaces, a, b } = fixtures(t);
+  const { workspaces, a, b } = (await fixtures(t));
   const app = createWebServer({ testIdentity: true, workspaces, workspaceClones: fixtureWorkspaceClones(workspaces) });
   const origin = await app.listen(0);
   t.after(() => app.close());
@@ -424,13 +426,14 @@ test("HTTP requires explicit workspace context and isolates lists, images, SSE a
   );
   assert.equal((await post("/api/workspaces", { name: "项目 C" })).status, 202);
   const prefix = (id) => `/api/workspaces/${id}`;
-  const first = workspaces.get(a.id),
-    second = workspaces.get(b.id);
+  const first = (await workspaces.get(a.id)),
+    second = (await workspaces.get(b.id));
   fs.mkdirSync(first.sessions.store.dir("1-2"), { recursive: true });
   fs.writeFileSync(
     path.join(first.sessions.store.dir("1-2"), "run.json"),
     JSON.stringify({
       workitem: { title: "A 的任务", id: "2", workspace_id: "1" },
+      agent: { provider: "codex", model: "", reasoningEffort: "", permissionMode: "ask" },
       execution: { status: "completed" },
     }),
   );
@@ -481,16 +484,16 @@ test("HTTP requires explicit workspace context and isolates lists, images, SSE a
   abort.abort();
 });
 
-test("tasks in one workspace select independent models, ignore old settings and resume their snapshots", async (t) => {
-  const { workspaces, a, settings } = fixtures(t);
+test("tasks in one workspace select independent models and resume their snapshots", async (t) => {
+  const { workspaces, a, settings } = (await fixtures(t));
   t.after(() => workspaces.close());
-  const context = workspaces.get(a.id),
+  const context = (await workspaces.get(a.id)),
     manager = context.sessions;
-  saveSettings(settings, context.configFile);
-  const config = readOptional(context.configFile);
-  config.codex.model = "obsolete-workspace-model";
-  config.codex.reasoning_effort = "high";
-  writeConfig(context.configFile, config);
+  (await saveSettings(settings, context.configFile));
+  const config = (await readOptional(context.configFile));
+  config.agent.model = "obsolete-workspace-model";
+  config.agent.reasoningEffort = "high";
+  (await writeConfig(context.configFile, config));
   const input = {
     channel: "manual",
     title: "模型隔离",
@@ -530,19 +533,20 @@ test("tasks in one workspace select independent models, ignore old settings and 
     )
       await new Promise((resolve) => setTimeout(resolve, 10));
     assert.ok(manager.sessions.get(key).turnId);
-    assert.deepEqual(manager.store.readTaskMetadata(key), {
+    assert.deepEqual((await manager.store.readTaskMetadata(key)), {
       type: "bug",
       progress: "in_progress",
     });
-    assert.deepEqual(manager.store.read(key).codex, {
-      model: selection.model || "",
-      reasoning_effort: selection.reasoningEffort || "",
-      permission_mode: selection.permissionMode || "ask",
-    });
-    assert.deepEqual((await manager.view(key)).codex, {
+    assert.deepEqual((await manager.store.read(key)).agent, {
+      provider: "codex",
       model: selection.model || "",
       reasoningEffort: selection.reasoningEffort || "",
+      permissionMode: selection.permissionMode || "ask",
     });
+    const presentedAgent = (await manager.view(key)).agent;
+    assert.equal(presentedAgent.provider, "codex");
+    assert.equal(presentedAgent.model, selection.model || "");
+    assert.equal(presentedAgent.reasoningEffort, selection.reasoningEffort || "");
     assert.deepEqual((await manager.view(key)).executionSettings, {
       model: selection.model || "", reasoningEffort: selection.reasoningEffort || "",
       permissionMode: selection.permissionMode || "ask",
@@ -563,7 +567,7 @@ test("tasks in one workspace select independent models, ignore old settings and 
   assert.deepEqual(manager.client.calls.filter((call) => call.method === "turn/start")
     .map((call) => [call.params.approvalPolicy, call.params.approvalsReviewer, call.params.sandboxPolicy.type]),
   [["never", "user", "dangerFullAccess"], ["on-request", "auto_review", "workspaceWrite"], ["on-request", "user", "workspaceWrite"]]);
-  manager.updateTaskMetadata(keys[0], { progress: "merge" });
+  await manager.updateTaskMetadata(keys[0], { progress: "merge" });
   for (const key of keys) {
     await manager.interrupt(key);
     await manager.sessions.get(key).operation;
@@ -581,37 +585,38 @@ test("tasks in one workspace select independent models, ignore old settings and 
     assert.equal(call.params.effort, ["high", "medium", "low"][index]);
     await manager.interrupt(key);
     assert.equal(
-      manager.store.readTaskMetadata(key).progress,
+      (await manager.store.readTaskMetadata(key)).progress,
       index === 0 ? "merge" : "in_progress",
     );
   }
-  saveSettings(settings, context.configFile);
-  assert.equal(readOptional(context.configFile).codex.model, undefined);
+  (await saveSettings(settings, context.configFile));
+  assert.equal((await readOptional(context.configFile)).agent.model, "obsolete-workspace-model");
   assert.equal(
-    readOptional(context.configFile).codex.reasoning_effort,
-    undefined,
+    (await readOptional(context.configFile)).agent.reasoningEffort,
+    "high",
   );
 });
 
 test("workspace icon IDs persist independently, validate before saving and preserve project settings", async (t) => {
-  const { workspaces, a, b, settings } = fixtures(t);
+  const { workspaces, a, b, settings } = (await fixtures(t));
   t.after(() => workspaces.close());
   const file = workspaces.configFile(a.id);
-  saveSettings(settings, file);
-  saveTapdSettings(file, { workspaceId: "42", cookie: "dsc-token=private" });
-  const before = readOptional(file);
-  const context = workspaces.get(a.id);
-  workspaces.save({ name: a.name, icon: "rocket" }, a.id);
-  assert.equal(workspaces.read(a.id).icon, "rocket");
-  assert.equal(workspaces.get(a.id), context);
-  assert.equal(workspaces.read(b.id).icon, null);
-  const saved = readOptional(file);
-  assert.deepEqual(saved.codex, before.codex);
+  (await saveSettings(settings, file));
+  (await saveTapdSettings(file, { workspaceId: "42", cookie: "dsc-token=private" }));
+  const before = (await readOptional(file));
+  const context = (await workspaces.get(a.id));
+  (await workspaces.save({ name: a.name, icon: "rocket" }, a.id));
+  assert.equal((await workspaces.read(a.id)).icon, "rocket");
+  assert.equal((await workspaces.get(a.id)), context);
+  assert.equal((await workspaces.read(b.id)).icon, null);
+  const saved = (await readOptional(file));
+  assert.deepEqual(saved.execution, before.execution);
+  assert.deepEqual(saved.agent, before.agent);
   assert.deepEqual(saved.tapd, before.tapd);
   const restarted = new WorkspaceManager({ directory: workspaces.directory });
-  assert.equal(restarted.read(a.id).icon, "rocket");
-  workspaces.save({ name: "新名称" }, a.id);
-  assert.equal(workspaces.read(a.id).icon, "rocket");
+  assert.equal((await restarted.read(a.id)).icon, "rocket");
+  (await workspaces.save({ name: "新名称" }, a.id));
+  assert.equal((await workspaces.read(a.id)).icon, "rocket");
   const raw = fs.readFileSync(file, "utf8");
   for (const icon of [
     "missing",
@@ -624,14 +629,14 @@ test("workspace icon IDs persist independently, validate before saving and prese
     false,
     "",
   ]) {
-    assert.throws(
-      () => workspaces.save({ name: "新名称", icon }, a.id),
+    (await assert.rejects(
+      async () => (await workspaces.save({ name: "新名称", icon }, a.id)),
       /图标库/,
-    );
+    ));
     assert.equal(fs.readFileSync(file, "utf8"), raw);
   }
-  workspaces.save({ name: "新名称", icon: null }, a.id);
-  assert.equal(restarted.read(a.id).icon, null);
+  (await workspaces.save({ name: "新名称", icon: null }, a.id));
+  assert.equal((await restarted.read(a.id)).icon, null);
   const app = createWebServer({ testIdentity: true, workspaces, workspaceClones: fixtureWorkspaceClones(workspaces) });
   const origin = await app.listen(0);
   t.after(() => app.close());

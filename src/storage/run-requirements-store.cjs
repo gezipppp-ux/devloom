@@ -4,7 +4,7 @@ const { RUN_KEY, sourceFor, runKey } = require("../domain/run-identity.cjs");
 const { MAX_REQUIREMENTS } = require("../domain/requirement-fusion.cjs");
 const { databaseForPath } = require("./database-registry.cjs");
 const { readOptional, writeConfig } = require("./json-files.cjs");
-const { withFileLock } = require("./file-lock.cjs");
+const { withAsyncFileLock } = require("./file-lock.cjs");
 
 // Source membership and addition snapshots commit together. Network preparation
 // happens outside this workspace-wide, short transaction/fixture file lock.
@@ -19,25 +19,25 @@ class RunRequirementsStore {
     return path.join(this.directory, key, "requirements.json");
   }
 
-  read(key) {
-    return readOptional(this.file(key));
+  async read(key) {
+    return (await readOptional(this.file(key)));
   }
 
-  transaction(operation) {
-    return this.database ? this.database.transaction(operation)
-      : withFileLock(path.join(this.directory, "requirements"), operation, "需求归属");
+  async transaction(operation) {
+    return this.database ? (await this.database.transaction(operation))
+      : (await withAsyncFileLock(path.join(this.directory, "requirements"), operation, "需求归属"));
   }
 
-  assignments() {
+  async assignments() {
     let documents;
-    if (this.database) documents = this.database.listDocuments(this.directory)
+    if (this.database) documents = (await this.database.listDocuments(this.directory))
       .filter(({ path: file }) => ["run.json", "requirements.json"].includes(path.basename(file)));
-    else documents = fs.existsSync(this.directory) ? fs.readdirSync(this.directory)
+    else documents = fs.existsSync(this.directory) ? (await Promise.all(fs.readdirSync(this.directory)
       .filter(key => RUN_KEY.test(key))
-      .flatMap(key => ["run.json", "requirements.json"].map(name => {
+      .flatMap(async key => (await Promise.all(["run.json", "requirements.json"].map(async name => {
         const file = path.join(this.directory, key, name);
-        return { path: file, value: readOptional(file) };
-      })) : [];
+        return { path: file, value: (await readOptional(file)) };
+      })))))).flat() : [];
     const result = new Map();
     for (const { path: file, value } of documents) {
       const key = path.basename(path.dirname(file));
@@ -48,9 +48,9 @@ class RunRequirementsStore {
     return result;
   }
 
-  claim(key, sources, { fingerprint = "", addition } = {}) {
-    return this.transaction(() => {
-      const saved = this.read(key);
+  async claim(key, sources, { fingerprint = "", addition } = {}) {
+    return (await this.transaction(async () => {
+      const saved = (await this.read(key));
       if (addition && saved.additions?.some(entry => entry.id === addition.id)) {
         const previous = saved.additions.find(entry => entry.id === addition.id);
         if (previous.fingerprint !== addition.fingerprint)
@@ -59,13 +59,13 @@ class RunRequirementsStore {
       }
       if (saved.fingerprint && fingerprint && saved.fingerprint !== fingerprint)
         throw new Error("同一任务标识不能提交不同需求，请重新打开表单。");
-      const assignments = this.assignments();
+      const assignments = (await this.assignments());
       for (const source of sources) {
         const owner = assignments.get(runKey(source));
         if (owner && (owner !== key || addition))
           throw new Error(`需求 ${source.id} 已归属任务 ${owner}，请打开原任务。`);
       }
-      const state = addition ? readOptional(path.join(this.directory, key, "run.json")) : {};
+      const state = addition ? (await readOptional(path.join(this.directory, key, "run.json"))) : {};
       const previousSources = saved.sources || state.workitem?.sources ||
         (state.workitem ? [state.source || sourceFor("tapd", state.workitem)] : []);
       const members = addition ? [...previousSources, ...sources] : sources;
@@ -74,32 +74,32 @@ class RunRequirementsStore {
       const value = { ...saved, sources: members,
         ...(fingerprint ? { fingerprint } : {}),
         ...(addition ? { additions: [...(saved.additions || []), addition] } : {}) };
-      writeConfig(this.file(key), value);
+      (await writeConfig(this.file(key), value));
       return value;
-    });
+    }));
   }
 
-  updateAddition(key, id, update) {
-    return this.transaction(() => {
-      const saved = this.read(key);
+  async updateAddition(key, id, update) {
+    return (await this.transaction(async () => {
+      const saved = (await this.read(key));
       const entry = saved.additions?.find(item => item.id === id);
       if (!entry) throw new Error("追加资料不存在。");
-      Object.assign(entry, update(entry));
-      writeConfig(this.file(key), saved);
+      Object.assign(entry, await update(entry));
+      (await writeConfig(this.file(key), saved));
       return entry;
-    });
+    }));
   }
 
-  releaseUnstarted(key) {
-    return this.transaction(() => {
+  async releaseUnstarted(key) {
+    return (await this.transaction(async () => {
       // A competing CLI may hold the same task while a Web launch fails to
       // acquire its execution lock. Never release that runner's reservation.
       if (fs.existsSync(path.join(this.directory, key, ".lock"))) return;
       const state = path.join(this.directory, key, "run.json");
       if (this.database) {
-        if (!this.database.readDocument(state)) this.database.deleteDocument(this.file(key));
+        if (!(await this.database.readDocument(state))) (await this.database.deleteDocument(this.file(key)));
       } else if (!fs.existsSync(state)) fs.rmSync(this.file(key), { force: true });
-    });
+    }));
   }
 }
 

@@ -19,6 +19,7 @@ process.stdin.on('end', () => {
   emit({ type: 'thread.started', thread_id: 'session-test-123' });
   if (mode === 'thread-only') return;
   emit({ type: 'turn.started' });
+  if (mode === 'item') emit({ type: 'item.completed', turn_id: 'turn-test', item: { id: 'message-test', type: 'agent_message', text: 'fixture answer' } });
   const file = process.argv[process.argv.indexOf('--output-last-message') + 1];
   fs.writeFileSync(
     file,

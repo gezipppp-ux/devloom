@@ -1,7 +1,7 @@
 const path = require("node:path");
 const { runTool, findExecutable, npmCommand, sameFile } = require("../shared/tool-process.cjs");
-const { resolveCodex } = require("../codex/command.cjs");
-const { childEnvironment } = require("../codex/environment.cjs");
+const { getAgentProvider } = require("../agents/registry.cjs");
+const { childEnvironment } = require("../shared/child-environment.cjs");
 const { toolVersion, compareVersions } = require("../domain/tool-version.cjs");
 const { systemUpdatePlan, installSystemTool } = require("./system-tool-updates.cjs");
 
@@ -12,7 +12,7 @@ const TOOLS = [
   { id: "node", name: "Node.js", requirement: "22.13.0+；更新目标为最新 LTS", url: "https://nodejs.org/en/download" },
 ];
 
-async function inspectTool(id, { run = runTool, codex = resolveCodex, npm = npmCommand, executable = findExecutable } = {}) {
+async function inspectTool(id, { run = runTool, codex = () => getAgentProvider("codex").resolveCommand(), npm = npmCommand, executable = findExecutable } = {}) {
   let launch;
   if (id === "node") launch = { command: process.execPath, args: [] };
   else if (id === "codex") launch = codex();

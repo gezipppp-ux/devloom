@@ -10,8 +10,12 @@
       "request_body": {
         "group": "workspace",
         "group_id": "YOUR_WORKSPACE_ID",
-        "select_workspace_ids": ["YOUR_WORKSPACE_ID"],
-        "select_object_types": ["story"],
+        "select_workspace_ids": [
+          "YOUR_WORKSPACE_ID"
+        ],
+        "select_object_types": [
+          "story"
+        ],
         "tab": "todo",
         "setting_view": "tree",
         "perpage": "20",
@@ -20,12 +24,19 @@
       }
     }
   },
-  "codex": {
+  "execution": {
     "repository": "",
     "repositories": {},
-    "base_ref": "HEAD",
-    "init_commands": [],
-    "startup_timeout_ms": 120000,
-    "worktree_root": ""
+    "baseRef": "HEAD",
+    "initCommands": [],
+    "worktreeRoot": ""
+  },
+  "agent": {
+    "provider": "codex",
+    "model": "",
+    "reasoningEffort": "",
+    "permissionMode": "ask",
+    "startupTimeoutMs": 120000,
+    "options": {}
   }
 }

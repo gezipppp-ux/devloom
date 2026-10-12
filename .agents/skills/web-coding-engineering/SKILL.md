@@ -11,7 +11,7 @@ description: 在 web-coding 项目开发、重构或 review 后端与 Vue 前端
 
 以下链接均相对本 Skill；执行命令时使用仓库根目录。先读 [README](../../../README.md)、[工程索引](../../../docs/engineering/index.md) 与 [架构规范](../../../docs/engineering/architecture.md)，再只读取涉及的详细契约：
 
-- 账号、鉴权、设置作用域或持久化：[账号与数据库](../../../docs/engineering/accounts-and-database.md)。生产环境的 Fastify、SQLite 和所有者隔离约定优先于旧文档的匿名访问及 JSON/JSONL 描述。
+- 账号、鉴权、设置作用域或持久化：[账号与数据库](../../../docs/engineering/accounts-and-database.md)。生产环境的 Fastify、PostgreSQL 和所有者隔离约定优先于旧文档的匿名访问及 JSON/JSONL 描述。
 - 会话、执行、审批、流事件：[Web/CLI](../../../docs/engineering/web-cli.md)。
 - 工作区与 Git 操作：[工作区](../../../docs/engineering/workspaces.md)。
 - 渠道与项目执行设置：[渠道与设置](../../../docs/engineering/channels-and-settings.md)、[渠道模块](../../../src/channels/README.md)。
@@ -27,7 +27,7 @@ description: 在 web-coding 项目开发、重构或 review 后端与 Vue 前端
 | 数据库、升级、凭据编码、缓存及文件锁 | `src/storage/`，拥有数据格式；业务层通过存储接口访问 |
 | 配置来源和仓库选择 | `src/config/`，Git 验证调用 Git 模块，不自行启动进程 |
 | 仓库查询与变更 | `src/git/`，包含 Git 命令、提交解析与 Worktree 身份校验 |
-| Codex 协议和进程传输 | `src/codex/`，不识别具体渠道或 HTTP 页面 |
+| CLI Agent 接口与适配 | `src/agents/` 显式注册并转换标准事件，`src/codex/` 拥有 Codex 原生协议与进程；应用/执行层不直接依赖 codex，详见 [Agent 契约](../../../docs/engineering/agents.md) |
 | 通用执行顺序 | `src/execution/`，通过渠道接口与 ExecutionStore 协调，不内嵌渠道实现或持久化格式 |
 | 来源规则 | `src/channels/<channel>/`，不依赖其他渠道或反向依赖注册表 |
 | 用例、权限门禁、生命周期、公开响应 | `src/application/`；公开结构由 presenter 构造；不直接操作文件或拼 Git 命令 |
@@ -57,7 +57,7 @@ description: 在 web-coding 项目开发、重构或 review 后端与 Vue 前端
 - 保留已记录的 session、source、run key、分支和 Worktree 路径；代码目录调整不迁移业务 Worktree，不重跑不确定的任务。
 - 新任务的个人默认值由应用层合并；区分字段省略、显式清空和非法类型。后续设置不回写已有任务快照。
 - 校验工作区所有者后才能读取任务、附件、工作区偏好或建立该工作区的 SSE；全局个人设置按当前账号鉴权，不要求先选择工作区。管理员身份不自动授予他人工作区访问权。账号权限不等于操作系统租户隔离。
-- SQLite 事务和短写锁不跨越网络、Git 或 Codex 等待。业务数据以数据库为准；图片文件只是受验证的缓存，显式文件适配不变成生产旧数据回退。
+- PostgreSQL 短事务和短写锁不跨越网络、Git 或 Codex 等待。业务数据以数据库为准；图片文件只是受验证的缓存，显式文件适配不变成生产旧数据回退。
 - Codex 执行状态、渠道流转状态和人工进度分别保存。只有真实执行开始事件才能触发渠道流转。
 - 异步完成要再次确认账号/任务/轮次归属；释放订阅、缓存和锁时，只处理当前操作拥有的资源。错误或未知状态不能伪装为成功或零值。
 
@@ -67,6 +67,6 @@ description: 在 web-coding 项目开发、重构或 review 后端与 Vue 前端
 
 代码变更运行 `npm run lint`、`npm test`、`npm run build`；Web 变更还运行 `npm run test:web`；布局、样式或组件位置调整运行 `npm run test:visual` 并检查相关截图。纯 Skill/文档修改校验 frontmatter 和链接即可，不因此运行真实业务或强制重构无关代码。
 
-回归使用临时 SQLite、临时 Git、fake Codex 和模拟 TAPD。不得拿真实需求、生产数据库或 TAPD 写操作验证实现。运行数据、凭据、日志和截图不提交。若需要提交，使用中文描述的 Conventional Commit。
+回归使用隔离 PostgreSQL、临时 Git、fake Codex 和模拟 TAPD。不得拿真实需求、生产数据库或 TAPD 写操作验证实现。运行数据、凭据、日志和截图不提交。若需要提交，使用中文描述的 Conventional Commit。
 
 交付说明实际修复、验证结果和未验证平台；不把 Skill 校验通过等同于代码正确，也不声称审查能证明不存在其他缺陷。

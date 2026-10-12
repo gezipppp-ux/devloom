@@ -5,7 +5,7 @@ const { once } = require("node:events");
 const { execFileSync, fork, spawnSync } = require("node:child_process");
 const { test } = require("node:test");
 const { RunStore } = require("../../src/storage/run-store.cjs");
-const { SessionManager } = require("../../src/application/session-manager.cjs");
+const { SessionManager } = require("../support/session-manager.cjs");
 const { worktreeReason } = require("../../src/git/worktree-access.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const { temporary } = require("../support/helpers.cjs");
@@ -157,6 +157,7 @@ test("delayed first-turn completion cannot overwrite a newer turn after reconnec
   fs.writeFileSync(
     path.join(store.dir(key), "run.json"),
     JSON.stringify({
+      agent: { provider: "codex" },
       workitem: { id: "2", workspace_id: "1", title: "Fixture" },
       worktree: { path: directory },
       session_id: "original",
@@ -192,20 +193,22 @@ test("delayed first-turn completion cannot overwrite a newer turn after reconnec
     method: "item/fileChange/requestApproval",
     params: { threadId: "original", turnId: next.turnId },
   });
+  await manager.events.drain();
   finishTransition();
   await completed;
   assert.equal(runtime.turnId, next.turnId);
   assert.equal(runtime.status, "running");
-  assert.equal(runtime.requests.has("42"), true);
-  assert.equal(store.read(key).execution.status, "running");
+  assert.equal(runtime.requests.has("number:42"), true);
+  assert.equal((await store.read(key)).execution.status, "running");
   await manager.interrupt(key);
-  assert.equal(store.read(key).execution.status, "interrupted");
+  assert.equal((await store.read(key)).execution.status, "interrupted");
 });
 
 test("credential refresh waits for all workspace activity, then resumes the same session before the next turn", async t => {
   const directory = temporary(t), store = new RunStore(directory), key = "1-2";
   fs.mkdirSync(store.dir(key));
   fs.writeFileSync(path.join(store.dir(key), "run.json"), JSON.stringify({
+    agent: { provider: "codex" },
     workitem: { id: "2", workspace_id: "1", title: "Fixture" },
     worktree: { path: directory }, session_id: "original", execution: { status: "completed" },
   }));
@@ -219,22 +222,22 @@ test("credential refresh waits for all workspace activity, then resumes the same
   const peer = manager.runtime("1-3", "peer");
   for (const field of ["pipelineActive", "turnId"]) {
     peer[field] = true;
-    manager.refreshGitCredentials();
+    (await manager.refreshGitCredentials());
     peer[field] = null;
   }
   for (const status of ["preparing", "initializing", "starting", "running"]) {
     peer.status = status;
-    manager.refreshGitCredentials();
+    (await manager.refreshGitCredentials());
   }
   peer.status = "idle";
   peer.requests.set("approval", {});
-  manager.refreshGitCredentials();
+  (await manager.refreshGitCredentials());
   peer.requests.clear();
   manager.operations.set("1-3", Promise.resolve());
-  manager.refreshGitCredentials();
+  (await manager.refreshGitCredentials());
   manager.operations.clear();
   manager.startingRequests = 1;
-  manager.refreshGitCredentials();
+  (await manager.refreshGitCredentials());
   manager.startingRequests = 0;
   assert.equal(refreshes, 0);
   manager.sessions.delete("1-3");
@@ -263,11 +266,11 @@ test("asynchronous startup validation fences credential replacement and releases
   const starting = manager.start({ channel: "manual" });
   await entered;
   assert.equal(refreshes, 1);
-  manager.refreshGitCredentials();
+  (await manager.refreshGitCredentials());
   assert.equal(refreshes, 1);
   rejectSource(new Error("fixture source validation failed"));
   await assert.rejects(starting, /fixture source validation failed/);
   assert.equal(manager.startingRequests, 0);
-  manager.refreshGitCredentials();
+  (await manager.refreshGitCredentials());
   assert.equal(refreshes, 2);
 });

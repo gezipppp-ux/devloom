@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
+const { setImmediate } = require("node:timers/promises");
 const { test } = require("node:test");
 const { createEventStream } = require("../../src/http/events.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
@@ -16,7 +17,7 @@ function connection() {
   return { request, response };
 }
 
-test("event transport isolates workspaces and releases subscriptions on shutdown", (t) => {
+test("event transport isolates workspaces and releases subscriptions on shutdown", async (t) => {
   const stream = createEventStream();
   t.after(() => stream.close());
   const first = new EventEmitter();
@@ -29,17 +30,22 @@ test("event transport isolates workspaces and releases subscriptions on shutdown
   stream.connect(sibling.request, sibling.response, first);
   assert.equal(first.listenerCount("event"), 1);
   first.emit("event", { key: "first", type: "state" });
+  await setImmediate();
   assert.equal(a.response.frames.length, 2);
+  await setImmediate();
   assert.equal(sibling.response.frames.length, 2);
   assert.equal(b.response.frames.length, 1);
   a.request.emit("close");
   assert.equal(first.listenerCount("event"), 1);
   first.emit("event", { key: "first", type: "state" });
+  await setImmediate();
   assert.equal(a.response.frames.length, 2);
+  await setImmediate();
   assert.equal(sibling.response.frames.length, 3);
   sibling.response.writableLength = 1024 * 1024 + 1;
   first.emit("event", { key: "first", type: "state" });
   first.emit("event", { key: "first", type: "state" });
+  await setImmediate();
   assert.equal(sibling.response.frames.length, 3);
   assert.equal(first.listenerCount("event"), 0);
   assert.equal(a.request.listenerCount("close"), 0);
@@ -48,6 +54,7 @@ test("event transport isolates workspaces and releases subscriptions on shutdown
   stream.connect(reconnected.request, reconnected.response, first);
   assert.equal(first.listenerCount("event"), 1);
   first.emit("event", { key: "first", type: "state" });
+  await setImmediate();
   assert.equal(reconnected.response.frames.length, 2);
   stream.close();
   assert.equal(first.listenerCount("event"), 0);
@@ -98,4 +105,22 @@ test("server shutdown rejects SSE reconnections while session shutdown is pendin
   assert.equal((await reader.read()).done, true);
   await app.close();
   assert.equal(closeCalls, 1);
+});
+
+test("HTTP storage errors hide database details and distinguish concurrent changes", async (t) => {
+  const manager = new EventEmitter();
+  manager.close = async () => {};
+  let code = "P2034";
+  manager.list = async () => { throw Object.assign(new Error("secret-db-password SELECT private_table"), { code }); };
+  const app = createWebServer({ testIdentity: true, manager, channels: {} });
+  t.after(() => app.close());
+  const origin = await app.listen(0);
+  for (const [value, status, publicCode] of [["P2034", 409, "STORAGE_CONFLICT"], ["P2002", 503, "STORAGE_UNAVAILABLE"]]) {
+    code = value;
+    const response = await fetch(`${origin}/api/runs`);
+    assert.equal(response.status, status);
+    const body = await response.json();
+    assert.equal(body.code, publicCode);
+    assert.doesNotMatch(JSON.stringify(body), /secret-db|private_table|SELECT|P2002|P2034/);
+  }
 });

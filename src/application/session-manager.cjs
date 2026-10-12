@@ -1,6 +1,8 @@
 const { EventEmitter } = require("node:events");
-const { AppServerClient } = require("../codex/app-server-client.cjs");
-const { isBlockingRequest } = require("../codex/user-input.cjs");
+const { presentError } = require("./error-presenter.cjs");
+const { createAgent } = require("../agents/registry.cjs");
+const { agentConfig: readAgentConfig, taskPrompt } = require("../domain/agent-config.cjs");
+const { isBlockingRequest, assertCapability, assertAgentIdentity } = require("../domain/agent-contract.cjs");
 const { RunStore } = require("../storage/run-store.cjs");
 const { initializationItem } = require("../domain/session-item.cjs");
 const { validateSessionMessage } = require("../domain/session-message.cjs");
@@ -16,18 +18,8 @@ const { SessionRequirements } = require("./session-requirements.cjs");
 const { runExecution } = require("../execution/runner.cjs");
 const { defaultChannels } = require("../channels/channel-registry.cjs");
 const { executionConfig } = require("../config/execution-settings.cjs");
-const { readOptional } = require("../storage/json-files.cjs");
+
 const { sourceFor, runKey } = require("../domain/run-identity.cjs");
-const {
-  validateModelSelection,
-  resolveTurnModel,
-} = require("../codex/models.cjs");
-const {
-  assertPermissionAvailable,
-  threadPermissionParams,
-  turnPermissionParams,
-} = require("../codex/permissions.cjs");
-const { validatePermissionMode } = require("../domain/permissions.cjs");
 const {
   validateTaskMetadata,
   defaultTaskMetadata,
@@ -37,27 +29,33 @@ class SessionManager extends EventEmitter {
   constructor({
     runsDirectory,
     configFile,
-    client,
+    agentConfig = { provider: "codex", options: {} },
+    agent,
     store,
     run = runExecution,
     channels,
     gitCredentialProvider,
     gitCredentialRevision,
+    authorize = async () => {},
     worktreeReason = defaultWorktreeReason,
     apiPrefix = "/api",
   }) {
     super();
     this.configFile = configFile;
+    this.authorize = authorize;
+    /** @type {RunStore} */
     this.store = store || new RunStore(runsDirectory);
-    this.client = client || new AppServerClient(readOptional(configFile).codex, {
-      gitCredentialProvider,
-      gitCredentialRevision,
+    this.agent = agent || createAgent({
+      provider: agentConfig.provider, config: agentConfig.options,
+      gitCredentialProvider, gitCredentialRevision,
     });
     this.channels = channels || defaultChannels(configFile);
     this.run = run;
     this.sessions = new Map();
     this.operations = new Map();
     this.startingRequests = 0;
+    this.starts = new Set();
+    this.credentialRefresh = null;
     this.closing = false;
     this.worktreeReason = worktreeReason;
     this.git = new SessionGit(this);
@@ -65,24 +63,25 @@ class SessionManager extends EventEmitter {
     this.requirements = new SessionRequirements(this);
     this.settings = new SessionSettings({
       store: this.store,
-      client: this.client,
+      agent: this.agent,
       sessions: this.sessions,
       worktreeReason: (state) => this.worktreeReason(state),
       emit: (event) => this.emit("event", event),
       assertOpen: () => this.assertOpen(),
+      authorize: () => this.authorize("session.continue"),
     });
     this.events = new SessionEvents({
       store: this.store,
-      client: this.client,
+      agent: this.agent,
       sessions: this.sessions,
       settings: this.settings,
       apiPrefix,
       emit: (event) => this.emit("event", event),
-      synchronizeHistory: (key) => this.views.synchronizeHistory(key),
+      synchronizeHistory: async (key) => (await this.views.synchronizeHistory(key)),
     });
     this.views = new SessionViews({
       store: this.store,
-      client: this.client,
+      agent: this.agent,
       sessions: this.sessions,
       settings: this.settings,
       worktreeReason: (state) => this.worktreeReason(state),
@@ -110,45 +109,48 @@ class SessionManager extends EventEmitter {
     return runtime;
   }
 
-  publish(runtime, event) {
-    this.events.publish(runtime, event);
+  async publish(runtime, event) {
+    (await this.events.publish(runtime, event));
   }
 
-  respond(key, requestId, response) {
+  async respond(key, requestId, response) {
     this.assertOpen();
-    return this.events.respond(key, requestId, response);
+    await this.authorize("session.approve");
+    assertAgentIdentity(this.agent, await this.store.read(key));
+    return (await this.events.respond(key, requestId, response));
   }
 
-  history(key, cursor) {
-    return this.views.history(key, cursor);
+  async history(key, cursor) {
+    return (await this.views.history(key, cursor));
   }
 
-  readGit(key) {
-    return this.git.read(key);
+  async readGit(key) {
+    return (await this.git.read(key));
   }
 
-  listFiles(key, scope) {
-    return this.files.list(key, scope);
+  async listFiles(key, scope) {
+    return (await this.files.list(key, scope));
   }
 
-  readFile(key, file, scope) {
-    return this.files.read(key, file, scope);
+  async readFile(key, file, scope) {
+    return (await this.files.read(key, file, scope));
   }
 
-  deleteWorktree(key, input) {
-    return this.git.remove(key, input);
+  async deleteWorktree(key, input) {
+    return (await this.git.remove(key, input));
   }
 
-  view(key) {
-    return this.views.view(key);
+  async view(key) {
+    return (await this.views.view(key));
   }
 
-  exclusive(key, operation) {
+  async exclusive(key, operation) {
     this.assertOpen();
     if (this.operations.has(key))
       throw new Error("该任务的上一条操作尚未完成。");
     const pending = Promise.resolve()
-      .then(() => {
+      .then(async () => {
+        await this.credentialRefresh;
         this.assertOpen();
         return operation();
       })
@@ -159,11 +161,17 @@ class SessionManager extends EventEmitter {
 
   async attach(key) {
     this.assertOpen();
-    const state = this.store.read(key);
-    this.assertWorktreeRetained(key);
+    const state = (await this.store.read(key));
+    assertAgentIdentity(this.agent, state);
+    assertCapability(this.agent, "resume");
+    (await this.assertWorktreeRetained(key));
     const reason = this.worktreeReason(state);
     if (reason) throw new Error(reason);
     const runtime = this.runtime(key, state.session_id);
+    // A credential refresh can return before its disconnect event is saved.
+    // Fence this session before trusting connected or resuming its transport.
+    await this.events.drain(key);
+    this.assertOpen();
     if (["preparing", "initializing", "starting"].includes(runtime.status))
       throw new Error("正在准备会话，请稍候。");
     if (runtime.connected) {
@@ -171,62 +179,59 @@ class SessionManager extends EventEmitter {
         throw new Error("正在完成首轮记录，请稍候再发送。");
       return runtime;
     }
-    if (!state.session_id) throw new Error("该任务尚未创建 Codex session。");
+    if (!state.session_id) throw new Error("该任务尚未创建执行器会话。");
     if (this.store.isExecutionLocked(key))
       throw new Error("原 CLI 仍持有任务锁，不能并发接管。");
     this.store.claim(key);
-    await this.client.connect();
+    await this.agent.connect();
     this.assertOpen();
-    const before = await this.client.request("thread/read", {
-      threadId: state.session_id,
-      includeTurns: false,
-    });
+    const before = await this.agent.readSession(state.session_id);
     this.assertOpen();
-    if (before.thread.status.type === "active")
+    if (before.status !== "idle")
       throw new Error("该 session 正在另一个客户端执行，请等待该轮结束。");
-    const selection = this.settings.read(key, state).selection;
-    await assertPermissionAvailable(this.client, selection.permissionMode);
+    const selection = (await this.settings.read(key, state)).selection;
+    await this.agent.assertPermissionAvailable(selection.permissionMode);
     this.assertOpen();
-    await this.client.request("thread/resume", {
-      threadId: state.session_id,
-      cwd: state.worktree.path,
-      ...threadPermissionParams(selection.permissionMode),
-      excludeTurns: true,
-      ...(selection.model ? { model: selection.model } : {}),
+    await this.agent.resumeSession({
+      sessionId: state.session_id, cwd: state.worktree.path, selection,
     });
     this.assertOpen();
     runtime.connected = true;
     try { await this.views.synchronizeHistory(key); }
-    catch (error) { runtime.error = `历史补齐失败：${error.message}`; }
+    catch (error) { runtime.error = `历史补齐失败：${presentError(error).message}`; }
     runtime.turnId = null;
     runtime.status = "idle";
-    this.publish(runtime, { type: "state" });
+    (await this.publish(runtime, { type: "state" }));
     return runtime;
   }
 
   async send(key, message, images) {
     const validated = validateSessionMessage(message, images);
-    this.refreshGitCredentials();
-    return this.exclusive(key, async () => {
-      const attachments = validated.images.map((id) =>
-        this.store.messageImages(key).read(id),
-      );
+    if (validated.images.length) assertCapability(this.agent, "images");
+    await this.authorize("session.continue");
+    assertAgentIdentity(this.agent, await this.store.read(key));
+    (await this.refreshGitCredentials());
+    return (await this.exclusive(key, async () => {
+      const attachments = (await Promise.all(validated.images.map(async (id) =>
+        (await (await this.store.messageImages(key)).read(id)),
+      )));
       const input = [
         ...(validated.text
-          ? [{ type: "text", text: validated.text, text_elements: [] }]
+          ? [{ type: "text", text: validated.text }]
           : []),
         ...attachments.map((image) => ({
-          type: "localImage",
+          type: "image",
           path: image.path,
         })),
       ];
-      return this.sendInput(key, input);
-    });
+      return (await this.sendInput(key, input));
+    }));
   }
 
   // Caller holds the session operation lock. A dispatch hook persists addition
   // intent immediately before RPC so unknown outcomes are never replayed.
   async sendInput(key, input, beforeDispatch) {
+    if (input.some(part => part.type === "image")) assertCapability(this.agent, "images");
     let dispatchedTurnId;
     const runtime = await this.attach(key);
     this.assertOpen();
@@ -235,67 +240,61 @@ class SessionManager extends EventEmitter {
     const activeTurn = runtime.turnId;
     if (activeTurn) {
       if (beforeDispatch) throw new Error("请等待当前轮结束后处理新增需求。");
-      await this.client.request("turn/steer", {
-        threadId: runtime.sessionId,
-        expectedTurnId: activeTurn,
+      await this.authorize("session.continue");
+      assertCapability(this.agent, "steer");
+      await this.agent.steerTurn({
+        sessionId: runtime.sessionId,
+        turnId: activeTurn,
         input,
       });
-      this.publish(runtime, {
+      (await this.publish(runtime, {
         type: "notice",
         text: "补充指令已发送至当前一轮。",
-      });
+      }));
     } else {
       let result;
-      const state = this.store.read(key);
-      const selection = this.settings.read(key, state).selection;
+      const state = (await this.store.read(key));
+      const selection = (await this.settings.read(key, state)).selection;
       try {
-        await assertPermissionAvailable(
-          this.client,
-          selection.permissionMode,
-        );
+        await this.agent.assertPermissionAvailable(selection.permissionMode);
         this.assertOpen();
-        const model = await resolveTurnModel(
-          this.client,
-          selection,
-          state.worktree.path,
-        );
+        const prepared = await this.agent.prepareTurn(selection, state.worktree.path);
         this.assertOpen();
         this.settings.starting(key, selection);
-        beforeDispatch?.();
-        result = await this.client.request("turn/start", {
-          threadId: runtime.sessionId,
-          input,
-          ...model,
-          ...turnPermissionParams(
-            selection.permissionMode,
-            state.worktree.path,
-          ),
+        await this.authorize("session.continue");
+        runtime.executionPermission = "session.continue";
+        await beforeDispatch?.();
+        await this.authorize("session.continue");
+        result = await this.agent.startTurn({
+          sessionId: runtime.sessionId, input, cwd: state.worktree.path, selection: prepared,
         });
-        dispatchedTurnId = result.turn.id;
-        this.settings.applied(key, selection);
+        dispatchedTurnId = result.id;
+        (await this.settings.applied(key, selection));
       } catch (error) {
         runtime.connected = false;
         runtime.status = "disconnected";
-        this.publish(runtime, { type: "state", error: error.message });
+        (await this.publish(runtime, { type: "state", error: presentError(error).message }));
         throw error;
       }
       if (
-        result.turn.status === "inProgress" &&
-        !runtime.completedTurns.has(result.turn.id)
+        result.status === "running" &&
+        !runtime.completedTurns.has(result.id)
       ) {
-        runtime.turnId = result.turn.id;
+        runtime.turnId = result.id;
         runtime.status = "running";
       }
-      this.publish(runtime, { type: "state" });
+      (await this.publish(runtime, { type: "state" }));
     }
     return { sessionId: runtime.sessionId, turnId: runtime.turnId,
       ...(beforeDispatch ? { dispatchedTurnId } : {}) };
   }
 
-  uploadMessageImage(key, bytes) {
-    return this.exclusive(key, () => {
-      const state = this.store.read(key);
-      this.assertWorktreeRetained(key);
+  async uploadMessageImage(key, bytes) {
+    assertCapability(this.agent, "images");
+    return (await this.exclusive(key, async () => {
+      const state = (await this.store.read(key));
+      assertAgentIdentity(this.agent, state);
+      (await this.assertWorktreeRetained(key));
       const reason = this.worktreeReason(state);
       if (reason) throw new Error(reason);
       const runtime = this.sessions.get(key);
@@ -309,44 +308,63 @@ class SessionManager extends EventEmitter {
       if (this.store.isExecutionLocked(key) && !runtime?.initial)
         throw new Error("原 CLI 仍持有任务锁，不能上传会话图片。");
       this.store.claim(key);
-      const image = this.store.messageImages(key).save(bytes);
+      await this.authorize("session.continue");
+      const image = (await (await this.store.messageImages(key)).save(bytes));
       return this.views.presenter.messageImage(key, image);
-    });
+    }));
   }
 
-  messageImagePath(key, id) {
-    return this.store.messageImages(key).read(id).path;
+  async messageImagePath(key, id) {
+    return (await (await this.store.messageImages(key)).read(id)).path;
   }
 
   async interrupt(key) {
-    return this.exclusive(key, async () => {
+    return (await this.exclusive(key, async () => {
+      await this.authorize("session.stop");
+      assertAgentIdentity(this.agent, await this.store.read(key));
       const runtime = this.sessions.get(key);
       if (runtime?.status === "initializing" && runtime.prepareAbort) {
         runtime.prepareAbort.abort();
-        this.publish(runtime, {
+        (await this.publish(runtime, {
           type: "notice",
           text: "已请求停止 worktree 初始化。",
-        });
+        }));
         return { accepted: true };
       }
       if (!runtime?.connected || !runtime.turnId)
         throw new Error("没有可中断的网页执行轮次。");
-      await this.client.request("turn/interrupt", {
-        threadId: runtime.sessionId,
+      await this.agent.interruptTurn({
+        sessionId: runtime.sessionId,
         turnId: runtime.turnId,
       });
-      this.publish(runtime, {
+      (await this.publish(runtime, {
         type: "notice",
-        text: "已请求停止当前一轮，等待 Codex 确认。",
-      });
+        text: "已请求停止当前一轮，等待执行器确认。",
+      }));
       return { accepted: true };
-    });
+    }));
   }
 
-  async start(input) {
-    this.refreshGitCredentials();
+  trackStart(operation) {
+    const pending = Promise.resolve().then(() => {
+      this.assertOpen();
+      return operation();
+    });
+    this.starts.add(pending);
+    void pending.finally(() => this.starts.delete(pending)).catch(() => {});
+    return pending;
+  }
+
+  start(input) {
+    return this.trackStart(() => this.startRequest(input));
+  }
+
+  async startRequest(input) {
+    await this.authorize("session.start");
+    const refresh = this.refreshGitCredentials();
     this.startingRequests++;
     try {
+      await refresh;
       return await this.resolveAndLaunch(input);
     } finally {
       this.startingRequests--;
@@ -357,10 +375,9 @@ class SessionManager extends EventEmitter {
     this.assertOpen();
     validateTaskMetadata(input.metadata === undefined ? {} : input.metadata);
     const channel = this.channels.get(input.channel || "tapd");
-    const selection = await validateModelSelection(this.client, input);
+    const selection = await this.agent.validateSelection(input);
     this.assertOpen();
-    const permissionMode = validatePermissionMode(input.permissionMode);
-    await assertPermissionAvailable(this.client, permissionMode);
+    await this.agent.assertPermissionAvailable(selection.permissionMode);
     this.assertOpen();
     const sourceInput = { ...input };
     delete sourceInput.model;
@@ -371,16 +388,12 @@ class SessionManager extends EventEmitter {
     this.assertOpen();
     const source = sourceFor(channel.id, resolved.item);
     const key = runKey(source);
-    return this.launch(
+    return (await this.launch(
       key,
       resolved.item,
       {
         ...resolved.config,
-        codex: {
-          ...resolved.config.codex,
-          ...selection,
-          permission_mode: permissionMode,
-        },
+        agent: { ...readAgentConfig(resolved.config), ...selection },
       },
       resolved.session,
       {},
@@ -389,10 +402,19 @@ class SessionManager extends EventEmitter {
         input.metadata || {},
         defaultTaskMetadata(resolved.item),
       ),
-    );
+    ));
   }
 
-  launch(
+  launch(key, ...args) {
+    return this.trackStart(async () => {
+      // Refresh before reserving the key: active operations intentionally fence
+      // credential rotation. Only preparation is exclusive, not the live turn.
+      await this.refreshGitCredentials();
+      return this.exclusive(key, () => this.prepareLaunch(key, ...args));
+    });
+  }
+
+  async prepareLaunch(
     key,
     item,
     config,
@@ -402,197 +424,212 @@ class SessionManager extends EventEmitter {
     metadata = defaultTaskMetadata(item),
   ) {
     this.assertOpen();
-    this.refreshGitCredentials();
     metadata = validateTaskMetadata(metadata);
-    config = executionConfig(config, this.configFile);
+    config = (await executionConfig(config, this.configFile));
+    assertAgentIdentity(this.agent, config);
     const source = sourceFor(channel.id, item);
-    if (this.sessions.has(key) || this.store.hasRun(key)) {
-      if (item.request_fingerprint && this.store.requirements.read(key).fingerprint === item.request_fingerprint)
+    if (this.sessions.has(key) || (await this.store.hasRun(key))) {
+      if (item.request_fingerprint && (await this.store.requirements.read(key)).fingerprint === item.request_fingerprint)
         return { key, accepted: true, reused: true };
       throw new Error("该需求已有运行记录。");
     }
     // Resolve before creating run ownership, downloading images or creating a branch.
-    this.client.validateCommand?.();
+    await this.authorize("session.start");
+    this.assertOpen();
+    this.agent.validateCommand();
     this.store.claim(key);
+    let claimed = false;
+    let runtime;
     try {
-      this.store.requirements.claim(key, item.sources || [source], { fingerprint: item.request_fingerprint });
+      (await this.store.requirements.claim(key, item.sources || [source], { fingerprint: item.request_fingerprint }));
+      claimed = true;
+      this.assertOpen();
+      (await this.store.writeTaskMetadata(key, metadata, item));
+      this.assertOpen();
+      (await this.settings.initialize(key, config.agent));
+      this.assertOpen();
+      runtime = this.runtime(key);
+      runtime.pipelineActive = true;
+      runtime.executionPermission = "session.start";
+      runtime.prepareAbort = new AbortController();
+      runtime.status = "preparing";
+      runtime.connected = false;
+      const directory = this.store.dir(key);
+      (await this.store.writeWeb(key, { source }));
+      this.assertOpen();
+      (await this.publish(runtime, { type: "state", title: "正在抓取需求并准备工作区" }));
+      this.assertOpen();
+      runtime.operation = this.run(
+        {
+          config,
+          channel,
+          configFile: this.configFile,
+          session,
+          item,
+          directory,
+        },
+        {
+          signal: runtime.prepareAbort.signal,
+          onInitialization: async (initialization, index) => {
+            const previousStatus = runtime.status;
+            runtime.status = "initializing";
+            if (previousStatus !== runtime.status)
+              (await this.publish(runtime, { type: "state" }));
+            const item = initializationItem(
+              initialization.commands[index],
+              index,
+            );
+            runtime.items.set(item.id, item);
+            (await this.publish(runtime, { type: "item", item }));
+          },
+          startSession: async ({ repository, task, onSession, onStarted }) => {
+            this.assertOpen();
+            await this.authorize("session.start");
+            this.assertOpen();
+            await this.agent.connect();
+            this.assertOpen();
+            const selection = (await this.settings.read(key, {
+              agent: config.agent,
+            })).selection;
+            await this.agent.assertPermissionAvailable(selection.permissionMode);
+            this.assertOpen();
+            const prepared = await this.agent.prepareTurn(selection, repository);
+            this.assertOpen();
+            await this.authorize("session.start");
+            this.assertOpen();
+            if (task.images.length) assertCapability(this.agent, "images");
+            const result = await this.agent.createSession({ cwd: repository, selection: prepared });
+            runtime.sessionId = result.sessionId;
+            runtime.status = "starting";
+            runtime.connected = true;
+            await onSession(runtime.sessionId);
+            this.assertOpen();
+            await this.authorize("session.start");
+            (await this.events.persist(runtime));
+            await this.authorize("session.start");
+            this.assertOpen();
+            return new Promise((resolve, reject) => {
+              const initial = { resolve, reject, onStarted, started: false };
+              runtime.initial = initial;
+              runtime.initial.timer = setTimeout(() => {
+                reject(
+                  new Error(
+                    "未收到执行器的执行开始确认，请刷新确认状态，勿重复启动。",
+                  ),
+                );
+              }, config.agent.startupTimeoutMs);
+              const input = [
+                { type: "text", text: taskPrompt(task) },
+                ...task.images.map((image) => ({
+                  type: "image",
+                  path: image.path,
+                })),
+              ];
+              this.settings.starting(key, selection);
+              this.agent
+                .startTurn({
+                  sessionId: runtime.sessionId, input, cwd: repository, selection: prepared,
+                })
+                .then((response) => this.events.enqueue(key, async () => {
+                  if (
+                    runtime.initial !== initial ||
+                    runtime.completedTurns.has(response.id)
+                  )
+                    return;
+                  if (
+                    !runtime.turnId || runtime.turnId === response.id
+                  )
+                    (await this.settings.applied(key, selection));
+                  if (
+                    !runtime.turnId &&
+                    response.status === "running"
+                  )
+                    runtime.turnId = response.id;
+                }))
+                .catch(reject);
+            });
+          },
+        },
+      )
+        .then(async (state) => {
+          runtime.pipelineActive = false;
+          runtime.prepareAbort = null;
+          if (runtime.initial && !runtime.initial.started)
+            runtime.connected = false;
+          clearTimeout(runtime.initial?.timer);
+          runtime.initial = null;
+          runtime.status = state.execution.status;
+          runtime.error = state.execution.error;
+          (await this.publish(runtime, { type: "state" }));
+        })
+        .catch(async (error) => {
+          error = presentError(error);
+          runtime.pipelineActive = false;
+          runtime.prepareAbort = null;
+          runtime.connected = false;
+          clearTimeout(runtime.initial?.timer);
+          runtime.initial = null;
+          runtime.status = "failed";
+          runtime.error = error.message;
+          (await this.publish(runtime, { type: "error", error: error.message }));
+          if (!(await this.store.hasRun(key))) {
+            (await this.store.requirements.releaseUnstarted(key));
+            this.sessions.delete(key);
+          }
+        });
+      // The accepted background operation must remain observed even when its
+      // failure cannot itself be persisted.
+      void runtime.operation.catch(error => this.events.fail(runtime, error));
+      return { key, accepted: true };
     } catch (error) {
-      this.store.release(key);
+      try {
+        if (claimed) await this.store.requirements.releaseUnstarted(key);
+        if (runtime && !(await this.store.hasRun(key))) this.sessions.delete(key);
+      } finally {
+        this.store.release(key);
+      }
       throw error;
     }
-    this.store.writeTaskMetadata(key, metadata, item);
-    this.settings.initialize(key, config.codex);
-    const runtime = this.runtime(key);
-    runtime.pipelineActive = true;
-    runtime.prepareAbort = new AbortController();
-    runtime.status = "preparing";
-    runtime.connected = false;
-    const directory = this.store.dir(key);
-    this.store.writeWeb(key, { source });
-    this.publish(runtime, { type: "state", title: "正在抓取需求并准备工作区" });
-    runtime.operation = this.run(
-      {
-        config,
-        channel,
-        configFile: this.configFile,
-        session,
-        item,
-        directory,
-      },
-      {
-        signal: runtime.prepareAbort.signal,
-        onInitialization: (initialization, index) => {
-          const previousStatus = runtime.status;
-          runtime.status = "initializing";
-          if (previousStatus !== runtime.status)
-            this.publish(runtime, { type: "state" });
-          const item = initializationItem(
-            initialization.commands[index],
-            index,
-          );
-          runtime.items.set(item.id, item);
-          this.publish(runtime, { type: "item", item });
-        },
-        startSession: async ({ repository, task, onSession, onStarted }) => {
-          this.assertOpen();
-          await this.client.connect();
-          this.assertOpen();
-          const selection = this.settings.read(key, {
-            codex: config.codex,
-          }).selection;
-          await assertPermissionAvailable(
-            this.client,
-            selection.permissionMode,
-          );
-          this.assertOpen();
-          const model = await resolveTurnModel(
-            this.client,
-            selection,
-            repository,
-          );
-          this.assertOpen();
-          const result = await this.client.request("thread/start", {
-            cwd: repository,
-            ...threadPermissionParams(selection.permissionMode),
-            ephemeral: false,
-            model: model.model,
-          });
-          runtime.sessionId = result.thread.id;
-          runtime.status = "starting";
-          runtime.connected = true;
-          onSession(runtime.sessionId);
-          this.assertOpen();
-          this.events.persist(runtime);
-          return new Promise((resolve, reject) => {
-            const initial = { resolve, reject, onStarted, started: false };
-            runtime.initial = initial;
-            runtime.initial.timer = setTimeout(() => {
-              reject(
-                new Error(
-                  "未收到 Codex 执行开始确认，请刷新确认状态，勿重复启动。",
-                ),
-              );
-            }, config.codex?.startup_timeout_ms || 120000);
-            const input = [
-              { type: "text", text: task.codex_prompt, text_elements: [] },
-              ...task.images.map((image) => ({
-                type: "localImage",
-                path: image.path,
-              })),
-            ];
-            this.settings.starting(key, selection);
-            this.client
-              .request("turn/start", {
-                threadId: runtime.sessionId,
-                input,
-                ...model,
-                ...turnPermissionParams(selection.permissionMode, repository),
-              })
-              .then((response) => {
-                if (
-                  runtime.initial !== initial ||
-                  runtime.completedTurns.has(response.turn.id)
-                )
-                  return;
-                if (
-                  !runtime.turnId || runtime.turnId === response.turn.id
-                )
-                  this.settings.applied(key, selection);
-                if (
-                  !runtime.turnId &&
-                  response.turn.status === "inProgress"
-                )
-                  runtime.turnId = response.turn.id;
-              })
-              .catch(reject);
-          });
-        },
-      },
-    )
-      .then((state) => {
-        runtime.pipelineActive = false;
-        runtime.prepareAbort = null;
-        if (runtime.initial && !runtime.initial.started)
-          runtime.connected = false;
-        clearTimeout(runtime.initial?.timer);
-        runtime.initial = null;
-        runtime.status = state.execution.status;
-        runtime.error = state.execution.error;
-        this.publish(runtime, { type: "state" });
-      })
-      .catch((error) => {
-        runtime.pipelineActive = false;
-        runtime.prepareAbort = null;
-        runtime.connected = false;
-        clearTimeout(runtime.initial?.timer);
-        runtime.initial = null;
-        runtime.status = "failed";
-        runtime.error = error.message;
-        this.publish(runtime, { type: "error", error: error.message });
-        if (!this.store.hasRun(key)) {
-          this.store.requirements.releaseUnstarted(key);
-          this.sessions.delete(key);
-        }
+  }
+
+  async list(options) {
+    return (await this.views.list(options));
+  }
+
+  async updateTaskMetadata(key, input) {
+    return this.exclusive(key, async () => {
+      const state = (await this.store.read(key));
+      const metadata = (await this.store.writeTaskMetadata(key, input, state.workitem));
+      this.emit("event", {
+        key,
+        type: "metadata",
+        metadata,
+        at: new Date().toISOString(),
       });
-    return { key, accepted: true };
-  }
-
-  list(options) {
-    return this.views.list(options);
-  }
-
-  updateTaskMetadata(key, input) {
-    this.assertOpen();
-    const state = this.store.read(key);
-    const metadata = this.store.writeTaskMetadata(key, input, state.workitem);
-    this.emit("event", {
-      key,
-      type: "metadata",
-      metadata,
-      at: new Date().toISOString(),
+      return { metadata };
     });
-    return { metadata };
   }
 
-  updateTitle(key, title) {
-    this.assertOpen();
-    this.store.read(key);
-    const savedTitle = this.store.writeSessionTitle(key, title);
-    this.emit("event", {
-      key,
-      type: "title",
-      title: savedTitle,
-      at: new Date().toISOString(),
+  async updateTitle(key, title) {
+    return this.exclusive(key, async () => {
+      (await this.store.read(key));
+      const savedTitle = (await this.store.writeSessionTitle(key, title));
+      this.emit("event", {
+        key,
+        type: "title",
+        title: savedTitle,
+        at: new Date().toISOString(),
+      });
+      return { title: savedTitle };
     });
-    return { title: savedTitle };
   }
 
-  archive(key) {
-    return this.exclusive(key, () => {
-      this.store.read(key);
+  async archive(key) {
+    return (await this.exclusive(key, async () => {
+      (await this.store.read(key));
       const reason = this.git.activeReason(key);
       if (reason) throw new Error(reason.replace("删除 Worktree", "归档会话"));
-      const archive = this.store.archive(key);
+      const archive = (await this.store.archive(key));
       this.emit("event", {
         key,
         type: "archived",
@@ -600,20 +637,20 @@ class SessionManager extends EventEmitter {
         at: new Date().toISOString(),
       });
       return archive;
-    });
+    }));
   }
 
-  restore(key) {
-    return this.exclusive(key, () => {
-      this.store.read(key);
-      const restored = this.store.restore(key);
+  async restore(key) {
+    return (await this.exclusive(key, async () => {
+      (await this.store.read(key));
+      const restored = (await this.store.restore(key));
       this.emit("event", { key, type: "restored", ...restored, at: new Date().toISOString() });
       return restored;
-    });
+    }));
   }
 
-  deleteSession(key, input) {
-    return this.exclusive(key, async () => {
+  async deleteSession(key, input) {
+    return (await this.exclusive(key, async () => {
       if (
         !input || typeof input !== "object" || Array.isArray(input) ||
         Object.keys(input).some((field) => !["confirm", "force", "confirmBranch"].includes(field)) ||
@@ -621,37 +658,43 @@ class SessionManager extends EventEmitter {
         (input.confirmBranch !== undefined && typeof input.confirmBranch !== "string") ||
         input.confirm !== true
       ) throw new Error("请明确确认永久删除会话。");
-      const state = this.store.read(key);
+      const state = (await this.store.read(key));
       const reason = this.git.activeReason(key);
       if (reason) throw new Error(reason.replace("删除 Worktree", "删除会话"));
       this.store.claim(key);
-      // Completion can still be saving canonical history after turnId clears.
-      // Keep the operation lock until all old writes settle before removing data.
-      await this.events.settle(key);
-      this.assertOpen();
-      if (input.force) await this.git.forceRemove(key, input.confirmBranch);
-      await this.events.settle(key);
-      const afterCleanup = this.git.activeReason(key);
-      if (afterCleanup) throw new Error(afterCleanup);
-      const deletion = this.store.readWorktreeDeletion(key);
-      if (state.worktree?.path && deletion.status !== "deleted")
-        throw new Error("请先删除 Worktree 与本地分支，避免遗留无法管理的代码目录。");
-      this.store.deleteRun(key);
-      this.sessions.delete(key);
-      this.emit("event", { key, type: "deleted", at: new Date().toISOString() });
-      return { deleted: true };
-    });
+      const runtime = this.sessions.get(key);
+      // Stop accepting late notifications before waiting for existing writes.
+      if (runtime) runtime.deleting = true;
+      try {
+        await this.events.settle(key);
+        await runtime?.operation;
+        this.assertOpen();
+        if (input.force) await this.git.forceRemove(key, input.confirmBranch);
+        await this.events.settle(key);
+        const afterCleanup = this.git.activeReason(key);
+        if (afterCleanup) throw new Error(afterCleanup);
+        const deletion = (await this.store.readWorktreeDeletion(key));
+        if (state.worktree?.path && deletion.status !== "deleted")
+          throw new Error("请先删除 Worktree 与本地分支，避免遗留无法管理的代码目录。");
+        (await this.store.deleteRun(key));
+        this.sessions.delete(key);
+        this.emit("event", { key, type: "deleted", at: new Date().toISOString() });
+        return { deleted: true };
+      } finally {
+        if (runtime) runtime.deleting = false;
+      }
+    }));
   }
 
-  updateExecutionSettings(key, input) {
-    return this.exclusive(key, () => {
-      this.assertWorktreeRetained(key);
-      return this.settings.update(key, input);
-    });
+  async updateExecutionSettings(key, input) {
+    return (await this.exclusive(key, async () => {
+      (await this.assertWorktreeRetained(key));
+      return (await this.settings.update(key, input));
+    }));
   }
 
-  assertWorktreeRetained(key) {
-    const deletion = this.store.readWorktreeDeletion(key);
+  async assertWorktreeRetained(key) {
+    const deletion = (await this.store.readWorktreeDeletion(key));
     if (deletion.worktreeRemoved || deletion.status === "deleted")
       throw new Error("Worktree 已删除，此会话仅供查看。");
     if (deletion.status === "deleting")
@@ -662,14 +705,33 @@ class SessionManager extends EventEmitter {
     if (this.closing) throw new Error("会话服务正在关闭，不能继续操作。");
   }
 
-  refreshGitCredentials() {
+  async refreshGitCredentials() {
     this.assertOpen();
+    if (this.credentialRefresh) return this.credentialRefresh;
     if (this.operations.size || this.startingRequests ||
       [...this.sessions.values()].some(runtime =>
         runtime.pipelineActive || runtime.turnId || runtime.requests.size ||
         ["preparing", "initializing", "starting", "running"].includes(runtime.status),
       )) return;
-    this.client.refreshGitCredentials?.();
+    const pending = Promise.resolve().then(() => this.agent.refreshGitCredentials());
+    this.credentialRefresh = pending;
+    try { await pending; }
+    finally { if (this.credentialRefresh === pending) this.credentialRefresh = null; }
+  }
+
+  async revokeAccess(key) {
+    for (const runtime of this.sessions.values()) {
+      if (key && runtime.key !== key) continue;
+      runtime.prepareAbort?.abort();
+      if (runtime.connected && runtime.turnId && runtime.revocationTurn !== runtime.turnId) {
+        const turnId = runtime.turnId;
+        try {
+          await this.agent.interruptTurn({ sessionId: runtime.sessionId, turnId }, 3000);
+          runtime.revocationTurn = turnId;
+          await this.publish(runtime, { type: "notice", text: "项目权限已变更，已请求停止本轮，等待执行器确认。" });
+        } catch (error) { this.events.fail(runtime, error); }
+      }
+    }
   }
 
   close() {
@@ -681,22 +743,29 @@ class SessionManager extends EventEmitter {
   }
 
   async shutdown() {
+    await this.credentialRefresh?.catch(() => {});
     for (const runtime of this.sessions.values()) {
       runtime.prepareAbort?.abort();
       if (runtime.connected && runtime.turnId) {
         try {
-          await this.client.request(
-            "turn/interrupt",
-            { threadId: runtime.sessionId, turnId: runtime.turnId },
+          await this.agent.interruptTurn(
+            { sessionId: runtime.sessionId, turnId: runtime.turnId },
             3000,
           );
         } catch {
           /* Preserve the session for recovery. */
         }
       }
+      // A completion may be waiting for an onStarted callback in the event
+      // queue. Reject the pipeline before disconnect queues behind it.
+      clearTimeout(runtime.initial?.timer);
+      runtime.initial?.reject(new Error("会话服务正在关闭。"));
+      runtime.initial = null;
     }
-    await this.client.close();
-    for (const runtime of this.sessions.values()) this.events.flushHistory(runtime.key);
+    await this.agent.close();
+    await Promise.allSettled([...this.starts]);
+    await this.events.drain();
+    for (const runtime of this.sessions.values()) (await this.events.flushHistory(runtime.key));
     await Promise.allSettled(
       [
         ...this.events.pendingCallbacks,

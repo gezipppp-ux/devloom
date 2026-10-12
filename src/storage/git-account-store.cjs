@@ -3,152 +3,82 @@ const { encodeSecret, decodeSecret } = require("./database-secrets.cjs");
 const { accountError } = require("../domain/account.cjs");
 
 class GitAccountStore {
-  constructor(database) {
-    this.db = database.handle;
-    this.key = database.encryptionKey;
-  }
-  decode(row) {
+  constructor(database) { this.database = database; this.key = database.encryptionKey; }
+
+  async decode(row) {
     if (!row) throw accountError("Git 账号不存在。", 404);
-    return {
-      id: row.id,
-      name: row.name,
-      authType: row.auth_type,
-      remoteUrl: row.remote_url,
-      revision: row.revision,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      ...decodeSecret(row.credentials, this.key),
-    };
+    return { id: row.id, name: row.name, authType: row.authType, remoteUrl: row.remoteUrl, host: row.host, authorName: row.authorName, authorEmail: row.authorEmail, revision: row.revision,
+      createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), ...decodeSecret(row.credentials, this.key) };
   }
-  list(userId) {
-    return this.db
-      .prepare(
-        "SELECT * FROM user_git_accounts WHERE user_id=? ORDER BY name,id",
-      )
-      .all(userId)
-      .map((row) => this.decode(row));
+
+  async list(userId) {
+    return (await Promise.all((await this.database.client.gitAccount.findMany({ where: { userId }, orderBy: [{ name: "asc" }, { id: "asc" }] }))
+      .map(async (row) => (await this.decode(row)))));
   }
-  read(id, userId) {
-    return this.decode(
-      this.db
-        .prepare("SELECT * FROM user_git_accounts WHERE id=? AND user_id=?")
-        .get(id, userId),
-    );
+
+  async read(id, userId) {
+    return (await this.decode(await this.database.client.gitAccount.findFirst({ where: { id, userId } })));
   }
-  isReferenced(id, userId) {
-    return this.db.prepare(
-      "SELECT s.data FROM workspace_settings s JOIN workspaces w ON w.id=s.workspace_id WHERE w.owner_user_id=?",
-    ).all(userId).some(({ data }) => JSON.parse(data).codex?.git_account_id === id);
+
+  async isReferenced(id, userId) {
+    if (await this.database.client.developmentSpace.count({ where: { gitAccountId: id, userId } })) return true;
+    return await this.database.client.workspaceSetting.count({ where: {
+      workspace: { ownerUserId: userId }, data: { path: ["execution", "gitAccountId"], equals: id },
+    } }) > 0;
   }
-  save(userId, value, previous, keyDraftId) {
-    return this.db
-      .transaction(() => {
-        const id = previous?.id || randomUUID(),
-          now = new Date().toISOString();
-        const credentials =
-          value.authType === "http"
-            ? { username: value.username, password: value.password }
-            : {
-                sshPrivateKey: value.sshPrivateKey,
-                publicKey: value.publicKey,
-              };
-        try {
-          if (previous) {
-            if (previous.authType !== value.authType && this.isReferenced(id, userId))
-              throw accountError("该 Git 账号仍被工作区使用，不能切换认证方式；请新建另一种认证方式的账号。", 409);
-            const updated = this.db
-              .prepare(
-                "UPDATE user_git_accounts SET name=?,auth_type=?,remote_url=?,credentials=?,revision=revision+1,updated_at=? WHERE id=? AND user_id=? AND revision=?",
-              )
-              .run(
-                value.name,
-                value.authType,
-                value.remoteUrl,
-                encodeSecret(credentials, this.key),
-                now,
-                id,
-                userId,
-                previous.revision,
-              );
-            if (!updated.changes)
-              throw accountError(
-                "Git 账号在检测期间已更改，请刷新后重试。",
-                409,
-              );
-          } else
-            this.db
-              .prepare(
-                "INSERT INTO user_git_accounts(id,user_id,name,auth_type,remote_url,credentials,revision,created_at,updated_at) VALUES (?,?,?,?,?,?,1,?,?)",
-              )
-              .run(
-                id,
-                userId,
-                value.name,
-                value.authType,
-                value.remoteUrl,
-                encodeSecret(credentials, this.key),
-                now,
-                now,
-              );
-          if (
-            keyDraftId &&
-            !this.db
-              .prepare(
-                "DELETE FROM git_key_drafts WHERE id=? AND user_id=? AND expires_at>?",
-              )
-              .run(keyDraftId, userId, Date.now()).changes
-          )
-            throw accountError("SSH 密钥草稿已失效，请重新生成。", 409);
-        } catch (error) {
-          if (error.code === "SQLITE_CONSTRAINT_UNIQUE")
-            throw accountError("同名 Git 账号已存在。", 409);
-          throw error;
+
+  async save(userId, value, previous, keyDraftId) {
+    try {
+      return await this.database.transaction(async () => {
+        const id = previous?.id || randomUUID();
+        const credentials = value.authType === "http" ? { username: value.username, password: value.password }
+          : { sshPrivateKey: value.sshPrivateKey, publicKey: value.publicKey };
+        const data = { name: value.name, authType: value.authType, remoteUrl: "", host: value.host || "", authorName: value.authorName || "", authorEmail: value.authorEmail || "",
+          credentials: encodeSecret(credentials, this.key) };
+        if (previous) {
+          if ((previous.authType !== value.authType || previous.host !== value.host) && await this.isReferenced(id, userId))
+            throw accountError("该 Git 账号仍被开发空间使用，不能切换主机或认证方式；请新建其他账号。", 409);
+          const updated = await this.database.client.gitAccount.updateMany({ where: { id, userId, revision: previous.revision },
+            data: { ...data, revision: { increment: 1 } } });
+          if (!updated.count) throw accountError("Git 账号在检测期间已更改，请刷新后重试。", 409);
+        } else {
+          await this.database.client.gitAccount.create({ data: { id, userId, ...data } });
         }
-        return this.read(id, userId);
-      })
-      .immediate();
+        if (keyDraftId && !(await this.database.client.gitKeyDraft.deleteMany({
+          where: { id: keyDraftId, userId, expiresAt: { gt: new Date() } },
+        })).count) throw accountError("SSH 密钥草稿已失效，请重新生成。", 409);
+        return (await this.read(id, userId));
+      });
+    } catch (error) {
+      if (error.code === "P2002") throw accountError("同名 Git 账号已存在。", 409);
+      if (error.code === "P2034") throw accountError("Git 账号数据已变更，请刷新后重试。", 409);
+      throw error;
+    }
   }
-  createKeyDraft(userId, keyPair) {
-    return this.db
-      .transaction(() => {
-        this.db
-          .prepare(
-            "DELETE FROM git_key_drafts WHERE expires_at<=? OR user_id=?",
-          )
-          .run(Date.now(), userId);
-        const id = randomUUID(),
-          expiresAt = Date.now() + 86400000;
-        this.db
-          .prepare(
-            "INSERT INTO git_key_drafts(id,user_id,credentials,expires_at) VALUES (?,?,?,?)",
-          )
-          .run(id, userId, encodeSecret(keyPair, this.key), expiresAt);
-        return { id, publicKey: keyPair.publicKey, expiresAt };
-      })
-      .immediate();
+
+  async createKeyDraft(userId, keyPair) {
+    return this.database.transaction(async () => {
+      await this.database.client.gitKeyDraft.deleteMany({ where: { OR: [{ userId }, { expiresAt: { lte: new Date() } }] } });
+      const id = randomUUID();
+      const expiresAt = Date.now() + 86400000;
+      await this.database.client.gitKeyDraft.create({ data: { id, userId, credentials: encodeSecret(keyPair, this.key), expiresAt: new Date(expiresAt) } });
+      return { id, publicKey: keyPair.publicKey, expiresAt };
+    });
   }
-  keyDraft(id, userId) {
-    const row = this.db
-      .prepare(
-        "SELECT credentials FROM git_key_drafts WHERE id=? AND user_id=? AND expires_at>?",
-      )
-      .get(id, userId, Date.now());
+
+  async keyDraft(id, userId) {
+    const row = await this.database.client.gitKeyDraft.findFirst({ where: { id, userId, expiresAt: { gt: new Date() } } });
     if (!row) throw accountError("SSH 密钥草稿已失效，请重新生成。", 404);
     return decodeSecret(row.credentials, this.key);
   }
-  remove(id, userId) {
-    return this.db
-      .transaction(() => {
-        if (this.isReferenced(id, userId))
-          throw accountError("该 Git 账号仍被工作区使用，不能删除。", 409);
-        if (
-          !this.db
-            .prepare("DELETE FROM user_git_accounts WHERE id=? AND user_id=?")
-            .run(id, userId).changes
-        )
-          throw accountError("Git 账号不存在。", 404);
-      })
-      .immediate();
+
+  async remove(id, userId) {
+    return this.database.transaction(async () => {
+      if (await this.isReferenced(id, userId)) throw accountError("该 Git 账号仍被工作区使用，不能删除。", 409);
+      if (!(await this.database.client.gitAccount.deleteMany({ where: { id, userId } })).count)
+        throw accountError("Git 账号不存在。", 404);
+    });
   }
 }
+
 module.exports = { GitAccountStore };

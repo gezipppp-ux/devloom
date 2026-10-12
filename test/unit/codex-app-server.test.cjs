@@ -170,12 +170,12 @@ test('reconnect and idle revision changes reload credentials and dispose only st
   t.after(() => client.close());
   await client.connect();
   resources.at(-1).child = client.child;
-  assert.equal(client.refreshGitCredentials(), false);
+  assert.equal((await client.refreshGitCredentials()), false);
   revision = 2;
   const pending = client.request('probe', { delay: 30 });
-  assert.equal(client.refreshGitCredentials(), false, 'never rotate during an RPC');
+  assert.equal((await client.refreshGitCredentials()), false, 'never rotate during an RPC');
   assert.equal(await pending, '1');
-  assert.equal(client.refreshGitCredentials(), true);
+  assert.equal((await client.refreshGitCredentials()), true);
   await Promise.all([...client.stopping]);
   assert.equal(resources[0].disposed, true);
   await client.connect();

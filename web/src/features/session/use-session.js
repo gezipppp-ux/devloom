@@ -24,13 +24,13 @@ export function useSession({
   const running = computed(() => Boolean(session.value?.turnId));
   const initializing = computed(() => session.value?.status === "initializing");
   const waitingForInput = computed(() => session.value?.requests?.some((request) =>
-    request.method !== 'item/tool/requestUserInput' || request.params?.isBlocking !== false));
+    request.kind !== 'user-input' || request.blocking !== false));
   const executionSettings = computed(
     () =>
       session.value?.executionSettings || {
-        model: session.value?.codex?.model || "",
-        reasoningEffort: session.value?.codex?.reasoningEffort || "",
-        permissionMode: "ask",
+        model: "",
+        reasoningEffort: "",
+        permissionMode: "",
       },
   );
   const canEditSettings = computed(() =>
@@ -53,6 +53,7 @@ export function useSession({
       !busy.value &&
       !settingsBusy.value &&
       online.value &&
+      session.value.agent?.capabilities?.[running.value ? "steer" : "resume"] === true &&
       !waitingForInput.value,
   );
 
@@ -83,6 +84,7 @@ export function useSession({
       "title",
       "requirement",
       "requirementCount",
+      "agent",
     ])
       if (name in event) fields[name] = event[name];
     if (event.at) fields.lastActivity = event.at;
@@ -234,7 +236,7 @@ export function useSession({
   }
 
   async function older() {
-    if (busy.value || !session.value?.nextCursor) return;
+    if (busy.value || !session.value?.nextCursor || session.value.agent?.capabilities?.history !== true) return;
     expandedHistory = true;
     busy.value = true;
     const key = active.value;

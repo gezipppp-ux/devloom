@@ -1,9 +1,10 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
-import catalog from "../../../../shared/codex-permissions.json";
+import catalog from "../../../../shared/agent-permissions.json";
 import { api } from "./api.js";
 
 export function usePermissionModes(request = api) {
   const discovered = ref(null),
+    agent = ref(null),
     loading = ref(false),
     error = ref(""),
     errorHint = ref("");
@@ -13,11 +14,13 @@ export function usePermissionModes(request = api) {
       const result = discovered.value?.find((mode) => mode.id === entry.id);
       return {
         ...entry,
-        available: result ? result.available === true : entry.id !== "auto",
+        label: result?.label || entry.label,
+        description: result?.description || entry.description,
+        available: !loading.value && result?.available === true,
         reason:
           result?.reason ||
-          (entry.id === "auto" && !result
-            ? "尚未确认服务是否支持帮我批准，请刷新权限选项。"
+          (!result
+            ? "尚未确认执行权限是否可用，请刷新权限选项。"
             : ""),
       };
     }),
@@ -45,10 +48,14 @@ export function usePermissionModes(request = api) {
         )
       )
         throw new Error("权限选项响应格式无效");
-      if (current === revision) discovered.value = result.permissionModes;
+      if (current === revision) {
+        discovered.value = result.permissionModes;
+        agent.value = result.agent || null;
+      }
     } catch (e) {
       if (current === revision) {
         discovered.value = null;
+        agent.value = null;
         error.value =
           e.status && !e.message.includes(`HTTP ${e.status}`)
             ? `HTTP ${e.status}：${e.message}`
@@ -68,5 +75,6 @@ export function usePermissionModes(request = api) {
   onUnmounted(() => {
     revision++;
   });
-  return { permissionModes, loading, error, errorHint, refresh };
+  const isAvailable = (id) => permissionModes.value.some((mode) => mode.id === id && mode.available);
+  return { permissionModes, agent, isAvailable, loading, error, errorHint, refresh };
 }

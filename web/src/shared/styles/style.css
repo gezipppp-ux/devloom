@@ -5,7 +5,7 @@
 .authenticated-app { --account-bar-height: 48px; min-height: 100dvh; }
 .account-bar { min-height: var(--account-bar-height); display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 3px 20px 4px; border-bottom: 1px solid var(--line); background: var(--sidebar); }
 .account-identity { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.account-bar nav { display: flex; gap: 8px; flex-shrink: 0; }
+.account-bar nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; min-width: 0; }
 .account-bar button { background: transparent; border-color: transparent; padding: 4px 10px; }
 .account-bar button.active { background: var(--soft); border-color: var(--line); }
 .authenticated-app > .workspace { height: calc(100dvh - var(--account-bar-height)); }
@@ -24,10 +24,16 @@
 .account-list-identity { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
 .account-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .account-reset-form { display: grid; gap: 8px; flex-basis: 100%; }
+@media (max-width: 900px) {
+  .authenticated-app { --account-bar-height: 112px; }
+  .account-bar { flex-wrap: wrap; gap: 8px; }
+  .account-bar nav { width: 100%; justify-content: flex-start; }
+  .account-bar button { flex: 0 0 auto; }
+}
 @media (max-width: 600px) {
   .authenticated-app { --account-bar-height: 104px; }
   .account-bar { flex-wrap: wrap; gap: 4px; padding: 8px 16px; }
-  .account-bar nav { width: 100%; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; }
+  .account-bar nav { width: 100%; display: grid; grid-auto-flow: row; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
   .account-bar button { padding: 4px; font-size: 12px; flex-direction: column; gap: 2px; white-space: nowrap; }
   .authenticated-app > .workspace { height: auto; min-height: calc(100dvh - var(--account-bar-height)); }
   .authentication-page { padding: 16px; }

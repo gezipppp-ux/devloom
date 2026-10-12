@@ -1,4 +1,6 @@
+const { assertAgentIdentity, assertCapability } = require("../domain/agent-contract.cjs");
 const { initializationItem } = require("../domain/session-item.cjs");
+const { presentError } = require("./error-presenter.cjs");
 
 const { SessionPresenter } = require("./session-presenter.cjs");
 
@@ -6,72 +8,74 @@ const { SessionPresenter } = require("./session-presenter.cjs");
 class SessionViews {
   constructor({
     store,
-    client,
+    agent,
     sessions,
     settings,
     worktreeReason,
     apiPrefix,
     assertOpen,
   }) {
+    /** @type {import('../storage/run-store.cjs').RunStore} */
     this.store = store;
-    this.client = client;
+    this.agent = agent;
     this.sessions = sessions;
     this.worktreeReason = worktreeReason;
     this.assertOpen = assertOpen;
-    this.presenter = new SessionPresenter({ store, settings, apiPrefix });
+    this.presenter = new SessionPresenter({ store, settings, apiPrefix, agent });
   }
 
   async history(key, cursor) {
     this.assertOpen();
-    const state = this.store.read(key);
+    const state = (await this.store.read(key));
     if (!state.session_id) return { items: [], nextCursor: null };
-    if (this.store.database) return this.store.savedHistory(key, cursor);
-    await this.client.connect();
+    if (this.store.database) return (await this.store.savedHistory(key, cursor));
+    assertAgentIdentity(this.agent, state);
+    assertCapability(this.agent, "history");
+    await this.agent.connect();
     this.assertOpen();
-    const result = await this.client.request("thread/items/list", {
-      threadId: state.session_id,
+    const result = await this.agent.listHistory({
+      sessionId: state.session_id,
       limit: 50,
-      sortDirection: "desc",
       ...(cursor ? { cursor } : {}),
     });
     return {
-      items: result.data
-        .map((entry) => this.presenter.item(key, entry.item, entry.turnId))
-        .reverse(),
+      items: await Promise.all(result.items.map(item => this.presenter.item(key, item, item.turnId))),
       nextCursor: result.nextCursor,
     };
   }
 
   async synchronizeHistory(key) {
     if (!this.store.database) return;
-    const state = this.store.read(key);
+    const state = (await this.store.read(key));
     if (!state.session_id) return;
+    assertAgentIdentity(this.agent, state);
+    assertCapability(this.agent, "history");
     let cursor;
     const startedAt = new Date().toISOString();
     const seen = new Set();
     const pages = [];
     do {
-      const result = await this.client.request("thread/items/list", {
-        threadId: state.session_id, limit: 50, sortDirection: "desc", ...(cursor ? { cursor } : {}),
+      const result = await this.agent.listHistory({
+        sessionId: state.session_id, limit: 50, ...(cursor ? { cursor } : {}),
       });
-      pages.push(result.data || []);
+      pages.push(result.items || []);
       cursor = result.nextCursor;
       if (cursor && seen.has(cursor)) throw new Error("会话历史分页重复，补齐已停止。");
       if (cursor) seen.add(cursor);
     } while (cursor);
     const items = [];
-    for (const page of pages.reverse()) for (const entry of [...page].reverse()) {
-      this.store.recordNotification(key, { method: "history/item", params: entry });
-      items.push(this.presenter.item(key, entry.item, entry.turnId));
+    for (const page of pages.reverse()) for (const item of page) {
+      (await this.store.recordNotification(key, { type: "history-item", item }));
+      items.push((await this.presenter.item(key, item, item.turnId)));
     }
-    this.store.reconcileHistory(key, items, startedAt);
+    (await this.store.reconcileHistory(key, items, startedAt));
   }
 
   async view(key) {
     const runtime = this.sessions.get(key);
     let state;
     try {
-      state = this.store.read(key);
+      state = (await this.store.read(key));
     } catch (error) {
       if (error.code !== "ENOENT" || !runtime) throw error;
       return {
@@ -90,8 +94,8 @@ class SessionViews {
     try {
       history = await this.history(key);
     } catch (error) {
-      history = { items: this.store.legacyHistory(key), nextCursor: null };
-      warning = error.message;
+      history = { items: this.store.database ? (await this.store.savedHistory(key)).items : [], nextCursor: null };
+      warning = presentError(error).message;
     }
     const items = new Map(history.items.map((item) => [item.id, item]));
     const initializationItems = new Map(
@@ -104,7 +108,7 @@ class SessionViews {
     }
     if (runtime) {
       const earlierIds = this.store.database
-        ? this.store.historyItemIdsBefore(key, [...runtime.items.keys()], history.items[0]?.id)
+        ? (await this.store.historyItemIdsBefore(key, [...runtime.items.keys()], history.items[0]?.id))
         : new Set();
       // File adapters have no saved ordering index. An overlapping live item
       // anchors the page; keep unanchored items when their age is unknown.
@@ -118,7 +122,7 @@ class SessionViews {
         else if (items.has(id) || (!beforePage && !earlierIds.has(id))) items.set(id, item);
       }
     }
-    const deletion = this.store.readWorktreeDeletion(key);
+    const deletion = (await this.store.readWorktreeDeletion(key));
     let readOnlyReason = deletion.worktreeRemoved || deletion.status === "deleted"
       ? "Worktree 已删除，此会话仅供查看。"
       : deletion.status === "deleting"
@@ -139,9 +143,9 @@ class SessionViews {
     )
       readOnlyReason ||= "正在准备会话，请稍候";
     if (!state.session_id)
-      readOnlyReason ||= "尚未创建 Codex session，请查看准备或初始化记录。";
+      readOnlyReason ||= "尚未创建执行器会话，请查看准备或初始化记录。";
     return {
-      ...this.presenter.summary(key, state),
+      ...(await this.presenter.summary(key, state)),
       status:
         runtime?.status ||
         (["running", "initializing"].includes(state.execution.status)
@@ -163,31 +167,31 @@ class SessionViews {
       ],
       nextCursor: history.nextCursor,
       requests: [...(runtime?.requests.values() || [])],
-      images: this.presenter.images(key),
-      requirement: this.presenter.requirement(key, state),
+      images: (await this.presenter.images(key)),
+      requirement: (await this.presenter.requirement(key, state)),
     };
   }
 
-  list({ archived = false } = {}) {
+  async list({ archived = false } = {}) {
     const saved = new Map(
-      this.store.list().flatMap(({ key, state }) => {
+      (await Promise.all((await this.store.list()).flatMap(async ({ key, state }) => {
         try {
-          if (this.store.isArchived(key) !== archived) return [];
-          return [[key, this.presenter.summary(key, state)]];
+          if ((await this.store.isArchived(key)) !== archived) return [];
+          return [[key, (await this.presenter.summary(key, state))]];
         } catch {
           return [];
         }
-      }),
+      }))).flat(),
     );
     for (const runtime of this.sessions.values()) {
-      if (this.store.isArchived(runtime.key) !== archived) continue;
+      if ((await this.store.isArchived(runtime.key)) !== archived) continue;
       saved.set(runtime.key, {
         ...(saved.get(runtime.key) || {
           key: runtime.key,
           title: "正在准备需求",
-          metadata: this.store.readTaskMetadata(runtime.key),
-          sources: this.store.requirements.read(runtime.key).sources || [],
-          requirementCount: this.store.requirements.read(runtime.key).sources?.length || 1,
+          metadata: (await this.store.readTaskMetadata(runtime.key)),
+          sources: (await this.store.requirements.read(runtime.key)).sources || [],
+          requirementCount: (await this.store.requirements.read(runtime.key)).sources?.length || 1,
         }),
         status: runtime.status,
         sessionId: runtime.sessionId,

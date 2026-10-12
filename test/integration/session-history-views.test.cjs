@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const { test } = require("node:test");
 const { SessionViews } = require("../../src/application/session-views.cjs");
-const { initializeDatabase } = require("../../src/storage/database-lifecycle.cjs");
+const { initializeTestDatabase } = require("../support/database.cjs");
 const { RunStore } = require("../../src/storage/run-store.cjs");
 const { writeConfig } = require("../../src/storage/json-files.cjs");
 const { initializationItem } = require("../../src/domain/session-item.cjs");
@@ -12,27 +12,29 @@ async function fixture(t, { persisted = true, sessionId = "saved-thread" } = {})
   let database;
   t.after(() => database?.close());
   const root = temporary(t);
-  if (persisted) database = await initializeDatabase(root);
+  if (persisted) database = await initializeTestDatabase(t, root);
   const store = new RunStore(path.join(root, "runs"));
   const key = "1-2";
   const initialization = { command: "fixture setup", status: "completed", output: "saved setup" };
   const state = {
+    agent: { provider: "codex" },
     workitem: { id: "2", workspace_id: "1", title: "history fixture" },
     session_id: sessionId,
     execution: { status: "completed" },
     initialization: { commands: [initialization] },
   };
-  writeConfig(path.join(store.dir(key), "run.json"), state);
+  (await writeConfig(path.join(store.dir(key), "run.json"), state));
   const runtime = { key, status: "running", items: new Map(), requests: new Map() };
-  const client = {
+  const agent = {
+    id: "codex", label: "Codex", capabilities: { history: true },
     async connect() { throw new Error("History views must remain readable offline"); },
-    async request() { throw new Error("Unexpected Codex request"); },
+    async listHistory() { throw new Error("Unexpected Codex request"); },
   };
   const views = new SessionViews({
-    store, client, sessions: new Map([[key, runtime]]),
+    store, agent, sessions: new Map([[key, runtime]]),
     worktreeReason: () => null, assertOpen() {},
   });
-  return { store, key, runtime, views, client, initialization };
+  return { store, key, runtime, views, agent, initialization };
 }
 
 function messages(count, prefix = "message") {
@@ -46,12 +48,12 @@ function ids(items) {
   return items.map((item) => item.id);
 }
 
-test("SQLite views retain page order, live replacements, unsaved tails and initialization without leaking earlier runtime items", async (t) => {
+test("PostgreSQL views retain page order, live replacements, unsaved tails and initialization without leaking earlier runtime items", async (t) => {
   const { store, key, runtime, views, initialization } = await fixture(t);
   const saved = messages(80);
   const init = initializationItem(initialization, 0);
-  store.saveHistoryItem(key, init);
-  for (const item of saved) store.saveHistoryItem(key, item);
+  (await store.saveHistoryItem(key, init));
+  for (const item of saved) (await store.saveHistoryItem(key, item));
   runtime.items = new Map([init, ...saved].map((item) => [item.id, item]));
   runtime.items.set(init.id, { ...init, output: "latest setup output" });
   const replacement = { ...saved.at(-1), text: "latest live delta", status: "inProgress" };
@@ -59,9 +61,9 @@ test("SQLite views retain page order, live replacements, unsaved tails and initi
   const pending = { id: "pending-delta", type: "agentMessage", text: "not flushed", status: "inProgress" };
   runtime.items.set(pending.id, pending);
   // A matching ID in another task must not classify this unsaved item as old.
-  store.saveHistoryItem("1-3", pending);
-  store.saveHistoryItem("1-3", saved[30]);
-  const page = store.savedHistory(key);
+  (await store.saveHistoryItem("1-3", pending));
+  (await store.saveHistoryItem("1-3", saved[30]));
+  const page = (await store.savedHistory(key));
   const view = await views.view(key);
   assert.deepEqual(ids(view.items), [init.id, ...ids(saved.slice(-50)), pending.id]);
   assert.equal(view.items[0].output, "latest setup output");
@@ -71,20 +73,20 @@ test("SQLite views retain page order, live replacements, unsaved tails and initi
   const older = await views.history(key, view.nextCursor);
   assert.deepEqual(ids(older.items), [init.id, ...ids(saved.slice(0, -50))]);
   assert.equal(older.nextCursor, null);
-  assert.equal(store.savedHistory(key).items.at(-1).text, saved.at(-1).text);
+  assert.equal((await store.savedHistory(key)).items.at(-1).text, saved.at(-1).text);
 });
 
 test("canonical backfill excludes retained runtime items even when none overlap the latest page", async (t) => {
   const { store, key, runtime, views } = await fixture(t);
   const retained = messages(12, "retained");
   for (const item of retained) {
-    store.saveHistoryItem(key, item);
+    (await store.saveHistoryItem(key, item));
     runtime.items.set(item.id, item);
   }
   const recovered = messages(120, "recovered");
   const canonical = [...retained.slice(0, 6), ...recovered.slice(0, 60),
     ...retained.slice(6), ...recovered.slice(60)];
-  store.reconcileHistory(key, canonical, new Date().toISOString());
+  (await store.reconcileHistory(key, canonical, new Date().toISOString()));
   const view = await views.view(key);
   assert.deepEqual(ids(view.items).slice(1), ids(canonical.slice(-50)));
   assert.ok(view.nextCursor);
@@ -97,7 +99,7 @@ test("items saved after the first-page snapshot stay visible alongside a buffere
   const { store, key, runtime, views } = await fixture(t);
   const saved = messages(60);
   for (const item of saved) {
-    store.saveHistoryItem(key, item);
+    (await store.saveHistoryItem(key, item));
     runtime.items.set(item.id, item);
   }
   const latest = { id: "just-saved", type: "agentMessage", text: "arrived during view" };
@@ -105,7 +107,7 @@ test("items saved after the first-page snapshot stay visible alongside a buffere
   const history = views.history.bind(views);
   views.history = async (...args) => {
     const snapshot = await history(...args);
-    store.saveHistoryItem(key, latest);
+    (await store.saveHistoryItem(key, latest));
     runtime.items.set(latest.id, latest);
     runtime.items.set(buffered.id, buffered);
     return snapshot;
@@ -115,7 +117,7 @@ test("items saved after the first-page snapshot stay visible alongside a buffere
   assert.ok(view.nextCursor);
 });
 
-test("empty SQLite pages preserve buffered items and runtime initialization", async (t) => {
+test("empty PostgreSQL pages preserve buffered items and runtime initialization", async (t) => {
   const { store, runtime, views, key, initialization } = await fixture(t);
   const init = { ...initializationItem(initialization, 0), output: "live initialization" };
   const pending = { id: "first-delta", type: "agentMessage", text: "pending write" };
@@ -125,7 +127,7 @@ test("empty SQLite pages preserve buffered items and runtime initialization", as
   assert.deepEqual(ids(view.items), [init.id, pending.id]);
   assert.equal(view.items[0].output, init.output);
   assert.equal(view.nextCursor, null);
-  store.saveHistoryItem(key, initializationItem(initialization, 0));
+  (await store.saveHistoryItem(key, initializationItem(initialization, 0)));
   const savedInitialization = await views.view(key);
   assert.deepEqual(savedInitialization.items, [init, pending]);
 });
@@ -137,17 +139,16 @@ test("initialization remains visible before a Codex session exists", async (t) =
   const view = await views.view(key);
   assert.deepEqual(view.items, [init]);
   assert.equal(view.nextCursor, null);
-  assert.match(view.readOnlyReason, /尚未创建 Codex session/);
+  assert.match(view.readOnlyReason, /尚未创建执行器会话/);
 });
 
 test("file-adapter pages use live overlap order while preserving unanchored live items", async (t) => {
-  const { runtime, views, key, client } = await fixture(t, { persisted: false });
+  const { runtime, views, key, agent } = await fixture(t, { persisted: false });
   const saved = messages(60);
   runtime.items = new Map(saved.map((item) => [item.id, item]));
-  client.connect = async () => {};
-  client.request = async (_method, { cursor }) => ({
-    data: (cursor ? saved.slice(0, 10) : saved.slice(-50)).toReversed()
-      .map((item) => ({ item, turnId: item.turnId })),
+  agent.connect = async () => {};
+  agent.listHistory = async ({ cursor }) => ({
+    items: cursor ? saved.slice(0, 10) : saved.slice(-50),
     nextCursor: cursor ? null : "older-page",
   });
   let view = await views.view(key);

@@ -14,7 +14,7 @@ function headers(session, referer = session.referer) {
     cookie: session.cookie_header,
     origin: 'https://www.tapd.cn',
     referer,
-    'user-agent': 'tapd-codex-runner/0.1',
+    'user-agent': 'web-coding/0.1',
   };
 }
 

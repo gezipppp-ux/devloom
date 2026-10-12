@@ -7,10 +7,11 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
   const key = "1-98";
   const original = "【生产】套餐本月已用积分在完成AI生成任务后，没有实时刷新已用积分，需要人工手动刷新";
   const title = "【SIT】模型网关：点击切换自定义供应商时，保留配置与会话上下文，支持长名称完整展示。".repeat(3);
-  saveState(path.join(manager.store.dir(key), "run.json"), {
+  (await saveState(path.join(manager.store.dir(key), "run.json"), {
     workitem: { id: "98", workspace_id: "1", title: original },
+    agent: { provider: "codex" },
     session_id: "archive-fixture", execution: { status: "completed" },
-  });
+  }));
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const peer = await browser.newPage();
   for (const tab of [page, peer]) tab.on("pageerror", (e) => errors.push(e.message));
@@ -46,7 +47,7 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
     assert.equal(await input.isVisible(), true, "IME confirmation must not save");
     await input.evaluate((el) => el.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, isComposing: true })));
     assert.equal(await input.isVisible(), true, "IME cancellation must keep the title draft");
-    assert.equal(manager.store.readSessionTitle(key, original), original);
+    assert.equal((await manager.store.readSessionTitle(key, original)), original);
     for (const width of [1440, 768, 390, 320]) {
       await page.setViewportSize({ width, height: 1000 });
       await input.scrollIntoViewIfNeeded();
@@ -96,7 +97,7 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
     await confirmation.getByLabel("我确认归档此会话。", { exact: true }).check();
     await confirmation.getByRole("button", { name: "归档会话", exact: true }).click();
     await confirmation.waitFor({ state: "hidden" });
-    assert.equal(manager.store.isArchived(key), true);
+    assert.equal((await manager.store.isArchived(key)), true);
     await page.reload();
     await peer.goto(origin);
     await page.route("**/api/runs?archived=true", (route) => route.fulfill({ status: 503, json: { error: "模拟归档加载失败" } }), { times: 1 });
@@ -121,10 +122,10 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
     await page.route(`**/api/runs/${key}/restore`, (route) => route.fulfill({ status: 400, json: { error: "模拟恢复失败，请重试" } }), { times: 1 });
     await recover.click();
     await dialog.getByText("恢复失败：模拟恢复失败，请重试", { exact: true }).waitFor();
-    assert.equal(manager.store.isArchived(key), true);
+    assert.equal((await manager.store.isArchived(key)), true);
     await recover.click();
     await dialog.getByRole("status").filter({ hasText: "已恢复" }).waitFor();
-    assert.equal(manager.store.isArchived(key), false);
+    assert.equal((await manager.store.isArchived(key)), false);
     await peer.locator(".session-link").filter({ hasText: title }).waitFor();
     await search.fill("");
     await dialog.getByText("暂无已归档会话。", { exact: true }).waitFor();
@@ -151,7 +152,7 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
     await dialog.getByText("暂无已归档会话。", { exact: true }).waitFor();
     releaseSnapshot();
     await page.waitForFunction(() => window.archiveSnapshotApplied);
-    assert.equal(manager.store.isArchived(key), false);
+    assert.equal((await manager.store.isArchived(key)), false);
     assert.equal(await recover.count(), 0);
     await peer.locator(".session-link").filter({ hasText: title }).waitFor();
     await search.fill("");
@@ -160,7 +161,7 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
     assert.equal(await trigger.evaluate((el) => el === document.activeElement), true);
     await page.locator(".session-link").filter({ hasText: title }).click();
     await page.getByRole("heading", { name: title, exact: true }).waitFor();
-    assert.equal(manager.store.read(key).session_id, "archive-fixture");
+    assert.equal((await manager.store.read(key)).session_id, "archive-fixture");
     await manager.archive(key);
     await trigger.click();
     await search.fill("模型网关");
@@ -174,13 +175,13 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
     assert.equal(await dialog.isVisible(), true);
     assert.equal(await search.inputValue(), "模型网关");
     assert.equal(await deleteButton.evaluate((el) => el === document.activeElement), true);
-    assert.equal(manager.store.hasRun(key), true);
+    assert.equal((await manager.store.hasRun(key)), true);
     await deleteButton.click();
     await deletion.getByLabel("我确认永久删除且无法恢复此会话。", { exact: true }).check();
     await deletion.getByRole("button", { name: "永久删除", exact: true }).click();
     await deletion.waitFor({ state: "hidden" });
     await dialog.getByText(`已永久删除「${title}」。`, { exact: true }).waitFor();
-    assert.equal(manager.store.hasRun(key), false);
+    assert.equal((await manager.store.hasRun(key)), false);
     await peer.getByRole("button", { name: `恢复会话：${title}`, exact: true }).waitFor({ state: "hidden" });
   } finally {
     releaseSnapshot?.();

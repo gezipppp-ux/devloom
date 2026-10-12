@@ -4,7 +4,7 @@ const { spawn } = require('node:child_process');
 
 const { validateInitCommands } = require('../domain/init-commands.cjs');
 const { stopProcessTree } = require('../shared/process-tree.cjs');
-const { childEnvironment } = require('../codex/environment.cjs');
+const { childEnvironment } = require('../shared/child-environment.cjs');
 
 async function initializeWorktree({
   commands,
@@ -33,14 +33,14 @@ async function initializeWorktree({
   };
   let logBytes = 0;
   const logFile = path.join(directory, 'initialization.log');
-  const log = (text) => {
+  const log = async (text) => {
     const limit = 5 * 1024 * 1024;
     if (logBytes >= limit) return;
     const chunk = Buffer.from(text).subarray(0, limit - logBytes);
-    appendArtifact(logFile, chunk);
+    (await appendArtifact(logFile, chunk));
     logBytes += chunk.length;
     if (logBytes >= limit)
-      appendArtifact(logFile, '\n[日志已达到 5 MiB 上限]\n');
+      (await appendArtifact(logFile, '\n[日志已达到 5 MiB 上限]\n'));
   };
   try {
     for (const [index, entry] of state.commands.entries()) {
@@ -48,8 +48,8 @@ async function initializeWorktree({
         if (combined.aborted) throw new Error('初始化已停止。');
         entry.status = 'running';
         entry.started_at = new Date().toISOString();
-        log(`\n[${index + 1}/${commands.length}] ${entry.command}\n`);
-        onUpdate(state, index);
+        (await log(`\n[${index + 1}/${commands.length}] ${entry.command}\n`));
+        await onUpdate(structuredClone(state), index);
         await new Promise((resolve, reject) => {
           const env = childEnvironment();
           env.INIT_CWD = cwd;
@@ -65,7 +65,9 @@ async function initializeWorktree({
             windowsHide: true,
             stdio: ['ignore', 'pipe', 'pipe'],
           });
-          let failure, publishTimer;
+          let failure;
+          let writes = Promise.resolve();
+          let lastPublished = 0;
           const stop = (message) => {
             failure ||= new Error(message);
             void stopProcessTree(child);
@@ -79,31 +81,24 @@ async function initializeWorktree({
           combined.addEventListener('abort', interrupted, { once: true });
           if (combined.aborted) interrupted();
           const output = (chunk) => {
-            try {
-              log(chunk);
+            writes = writes.then(async () => {
+              (await log(chunk));
               entry.output = (entry.output + chunk).slice(-20000);
-              if (!publishTimer)
-                publishTimer = setTimeout(() => {
-                  publishTimer = null;
-                  try {
-                    onUpdate(state, index);
-                  } catch (error) {
-                    stop(error.message);
-                  }
-                }, 200);
-            } catch (error) {
-              stop(error.message);
-            }
+              if (Date.now() - lastPublished >= 200) {
+                lastPublished = Date.now();
+                await onUpdate(structuredClone(state), index);
+              }
+            }).catch(error => stop(error.message));
           };
           child.stdout.setEncoding('utf8').on('data', output);
           child.stderr.setEncoding('utf8').on('data', output);
           child.on('error', (error) => {
             failure = error;
           });
-          child.once('close', (code, exitSignal) => {
+          child.once('close', async (code, exitSignal) => {
             clearTimeout(timeout);
-            clearTimeout(publishTimer);
             combined.removeEventListener('abort', interrupted);
+            await writes;
             entry.exit_code = code;
             entry.signal = exitSignal;
             if (failure) reject(failure);
@@ -118,7 +113,7 @@ async function initializeWorktree({
         });
         entry.status = 'completed';
         entry.finished_at = new Date().toISOString();
-        onUpdate(state, index);
+        await onUpdate(structuredClone(state), index);
       } catch (error) {
         entry.status = combined.aborted ? 'interrupted' : 'failed';
         entry.finished_at = new Date().toISOString();
@@ -126,14 +121,14 @@ async function initializeWorktree({
         state.status = entry.status;
         for (const next of state.commands.slice(index + 1))
           next.status = 'skipped';
-        onUpdate(state, index);
+        await onUpdate(structuredClone(state), index);
         throw new Error(
           `Worktree 初始化第 ${index + 1} 条命令失败：${entry.command}；${error.message}`,
         );
       }
     }
     state.status = 'completed';
-    onUpdate(state, state.commands.length - 1);
+    await onUpdate(structuredClone(state), state.commands.length - 1);
     return state;
   } finally {
     process.removeListener('SIGINT', abort);

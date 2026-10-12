@@ -11,16 +11,16 @@ class SystemServices {
   }
 
   async readSettings() {
-    return { ...readSystemSettings(this.dataDirectory), git: await gitInstallation() };
+    return { ...(await readSystemSettings(this.dataDirectory)), git: await gitInstallation() };
   }
 
   async saveSettings(input) {
-    saveSystemSettings(input, this.dataDirectory);
-    return this.readSettings();
+    (await saveSystemSettings(input, this.dataDirectory));
+    return (await this.readSettings());
   }
 
-  listDirectories(input) {
-    return listDirectories(input, readSystemSettings(this.dataDirectory).memberStorageRoot);
+  async listDirectories(input) {
+    return (await listDirectories(input, (await readSystemSettings(this.dataDirectory)).memberStorageRoot));
   }
 }
 

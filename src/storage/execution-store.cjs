@@ -5,7 +5,6 @@ const { writeConfig } = require("./json-files.cjs");
 const { databaseForPath } = require("./database-registry.cjs");
 const { appendArtifact, writeArtifact } = require("./artifact-store.cjs");
 const { SessionHistoryStore } = require("./session-history-store.cjs");
-const { normalizeItem } = require("../domain/session-item.cjs");
 const { RunRequirementsStore } = require("./run-requirements-store.cjs");
 
 // Owns the on-disk execution intent, task snapshot and long-lived runner lock.
@@ -17,17 +16,17 @@ class ExecutionStore {
     this.locked = false;
   }
 
-  claimSources(key, sources, options) {
+  async claimSources(key, sources, options) {
     // Explicit isolated execution fixtures can use an arbitrary directory;
     // never place their membership records outside that directory.
     this.requirements = new RunRequirementsStore(path.basename(this.directory) === key
       ? path.dirname(this.directory) : this.directory);
     this.sourceKey = key;
-    this.requirements.claim(key, sources, options);
+    (await this.requirements.claim(key, sources, options));
   }
 
-  releaseUnstartedSources() {
-    if (!this.exists()) this.requirements?.releaseUnstarted(this.sourceKey);
+  async releaseUnstartedSources() {
+    if (!(await this.exists())) (await this.requirements?.releaseUnstarted(this.sourceKey));
   }
 
   lock() {
@@ -50,53 +49,49 @@ class ExecutionStore {
     this.locked = false;
   }
 
-  exists() {
+  async exists() {
     const database = databaseForPath(this.stateFile);
-    if (database) return database.readDocument(this.stateFile) !== undefined;
+    if (database) return (await database.readDocument(this.stateFile)) !== undefined;
     return fs.existsSync(this.stateFile);
   }
 
-  read() {
-    return readState(this.stateFile);
+  async read() {
+    return (await readState(this.stateFile));
   }
 
-  save(state) {
-    return saveState(this.stateFile, state);
+  async save(state) {
+    return (await saveState(this.stateFile, state));
   }
 
-  update(patch) {
-    return updateState(this.stateFile, patch);
+  async update(patch) {
+    return (await updateState(this.stateFile, patch));
   }
 
-  writeTask(task) {
-    writeConfig(path.join(this.directory, "requirement.json"), task);
+  async writeTask(task) {
+    (await writeConfig(path.join(this.directory, "requirement.json"), task));
   }
 
-  append(name, value) {
+  async append(name, value) {
     if (!["events.jsonl", "stderr.log", "initialization.log"].includes(name))
       throw new Error("无效的执行日志类型。");
-    appendArtifact(path.join(this.directory, name), value);
-    if (name === "events.jsonl" && databaseForPath(this.directory)) {
-      for (const line of String(value).split("\n").filter(Boolean)) {
-        let event;
-        try { event = JSON.parse(line); } catch { continue; }
-        if (["item.started", "item.completed"].includes(event.type) && event.item)
-          new SessionHistoryStore(this.directory).save(normalizeItem(event.item, event.turn_id));
-      }
-    }
+    (await appendArtifact(path.join(this.directory, name), value));
   }
 
-  captureFinal() {
+  async saveHistoryItem(item) {
+    await new SessionHistoryStore(this.directory).save(item);
+  }
+
+  async captureFinal() {
     const file = path.join(this.directory, "final.md");
     if (databaseForPath(file) && fs.existsSync(file)) {
-      writeArtifact(file, fs.readFileSync(file), { mimeType: "text/markdown" });
+      (await writeArtifact(file, fs.readFileSync(file), { mimeType: "text/markdown" }));
       fs.unlinkSync(file);
     }
   }
 }
 
-function readRunStatus(directory) {
-  return new ExecutionStore(directory).read();
+async function readRunStatus(directory) {
+  return (await new ExecutionStore(directory).read());
 }
 
 module.exports = { ExecutionStore, readRunStatus };

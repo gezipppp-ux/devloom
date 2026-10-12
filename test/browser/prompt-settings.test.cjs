@@ -1,3 +1,4 @@
+const { navigateWorkspace } = require("../support/browser-navigation.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -14,7 +15,7 @@ async function verifyPromptSettings(browser, { origin, output, errors, workspace
   const save = page.getByRole("button", { name: "保存提示词模板", exact: true });
   const reset = page.getByRole("button", { name: "恢复当前渠道默认模板", exact: true });
   const switchWorkspace = async (workspace) => {
-    await page.getByRole("button", { name: `切换工作区：${workspace.name}`, exact: true }).click();
+    await navigateWorkspace(page, workspace);
     await page.getByRole("heading", { name: `${workspace.name} · 工作区设置`, exact: true }).waitFor();
     await editor.waitFor();
   };
@@ -124,7 +125,8 @@ async function verifyPromptSettings(browser, { origin, output, errors, workspace
     for (const width of [1440, 768, 390, 320]) {
       await page.setViewportSize({ width, height: 1000 });
       await page.locator("#prompt-settings").scrollIntoViewIfNeeded();
-      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+      await page.screenshot({ path: path.join(output, `prompt-fusion-${width}.png`), fullPage: true });
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `prompt page overflow at ${width}: ${JSON.stringify(await page.locator("body *").evaluateAll(nodes => nodes.filter(el => el.getBoundingClientRect().right > window.innerWidth + 1).map(el => ({ tag: el.tagName, class: el.className, width: el.getBoundingClientRect().width })).slice(0, 12)))}`);
       assert.ok(await page.locator("main").evaluate(element => element.scrollWidth <= element.clientWidth));
       await page.screenshot({ path: path.join(output, `prompt-fusion-${width}.png`), fullPage: true });
       await save.scrollIntoViewIfNeeded();

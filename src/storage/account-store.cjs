@@ -1,141 +1,110 @@
-const { randomUUID } = require("node:crypto");
-const {
-  accountError,
-  DEFAULT_ACCOUNT_SETTINGS,
-} = require("../domain/account.cjs");
+const { accountError, DEFAULT_ACCOUNT_SETTINGS } = require("../domain/account.cjs");
+const { effectivePermissions, ownerPermissions } = require("../domain/project-permissions.cjs");
+
+// Internal account record contract shared with password and authentication
+// services. Public response shaping remains in account-presenter.
+function accountRecord(row) {
+  if (!row) return undefined;
+  return {
+    id: row.id, username: row.username, password_hash: row.passwordHash,
+    role: row.role, status: row.status, must_change_password: row.mustChangePassword,
+    departmentId: row.departmentId, canCreateProjects: row.canCreateProjects,
+    auth_version: row.authVersion, created_at: row.createdAt.toISOString(), updated_at: row.updatedAt.toISOString(),
+  };
+}
 
 class AccountStore {
-  constructor(database) {
-    this.db = database.handle;
+  constructor(database) { this.database = database; }
+
+  async count() { return this.database.client.user.count(); }
+  async byId(id) { return accountRecord(await this.database.client.user.findUnique({ where: { id } })); }
+  async byUsername(username) { return accountRecord(await this.database.client.user.findUnique({ where: { username } })); }
+  async list() { return (await this.database.client.user.findMany({ orderBy: { username: "asc" } })).map(accountRecord); }
+
+  async create(input, { initial = false } = {}) {
+    try {
+      return await this.database.transaction(async () => {
+        if (initial && await this.count()) throw accountError("管理员已初始化。", 409);
+        if (input.departmentId && !(await this.database.client.department.findFirst({ where: { id: input.departmentId, status: "active" } }))) throw accountError("部门不存在或已停用。");
+        return accountRecord(await this.database.client.user.create({ data: {
+          username: input.username, passwordHash: input.password_hash,
+          role: input.role, mustChangePassword: Boolean(input.must_change_password),
+          departmentId: input.departmentId || null, canCreateProjects: Boolean(input.canCreateProjects),
+        } }));
+      });
+    } catch (error) {
+      if (error.code === "P2002") throw accountError("账号已存在。", 409);
+      if (error.code === "P2034") throw accountError("账号数据已变更，请刷新后重试。", 409);
+      throw error;
+    }
   }
-  count() {
-    return this.db.prepare("SELECT count(*) AS count FROM users").get().count;
-  }
-  byId(id) {
-    return this.db.prepare("SELECT * FROM users WHERE id = ?").get(id);
-  }
-  byUsername(name) {
-    return this.db.prepare("SELECT * FROM users WHERE username = ?").get(name);
-  }
-  list() {
-    return this.db.prepare("SELECT * FROM users ORDER BY username").all();
-  }
-  create(input, { initial = false } = {}) {
-    return this.db
-      .transaction(() => {
-        if (initial && this.count())
-          throw accountError("管理员已初始化，请使用账号重置命令。", 409);
-        if (this.byUsername(input.username))
-          throw accountError("账号已存在。", 409);
-        const row = {
-          id: randomUUID(),
-          ...input,
-          status: "active",
-          must_change_password: input.must_change_password ? 1 : 0,
-          auth_version: 1,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        this.db
-          .prepare(
-            "INSERT INTO users (id,username,password_hash,role,status,must_change_password,auth_version,created_at,updated_at) VALUES (@id,@username,@password_hash,@role,@status,@must_change_password,@auth_version,@created_at,@updated_at)",
-          )
-          .run(row);
-        return this.byId(row.id);
-      })
-      .immediate();
-  }
-  update(id, patch) {
-    return this.db
-      .transaction(() => {
-        const current = this.byId(id);
+
+  async update(id, patch) {
+    try {
+      return await this.database.transaction(async () => {
+        const current = await this.byId(id);
         if (!current) throw accountError("账号不存在。", 404);
-        const next = {
-          ...current,
-          ...patch,
-          updated_at: new Date().toISOString(),
-          auth_version: current.auth_version + 1,
-        };
-        if (
-          current.role === "admin" &&
-          current.status === "active" &&
-          (next.role !== "admin" || next.status !== "active")
-        ) {
-          const active = this.db
-            .prepare(
-              "SELECT count(*) AS count FROM users WHERE role='admin' AND status='active'",
-            )
-            .get().count;
-          if (active <= 1)
-            throw accountError("不能停用或降级最后一个有效管理员。", 409);
+        const next = { ...current, ...patch };
+        if (patch.departmentId && !(await this.database.client.department.findFirst({ where: { id: patch.departmentId, status: "active" } }))) throw accountError("部门不存在或已停用。");
+        if (patch.departmentId !== undefined && patch.departmentId !== current.departmentId) {
+          const department = next.departmentId && await this.database.client.department.findUnique({ where: { id: next.departmentId } });
+          const owned = await this.database.client.project.findMany({ where: { ownerUserId: id },
+            select: { members: { where: { userId: id }, select: { status: true, permissions: true } } } });
+          if (owned.some(project => {
+            const member = project.members[0];
+            const effective = department?.status === "active" && member?.status === "active"
+              ? effectivePermissions(department.permissions, member.permissions) : [];
+            return !ownerPermissions.every(permission => effective.includes(permission));
+          })) throw accountError("新部门不能保留项目负责人的查看、配置和成员管理权限，请先指定接任人。", 409);
         }
-        this.db
-          .prepare(
-            "UPDATE users SET password_hash=@password_hash,role=@role,status=@status,must_change_password=@must_change_password,auth_version=@auth_version,updated_at=@updated_at WHERE id=@id",
-          )
-          .run(next);
-        this.db.prepare("DELETE FROM auth_sessions WHERE user_id = ?").run(id);
-        return this.byId(id);
-      })
-      .immediate();
+        if (next.status !== "active" && await this.database.client.project.count({ where: { ownerUserId: id } })) throw accountError("该账号仍为项目负责人，请先指定接任人。", 409);
+        if (current.role === "admin" && current.status === "active" &&
+            (next.role !== "admin" || next.status !== "active") &&
+            await this.database.client.user.count({ where: { role: "admin", status: "active" } }) <= 1)
+          throw accountError("不能停用或降级最后一个有效管理员。", 409);
+        const row = await this.database.client.user.update({ where: { id }, data: {
+          passwordHash: next.password_hash, role: next.role, status: next.status,
+          mustChangePassword: Boolean(next.must_change_password), authVersion: { increment: 1 },
+          departmentId: next.departmentId, canCreateProjects: Boolean(next.canCreateProjects),
+        } });
+        await this.database.client.authSession.deleteMany({ where: { userId: id } });
+        return accountRecord(row);
+      });
+    } catch (error) {
+      if (error.code === "P2034") throw accountError("账号数据已变更，请刷新后重试。", 409);
+      throw error;
+    }
   }
-  settings(id) {
-    const row = this.db
-      .prepare("SELECT * FROM user_settings WHERE user_id=?")
-      .get(id);
+
+  async settings(userId) {
+    const row = await this.database.client.userSetting.findUnique({ where: { userId } });
     if (!row) return { ...DEFAULT_ACCOUNT_SETTINGS };
-    return {
-      model: row.model ?? null,
-      reasoningEffort: row.reasoning_effort ?? null,
-      permissionMode: row.permission_mode || "ask",
-      notificationsEnabled: Boolean(row.notifications_enabled),
-      grouping: row.grouping || "type",
-    };
+    return { model: row.model, reasoningEffort: row.reasoningEffort, permissionMode: row.permissionMode,
+      notificationsEnabled: row.notificationsEnabled, grouping: row.grouping };
   }
-  saveSettings(id, value) {
-    this.db
-      .prepare(
-        "INSERT INTO user_settings(user_id,model,reasoning_effort,permission_mode,notifications_enabled,grouping,updated_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET model=excluded.model,reasoning_effort=excluded.reasoning_effort,permission_mode=excluded.permission_mode,notifications_enabled=excluded.notifications_enabled,grouping=excluded.grouping,updated_at=excluded.updated_at",
-      )
-      .run(
-        id,
-        value.model,
-        value.reasoningEffort,
-        value.permissionMode,
-        value.notificationsEnabled ? 1 : 0,
-        value.grouping,
-        new Date().toISOString(),
-      );
-    return this.settings(id);
+
+  async saveSettings(userId, value) {
+    const data = { model: value.model, reasoningEffort: value.reasoningEffort, permissionMode: value.permissionMode,
+      notificationsEnabled: value.notificationsEnabled, grouping: value.grouping };
+    await this.database.client.userSetting.upsert({ where: { userId }, create: { userId, ...data }, update: data });
+    return (await this.settings(userId));
   }
-  preferences(id, workspaceId) {
-    const row = this.db
-      .prepare(
-        "SELECT data FROM user_preferences WHERE user_id=? AND workspace_id=?",
-      )
-      .get(id, workspaceId);
-    return row ? JSON.parse(row.data) : { unreadRunKeys: [] };
+
+  async preferences(userId, workspaceId) {
+    return (await this.database.client.userPreference.findUnique({ where: { userId_workspaceId: { userId, workspaceId } } }))?.data || { unreadRunKeys: [] };
   }
-  audit(actor, event, workspaceId, details = {}) {
-    this.db
-      .prepare(
-        "INSERT INTO audit_events(event,actor_user_id,workspace_id,details_json,created_at) VALUES (?,?,?,?,?)",
-      )
-      .run(
-        event,
-        actor?.id || null,
-        workspaceId || null,
-        JSON.stringify(details),
-        new Date().toISOString(),
-      );
+
+  async savePreferences(userId, workspaceId, data) {
+    await this.database.client.userPreference.upsert({ where: { userId_workspaceId: { userId, workspaceId } },
+      create: { userId, workspaceId, data }, update: { data } });
+    return data;
   }
-  savePreferences(id, workspaceId, value) {
-    this.db
-      .prepare(
-        "INSERT INTO user_preferences(user_id,workspace_id,data) VALUES (?,?,?) ON CONFLICT(user_id,workspace_id) DO UPDATE SET data=excluded.data",
-      )
-      .run(id, workspaceId, JSON.stringify(value));
-    return value;
+
+  async audit(actor, event, workspaceId, details = {}) {
+    await this.database.client.auditEvent.create({ data: {
+      event, actorUserId: actor?.id || null, workspaceId: workspaceId || null, details,
+    } });
   }
 }
+
 module.exports = { AccountStore };

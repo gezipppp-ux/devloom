@@ -29,13 +29,13 @@ async function withRepositoryOperation(commonDirectory, operation) {
   }
 }
 
-function readFetchState(commonDirectory, configFile) {
-  return readOptional(fetchStateFile(commonDirectory, configFile));
+async function readFetchState(commonDirectory, configFile) {
+  return (await readOptional(fetchStateFile(commonDirectory, configFile)));
 }
 
-function writeFetchState(commonDirectory, remote, configFile) {
+async function writeFetchState(commonDirectory, remote, configFile) {
   const value = { remote, fetchedAt: new Date().toISOString() };
-  writeConfig(fetchStateFile(commonDirectory, configFile), value);
+  (await writeConfig(fetchStateFile(commonDirectory, configFile), value));
   return value;
 }
 

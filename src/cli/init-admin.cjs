@@ -49,21 +49,21 @@ async function readPassword(input, output) {
 
 async function main(
   argv = process.argv.slice(2),
-  { input = process.stdin, output = process.stdout, directory = dataRoot } = {},
+  { input = process.stdin, output = process.stdout, directory = dataRoot, databaseUrl } = {},
 ) {
   if (argv.length) throw new Error("init:admin 不接受命令行参数。");
   const password = await readPassword(input, output);
-  const accounts = await initializeAccountServices(directory);
+  const accounts = await initializeAccountServices(directory, { url: databaseUrl });
   try {
     const user = await accounts.create({ username: "admin", password }, null, true);
-    accounts.audit(null, "account.local.init", null, {
+    (await accounts.audit(null, "account.local.init", null, {
       actorType: "local_operator",
       targetUserId: user.id,
-    });
+    }));
     output.write(`管理员 ${user.username} 已创建。\n`);
   } finally {
     await accounts.close();
-    accounts.closeDatabase();
+    (await accounts.closeDatabase());
   }
 }
 

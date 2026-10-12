@@ -1,10 +1,11 @@
-import { onMounted, onUnmounted, ref } from "vue";
+import { onMounted, onUnmounted, ref, toValue, watch } from "vue";
 import { bootstrap, apiPath, expireAuthentication } from "../shared/api/api.js";
 import { revalidateAccountSession } from "../shared/api/account-session.js";
 import { useTaskList } from "../features/tasks/use-task-list.js";
 import { useSession } from "../features/session/use-session.js";
 
 export function useWorkspaceConsole({
+  initialTask = "",
   canRefresh,
   onOpen,
   onOpened,
@@ -68,7 +69,8 @@ export function useWorkspaceConsole({
     tasks.remove(key);
     conversation.remove(key);
     if (wasActive) {
-      if (tasks.runs.value.length) await conversation.open(tasks.runs.value[0].key);
+      if (toValue(initialTask) === key) await conversation.open(key);
+      else if (tasks.runs.value.length) await conversation.open(tasks.runs.value[0].key);
       else onEmpty();
     }
   }
@@ -144,7 +146,8 @@ export function useWorkspaceConsole({
       events.onmessage = (event) => eventReceived(JSON.parse(event.data));
       await tasks.refresh();
       if (disposed) return;
-      if (tasks.runs.value.length)
+      if (toValue(initialTask)) await conversation.open(toValue(initialTask));
+      else if (tasks.runs.value.length)
         await conversation.open(tasks.runs.value[0].key);
       else onEmpty();
     } catch (e) {
@@ -156,6 +159,11 @@ export function useWorkspaceConsole({
         scheduleRefresh();
       }
     }
+  });
+  watch([() => toValue(initialTask), workspaceLoading], ([key, initializing]) => {
+    if (initializing || disposed) return;
+    const target = key || tasks.runs.value[0]?.key;
+    if (target && target !== conversation.active.value) void conversation.open(target);
   });
   onUnmounted(() => {
     disposed = true;

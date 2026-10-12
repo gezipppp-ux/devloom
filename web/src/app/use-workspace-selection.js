@@ -1,7 +1,7 @@
 /* global window */
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { bootstrap, selectWorkspace } from "../shared/api/api.js";
+import { appApi, bootstrap, selectWorkspace } from "../shared/api/api.js";
 
 export function useWorkspaceSelection() {
   const route = useRoute();
@@ -17,16 +17,23 @@ export function useWorkspaceSelection() {
       !["back", "current", "forward", "replaced", "position", "scroll"].includes(key)));
   }
 
-  function navigate(id) {
+  async function navigate(id, task) {
     if (disposed) return;
-    void router.push({ name: "workspace", query: { ...route.query, workspace: id }, hash: route.hash, state: navigationState() });
+    const location = route.fullPath;
+    try {
+      const result = await appApi("/bootstrap");
+      if (disposed || route.fullPath !== location) return;
+      workspaces.value = result.workspaces || [];
+      const returnTo = route.name === "project" ? route.fullPath : route.query.returnTo;
+      await router.push({ name: "workspace", query: { workspace: id, ...(task ? { task } : {}), ...(returnTo ? { returnTo } : {}) }, state: navigationState() });
+    } catch (failure) { if (!disposed) error.value = failure.message; }
   }
 
   function restoreSelection() {
     const requested = route.query.workspace;
     const selected = requested
       ? workspaces.value.find((entry) => entry.id === requested)
-      : workspaces.value[0];
+      : null;
     error.value =
       requested && !selected && !standalone.value
         ? "工作区不存在，请选择其他工作区。"

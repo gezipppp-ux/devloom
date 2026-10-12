@@ -44,9 +44,9 @@ async function verifyTapdFusion(browser, errors, output) {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.getByRole("button", { name: "创建 session 并开始开发 →", exact: true }).click();
     await page.locator(".session-header").getByText("登录问题融合修复", { exact: true }).waitFor();
-    const key = manager.list()[0].key;
+    const key = (await manager.list())[0].key;
     await waitForTurn(manager, key);
-    assert.deepEqual(manager.store.readTask(key).requirements.map(entry => entry.workitem.id), ["12", "11"]);
+    assert.deepEqual((await manager.store.readTask(key)).requirements.map(entry => entry.workitem.id), ["12", "11"]);
     await finishTurn(manager, client, key);
     await page.getByRole("button", { name: "需求资料", exact: true }).click();
     await page.getByRole("button", { name: "追加 TAPD 需求", exact: true }).waitFor({ state: "visible" });
@@ -65,7 +65,7 @@ async function verifyTapdFusion(browser, errors, output) {
     const count = client.calls.filter(call => call.method === "turn/start").length;
     await append.getByRole("button", { name: "保存追加资料", exact: true }).click();
     await page.getByRole("button", { name: "继续处理新增需求", exact: true }).waitFor();
-    assert.equal(manager.store.requirements.read(key).additions[0].task.requirements[0].workitem.type, "board_card");
+    assert.equal((await manager.store.requirements.read(key)).additions[0].task.requirements[0].workitem.type, "board_card");
     assert.equal(client.calls.filter(call => call.method === "turn/start").length, count);
     await page.reload();
     await page.getByRole("button", { name: "需求资料", exact: true }).click();

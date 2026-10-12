@@ -23,8 +23,8 @@ function createManualChannel(configFile, { uploadDirectory } = {}) {
         capabilities: this.capabilities,
       };
     },
-    uploadImage(bytes) {
-      return uploads.upload(bytes);
+    async uploadImage(bytes) {
+      return (await uploads.upload(bytes));
     },
     async resolve({
       requestId,
@@ -47,9 +47,9 @@ function createManualChannel(configFile, { uploadDirectory } = {}) {
         throw new Error('最多上传 20 张不同图片。');
       if (!content.trim() && !images.length)
         throw new Error('请填写需求内容或上传图片。');
-      for (const id of images) uploads.read(id);
+      for (const id of images) (await uploads.read(id));
       const directoryName = validateWorktreeName(worktreeName);
-      const config = readOptional(configFile);
+      const config = (await readOptional(configFile));
       return {
         item: {
           id: requestId,
@@ -68,12 +68,12 @@ function createManualChannel(configFile, { uploadDirectory } = {}) {
       };
     },
     async prepare({ item, directory, config }) {
-      return buildManualTaskPackage({
+      return (await buildManualTaskPackage({
         item,
         directory,
         config,
-        readImage: (id) => uploads.read(id),
-      });
+        readImage: async (id) => (await uploads.read(id)),
+      }));
     },
     async transition() {
       return { status: 'skipped', reason: '手动需求无需同步外部渠道' };

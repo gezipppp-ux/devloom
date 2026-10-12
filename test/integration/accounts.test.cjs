@@ -1,15 +1,14 @@
 const assert = require("node:assert/strict");
 const { randomUUID } = require("node:crypto");
-const { waitForClone } = require("../support/workspace-clones.cjs");
+const { projectPermissionCatalog } = require("../../src/domain/project-permissions.cjs");
+const { ProjectServices } = require("../../src/application/project-services.cjs");
 const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
 const http = require("node:http");
 const { EventEmitter } = require("node:events");
 const { test } = require("node:test");
-const {
-  initializeDatabase,
-} = require("../../src/storage/database-lifecycle.cjs");
+const { initializeTestDatabase } = require("../support/database.cjs");
 const {
   AccountServices,
 } = require("../../src/application/account-services.cjs");
@@ -24,12 +23,51 @@ const { saveSystemSettings } = require("../../src/config/system-settings.cjs");
 
 const password = "fixture-password-123";
 
+test("legacy requirement searches require current issue and session access before and after TAPD", async t => {
+  const f = await fixture(t);
+  const browser = f.client(), other = f.client();
+  await browser.login("member");
+  await other.login("admin");
+  const prepared = await browser.space({ name: "requirement-access" });
+  const workspaceId = prepared.data.id;
+  const context = await f.workspaces.get(workspaceId, f.member);
+  let searches = 0, onSearch = async () => {};
+  context.channels.get = () => ({ capabilities: { search: true }, search: async () => {
+    searches++;
+    await onSearch();
+    return [{ id: "123", workspace: "456", title: "private fake TAPD requirement" }];
+  } });
+  const sessionPermissions = ["project.view", "code.view", "session.view"];
+  async function grant(permissions) {
+    const membership = await f.app.projects.store.membership(prepared.projectId, f.member.id);
+    await f.app.projects.saveMember(prepared.projectId, f.admin, { permissions, revision: membership.revision }, f.member.id);
+  }
+  for (const route of ["requirements?channel=tapd", "stories"]) {
+    const url = `/api/workspaces/${workspaceId}/${route}`;
+    await grant([...sessionPermissions, "issue.view"]);
+    assert.equal((await browser.request(url)).status, 200);
+    const before = searches;
+    assert.equal((await other.request(url)).status, 404, "administrator cannot read another member's workspace");
+    await grant(["project.view", "issue.view"]);
+    assert.equal((await browser.request(url)).status, 403, "issue access does not replace session access");
+    await grant(sessionPermissions);
+    assert.equal((await browser.request(url)).status, 403);
+    assert.equal(searches, before, "denied callers never reach TAPD");
+    await grant([...sessionPermissions, "issue.view"]);
+    onSearch = () => grant(sessionPermissions);
+    const revoked = await browser.request(url);
+    assert.equal(revoked.status, 403, "revocation during TAPD search suppresses its result");
+    assert.equal(revoked.data.items, undefined);
+    onSearch = async () => {};
+  }
+});
+
 test("environment endpoints require administrator and CSRF, and maintenance blocks writes", async t => {
   let busy = false, starts = 0;
   const environment = {
     read: async () => ({ tools: [] }), checkLatest: async () => ({ tools: [] }),
     status: () => ({ busy }), close: async () => {},
-    start: async (_input, authorize) => { authorize(); starts++; busy = true; return { status: "running" }; },
+    start: async (_input, authorize) => { await authorize(); starts++; busy = true; return { status: "running" }; },
   };
   const { client } = await fixture(t, { environment });
   const admin = client(), member = client();
@@ -46,7 +84,7 @@ test("environment endpoints require administrator and CSRF, and maintenance bloc
   assert.equal((await admin.request("/api/auth/logout", {})).status, 200);
 });
 
-test("Git HTTP endpoints test drafts before saving and expose only generated SSH public keys", async t => {
+test("Git HTTP endpoints separate personal hosts, project access checks and SSH public keys", async t => {
   const { client } = await fixture(t);
   const browser = client();
   await browser.login("admin");
@@ -54,14 +92,15 @@ test("Git HTTP endpoints test drafts before saving and expose only generated SSH
   const saved = list.data.accounts[0];
   assert.equal(saved.authType, "http");
   assert.equal(saved.password, undefined);
-  const input = { name: saved.name, authType: saved.authType, remoteUrl: saved.remoteUrl, username: saved.username };
-  const tested = await browser.request(`/api/account/git-accounts/${saved.id}/test`, input);
+  const prepared = await browser.space({ name: "Git check" });
+  const input = { name: saved.name, authType: saved.authType, host: saved.host, username: saved.username, revision: saved.revision };
+  const tested = await browser.request(`/api/account/git-accounts/${saved.id}/test`, { projectId: prepared.projectId });
   assert.equal(tested.status, 200, JSON.stringify(tested.data));
   const updated = await browser.request(`/api/account/git-accounts/${saved.id}`, { ...input, name: "edited" });
   assert.equal(updated.status, 200, JSON.stringify(updated.data));
   assert.equal(updated.data.account.name, "edited");
   const failed = await browser.request(`/api/account/git-accounts/${saved.id}`, { ...input, password: "wrong" });
-  assert.equal(failed.status, 400);
+  assert.equal(failed.status, 409, "a stale revision cannot overwrite rotated credentials");
   assert.equal((await browser.request("/api/account/git-accounts")).data.accounts[0].name, "edited");
   const key = await browser.request("/api/account/git-keys", {});
   assert.equal(key.status, 201, JSON.stringify(key.data));
@@ -80,7 +119,7 @@ async function fixture(t, options = {}) {
     await app?.close();
     await remote?.close();
     await accounts?.close();
-    database?.close();
+    await database?.close();
     assert.equal(
       path.dirname(path.resolve(directory)),
       path.resolve(os.tmpdir()),
@@ -88,20 +127,24 @@ async function fixture(t, options = {}) {
     assert.ok(path.basename(directory).startsWith("web-coding-accounts-"));
     fs.rmSync(directory, { recursive: true, force: true, maxRetries: 3 });
   });
-  database = await initializeDatabase(directory);
+  database = await initializeTestDatabase(t, directory);
   accounts = new AccountServices(database);
   const admin = await accounts.create(
     { username: "admin", password },
     null,
     true,
   );
-  const member = await accounts.create({ username: "member", password }, admin);
-  accounts.store.update(member.id, { must_change_password: 0 });
+  const setupProjects = new ProjectServices(database);
+  const permissions = projectPermissionCatalog.map(entry => entry.id);
+  const department = (await setupProjects.saveDepartment(admin, { name: "fixture", permissions })).department;
+  await accounts.store.update(admin.id, { departmentId: department.id });
+  const member = await accounts.create({ username: "member", password, departmentId: department.id }, admin);
+  (await accounts.store.update(member.id, { must_change_password: 0 }));
   remote = await gitRemote(path.join(directory, "git-server"));
-  saveSystemSettings({ memberStorageRoot: path.join(directory, "members") }, directory);
+  (await saveSystemSettings({ memberStorageRoot: path.join(directory, "members") }, directory));
   const gitAccounts = new GitAccountServices(database), gitIds = new Map();
   for (const actor of [admin, member]) {
-    const account = await gitAccounts.save(actor, { name: "fixture", authType: "http", remoteUrl: remote.remoteUrl, username: remote.username, password: remote.password });
+    const account = await gitAccounts.save(actor, { name: "fixture", authType: "http", host: new URL(remote.remoteUrl).origin, username: remote.username, password: remote.password });
     gitIds.set(actor.username, account.id);
   }
   const activity = [];
@@ -145,6 +188,17 @@ async function fixture(t, options = {}) {
     ...options,
   });
   const origin = await app.listen(0);
+  const repository = (await app.projects.saveRepository(admin, { name: "fixture", remoteUrl: remote.remoteUrl })).repository;
+  async function space(actor, input) {
+    const created = await app.projects.create(admin, { name: input.name, departmentId: department.id, repositoryId: repository.id });
+    if (actor.id === admin.id) await app.projects.saveMember(created.project.id, admin, { permissions: permissions.filter(id => id !== "project.create"), revision: created.membership.revision }, admin.id);
+    else await app.projects.saveMember(created.project.id, admin, { userId: actor.id, permissions: permissions.filter(id => id !== "project.create") });
+    const prepared = await app.projects.prepare(created.project.id, actor, { gitAccountId: gitIds.get(actor.username), requestId: randomUUID() });
+    await app.projects.active.get(prepared.space.id)?.promise;
+    const result = (await app.projects.space(created.project.id, actor)).space;
+    assert.equal(result.status, "ready", result.error);
+    return { status: 202, data: await workspaces.read(result.workspaceId, actor), projectId: created.project.id };
+  }
   function client() {
     let cookie = "",
       token = "", username = "";
@@ -153,7 +207,7 @@ async function fixture(t, options = {}) {
         return { cookie, "x-tapd-token": token };
       },
       async request(url, input, extra = {}) {
-        if (url === "/api/workspaces" && input) input = { requestId: randomUUID(), remoteUrl: remote.remoteUrl, gitAccountId: gitIds.get(username), ...input };
+        if (url === "/api/admin/accounts" && input) input = { departmentId: department.id, ...input };
         const response = await fetch(origin + url, {
           ...extra,
           method: input === undefined ? "GET" : "POST",
@@ -171,13 +225,9 @@ async function fixture(t, options = {}) {
         if (saved) cookie = saved.split(";", 1)[0];
         const data = await response.json();
         if (data.token) token = data.token;
-        if (url === "/api/workspaces" && input && response.status === 202) {
-          const clone = await waitForClone(async () => (await this.request(`/api/workspace-clones/${data.clone.id}`)).data.clone);
-          assert.equal(clone.status, "completed", JSON.stringify(clone));
-          return { status: response.status, data: clone.workspace, headers: response.headers };
-        }
         return { status: response.status, data, headers: response.headers };
       },
+      async space(input) { return space(await accounts.store.byUsername(username), input); },
       async login(selectedUsername) {
         username = selectedUsername;
         await this.request("/api/auth/session");
@@ -201,6 +251,8 @@ async function fixture(t, options = {}) {
     client,
     directory,
     activity,
+    department,
+    space,
   };
 }
 
@@ -254,8 +306,8 @@ async function partialRequest(app, origin, pathname, browser, payload) {
     accepted = resolve;
   });
   const original = app.accounts.actor;
-  app.accounts.actor = function (session) {
-    const actor = original.call(this, session);
+  app.accounts.actor = async function (session) {
+    const actor = await original.call(this, session);
     if (actor) accepted();
     return actor;
   };
@@ -286,7 +338,7 @@ async function partialRequest(app, origin, pathname, browser, payload) {
   };
 }
 
-test("SQLite accounts require login and session CSRF, isolate workspaces including administrators", async (t) => {
+test("PostgreSQL accounts require login and session CSRF, isolate workspaces including administrators", async (t) => {
   const { client, database } = await fixture(t);
   const anonymous = client();
   for (const url of [
@@ -314,7 +366,8 @@ test("SQLite accounts require login and session CSRF, isolate workspaces includi
     member = client();
   await admin.login("admin");
   await member.login("member");
-  const own = await member.request("/api/workspaces", { name: "私有工作区" });
+  assert.equal((await member.request("/api/workspaces", { name: "禁止个人创建" })).status, 403);
+  const own = await member.space({ name: "私有工作区" });
   assert.equal(own.status, 202, JSON.stringify(own.data));
   assert.equal(
     (await admin.request(`/api/workspaces/${own.data.id}/bootstrap`)).status,
@@ -345,13 +398,13 @@ test("SQLite accounts require login and session CSRF, isolate workspaces includi
     (await admin.request("/api/account/settings")).data.settings.model,
     null,
   );
-  const rows = database.handle.prepare("SELECT * FROM auth_sessions").all();
+  const rows = await database.client.authSession.findMany();
   assert.ok(rows.length >= 2);
   assert.ok(
     rows.every(
       (row) =>
         /^[a-f0-9]{64}$/.test(row.sid) &&
-        !row.session_json.includes("encryptedSessionId"),
+        !JSON.stringify(row.data).includes("encryptedSessionId"),
     ),
   );
 });
@@ -429,7 +482,7 @@ test("logout closes existing SSE and its cookie cannot reconnect", async (t) => 
   const { client, origin } = await fixture(t);
   const browser = client();
   await browser.login("admin");
-  const created = await browser.request("/api/workspaces", { name: "事件" });
+  const created = await browser.space({ name: "事件" });
   const url = `/api/workspaces/${created.data.id}/events`;
   const headers = browser.headers;
   const stream = await fetch(origin + url, { headers });
@@ -453,7 +506,7 @@ test("disabled accounts and expired sessions close streams before a private even
     browser = client();
   await admin.login("admin");
   await browser.login("member");
-  const created = await browser.request("/api/workspaces", { name: "撤权" });
+  const created = await browser.space({ name: "撤权" });
   const url = `/api/workspaces/${created.data.id}/events`;
   async function stream() {
     const response = await fetch(origin + url, { headers: browser.headers });
@@ -473,11 +526,9 @@ test("disabled accounts and expired sessions close streams before a private even
     assert.doesNotMatch(value, /private-marker/);
   }
   const expired = await stream();
-  database.handle
-    .prepare("UPDATE auth_sessions SET expires_at=0 WHERE user_id=?")
-    .run(member.id);
-  workspaces
-    .get(created.data.id, member)
+  await database.client.authSession.updateMany({ where: { userId: member.id }, data: { expiresAt: new Date(0) } });
+  (await workspaces
+    .get(created.data.id, member))
     .sessions.emit("event", { marker: "private-marker" });
   await ended(expired);
   await browser.login("member");
@@ -498,13 +549,11 @@ test("login attempts are rate limited and successful mutations record actor with
   const { client, database } = await fixture(t);
   const browser = client();
   await browser.login("admin");
-  const workspace = await browser.request("/api/workspaces", { name: "审计" });
-  const audit = database.handle
-    .prepare("SELECT * FROM audit_events WHERE workspace_id=?")
-    .all(workspace.data.id);
+  const workspace = await browser.space({ name: "审计" });
+  const audit = await database.client.auditEvent.findMany({ where: { event: "project.space.ready", details: { path: ["projectId"], equals: workspace.projectId } } });
   assert.equal(audit.length, 1);
-  assert.equal(audit[0].event, "workspace.clone.completed");
-  assert.ok(audit[0].actor_user_id);
+  assert.equal(audit[0].event, "project.space.ready");
+  assert.ok(audit[0].actorUserId);
   assert.doesNotMatch(
     JSON.stringify(audit),
     /fixture-password|csrf|password_hash/,
@@ -587,13 +636,13 @@ test("logout fences every pending JSON or binary mutation before resolving its w
   } = await fixture(t);
   const browser = client();
   await browser.login("admin");
-  const created = await browser.request("/api/workspaces", {
+  const created = await browser.space({
     name: "原工作区",
   });
   const workspace = created.data.id;
   const prefix = `/api/workspaces/${workspace}`;
   const systemBefore = (await browser.request("/api/system/settings")).data;
-  const settingsBefore = accounts.settings(admin);
+  const settingsBefore = (await accounts.settings(admin));
   const target = path.join(directory, "revoked-settings");
   const routes = [
     [
@@ -655,13 +704,13 @@ test("logout fences every pending JSON or binary mutation before resolving its w
   }
   assert.deepEqual(activity, []);
   assert.equal(workspaces.contexts.size, 0);
-  assert.deepEqual(workspaces.list(admin), [created.data]);
-  assert.deepEqual(accounts.settings(admin), settingsBefore);
-  assert.deepEqual(accounts.preferences(admin, workspace), {
+  assert.deepEqual((await workspaces.list(admin)), [created.data]);
+  assert.deepEqual((await accounts.settings(admin)), settingsBefore);
+  assert.deepEqual((await accounts.preferences(admin, workspace)), {
     unreadRunKeys: [],
   });
-  assert.equal(accounts.list(admin).length, 2);
-  assert.equal(accounts.store.byId(member.id).status, "active");
+  assert.equal((await accounts.list(admin)).length, 2);
+  assert.equal((await accounts.store.byId(member.id)).status, "active");
   assert.equal(fs.existsSync(target), false);
   await browser.login("admin");
   assert.deepEqual(
@@ -673,13 +722,13 @@ test("logout fences every pending JSON or binary mutation before resolving its w
 test("disabled, downgraded, reset and expired identities cannot finish an authorized settings body", async (t) => {
   for (const reason of ["disabled", "downgraded", "reset", "expired"])
     await t.test(reason, async (t) => {
-      const { app, origin, client, accounts, admin, directory, database } =
+      const { app, origin, client, accounts, admin, directory, database, department } =
         await fixture(t);
       const second = await accounts.create(
-        { username: "second-admin", password, role: "admin" },
+        { username: "second-admin", password, role: "admin", departmentId: department.id },
         admin,
       );
-      accounts.store.update(second.id, { must_change_password: 0 });
+      (await accounts.store.update(second.id, { must_change_password: 0 }));
       const browser = client(),
         administrator = client();
       await browser.login("admin");
@@ -695,9 +744,7 @@ test("disabled, downgraded, reset and expired identities cannot finish an author
       );
       try {
         if (reason === "expired")
-          database.handle
-            .prepare("UPDATE auth_sessions SET expires_at=0 WHERE user_id=?")
-            .run(admin.id);
+          await database.client.authSession.updateMany({ where: { userId: admin.id }, data: { expiresAt: new Date(0) } });
         else {
           const patch =
             reason === "disabled"
@@ -729,12 +776,12 @@ test("disabled, downgraded, reset and expired identities cannot finish an author
 });
 
 test("complete bodies retain owner checks and logout leaves accepted background work running", async (t) => {
-  const { app, origin, client, accounts, admin, member, workspaces, activity } =
+  const { app, origin, client, accounts, admin, member, workspaces, activity, space } =
     await fixture(t);
   const browser = client();
   await browser.login("admin");
-  const own = workspaces.save({ name: "自己的" }, undefined, admin);
-  const foreign = workspaces.save({ name: "他人的" }, undefined, member);
+  const own = (await space(admin, { name: "自己的" })).data;
+  const foreign = (await space(member, { name: "他人的" })).data;
   const unauthorized = await partialRequest(
     app,
     origin,
@@ -778,7 +825,7 @@ test("complete bodies retain owner checks and logout leaves accepted background 
   const finished = new Promise((resolve) => {
     complete = resolve;
   });
-  const manager = workspaces.get(own.id, admin).sessions;
+  const manager = (await workspaces.get(own.id, admin)).sessions;
   manager.start = () => {
     finished.then(() => activity.push({ action: "background-finished" }));
     return { key: "1-2", accepted: true };
@@ -787,14 +834,8 @@ test("complete bodies retain owner checks and logout leaves accepted background 
   manager.close = async () => {
     closed = true;
   };
-  assert.equal(
-    (
-      await browser.request(`/api/workspaces/${own.id}/runs`, {
-        channel: "manual",
-      })
-    ).status,
-    202,
-  );
+  assert.equal((await browser.request(`/api/workspaces/${own.id}/runs`, { channel: "manual" })).status, 403);
+  await manager.start({ channel: "manual" });
   assert.equal(
     (
       await rawRequest(
@@ -810,7 +851,7 @@ test("complete bodies retain owner checks and logout leaves accepted background 
   complete();
   await finished;
   assert.deepEqual(activity.at(-1), { action: "background-finished" });
-  assert.equal(accounts.store.byId(admin.id).status, "active");
+  assert.equal((await accounts.store.byId(admin.id)).status, "active");
 });
 
 test("account mutations recheck session revocation after asynchronous password work", async (t) => {
@@ -820,15 +861,13 @@ test("account mutations recheck session revocation after asynchronous password w
         await fixture(t);
       const browser = client();
       await browser.login("admin");
-      const before = accounts.store.list();
+      const before = (await accounts.store.list());
       const original = app.accounts[method].bind(app.accounts);
-      app.accounts[method] = (...args) => {
+      app.accounts[method] = async (...args) => {
         const pending = original(...args);
         // The service has passed its first authorization and reached scrypt.
         // Model logout on another connection while password work is pending.
-        database.handle
-          .prepare("DELETE FROM auth_sessions WHERE user_id=?")
-          .run(admin.id);
+        await database.client.authSession.deleteMany({ where: { userId: admin.id } });
         return pending;
       };
       const route =
@@ -844,6 +883,6 @@ test("account mutations recheck session revocation after asynchronous password w
             ? { password: "reset-password-1234" }
             : { currentPassword: password, password: "changed-password-1234" };
       assert.equal((await browser.request(route, input)).status, 401);
-      assert.deepEqual(accounts.store.list(), before);
+      assert.deepEqual((await accounts.store.list()), before);
     });
 });

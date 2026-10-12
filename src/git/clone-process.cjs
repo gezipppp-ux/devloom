@@ -10,6 +10,7 @@ function runClone(args, env, { signal, onProgress = () => {} } = {}) {
       detached: process.platform !== "win32", stdio: ["ignore", "ignore", "pipe"],
     });
     let failure, stopping, idle;
+    let progressWrites = Promise.resolve();
     const stop = message => {
       failure ||= new Error(message);
       stopping ||= stopProcessTree(child);
@@ -20,7 +21,11 @@ function runClone(args, env, { signal, onProgress = () => {} } = {}) {
       idle = setTimeout(() => stop("Git 超过 30 分钟没有响应，请检查网络后重试。"), 30 * 60 * 1000);
     };
     const timeout = setTimeout(() => stop("克隆超过 6 小时，请检查仓库大小和网络后重试。"), 6 * 60 * 60 * 1000);
-    const progress = cloneProgressParser(onProgress);
+    const progress = cloneProgressParser(value => {
+      const snapshot = structuredClone(value);
+      progressWrites = progressWrites.then(() => onProgress(snapshot))
+        .catch(() => stop("无法记录克隆进度，克隆已停止，请检查服务存储。"));
+    });
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", chunk => {
       touch();
@@ -31,6 +36,7 @@ function runClone(args, env, { signal, onProgress = () => {} } = {}) {
     child.once("close", async code => {
       clearTimeout(timeout); clearTimeout(idle);
       signal?.removeEventListener("abort", abort);
+      await progressWrites;
       await stopping;
       if (failure || code !== 0) reject(failure || new Error("Git 克隆失败，请检查网络、远程地址、凭据与磁盘空间后重试。"));
       else resolve("");

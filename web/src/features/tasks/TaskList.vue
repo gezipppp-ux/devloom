@@ -90,7 +90,7 @@ const groups = computed(() => {
             v-if="props.unreadResultKeys.includes(run.key)"
             class="unread-result"
             role="img"
-            aria-label="有未读 Codex 回复"
+            :aria-label="`有未读 ${run.agent?.label || 'Agent'} 回复`"
           ></span></span
         >
         <span class="task-tags"
@@ -108,7 +108,7 @@ const groups = computed(() => {
           ><i
             :class="{ live: ['running', 'inProgress'].includes(run.status) }"
           ></i
-          >Codex · {{ statusLabel(run.status || run.execution?.status) }}</span
+          >{{ run.agent?.label || 'Agent' }} · {{ statusLabel(run.status || run.execution?.status) }}</span
         >
         <small v-if="run.requirementCount > 1">关联 {{ run.requirementCount }} 条需求</small>
       </button>

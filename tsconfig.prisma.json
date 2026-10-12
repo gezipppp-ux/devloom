@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rootDir": "generated/prisma",
+    "outDir": "generated/prisma-runtime",
+    "strict": true,
+    "skipLibCheck": true,
+    "declaration": false,
+    "noEmitOnError": true
+  },
+  "include": ["generated/prisma/**/*.cts"]
+}

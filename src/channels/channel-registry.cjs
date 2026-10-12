@@ -22,8 +22,8 @@ class ChannelRegistry {
     if (!channel) throw new Error(`未接入需求渠道：${id}`);
     return channel;
   }
-  list() {
-    return [...this.channels.values()].map((channel) => channel.describe());
+  async list() {
+    return Promise.all([...this.channels.values()].map((channel) => channel.describe()));
   }
 }
 function defaultChannels(configFile, options) {

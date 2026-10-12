@@ -6,20 +6,20 @@ const { execFileSync } = require("node:child_process");
 const { setImmediate } = require("node:timers/promises");
 const { temporary, png } = require("../support/helpers.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
-const { initializeDatabase } = require("../../src/storage/database-lifecycle.cjs");
+const { initializeTestDatabase } = require("../support/database.cjs");
 const { saveState } = require("../../src/storage/run-state.cjs");
-const { SessionManager } = require("../../src/application/session-manager.cjs");
+const { SessionManager } = require("../support/session-manager.cjs");
 const { forceDeleteTaskWorktree } = require("../../src/git/task-operations.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 
 async function fixture(t) {
   const cleanup = [];
   const root = temporary({ after: (callback) => cleanup.push(callback) });
-  const database = await initializeDatabase(root);
+  const database = await initializeTestDatabase(t, root);
   let manager;
   t.after(async () => {
     await manager?.close();
-    database.close();
+    await database.close();
     for (const callback of cleanup.reverse()) callback();
   });
   const repository = path.join(root, "repository");
@@ -39,11 +39,11 @@ async function fixture(t) {
   manager = new SessionManager({ runsDirectory: path.join(root, "runs"), configFile: path.join(root, "config.json"), client });
   const key = "1-2";
   const state = { workitem: { id: "2", workspace_id: "1", title: "Delete fixture" },
-    session_id: "original", execution: { status: "completed" },
+    agent: { provider: "codex" }, session_id: "original", execution: { status: "completed" },
     worktree: { repository, path: tree, branch } };
-  saveState(path.join(manager.store.dir(key), "run.json"), state);
-  manager.store.saveHistoryItem(key, { id: "old", type: "agentMessage", text: "history" });
-  manager.store.messageImages(key).save(png);
+  (await saveState(path.join(manager.store.dir(key), "run.json"), state));
+  (await manager.store.saveHistoryItem(key, { id: "old", type: "agentMessage", text: "history" }));
+  await (await manager.store.messageImages(key)).save(png);
   const input = { confirm: true, force: true, confirmBranch: branch };
   return { root, database, repository, tree, branch, git, client, manager, key, state, input };
 }
@@ -68,7 +68,7 @@ test("force session deletion discards dirty, untracked, ignored and unpublished 
     { ...f.input, confirmBranch: "main" }, { ...f.input, path: f.repository }, { confirm: true }]) {
     assert.equal((await post(input)).status, 400);
     assert.equal(fs.existsSync(f.tree), true);
-    assert.equal(f.manager.store.hasRun(f.key), true);
+    assert.equal((await f.manager.store.hasRun(f.key)), true);
   }
   const response = await post(f.input);
   assert.equal(response.status, 200);
@@ -76,8 +76,8 @@ test("force session deletion discards dirty, untracked, ignored and unpublished 
   assert.equal(fs.existsSync(f.tree), false);
   assert.equal(f.git("branch", "--list", f.branch), "");
   assert.equal(fs.readFileSync(path.join(f.repository, "tracked.txt"), "utf8"), "original");
-  for (const table of ["runs", "run_documents", "session_items", "log_chunks", "attachments"])
-    assert.equal(f.database.handle.prepare(`SELECT count(*) AS total FROM ${table}`).get().total, 0, table);
+  for (const table of ["run", "runDocument", "sessionItem", "logChunk", "attachment"])
+    assert.equal(await f.database.client[table].count(), 0, table);
 });
 
 test("force deletion clears an unregistered leftover directory and its recorded branch", async (t) => {
@@ -152,13 +152,13 @@ test("force deletion refuses running tasks, foreign owners, active Codex and Git
   peer.store.release(f.key);
   const request = f.client.request.bind(f.client);
   f.client.request = async (method, params) => method === "thread/read" ? { thread: { status: { type: "active" } } } : request(method, params);
-  await assert.rejects(f.manager.deleteSession(f.key, f.input), /无法确认 Codex/);
+  await assert.rejects(f.manager.deleteSession(f.key, f.input), /无法确认执行器/);
   f.client.request = request;
   f.git("worktree", "lock", f.tree);
   await assert.rejects(f.manager.deleteSession(f.key, f.input), /锁定/);
   f.git("worktree", "unlock", f.tree);
   assert.equal(fs.existsSync(f.tree), true);
-  assert.equal(f.manager.store.hasRun(f.key), true);
+  assert.equal((await f.manager.store.hasRun(f.key)), true);
 });
 
 test("force cleanup refuses main/ancestor directories, switched branches and replacement links", async (t) => {
@@ -182,12 +182,12 @@ test("failed branch cleanup retains the session and can be retried", async (t) =
   fs.writeFileSync(branchLock, "fixture lock");
   try {
     await assert.rejects(f.manager.deleteSession(f.key, f.input), /强制清理未完成/);
-    assert.equal(f.manager.store.hasRun(f.key), true);
-    assert.equal(f.manager.store.readWorktreeDeletion(f.key).status, "partial");
+    assert.equal((await f.manager.store.hasRun(f.key)), true);
+    assert.equal((await f.manager.store.readWorktreeDeletion(f.key)).status, "partial");
     assert.equal(fs.existsSync(f.tree), false);
   } finally { fs.unlinkSync(branchLock); }
   await f.manager.deleteSession(f.key, f.input);
-  assert.equal(f.manager.store.hasRun(f.key), false);
+  assert.equal((await f.manager.store.hasRun(f.key)), false);
   assert.equal(f.git("branch", "--list", f.branch), "");
 });
 
@@ -201,6 +201,10 @@ test("permanent deletion waits for delayed completion writes before clearing all
   Object.assign(runtime, { status: "running", turnId: "followup", connected: true });
   runtime.items.set("answer", { id: "answer", type: "agentMessage", turnId: "followup", text: "private history" });
   const completing = f.manager.events.completed(runtime, { id: "followup", status: "completed" });
+  const deadline = Date.now() + 10000;
+  while (!finishHistory && Date.now() < deadline) await setImmediate();
+  assert.equal(typeof finishHistory, "function");
+  assert.equal(runtime.turnId, null);
   let deleted = false;
   const deleting = f.manager.deleteSession(f.key, f.input).then(() => { deleted = true; });
   await setImmediate();
@@ -208,6 +212,29 @@ test("permanent deletion waits for delayed completion writes before clearing all
   assert.equal(fs.existsSync(f.tree), true);
   finishHistory({ data: [{ turnId: "followup", item: { id: "answer", type: "agentMessage", text: "private history" } }], nextCursor: null });
   await Promise.all([completing, deleting]);
-  for (const table of ["runs", "run_documents", "session_items", "log_chunks", "attachments"])
-    assert.equal(f.database.handle.prepare(`SELECT count(*) AS total FROM ${table}`).get().total, 0, table);
+  for (const table of ["run", "runDocument", "sessionItem", "logChunk", "attachment"])
+    assert.equal(await f.database.client[table].count(), 0, table);
+});
+
+test("late notifications cannot recreate history while permanent deletion is awaiting storage", async (t) => {
+  const f = await fixture(t);
+  const runtime = f.manager.runtime(f.key, "original");
+  runtime.connected = true;
+  let entered, release;
+  const reached = new Promise(resolve => { entered = resolve; });
+  const gate = new Promise(resolve => { release = resolve; });
+  const remove = f.manager.store.deleteRun.bind(f.manager.store);
+  f.manager.store.deleteRun = async key => { entered(); await gate; return remove(key); };
+  const deleting = f.manager.deleteSession(f.key, f.input);
+  await reached;
+  try {
+    assert.equal(runtime.deleting, true);
+    f.client.notify("item/completed", { threadId: "original", item: { id: "late", type: "agentMessage", text: "late private content" } });
+    f.client.emit("disconnected", new Error("late disconnect"));
+    await f.manager.events.drain();
+    assert.equal((await f.manager.store.savedHistory(f.key)).items.some(item => item.id === "late"), false);
+  } finally { release(); }
+  await deleting;
+  assert.equal(await f.database.client.sessionItem.count(), 0);
+  assert.equal(await f.database.client.logChunk.count(), 0);
 });

@@ -1,3 +1,4 @@
+const { navigateWorkspace } = require("../support/browser-navigation.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -9,9 +10,7 @@ async function settingsReady(page, workspace, repository, tapdWorkspace) {
     document.querySelector('[aria-label="项目代码仓库路径"]')?.textContent === repository &&
     document.querySelector('input[aria-label="TAPD 项目 ID"]')?.value === tapdWorkspace,
   { repository, tapdWorkspace });
-  assert.equal(await page.getByRole("button", {
-    name: `切换工作区：${workspace.name}`, exact: true,
-  }).getAttribute("aria-current"), "true");
+  assert.equal(new URL(page.url()).searchParams.get("workspace"), workspace.id);
 }
 
 async function holdResponse(page, pattern) {
@@ -59,9 +58,7 @@ async function verifyWorkspaceNavigation(page, { workspaceA, workspaceB, reposit
       return response;
     };
   });
-  const select = (workspace) => page.getByRole("button", {
-    name: `切换工作区：${workspace.name}`, exact: true,
-  }).click();
+  const select = workspace => navigateWorkspace(page, workspace);
   const checkUrl = async (workspace) => {
     const url = new URL(page.url());
     assert.equal(url.searchParams.get("workspace"), workspace.id);
@@ -105,7 +102,7 @@ async function verifyWorkspaceNavigation(page, { workspaceA, workspaceB, reposit
     await select(workspaceB);
     const oldBootstrap = await delayedBootstrap.captured;
     await page.getByRole("heading", { name: "正在加载工作区…", exact: true }).waitFor();
-    assert.equal(await page.getByRole("navigation", { name: "工作区", exact: true }).isVisible(), true);
+
     assert.equal(await page.getByLabel("项目代码仓库", { exact: true }).count(), 0,
       "loading another workspace must not expose the previous workspace's form");
     assert.equal(await page.getByRole("button", { name: "＋ 从需求启动", exact: true }).isDisabled(), true);

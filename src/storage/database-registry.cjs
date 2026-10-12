@@ -1,5 +1,6 @@
 const path = require("node:path");
 
+/** @type {Map<string, import('./application-database.cjs').ApplicationDatabase>} */
 const databases = new Map();
 
 function key(directory) {

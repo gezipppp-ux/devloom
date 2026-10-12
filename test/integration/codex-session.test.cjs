@@ -16,12 +16,23 @@ function options(t, mode = 'success') {
     },
     task: {
       images: [{ path: path.join(directory, 'image with spaces.png') }],
-      codex_prompt: '需求包含 "quotes" 和 $(literal)，请结合图片。',
+      prompt: '需求包含 "quotes" 和 $(literal)，请结合图片。',
     },
     onSession() {},
     onStarted() {},
   };
 }
+
+test('standalone native CLI reports normalized history items through onItem', async t => {
+  const input = options(t, 'item');
+  const items = [];
+  input.onItem = item => items.push(item);
+  const result = await startSession(input);
+  assert.equal(result.completed, true);
+  assert.equal(items[0].type, 'agentMessage');
+  assert.equal(items[0].turnId, 'turn-test');
+  assert.equal(items[0].text, 'fixture answer');
+});
 
 test('new persistent session uses stdin, isolated cwd and --image; strips TAPD env', async (t) => {
   const input = options(t);
@@ -42,7 +53,7 @@ test('new persistent session uses stdin, isolated cwd and --image; strips TAPD e
   const captured = JSON.parse(
     fs.readFileSync(path.join(input.directory, 'final.md')),
   );
-  assert.equal(captured.prompt, input.task.codex_prompt);
+  assert.equal(captured.prompt, input.task.prompt);
   assert.equal(captured.cwd, input.repository);
   assert.equal(
     captured.args[captured.args.indexOf('--image') + 1],

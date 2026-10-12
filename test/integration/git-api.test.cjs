@@ -6,7 +6,7 @@ const { execFileSync } = require("node:child_process");
 const { temporary } = require("../support/helpers.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const { WorkspaceManager } = require("../../src/application/workspace-manager.cjs");
-const { SessionManager } = require("../../src/application/session-manager.cjs");
+const { SessionManager } = require("../support/session-manager.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { saveSystemSettings } = require("../../src/config/system-settings.cjs");
 const { saveSettings } = require("../../src/config/execution-settings.cjs");
@@ -47,24 +47,25 @@ async function fixture(t) {
     createManager: (options) =>
       new SessionManager({ ...options, client: new FakeClient() }),
   });
-  saveSystemSettings(
+  (await saveSystemSettings(
     { memberStorageRoot: path.join(directory, "trees") },
     directory,
-  );
-  const a = workspaces.save({ name: "Git fixture" });
-  const b = workspaces.save({ name: "Other workspace" });
-  seedWorkspaceProject(workspaces.configFile(a.id), repository);
-  saveSettings(
+  ));
+  const a = (await workspaces.save({ name: "Git fixture" }));
+  const b = (await workspaces.save({ name: "Other workspace" }));
+  (await seedWorkspaceProject(workspaces.configFile(a.id), repository));
+  (await saveSettings(
     { baseRef: "main" },
     workspaces.configFile(a.id),
-  );
-  const manager = workspaces.get(a.id).sessions;
+  ));
+  const manager = (await workspaces.get(a.id)).sessions;
   const key = "1-2";
   const tree = path.join(directory, "task");
   const branch = "codex/git-api-fixture";
   git("worktree", "add", "-b", branch, tree, "HEAD");
   const state = {
     source: { channel: "tapd", scope: "1", id: "2" },
+    agent: { provider: "codex" },
     workitem: { title: "Git fixture", id: "2", workspace_id: "1" },
     worktree: {
       repository,
@@ -76,7 +77,7 @@ async function fixture(t) {
     execution: { status: "completed" },
     transition: { status: "succeeded" },
   };
-  writeConfig(path.join(manager.store.dir(key), "run.json"), state);
+  (await writeConfig(path.join(manager.store.dir(key), "run.json"), state));
   const app = createWebServer({ testIdentity: true, workspaces });
   t.after(() => app.close());
   const origin = await app.listen(0);
@@ -93,8 +94,8 @@ async function fixture(t) {
       body: JSON.stringify(input),
     });
   const snapshot = () => manager.readGit(key);
-  const confirmation = () => {
-    const status = snapshot();
+  const confirmation = async () => {
+    const status = await snapshot();
     return {
       expectedHead: status.head,
       statusToken: status.statusToken,
@@ -102,8 +103,8 @@ async function fixture(t) {
       discardChanges: true,
     };
   };
-  const remove = (input = confirmation(), headers) =>
-    post(`/runs/${key}/worktree/delete`, input, headers);
+  const remove = async (input, headers) =>
+    post(`/runs/${key}/worktree/delete`, input ?? await confirmation(), headers);
   return {
     directory,
     repository,
@@ -128,14 +129,14 @@ async function fixture(t) {
 test("delete API validates origin, scope, snapshot and risk acknowledgement without starting a turn", async (t) => {
   const f = await fixture(t);
   const { manager, key, tree, branch, snapshot, confirmation, remove } = f;
-  assert.equal(snapshot().unpublished, true);
-  assert.equal(snapshot().ahead, null);
+  assert.equal((await snapshot()).unpublished, true);
+  assert.equal((await snapshot()).ahead, null);
   assert.equal(
-    (await remove(confirmation(), { "x-tapd-token": "wrong" })).status,
+    (await remove((await confirmation()), { "x-tapd-token": "wrong" })).status,
     403,
   );
   assert.equal(
-    (await remove(confirmation(), { origin: "https://elsewhere.invalid" }))
+    (await remove((await confirmation()), { origin: "https://elsewhere.invalid" }))
       .status,
     403,
   );
@@ -145,19 +146,19 @@ test("delete API validates origin, scope, snapshot and risk acknowledgement with
     404,
   );
   for (const input of [
-    { ...confirmation(), confirmBranch: "main" },
-    { ...confirmation(), discardChanges: false },
-    { ...confirmation(), path: f.repository },
+    { ...(await confirmation()), confirmBranch: "main" },
+    { ...(await confirmation()), discardChanges: false },
+    { ...(await confirmation()), path: f.repository },
   ])
     assert.equal((await remove(input)).status, 400);
-  const stale = confirmation();
+  const stale = (await confirmation());
   fs.writeFileSync(path.join(tree, "new.txt"), "keep");
   assert.equal((await remove(stale)).status, 400);
   assert.equal(fs.readFileSync(path.join(tree, "new.txt"), "utf8"), "keep");
   const runtime = manager.runtime(key, "original");
   runtime.status = "running";
   runtime.turnId = "active-turn";
-  assert.equal(snapshot().canDelete, false);
+  assert.equal((await snapshot()).canDelete, false);
   assert.equal((await remove()).status, 400);
   runtime.status = "completed";
   runtime.turnId = null;
@@ -174,8 +175,8 @@ test("delete API validates origin, scope, snapshot and risk acknowledgement with
   assert.equal((await remove()).status, 200);
   assert.equal(fs.existsSync(tree), false);
   assert.throws(() => f.git("show-ref", "--verify", `refs/heads/${branch}`));
-  assert.equal(snapshot().deleted, true);
-  assert.equal(manager.store.readWorktreeDeletion(key).status, "deleted");
+  assert.equal((await snapshot()).deleted, true);
+  assert.equal((await manager.store.readWorktreeDeletion(key)).status, "deleted");
   assert.equal(
     fs.readFileSync(path.join(manager.store.dir(key), "run.json"), "utf8"),
     original,
@@ -202,10 +203,10 @@ test("delete API validates origin, scope, snapshot and risk acknowledgement with
 test("delete refuses another Web owner and active external Codex session; repository mutations are serialized", async (t) => {
   const f = await fixture(t);
   const { manager, key, remove, tree } = f;
-  writeConfig(path.join(manager.store.dir(key), "web-owner.json"), {
+  (await writeConfig(path.join(manager.store.dir(key), "web-owner.json"), {
     pid: process.pid,
     token: "another-service",
-  });
+  }));
   assert.equal((await remove()).status, 400);
   fs.unlinkSync(path.join(manager.store.dir(key), "web-owner.json"));
   const request = manager.client.request.bind(manager.client);
@@ -222,7 +223,7 @@ test("delete refuses another Web owner and active external Codex session; reposi
     },
   );
   assert.equal(fs.existsSync(tree), true);
-  assert.equal(manager.store.readWorktreeDeletion(key).status, undefined);
+  assert.equal((await manager.store.readWorktreeDeletion(key)).status, undefined);
 });
 
 test("repository HTTP fetch uses saved repository and configured remote; persists refresh timestamp", async (t) => {

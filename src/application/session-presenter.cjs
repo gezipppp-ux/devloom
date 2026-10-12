@@ -1,6 +1,7 @@
 const path = require("node:path");
 const { sourceFor } = require("../domain/run-identity.cjs");
-const { normalizeItem } = require("../domain/session-item.cjs");
+const { agentConfig } = require("../domain/agent-config.cjs");
+const { describeAgent } = require("./agent-presenter.cjs");
 
 function text(value) {
   return typeof value === "string" ? value : "";
@@ -8,48 +9,49 @@ function text(value) {
 
 // Owns the public session DTOs; raw records and filesystem locations stay in storage.
 class SessionPresenter {
-  constructor({ store, settings, apiPrefix = "/api" }) {
+  constructor({ store, settings, apiPrefix = "/api", agent }) {
+    /** @type {import('../storage/run-store.cjs').RunStore} */
     this.store = store;
+    this.agent = agent;
+    /** @type {import('./session-settings.cjs').SessionSettings} */
     this.settings = settings;
     this.apiPrefix = apiPrefix;
   }
 
-  summary(key, state) {
+  async summary(key, state) {
     const originalTitle = text(state.workitem.title).trim() || text(state.workitem.name).trim();
-    const sources = this.store.requirements.read(key).sources || state.workitem.sources ||
+    const sources = (await this.store.requirements.read(key)).sources || state.workitem.sources ||
       [state.source || sourceFor("tapd", state.workitem)];
     return {
       key,
       sources,
       requirementCount: sources.length,
-      title: this.store.readSessionTitle(key, originalTitle || `未命名会话 · ${state.workitem.id || key}`),
-      archivedAt: this.store.readArchive(key).archivedAt || null,
+      title: (await this.store.readSessionTitle(key, originalTitle || `未命名会话 · ${state.workitem.id || key}`)),
+      archivedAt: (await this.store.readArchive(key)).archivedAt || null,
       source: state.source || sourceFor("tapd", state.workitem),
       storyId: state.workitem.id,
       workspaceId: state.workitem.workspace_id,
       sessionId: state.session_id,
-      metadata: this.store.readTaskMetadata(key, state.workitem),
-      ...(this.settings ? this.settings.describe(key, state) : {}),
-      codex: state.codex
-        ? {
-            model: text(state.codex.model),
-            reasoningEffort: text(state.codex.reasoning_effort),
-          }
-        : null,
+      metadata: (await this.store.readTaskMetadata(key, state.workitem)),
+      ...(this.settings ? (await this.settings.describe(key, state)) : {}),
+      agent: { ...describeAgent(this.agent, agentConfig(state).provider),
+        model: agentConfig(state).model, reasoningEffort: agentConfig(state).reasoningEffort,
+        permissionMode: agentConfig(state).permissionMode },
       execution: state.execution,
       transition: state.transition,
       updatedAt: state.updated_at,
       imageCount: state.image_count,
       worktree: state.worktree,
-      worktreeDeletion: this.store.readWorktreeDeletion(key),
+      worktreeDeletion: (await this.store.readWorktreeDeletion(key)),
     };
   }
 
-  requirement(key, state = this.store.read(key)) {
+  async requirement(key, state) {
+    state ??= await this.store.read(key);
     let task = {};
     let warning = "";
     try {
-      task = this.store.readTask(key);
+      task = (await this.store.readTask(key));
     } catch (error) {
       warning =
         error.code === "ENOENT"
@@ -57,7 +59,7 @@ class SessionPresenter {
           : "任务资料快照无法读取，已显示运行记录中保存的需求内容。";
     }
     return { ...this.taskRequirement(key, task, state.workitem, state.created_at), warning,
-      additions: (this.store.requirements.read(key).additions || []).map(entry => ({
+      additions: ((await this.store.requirements.read(key)).additions || []).map(entry => ({
         id: entry.id, status: entry.status, createdAt: entry.createdAt,
         requirement: this.taskRequirement(key, entry.task, {}, entry.createdAt, entry.id),
       })),
@@ -77,7 +79,7 @@ class SessionPresenter {
       description: text(item.description),
       markdown: text(item.markdown_description),
       supplementaryInstructions: text(item.supplementary_instructions),
-      prompt: text(task.codex_prompt),
+      prompt: text(task.prompt),
       requirements: task.requirements?.map(child => this.taskRequirement(key, child, {}, createdAt, additionId, allImages)),
       images: (task.images || []).map((image) => ({
         index: allImages.findIndex(entry => entry.path === image.path),
@@ -88,9 +90,9 @@ class SessionPresenter {
     };
   }
 
-  images(key) {
+  async images(key) {
     try {
-      const task = this.store.readTask(key);
+      const task = (await this.store.readTask(key));
       return (task.images || []).map((image, index) => ({
         index,
         name: path.basename(image.path),
@@ -112,10 +114,11 @@ class SessionPresenter {
     };
   }
 
-  item(key, item, turnId) {
-    const normalized = normalizeItem(item, turnId);
+  async item(key, item, turnId) {
+    const { imageSources, ...fields } = item;
+    const normalized = { ...fields, turnId: turnId ?? item.turnId };
     if (normalized.type === "userMessage") {
-      const images = this.store.messageImages(key).match(item.content);
+      const images = (await (await this.store.messageImages(key)).match(imageSources));
       if (images.length)
         normalized.images = images.map((image) =>
           this.messageImage(key, image),

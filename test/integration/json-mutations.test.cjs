@@ -11,7 +11,7 @@ const { saveSession } = require('../../src/channels/tapd/auth-utils.cjs');
 test('concurrent task metadata updates preserve the other process field', { timeout: 15000 }, async (t) => {
   const directory = temporary(t);
   const store = new RunStore(directory);
-  store.writeTaskMetadata('1-2', { type: 'requirement', progress: 'in_progress' });
+  (await store.writeTaskMetadata('1-2', { type: 'requirement', progress: 'in_progress' }));
   const gate = new SharedArrayBuffer(4);
   const workers = [];
   t.after(async () => { await Promise.all(workers.map((worker) => worker.terminate())); });
@@ -71,40 +71,40 @@ test('concurrent task metadata updates preserve the other process field', { time
     Atomics.notify(new Int32Array(gate), 0);
   }
   await Promise.all([first.finished, second.finished]);
-  assert.deepEqual(store.readTaskMetadata('1-2'), { type: 'bug', progress: 'done' });
+  assert.deepEqual((await store.readTaskMetadata('1-2')), { type: 'bug', progress: 'done' });
   assert.deepEqual(fs.readdirSync(store.dir('1-2')), ['task-metadata.json']);
 });
 
-test('authentication refresh keeps workspace version and atomically preserves the previous config on write failure', (t) => {
+test('authentication refresh keeps workspace version and atomically preserves the previous config on write failure', async (t) => {
   const directory = temporary(t);
   const file = path.join(directory, 'config.json');
   const previous = {
     version: 3, workspace: { id: 'workspace-fixture', name: '项目名称' },
-    codex: { repository: '/recorded/repository' },
+    agent: { provider: 'codex' }, execution: { repository: '/recorded/repository' },
     workflow: { allow_write: true, fields: { developer: 'fixture' } },
     tapd: { image_hosts: ['images.example.invalid'], session: { cookie_header: 'old-fixture' } },
   };
-  writeConfig(file, previous);
+  (await writeConfig(file, previous));
   const session = { cookie_header: 'new-fixture', request_body: {} };
-  saveSession(session, file);
+  (await saveSession(session, file));
   const expected = { ...previous, tapd: { ...previous.tapd, session } };
-  assert.deepEqual(readOptional(file), expected);
+  assert.deepEqual((await readOptional(file)), expected);
   const rename = fs.renameSync;
   t.mock.method(fs, 'renameSync', function (source, target) {
     if (target === file) throw new Error('fixture rename failed');
     return rename.call(this, source, target);
   });
-  assert.throws(() => saveSession({ cookie_header: 'failed-fixture' }, file), /fixture rename failed/);
-  assert.deepEqual(readOptional(file), expected);
+  (await assert.rejects(async () => (await saveSession({ cookie_header: 'failed-fixture' }, file)), /fixture rename failed/));
+  assert.deepEqual((await readOptional(file)), expected);
   assert.deepEqual(fs.readdirSync(directory), ['config.json']);
 });
 
-test('JSON updates release their lock when validation fails and preserve independently owned configuration fields', (t) => {
+test('JSON updates release their lock when validation fails and preserve independently owned configuration fields', async (t) => {
   const directory = temporary(t);
   const file = path.join(directory, 'config.json');
-  writeConfig(file, { workspace: { id: 'fixture' }, tapd: { session: { cookie_header: 'fixture' } } });
-  assert.throws(() => updateConfig(file, () => { throw new Error('invalid draft'); }), /invalid draft/);
-  const saved = updateConfig(file, (current) => ({ ...current, codex: { repository: '/new/repository' } }));
+  (await writeConfig(file, { workspace: { id: 'fixture' }, tapd: { session: { cookie_header: 'fixture' } } }));
+  (await assert.rejects(async () => (await updateConfig(file, () => { throw new Error('invalid draft'); })), /invalid draft/));
+  const saved = (await updateConfig(file, (current) => ({ ...current, agent: { provider: 'codex' }, execution: { repository: '/new/repository' } })));
   assert.deepEqual(saved.workspace, { id: 'fixture' });
   assert.equal(saved.tapd.session.cookie_header, 'fixture');
   assert.deepEqual(fs.readdirSync(directory), ['config.json']);

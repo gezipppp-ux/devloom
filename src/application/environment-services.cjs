@@ -26,7 +26,7 @@ class EnvironmentServices {
     const checks = [
       { name: "操作系统", status: ["win32", "linux"].includes(process.platform) ? "pass" : "warning", detail: `${process.platform} / ${process.arch}（支持 Windows、Linux）` },
       { name: "数据目录可写", status: writableDirectory(this.dataDirectory) ? "pass" : "fail", detail: "数据库与上传数据存储目录" },
-      { name: "成员目录可写", status: writableDirectory(readSystemSettings(this.dataDirectory).memberStorageRoot) ? "pass" : "fail", detail: "项目与任务目录，未创建时检查上级目录权限" },
+      { name: "成员目录可写", status: writableDirectory((await readSystemSettings(this.dataDirectory)).memberStorageRoot) ? "pass" : "fail", detail: "项目与任务目录，未创建时检查上级目录权限" },
     ];
     return { tools, checks, runningNode: process.version, checkedAt: new Date().toISOString(), job: this.job, busy: this.busy,
       ready: tools.every(tool => tool.status === "pass") && checks.every(check => check.status === "pass") };
@@ -40,13 +40,13 @@ class EnvironmentServices {
       })).finally(() => { this.checking = null; });
     }
     await this.checking;
-    return this.read();
+    return (await this.read());
   }
 
   assertIdle() {
     if (this.cloning()) throw new Error("仍有项目正在克隆，请完成后再更新。");
     for (const manager of this.managers()) {
-      if (manager.startingRequests || manager.operations?.size || [...(manager.sessions?.values() || [])].some(runtime => runtime.turnId || runtime.pipelineActive || runtime.requests?.size || ["preparing", "initializing", "starting", "running", "inProgress"].includes(runtime.status)))
+      if (manager.startingRequests || manager.credentialRefresh || manager.operations?.size || [...(manager.sessions?.values() || [])].some(runtime => runtime.turnId || runtime.pipelineActive || runtime.requests?.size || ["preparing", "initializing", "starting", "running", "inProgress"].includes(runtime.status)))
         throw new Error("仍有任务正在执行或等待审批，请结束本轮后再更新。");
     }
   }
@@ -66,7 +66,7 @@ class EnvironmentServices {
       if (compareVersions(latest.version, installed.version) <= 0) throw new Error("当前版本无需更新。");
       const plan = await this.plan(input.id, installed);
       if (!plan.available) throw new Error(plan.reason);
-      authorize();
+      await authorize();
       this.assertIdle();
       if (this.closed) throw new Error("服务正在关闭。");
       const job = { id: input.id, version: input.version, status: "running", startedAt: new Date().toISOString(), message: "正在安装，请保持服务运行。" };

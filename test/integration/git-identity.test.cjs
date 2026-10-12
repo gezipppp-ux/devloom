@@ -4,7 +4,7 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { test } = require("node:test");
 const { createGitCredentialEnvironment } = require("../../src/git/account-credentials.cjs");
-const { childEnvironment } = require("../../src/codex/environment.cjs");
+const { childEnvironment } = require("../../src/shared/child-environment.cjs");
 const { temporary } = require("../support/helpers.cjs");
 
 test("credentialed worktrees retain system/global commit identity but not authentication, with local identity taking precedence", async t => {

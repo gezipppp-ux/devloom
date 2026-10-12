@@ -1,11 +1,12 @@
 const assert = require("node:assert/strict");
 const { randomUUID } = require("node:crypto");
-const { waitForClone } = require("../support/workspace-clones.cjs");
+const { seedProjectDepartment, prepareHttpProject } = require("../support/project-http.cjs");
 const { execFileSync, fork } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 const { test } = require("node:test");
+const { postgresFixture } = require("../support/postgres.cjs");
 const { temporary } = require("../support/helpers.cjs");
 
 const root = path.resolve(__dirname, "../..");
@@ -21,13 +22,13 @@ function within(promise, milliseconds, message) {
   ]).finally(() => clearTimeout(timer));
 }
 
-function launch(directory, port = 0) {
+function launch(directory, url, port = 0) {
   const child = fork(
     entrypoint,
     ["--host", "127.0.0.1", "--port", String(port)],
     {
       cwd: directory,
-      env: { ...process.env, RUNNER_DATA_DIR: directory },
+      env: { ...process.env, RUNNER_DATA_DIR: directory, DATABASE_URL: url },
       stdio: ["ignore", "pipe", "pipe", "ipc"],
       windowsHide: true,
     },
@@ -148,7 +149,7 @@ test("importing the development entrypoint is inert from a separate data directo
     ],
     {
       cwd: directory,
-      env: { ...process.env, RUNNER_DATA_DIR: directory },
+      env: { ...process.env, RUNNER_DATA_DIR: directory, DATABASE_URL: "" },
       encoding: "utf8",
       timeout: 10000,
       windowsHide: true,
@@ -164,6 +165,9 @@ test("development CLI serves Vite and workspace APIs on one guarded origin", asy
   const { gitRemote } = require("../support/git-remote.cjs");
   const remote = await gitRemote(path.join(directory, "git-server"));
   t.after(() => remote.close());
+  const fixture = await postgresFixture(t);
+  await fixture.deploy();
+  const url = fixture.url;
   const accountPassword = "development-fixture-password";
   execFileSync(
     process.execPath,
@@ -172,16 +176,19 @@ test("development CLI serves Vite and workspace APIs on one guarded origin", asy
     ],
     {
       cwd: directory,
-      env: { ...process.env, RUNNER_DATA_DIR: directory },
+      env: { ...process.env, RUNNER_DATA_DIR: directory, DATABASE_URL: url },
       input: `${accountPassword}\n${accountPassword}\n`,
       encoding: "utf8",
       windowsHide: true,
     },
   );
+  const seeding = await fixture.open();
+  const department = await seedProjectDepartment(seeding);
+  await seeding.close();
   const privateFile = path.join(directory, "private-fixture.json");
   const secret = "development-test-private-data-must-not-be-served";
   fs.writeFileSync(privateFile, JSON.stringify({ secret }));
-  const running = launch(directory);
+  const running = launch(directory, url);
   try {
     const origin = await ready(running);
     assert.match(origin, /^http:\/\/127\.0\.0\.1:\d+$/);
@@ -256,31 +263,18 @@ test("development CLI serves Vite and workspace APIs on one guarded origin", asy
     };
     const system = await send(`${origin}/api/system/settings`, { method: "POST", headers, body: JSON.stringify({ memberStorageRoot: path.join(directory, "members") }) });
     assert.equal(system.status, 200);
-    const account = await send(`${origin}/api/account/git-accounts`, { method: "POST", headers, body: JSON.stringify({ name: "fixture", authType: "http", remoteUrl: remote.remoteUrl, username: remote.username, password: remote.password }) });
+    const account = await send(`${origin}/api/account/git-accounts`, { method: "POST", headers, body: JSON.stringify({ name: "fixture", authType: "http", host: new URL(remote.remoteUrl).origin, username: remote.username, password: remote.password }) });
     assert.equal(account.status, 201, account.text);
-    const payload = JSON.stringify({ requestId: randomUUID(), name: "开发服务隔离测试", gitAccountId: JSON.parse(account.text).account.id, remoteUrl: remote.remoteUrl });
-    const created = await send(`${origin}/api/workspaces`, {
-      method: "POST",
-      headers,
-      body: payload,
-    });
-    assert.equal(created.status, 202, created.text);
-    const clone = await waitForClone(async () => JSON.parse((await send(`${origin}/api/workspace-clones/${JSON.parse(created.text).clone.id}`, { headers: { cookie } })).text).clone);
-    assert.equal(clone.status, "completed", JSON.stringify(clone));
-    const workspace = clone.workspace;
-    assert.equal(workspace.name, "开发服务隔离测试");
-    const configFile = path.join(directory, "db", "web-coding.sqlite");
-    const database = require("better-sqlite3")(configFile, { readonly: true });
-    try {
-      assert.equal(
-        database
-          .prepare("SELECT id FROM workspaces WHERE id=?")
-          .get(workspace.id).id,
-        workspace.id,
-      );
-    } finally {
-      database.close();
-    }
+    const payload = JSON.stringify({ name: "forbidden" });
+    const refused = await send(origin + "/api/workspaces", { method: "POST", headers, body: JSON.stringify({ requestId: randomUUID(), name: "forbidden", gitAccountId: JSON.parse(account.text).account.id, remoteUrl: remote.remoteUrl }) });
+    assert.equal(refused.status, 403);
+    const workspace = await prepareHttpProject(async (route, body) => {
+      const response = await send(origin + route, { headers, ...(body === undefined ? {} : { method: "POST", body: JSON.stringify(body) }) });
+      return { status: response.status, data: JSON.parse(response.text) };
+    }, { name: "开发服务隔离测试", departmentId: department.id, gitAccountId: JSON.parse(account.text).account.id, remoteUrl: remote.remoteUrl });
+    const database = await fixture.open();
+    assert.equal((await database.client.workspace.findUniqueOrThrow({ where: { id: workspace.id } })).id, workspace.id);
+    await database.close();
 
     for (const pathname of [
       "/",
@@ -326,11 +320,12 @@ test("development CLI serves Vite and workspace APIs on one guarded origin", asy
     const catalog = JSON.parse(
       (await send(`${origin}/api/workspaces`, { headers: { cookie } })).text,
     );
-    assert.deepEqual(catalog.workspaces, [workspace]);
+    assert.deepEqual(catalog.workspaces.map(({ id, name, projectId }) => ({ id, name, projectId })), [workspace]);
+    assert.ok(catalog.workspaces[0].permissions.includes("session.view"));
 
     for (const file of [
       privateFile,
-      configFile,
+      path.join(directory, "secrets", "database.key"),
       path.join(root, "config", "tapd.example.json"),
       path.join(root, "src", "config", "runtime.cjs"),
     ])
@@ -356,12 +351,14 @@ test("development CLI serves Vite and workspace APIs on one guarded origin", asy
 
 test("development CLI exits after a port collision instead of retaining Vite watchers", async (t) => {
   const directory = temporary(t);
+  const fixture = await postgresFixture(t);
+  await fixture.deploy();
   const occupied = http.createServer((_request, response) =>
     response.end("occupied"),
   );
   await new Promise((resolve) => occupied.listen(0, "127.0.0.1", resolve));
   const port = occupied.address().port;
-  const running = launch(directory, port);
+  const running = launch(directory, fixture.url, port);
   try {
     const result = await within(
       running.exited,

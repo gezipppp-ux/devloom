@@ -4,12 +4,14 @@
 
 ## 独立安装
 
-需要 Node.js **22.13+**（推荐当前 LTS）、npm、Git，以及已安装并登录的 Codex CLI。将应用源码复制到单独目录；不复制 `node_modules`、运行记录和凭据。
+需要 Node.js **22.13+**（推荐当前 LTS）、npm、Git、PostgreSQL **17**（当前验证版本），以及已安装并登录的 Codex CLI。将应用源码复制到单独目录；不复制 `node_modules`、运行记录和凭据。先设置独立的 `RUNNER_DATA_DIR` 和 `DATABASE_URL`。
 
 ```sh
 cd /opt/requirement-runner
 npm ci
 npm run build
+npm run db:deploy
+npm run init:admin
 npm start -- --port 4317
 ```
 
@@ -20,6 +22,33 @@ Windows 也支持上述 npm 命令。生产部署先构建一次，再运行 `np
 更新源码后需要重新构建前端并重启 Web 服务。服务不会热加载后端代码；只构建或刷新页面可能使新版页面连接旧接口，出现“接口不存在”。确认没有执行中的任务后停止原服务，再从当前安装目录运行 `npm start -- --port 4317`，并刷新浏览器。重启继续使用同一 `RUNNER_DATA_DIR`，保留已有会话及 worktree。
 
 本次 Git／目录重构不兼容旧数据：使用新的独立 `RUNNER_DATA_DIR`，不迁移、不回退读取旧目录字段。旧数据库和业务文件不会自动删除。
+
+## 本地 PostgreSQL
+
+可以连接已有的独立 PostgreSQL 数据库，也可以使用仓库的 `compose.yaml` 启动本机数据库。Docker 仅运行数据库，应用仍由 Node.js 运行。
+
+PowerShell 示例：
+
+```powershell
+$env:POSTGRES_PASSWORD = '替换为独立随机密码'
+docker compose up -d postgres
+$encodedPassword = [Uri]::EscapeDataString($env:POSTGRES_PASSWORD)
+$env:DATABASE_URL = "postgresql://web_coding:${encodedPassword}@127.0.0.1:5432/web_coding"
+npm run db:deploy
+```
+
+Linux shell 示例：
+
+```sh
+export POSTGRES_PASSWORD='替换为独立随机密码'
+docker compose up -d postgres
+export DATABASE_URL='postgresql://web_coding:替换为URL编码密码@127.0.0.1:5432/web_coding'
+npm run db:deploy
+```
+
+密码在连接 URL 中需要百分号编码。默认端口仅绑定 `127.0.0.1:5432`，可通过 `POSTGRES_PORT` 调整。数据库保存在 Docker 命名卷，日常停止用 `docker compose stop`；数据库备份使用 `pg_dump` 等 PostgreSQL 工具。生产环境按运维要求配置连接权限、TLS 和备份。
+
+应用不自动读取 `.env`；连接地址必须传给初始化、迁移和启动进程。Docker Compose 自身支持 `.env`，不要把只供 Compose 读取的变量误认为已传给 Node.js。
 
 ## 持久化与配置
 
@@ -32,17 +61,17 @@ Windows 也支持上述 npm 命令。生产部署先构建一次，再运行 `np
 | 业务 Git 仓库   | `/srv/repos/product`          |
 | Worktree 根目录 | `/srv/worktrees`              |
 
-启动前设置 `RUNNER_DATA_DIR` 为独立运行数据目录。业务数据保存在 `db/web-coding.sqlite`，独立凭据主密钥位于 `secrets/database.key`。`workspaces/` 仅保留执行图片缓存和必要锁。未设置变量时使用应用目录；静态页面始终取自安装包的 `web/dist`。账号与升级完整约定见 [账号与数据库](engineering/accounts-and-database.md)。
+启动前设置 `RUNNER_DATA_DIR` 为独立运行数据目录，`DATABASE_URL` 指向新的 PostgreSQL 数据库。业务数据通过 Prisma 保存，独立凭据主密钥位于 `secrets/database.key`。`workspaces/` 仅保留执行图片缓存和必要锁。未设置数据目录时使用应用目录；静态页面始终取自安装包的 `web/dist`。账号与升级完整约定见 [账号与数据库](engineering/accounts-and-database.md)。
 
-先运行 `npm run init:admin` 交互创建管理员，再启动和登录页面。密码需要输入两次且不回显，不会写入命令行或 npm 配置。管理员创建成员，成员各自创建私有工作区并配置仓库和 TAPD。Cookie 加密入库，不回显。旧配置和运行文件不迁移、不自动清理；业务仓库和 Worktree 保留原位。
+先运行 `npm run init:admin` 交互创建管理员，再启动和登录页面。密码需要输入两次且不回显，不会写入命令行或 npm 配置。管理员维护部门、成员及仓库目录，并为自己分配部门；获授权的创建者建立项目、添加成员及分配权限。普通成员不能自行创建空间，拥有代码操作权限后自动分配个人开发空间。TAPD Cookie 在项目设置中加密入库，不回显。旧配置和运行文件不迁移、不自动清理；业务仓库和 Worktree 保留原位。
 
 Web 不接受 `--config`。不要将凭据写入 service 文件或版本控制。
 
-登录 Codex 的用户必须与运行服务的用户一致。管理员在「系统设置」维护成员目录基础路径并查看 Git 环境；成员在「个人设置」维护 Git 账号，创建工作区时输入远程克隆地址。项目与任务路径由服务生成，工作区只调整基准引用及初始化命令。SSH 生成需要服务器安装 OpenSSH（`ssh-keygen`）。Linux 路径区分大小写，不接受 Windows 盘符路径。
+登录 Codex 的用户必须与运行服务的用户一致。管理员在「系统设置」维护成员目录基础路径并查看 Git 环境；开发成员在「个人设置」维护多个 Git 主机账号和独立提交作者，在项目开发空间选择本人账号验证实际仓库并准备克隆。非开发成员无需 Git 或 Codex。项目基准引用、初始化命令及 TAPD 在项目设置中维护。新目录为 `<成员目录>/projects/<项目ID>/members/<用户ID>/{repository-<准备修订号>,worktree/<任务>}`。准备失败保留原目录，明确重试使用新目录；已就绪空间的记录路径保持不变。SSH 生成需要服务器安装 OpenSSH（`ssh-keygen`）。Linux 路径区分大小写，不接受 Windows 盘符路径。
 
 Windows 路径需带完整盘符（例如 `D:\repos\project`）或使用 UNC 共享路径；`\repos\project`、`/repos/project` 依赖当前磁盘，不能作为明确的服务端绝对路径。中文、空格和 Windows 扩展路径可用于仓库及 worktree。Linux 保留路径中的空格并按大小写匹配。
 
-配置、任务和工作区名称使用 SQLite 事务及唯一约束更新。服务启动时执行未运行的 Knex 升级，再补齐缺失的生产默认设置；升级前停掉旧服务及 CLI，存在运行进程时拒绝改表。有升级时在 `db/backups/` 建立一致性备份。异常留下的 `db/.upgrade.lock` 应在确认相关进程均停止后再处理；不自动移除未知所有权锁，不删除业务 Worktree。
+配置、任务和工作区名称使用 PostgreSQL 短事务及唯一约束更新。升级前停掉旧服务及 CLI，完成数据库、密钥和工作目录备份，执行 `npm run build` 和 `npm run db:deploy`。启动只校验迁移状态和文件校验和、补齐默认设置，发现未部署或失败的迁移时拒绝启动；不回退旧 SQLite，不自动删除业务 Worktree。不要在生产运行 `db push` 或 `migrate reset`。
 
 Web 与 CLI 自动定位 Codex 的顺序：
 
@@ -55,7 +84,7 @@ Linux 候选必须具有执行权限；npm 的 `codex.js` 入口通过当前 Nod
 
 迁移到 Linux 时删除旧的 Windows `codex.command`（以及与旧安装绑定的 `command_args`），再启用自动查找。systemd 不会自动读取 `.bashrc` 或 nvm 初始化脚本；如果 Codex 安装在另一套 Node 或自定义目录中，需要在 service 中添加该目录到 `PATH`，或设置 `Environment=CODEX_BIN=/absolute/path/to/codex`。修改 service 后执行 `systemctl daemon-reload` 并重启服务；Web 中保存工作区配置无需重启；手动修改 Codex 启动程序路径后需要重启。
 
-现有 session 不会因为设置改动而迁移。备份 SQLite 还应单独保管凭据主密钥。恢复执行需要对应的 Codex 用户数据、业务仓库与 Worktree Git 元数据；仅恢复数据库不足以恢复执行，路径不一致的历史会话保持只读。
+现有 session 不会因为设置改动而迁移。PostgreSQL 备份之外应单独保管凭据主密钥。恢复执行需要对应的 Codex 用户数据、业务仓库与 Worktree Git 元数据；仅恢复数据库不足以恢复执行，路径不一致的历史会话保持只读。
 
 ## Linux 常驻服务
 
@@ -72,6 +101,7 @@ Type=simple
 User=runner
 WorkingDirectory=/opt/requirement-runner
 Environment=RUNNER_DATA_DIR=/var/lib/requirement-runner
+EnvironmentFile=/etc/requirement-runner/environment
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 ExecStart=/usr/bin/node /opt/requirement-runner/src/cli/web.cjs --port 4317
 Restart=on-failure
@@ -81,6 +111,8 @@ UMask=0077
 [Install]
 WantedBy=multi-user.target
 ```
+
+`/etc/requirement-runner/environment` 由运维创建并限制读取权限，包含 `DATABASE_URL=postgresql://...`，可按需要配置外部 `RUNNER_ENCRYPTION_KEY`；不要提交该文件。初始化管理员、部署迁移与服务启动必须使用相同数据库、运行目录和密钥。
 
 CLI 启动默认监听 `0.0.0.0`，上述 npm 命令和 systemd 配置均可通过 `http://<Linux主机IP>:4317` 直接访问，例如 `http://192.168.0.27:4317`。`0.0.0.0` 是监听地址，浏览器应使用主机实际 IP。
 
@@ -111,6 +143,7 @@ ssh -N -L 4317:127.0.0.1:4317 runner@your-server
 初始化和 CLI 超时/停止时，Linux 终止独立进程组，Windows 使用 `taskkill /t` 清理普通子进程树。初始化适用于安装、构建等有明确结束时间的命令；主动脱离进程组的守护程序需要由独立服务管理。
 
 ```sh
+npm run db:generate
 npx eslint src test web/src web/vite.config.mjs
 node --test test/architecture/*.test.cjs test/unit/*.test.cjs test/integration/*.test.cjs
 npm run build
@@ -120,6 +153,8 @@ node test/browser/workspaces.test.cjs
 node test/browser/dev.test.cjs
 node test/browser/accounts.test.cjs
 ```
+
+测试必须设置 `TEST_DATABASE_URL` 指向独立测试数据库。测试创建并清理随机 schema，不应使用生产连接或生产运行目录。
 
 浏览器 smoke 在 Linux/macOS 默认使用 Playwright Chromium；Windows 默认使用本机 Edge。`BROWSER_CHANNEL` 可显式选择已安装的浏览器渠道。执行核心与 HTTP 测试不依赖浏览器、真实模型或 TAPD 写入。
 

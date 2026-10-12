@@ -63,13 +63,14 @@ async function fetchRepository(value, remote, credentials) {
   return { remote: selected, fetchedAt: new Date().toISOString() };
 }
 
-async function updateBaseBranch(value, baseRef = "HEAD", remote, credentials) {
+async function updateBaseBranch(value, baseRef = "HEAD", remote, credentials, authorize = async () => {}) {
   const before = readRepositoryStatus(value, baseRef);
   if (!before.canUpdate) throw new Error(before.updateReason);
   const selected = selectedRemote(before.repository, remote || before.remote);
   if (selected !== before.remote) throw new Error("更新基准分支必须使用该分支已配置的远端上游。");
   const head = git(before.repository, ["rev-parse", "--verify", "HEAD"]);
   const fetched = await fetchRepository(before.repository, selected, credentials);
+  await authorize();
   const current = readRepositoryStatus(before.repository, baseRef);
   if (!current.canUpdate) throw new Error(current.updateReason);
   if (current.branch !== before.branch || current.upstream !== before.upstream ||
@@ -78,6 +79,7 @@ async function updateBaseBranch(value, baseRef = "HEAD", remote, credentials) {
   const upstream = localBranches(before.repository).find((branch) => branch.name === current.branch).upstream;
   const commit = resolveCommit(before.repository, upstream);
   try {
+    await authorize();
     await gitAsync(before.repository, ["merge", "--ff-only", "--no-edit", "--no-overwrite-ignore", "--", commit]);
   } catch {
     throw new Error("无法快进更新基准分支。分支可能已分叉，或文件阻止更新，请交由 Codex 或在本地处理。");

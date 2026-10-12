@@ -30,7 +30,7 @@ function decodeEntities(value) {
   );
 }
 
-function extractImages(workitem) {
+function extractImageReferences(workitem) {
   const sources = [];
   for (const text of [
     workitem.description || '',
@@ -56,18 +56,19 @@ function extractImages(workitem) {
       sources.push(source);
     }
   }
-  return [
-    ...new Set(
-      sources.map((source) => {
-        const url = new URL(
-          decodeEntities(source.trim()),
-          workitem.detail_url || 'https://www.tapd.cn/',
-        );
-        url.hash = '';
-        return url.href;
-      }),
-    ),
-  ];
+  return [...new Set(sources)].map((source) => {
+    const decoded = decodeEntities(source.trim());
+    const url = new URL(
+      decoded,
+      workitem.detail_url || 'https://www.tapd.cn/',
+    );
+    url.hash = '';
+    return { source: decoded, url: url.href };
+  });
+}
+
+function extractImages(workitem) {
+  return [...new Set(extractImageReferences(workitem).map(reference => reference.url))];
 }
 
 function allowedUrl(value, extraHosts) {
@@ -158,7 +159,7 @@ async function collectImages(workitem, session, directory, options = {}) {
       'images',
       `${String(index + 1).padStart(2, '0')}.${extension}`,
     );
-    writeArtifact(file, bytes, { materialize: true, mimeType: extension === 'jpg' ? 'image/jpeg' : `image/${extension}` });
+    (await writeArtifact(file, bytes, { materialize: true, mimeType: extension === 'jpg' ? 'image/jpeg' : `image/${extension}` }));
     images.push({
       index: index + 1,
       source: source.startsWith('data:') ? '(embedded image)' : source,
@@ -173,4 +174,5 @@ module.exports = {
   collectImages,
   downloadImage,
   extractImages,
+  extractImageReferences,
 };

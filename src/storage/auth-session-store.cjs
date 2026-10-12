@@ -1,89 +1,53 @@
 const { createHash, randomBytes } = require("node:crypto");
 
-function sessionKey(sid) {
-  return createHash("sha256").update(sid).digest("hex");
+function sessionKey(sid) { return createHash("sha256").update(sid).digest("hex"); }
+
+function deliver(operation, callback) {
+  Promise.resolve().then(operation).then((value) => callback(null, value), callback);
 }
 
 class AuthSessionStore {
-  constructor(database) {
-    this.db = database.handle;
+  constructor(database) { this.database = database; }
+
+  async signingSecret() {
+    // Empty-update upserts may be emulated by Prisma with a read then insert.
+    // A native conflict-ignoring insert protects concurrent server startup.
+    await this.database.client.authMetadata.createMany({
+      data: [{ name: "cookie-secret", value: randomBytes(48).toString("hex") }], skipDuplicates: true,
+    });
+    const row = await this.database.client.authMetadata.findUniqueOrThrow({ where: { name: "cookie-secret" } });
+    return row.value;
   }
-  signingSecret() {
-    return this.db
-      .transaction(() => {
-        let row = this.db
-          .prepare("SELECT value FROM auth_metadata WHERE name='cookie-secret'")
-          .get();
-        if (!row) {
-          row = { value: randomBytes(48).toString("hex") };
-          this.db
-            .prepare(
-              "INSERT INTO auth_metadata(name,value) VALUES ('cookie-secret',?)",
-            )
-            .run(row.value);
-        }
-        return row.value;
-      })
-      .immediate();
-  }
+
   set(sid, session, callback) {
-    try {
-      const expires = new Date(
-        session.cookie.expires || Date.now() + 12 * 60 * 60 * 1000,
-      ).getTime();
+    deliver(async () => {
+      const expiresAt = new Date(session.cookie.expires || Date.now() + 12 * 60 * 60 * 1000);
       const copy = { ...session };
-      // The plaintext bearer id is never persisted inside the session JSON.
       delete copy.sessionId;
       delete copy.encryptedSessionId;
-      this.db
-        .prepare(
-          "INSERT INTO auth_sessions(sid,session_json,expires_at,user_id) VALUES (?,?,?,?) ON CONFLICT(sid) DO UPDATE SET session_json=excluded.session_json,expires_at=excluded.expires_at,user_id=excluded.user_id",
-        )
-        .run(
-          sessionKey(sid),
-          JSON.stringify(copy),
-          expires,
-          session.userId || null,
-        );
-      this.db
-        .prepare("DELETE FROM auth_sessions WHERE expires_at <= ?")
-        .run(Date.now());
-      callback();
-    } catch (error) {
-      callback(error);
-    }
+      // Session plugins may supply Date instances; persist their JSON form.
+      const data = JSON.parse(JSON.stringify(copy));
+      const record = { data, expiresAt, userId: session.userId || null };
+      await this.database.client.authSession.upsert({ where: { sid: sessionKey(sid) },
+        create: { sid: sessionKey(sid), ...record }, update: record });
+      await this.database.client.authSession.deleteMany({ where: { expiresAt: { lte: new Date() } } });
+    }, callback);
   }
+
   get(sid, callback) {
-    try {
-      const row = this.db
-        .prepare(
-          "SELECT session_json,expires_at FROM auth_sessions WHERE sid=?",
-        )
-        .get(sessionKey(sid));
-      if (!row || row.expires_at <= Date.now()) return callback(null, null);
-      callback(null, JSON.parse(row.session_json));
-    } catch (error) {
-      callback(error);
-    }
+    deliver(async () => {
+      const row = await this.database.client.authSession.findUnique({ where: { sid: sessionKey(sid) } });
+      return row && row.expiresAt.getTime() > Date.now() ? row.data : null;
+    }, callback);
   }
+
   destroy(sid, callback) {
-    try {
-      this.db
-        .prepare("DELETE FROM auth_sessions WHERE sid=?")
-        .run(sessionKey(sid));
-      callback();
-    } catch (error) {
-      callback(error);
-    }
+    deliver(async () => { await this.database.client.authSession.deleteMany({ where: { sid: sessionKey(sid) } }); }, callback);
   }
-  valid(sid, userId) {
-    return Boolean(
-      this.db
-        .prepare(
-          "SELECT 1 FROM auth_sessions WHERE sid=? AND user_id=? AND expires_at>?",
-        )
-        .get(sessionKey(sid), userId, Date.now()),
-    );
+
+  async valid(sid, userId) {
+    return await this.database.client.authSession.count({ where: { sid: sessionKey(sid), userId, expiresAt: { gt: new Date() } } }) > 0;
   }
 }
+
 module.exports = { AuthSessionStore };

@@ -20,50 +20,59 @@ function setup() {
   };
   const emitted = [];
   const rejected = [];
-  const client = new EventEmitter();
-  client.reject = (...args) => rejected.push(args);
-  new SessionEvents({
+  const agent = new EventEmitter();
+  agent.reject = (...args) => rejected.push(args);
+  const events = new SessionEvents({
     store: { log() {} },
-    client,
+    agent,
     sessions: new Map([[preparing.key, preparing], [active.key, active]]),
     emit: (event) => emitted.push(event),
   });
-  return { client, preparing, active, emitted, rejected };
+  return { events, agent, preparing, active, emitted, rejected };
 }
 
-test("request resolution without threadId targets its owner while another task is preparing", () => {
-  const { client, active, preparing, emitted } = setup();
+test("request resolution without sessionId targets its owner while another task is preparing", async () => {
+  const { events, agent, active, preparing, emitted } = setup();
   active.requests.set("42", { id: "42" });
-  client.emit("notification", {
-    method: "serverRequest/resolved",
-    params: { requestId: 42 },
+  agent.emit("event", {
+    type: "request-resolved",
+    requestId: "42",
   });
+  await events.drain();
   assert.equal(active.requests.size, 0);
+  await events.drain();
   assert.equal(preparing.requests.size, 0);
+  await events.drain();
   assert.equal(emitted.length, 1);
+  await events.drain();
   assert.equal(emitted[0].key, active.key);
   assert.deepEqual(emitted[0].requests, []);
 });
 
-test("notifications without a thread identity cannot mutate a preparing task", () => {
-  const { client, preparing, emitted } = setup();
-  client.emit("notification", {
-    method: "item/agentMessage/delta",
-    params: { itemId: "foreign-item", delta: "unrelated output" },
+test("notifications without a session identity cannot mutate a preparing task", async () => {
+  const { events, agent, preparing, emitted } = setup();
+  agent.emit("event", {
+    type: "item-delta",
+    itemId: "foreign-item", field: "text", delta: "unrelated output",
   });
+  await events.drain();
   assert.equal(preparing.items.size, 0);
+  await events.drain();
   assert.equal(emitted.length, 0);
 });
 
-test("interactive requests without a thread identity are rejected instead of attaching to preparation", () => {
-  const { client, preparing, emitted, rejected } = setup();
-  client.emit("request", {
-    id: 43,
-    method: "item/commandExecution/requestApproval",
-    params: { command: "echo fixture" },
+test("interactive requests without a session identity are rejected instead of attaching to preparation", async () => {
+  const { events, agent, preparing, emitted, rejected } = setup();
+  agent.emit("request", {
+    id: "request-43", kind: "approval", blocking: true,
+    command: "echo fixture",
   });
+  await events.drain();
   assert.equal(preparing.requests.size, 0);
+  await events.drain();
   assert.equal(emitted.length, 0);
+  await events.drain();
   assert.equal(rejected.length, 1);
-  assert.equal(rejected[0][0], 43);
+  await events.drain();
+  assert.equal(rejected[0][0].id, "request-43");
 });

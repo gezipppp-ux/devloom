@@ -33,17 +33,17 @@ function basePath(value) {
   return directory;
 }
 
-function readSystemSettings(directory = dataRoot) {
-  const config = readOptional(settingsFile(directory));
+async function readSystemSettings(directory = dataRoot) {
+  const config = (await readOptional(settingsFile(directory)));
   return {
     memberStorageRoot: basePath(
-      config.memberStorageRoot ?? path.join(os.homedir(), ".codex-workspaces"),
+      config.memberStorageRoot ?? path.join(os.homedir(), ".web-coding-workspaces"),
     ),
     platform: process.platform,
   };
 }
 
-function saveSystemSettings(input, directory = dataRoot) {
+async function saveSystemSettings(input, directory = dataRoot) {
   if (
     !input ||
     typeof input !== "object" ||
@@ -62,12 +62,12 @@ function saveSystemSettings(input, directory = dataRoot) {
   } finally {
     if (fs.existsSync(probe)) fs.unlinkSync(probe);
   }
-  updateConfig(settingsFile(directory), (current) => ({
+  (await updateConfig(settingsFile(directory), (current) => ({
     ...current,
     version: 1,
     memberStorageRoot: canonical,
-  }));
-  return readSystemSettings(directory);
+  })));
+  return (await readSystemSettings(directory));
 }
 
 module.exports = { readSystemSettings, saveSystemSettings };

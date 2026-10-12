@@ -20,22 +20,22 @@ function titleSlug(title) {
   );
 }
 
-function buildManualTaskPackage({ item, directory, readImage, config = {} }) {
-  const images = item.image_ids.map((id, offset) => {
-    const { bytes, extension } = readImage(id);
+async function buildManualTaskPackage({ item, directory, readImage, config = {} }) {
+  const images = (await Promise.all(item.image_ids.map(async (id, offset) => {
+    const { bytes, extension } = await readImage(id);
     const file = path.join(
       directory,
       'images',
       `${String(offset + 1).padStart(2, '0')}.${extension}`,
     );
-    writeArtifact(file, bytes, { materialize: true, mimeType: extension === 'jpg' ? 'image/jpeg' : `image/${extension}` });
+    (await writeArtifact(file, bytes, { materialize: true, mimeType: extension === 'jpg' ? 'image/jpeg' : `image/${extension}` }));
     return {
       index: offset + 1,
       source: `manual-image:${id}`,
       path: file,
       bytes: bytes.length,
     };
-  });
+  })));
   const workitem = { ...item };
   delete workitem.image_ids;
   const imageList = images
@@ -61,7 +61,7 @@ function buildManualTaskPackage({ item, directory, readImage, config = {} }) {
       generated_at: new Date().toISOString(),
       workitem,
       images,
-      codex_prompt: prompt,
+      prompt,
       execution_ready: true,
       blocked_reason: null,
     },

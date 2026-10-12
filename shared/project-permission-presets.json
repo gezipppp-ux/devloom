@@ -1,0 +1,80 @@
+[
+  {
+    "id": "product",
+    "label": "产品协作",
+    "description": "维护需求与 Bug、评论、交付和普通资产",
+    "permissions": [
+      "project.view",
+      "issue.view",
+      "issue.create",
+      "issue.edit",
+      "issue.assign",
+      "issue.transition",
+      "issue.accept",
+      "collaboration.view",
+      "comment.create",
+      "deliverable.create",
+      "asset.view",
+      "asset.edit"
+    ],
+    "corePermissions": [
+      "issue.create",
+      "issue.edit",
+      "comment.create"
+    ]
+  },
+  {
+    "id": "code",
+    "label": "代码操作",
+    "description": "准备个人开发空间并操作仓库，不授予 Agent 执行",
+    "permissions": [
+      "project.view",
+      "code.view",
+      "code.operate"
+    ],
+    "corePermissions": [
+      "code.operate"
+    ]
+  },
+  {
+    "id": "agent",
+    "label": "Agent 开发",
+    "description": "查看事项、操作代码、启动、续聊、审批和停止任务",
+    "permissions": [
+      "project.view",
+      "issue.view",
+      "issue.transition",
+      "collaboration.view",
+      "comment.create",
+      "deliverable.create",
+      "code.view",
+      "code.operate",
+      "session.view",
+      "session.start",
+      "session.continue",
+      "session.approve",
+      "session.stop"
+    ],
+    "corePermissions": [
+      "session.start",
+      "session.continue",
+      "session.approve",
+      "session.stop"
+    ]
+  },
+  {
+    "id": "management",
+    "label": "项目管理",
+    "description": "修改配置、管理成员和归档项目",
+    "permissions": [
+      "project.view",
+      "project.configure",
+      "project.members.manage",
+      "project.archive"
+    ],
+    "corePermissions": [
+      "project.configure",
+      "project.members.manage"
+    ]
+  }
+]

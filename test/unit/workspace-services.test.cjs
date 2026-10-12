@@ -2,16 +2,17 @@ const assert = require("node:assert/strict");
 const { test } = require("node:test");
 const { WorkspaceServices } = require("../../src/application/workspace-services.cjs");
 const { DEFAULT_ACCOUNT_SETTINGS } = require("../../src/domain/account.cjs");
-const { validateModelSelection } = require("../../src/codex/models.cjs");
+const { createAgent } = require("../../src/agents/registry.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 
 function services() {
   const client = new FakeClient();
+  const agent = createAgent({ provider: "codex", client });
   return new WorkspaceServices({
     channels: {},
     sessions: {
       async start(input) {
-        await validateModelSelection(client, input);
+        await agent.validateSelection(input);
         return input;
       },
     },

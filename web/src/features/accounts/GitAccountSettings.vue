@@ -1,5 +1,4 @@
 <script setup>
-import { computed } from "vue";
 import { ReloadOutlined } from "@antdv-next/icons";
 import FormSection from "../../shared/components/FormSection.vue";
 import { useGitAccounts } from "./use-git-accounts.js";
@@ -8,7 +7,6 @@ const {
   form,
   loading,
   saving,
-  checking,
   generating,
   deleting,
   busy,
@@ -19,19 +17,18 @@ const {
   edit,
   load,
   save,
-  check,
   generate,
   remove,
   changeAuthType,
 } = useGitAccounts();
-const httpWarning = computed(() => /^http:\/\//i.test(form.remoteUrl));
 </script>
 
 <template>
   <FormSection
+    id="git-accounts"
     class="git-account-settings"
     title="Git 账号"
-    description="可维护多个 Git 账号。保存前会使用当前填写的凭据检测仓库连接，检测成功后才保存。"
+    description="维护适用于 Git 主机的多个个人账号。开发空间准备时检测项目仓库的实际访问权限。"
   >
     <template #action
       ><button type="button" class="text-button" :disabled="busy" @click="load">
@@ -115,20 +112,18 @@ const httpWarning = computed(() => /^http:\/\//i.test(form.remoteUrl));
           <option value="ssh">SSH · 系统生成密钥</option>
         </select></a-form-item
       >
-      <a-form-item label="Git 远程地址" html-for="git-account-remote"
+      <a-form-item label="Git 主机" html-for="git-account-host"
         ><input
-          id="git-account-remote"
-          v-model="form.remoteUrl"
+          id="git-account-host"
+          v-model="form.host"
           required
           :disabled="busy"
-          placeholder="例如：http://git.example.com/team/project.git"
+          placeholder="例如：git.example.com"
         />
         <p class="field-hint">
-          填写完整仓库克隆地址，不是 Git 服务首页。此地址用于验证仓库读取权限。
+          填写 Git 服务的主机名；项目仓库由管理员单独维护。
         </p>
-        <p v-if="httpWarning" class="warning" role="status">
-          HTTP 不加密传输凭据，仅建议在可信网络的开发环境使用。
-        </p></a-form-item
+        </a-form-item
       >
       <template v-if="form.authType === 'http'">
         <a-form-item label="用户名" html-for="git-account-user"
@@ -151,7 +146,7 @@ const httpWarning = computed(() => /^http:\/\//i.test(form.remoteUrl));
           <p class="field-hint">
             支持普通账号密码或个人访问令牌，具体由 Git 服务决定。{{
               form.id
-                ? "留空保留已保存密码；填写新值后将先检测再替换。"
+                ? "留空保留已保存密码。"
                 : "凭据加密保存，不会回显。"
             }}
           </p></a-form-item
@@ -170,7 +165,7 @@ const httpWarning = computed(() => /^http:\/\//i.test(form.remoteUrl));
         />
         <p class="field-hint">
           系统生成 Ed25519 密钥。请复制公钥到 Git 服务的 SSH
-          密钥设置；私钥仅在服务端加密保管，不会显示或下载。替换密钥需重新检测并保存才生效。
+          密钥设置；私钥仅在服务端加密保管，不会显示或下载。替换密钥保存后生效。
         </p>
         <button type="button" :disabled="busy" @click="generate">
           {{
@@ -182,14 +177,14 @@ const httpWarning = computed(() => /^http:\/\//i.test(form.remoteUrl));
           }}
         </button>
       </a-form-item>
+      <div class="form-columns"><a-form-item label="提交作者姓名" html-for="git-author-name"><input id="git-author-name" v-model="form.authorName" :disabled="busy" /></a-form-item><a-form-item label="提交作者邮箱" html-for="git-author-email"><input id="git-author-email" v-model="form.authorEmail" type="email" :disabled="busy" /></a-form-item></div>
+      <p class="field-hint">提交作者身份与 Git 登录凭据独立；不填写时沿用服务端已配置的 Git 作者身份。</p>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <p v-if="notice" class="success" role="status">{{ notice }}</p>
       <div class="actions">
         <button type="button" :disabled="busy" @click="edit()">新建账号</button
-        ><button type="button" :disabled="busy || !ready" @click="check">
-          {{ checking ? "正在检测…" : "测试连接" }}</button
         ><button type="submit" class="primary" :disabled="busy || !ready">
-          {{ saving ? "正在检测并保存…" : "检测并保存 Git 账号" }}
+          {{ saving ? "正在保存…" : "保存 Git 账号" }}
         </button>
       </div>
     </a-form>

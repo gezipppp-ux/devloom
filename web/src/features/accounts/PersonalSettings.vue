@@ -6,7 +6,7 @@ import { appApi } from "../../shared/api/api.js";
 import { useModelCatalog } from "../../shared/api/use-model-catalog.js";
 import { usePermissionModes } from "../../shared/api/use-permission-modes.js";
 import FormSection from "../../shared/components/FormSection.vue";
-import CodexModelControls from "../../shared/components/CodexModelControls.vue";
+import AgentModelControls from "../../shared/components/AgentModelControls.vue";
 import PermissionSelect from "../../shared/components/PermissionSelect.vue";
 import PasswordForm from "./PasswordForm.vue";
 import GitAccountSettings from "./GitAccountSettings.vue";
@@ -16,6 +16,7 @@ const models = useModelCatalog((url) => appApi(`/account${url}`));
 const permissions = usePermissionModes((url) => appApi(`/account${url}`));
 const busy = ref(false), saved = ref(false), error = ref("");
 async function save() {
+  if (busy.value || !permissions.isAvailable(form.permissionMode)) return;
   busy.value = true; saved.value = false; error.value = "";
   try {
     await saveAccountSettings({ ...form, model: form.model || null, reasoningEffort: form.reasoningEffort || null });
@@ -30,13 +31,14 @@ async function save() {
     <FormSection title="新任务默认值" description="创建任务时自动填入，单个任务仍可独立调整。已有会话保持原设置。">
       <template #action><button type="button" class="text-button" :disabled="models.loading.value" @click="models.refresh"><ReloadOutlined aria-hidden="true" />刷新模型列表</button></template>
       <a-form :model="form" layout="vertical" @finish="save">
-        <CodexModelControls :model="form.model" :reasoning-effort="form.reasoningEffort" :models="models.models.value" :loading="models.loading.value" :disabled="busy" @change="Object.assign(form, $event)" />
+        <AgentModelControls :agent-label="permissions.agent.value?.label || 'Agent'" :model="form.model" :reasoning-effort="form.reasoningEffort" :models="models.models.value" :loading="models.loading.value" :disabled="busy" @change="Object.assign(form, $event)" />
         <p v-if="models.error.value" class="error" role="alert">模型列表加载失败：{{ models.error.value }}。当前选择会保留。</p>
         <a-form-item label="默认执行权限"><PermissionSelect v-model="form.permissionMode" :options="permissions.permissionModes.value" :disabled="busy" refreshable :refreshing="permissions.loading.value" @refresh="permissions.refresh" /></a-form-item>
         <p v-if="permissions.error.value" class="error" role="alert">{{ permissions.error.value }}</p>
+        <p v-if="!permissions.loading.value && !permissions.error.value && !permissions.isAvailable(form.permissionMode)" class="error" role="alert">当前权限模式不可用，请选择可用的权限模式后保存。</p>
         <a-form-item label="默认任务分组"><select v-model="form.grouping" aria-label="默认任务分组" :disabled="busy"><option value="type">按类型</option><option value="progress">按进度</option><option value="none">不分组</option></select></a-form-item>
         <p v-if="error" class="error" role="alert">{{ error }}</p><p v-if="saved" class="success" role="status">个人设置已保存。</p>
-        <button type="submit" class="primary" :disabled="busy">{{ busy ? "正在保存…" : "保存个人设置" }}</button>
+        <button type="submit" class="primary" :disabled="busy || !permissions.isAvailable(form.permissionMode)">{{ busy ? "正在保存…" : "保存个人设置" }}</button>
       </a-form>
     </FormSection>
     <FormSection title="桌面通知" description="Codex 返回未读结果时提醒你。每台设备仍需单独允许浏览器通知。">

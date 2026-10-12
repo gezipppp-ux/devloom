@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, ref } from "vue";
 import { ReloadOutlined, CloudDownloadOutlined } from "@antdv-next/icons";
 import { api } from "../../shared/api/api.js";
 import FormSection from "../../shared/components/FormSection.vue";
+const props = defineProps({ canOperate: { type: Boolean, default: true } });
 
 const repository = ref(null);
 const selectedRemote = ref("");
@@ -30,7 +31,7 @@ async function refresh() {
 }
 
 async function execute(action) {
-  if (operation.value || loading.value) return;
+  if (operation.value || loading.value || !props.canOperate) return;
   const current = ++revision;
   operation.value = action;
   error.value = "";
@@ -112,7 +113,7 @@ onUnmounted(() => {
       </p>
     </FormSection>
     <FormSection
-      v-if="repository"
+      v-if="repository && canOperate"
       title="获取最新代码"
       description="先获取远端分支信息，再按需更新本地基准分支。"
     >

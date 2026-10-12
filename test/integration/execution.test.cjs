@@ -1,3 +1,4 @@
+const { startFixtureSession } = require("../support/cli-execution.cjs");
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -6,7 +7,7 @@ const { test } = require('node:test');
 const { runExecution } = require('../../src/execution/runner.cjs');
 const { createTapdChannel } = require('../../src/channels/tapd/adapter.cjs');
 const { saveState } = require('../../src/storage/run-state.cjs');
-const { SessionManager } = require('../../src/application/session-manager.cjs');
+const { SessionManager } = require('../support/session-manager.cjs');
 const { FakeClient } = require('../fixtures/web-client.cjs');
 const { item, png, session, temporary, workflow } = require('../support/helpers.cjs');
 
@@ -21,7 +22,7 @@ function setup(t) {
   const directory = temporary(t);
   const calls = [];
   const input = {
-    config: { workflow: { allow_write: true } },
+    config: { agent: { provider: "codex" }, workflow: { allow_write: true } },
     configFile: path.join(directory, 'config.json'),
     session,
     item,
@@ -33,7 +34,7 @@ function setup(t) {
     buildTask: async () => ({
       images: [],
       execution_ready: true,
-      codex_prompt: 'test',
+      prompt: 'test',
     }),
     workflowInfo: async () => workflow,
     worktreePlan: () => ({
@@ -43,7 +44,7 @@ function setup(t) {
     createWorktree: () => calls.push('worktree'),
     startSession: async ({ onSession, onStarted }) => {
       calls.push('session');
-      onSession('session-id');
+      await onSession('session-id');
       const saved = JSON.parse(
         fs.readFileSync(path.join(directory, 'run.json')),
       );
@@ -81,12 +82,12 @@ test('TAPD execution skips status writes, persists results and prevents duplicat
 test('initialization runs between worktree creation and Codex; failure prevents session and transition', async (t) => {
   for (const fail of [false, true]) {
     const { calls, input, dependencies } = setup(t);
-    input.config.codex = { init_commands: ['pnpm install'] };
+    input.config.execution = { initCommands: ['pnpm install'] };
     dependencies.initializeWorktree = async ({ cwd, commands, onUpdate }) => {
       assert.equal(cwd, path.join(input.directory, 'tree'));
       assert.deepEqual(commands, ['pnpm install']);
       calls.push('initialize');
-      onUpdate({ status: fail ? 'failed' : 'completed', commands: [] }, 0);
+      await onUpdate({ status: fail ? 'failed' : 'completed', commands: [] }, 0);
       if (fail) throw new Error('initialization failed');
     };
     if (fail) {
@@ -119,7 +120,7 @@ test('legacy TAPD transition retries are skipped without writes or redispatch', 
   const { calls, input, dependencies } = setup(t);
   const state = await runRequirement(input, dependencies);
   state.transition = { status: 'failed', error: 'legacy transition failure' };
-  saveState(path.join(input.directory, 'run.json'), state);
+  (await saveState(path.join(input.directory, 'run.json'), state));
   dependencies.detail = () => { throw new Error('no longer in todo'); };
   const retried = await runRequirement({ ...input, retry: true }, dependencies);
   assert.equal(retried.transition.status, 'skipped');
@@ -157,20 +158,21 @@ test('transition retry preserves a concurrent Web followup on success and failur
     const file = path.join(directory, 'run.json');
     fs.mkdirSync(directory, { recursive: true });
     const workitem = { id: '2', workspace_id: '1', title: 'retry fixture' };
-    saveState(file, {
+    (await saveState(file, {
+      agent: { provider: "codex" },
       workitem,
       worktree: { path: directory },
       session_id: 'original',
       execution_started_at: new Date().toISOString(),
       execution: { status: 'completed' },
       transition: { status: 'failed' },
-    });
+    }));
     manager.worktreeReason = () => null;
     manager.runtime(key, 'original').connected = true;
     const entered = Promise.withResolvers();
     const finish = Promise.withResolvers();
     const retry = runExecution({
-      config: { workspace: {} },
+      config: { workspace: {}, agent: { provider: "codex" } },
       configFile,
       item: workitem,
       directory,
@@ -188,14 +190,14 @@ test('transition retry preserves a concurrent Web followup on success and failur
     try {
       await entered.promise;
       await manager.send(key, 'continue during the transition retry');
-      assert.equal(manager.store.read(key).execution.status, 'running');
+      assert.equal((await manager.store.read(key)).execution.status, 'running');
       finish.resolve();
       const result = await retry;
       assert.equal(result.execution.status, 'running');
       assert.equal(result.transition.status, fail ? 'failed' : 'succeeded');
-      assert.equal(manager.store.read(key).execution.status, 'running');
+      assert.equal((await manager.store.read(key)).execution.status, 'running');
       await manager.interrupt(key);
-      const completed = manager.store.read(key);
+      const completed = (await manager.store.read(key));
       assert.equal(completed.execution.status, 'interrupted');
       assert.deepEqual(completed.transition, result.transition);
     } finally {
@@ -228,6 +230,7 @@ test('exclusive lock blocks concurrent dispatch; uncertain state is not redispat
   fs.writeFileSync(
     path.join(input.directory, 'run.json'),
     JSON.stringify({
+      agent: { provider: "codex" },
       workitem: item,
       execution: { status: 'starting' },
       transition: { status: 'not_started' },
@@ -276,15 +279,21 @@ test('full pipeline uses one real Git worktree, image attachment and simulated C
       configFile: path.join(temporaryRoot, 'config.json'),
       config: {
         workflow: { allow_write: true },
-        codex: {
+        execution: {
           repository,
-          worktree_root: path.join(temporaryRoot, 'external-worktrees'),
-          command: process.execPath,
-          command_args: [path.join(__dirname, '../fixtures/codex.cjs'), 'success'],
+          worktreeRoot: path.join(temporaryRoot, 'external-worktrees'),
+        },
+        agent: {
+          provider: "codex",
+          options: {
+            command: process.execPath,
+            command_args: [path.join(__dirname, '../fixtures/codex.cjs'), 'success'],
+          },
         },
       },
     },
     {
+      startSession: startFixtureSession,
       detail: async () => withImage,
       workflowInfo: async () => workflow,
       applyTransition: async () => ({ verified_status: 'developing' }),
@@ -330,4 +339,27 @@ test('full pipeline uses one real Git worktree, image attachment and simulated C
     fs.readFileSync(path.join(state.worktree.path, 'codex-result.txt'), 'utf8'),
     'isolated',
   );
+});
+
+test('execution awaits asynchronous channel validation and worktree creation before starting Codex', async (t) => {
+  const { calls, input, dependencies } = setup(t);
+  const channel = createTapdChannel(input.configFile, dependencies);
+  let releaseValidation, releaseWorktree, enteredValidation, enteredWorktree;
+  const validating = new Promise(resolve => { enteredValidation = resolve; });
+  const creating = new Promise(resolve => { enteredWorktree = resolve; });
+  const validationGate = new Promise(resolve => { releaseValidation = resolve; });
+  const worktreeGate = new Promise(resolve => { releaseWorktree = resolve; });
+  channel.validate = async () => { enteredValidation(); await validationGate; calls.push('validated'); };
+  dependencies.createWorktree = async () => { enteredWorktree(); await worktreeGate; calls.push('worktree'); };
+  const execution = runExecution({ ...input, channel }, dependencies);
+  try {
+    await validating;
+    assert.deepEqual(calls, []);
+    releaseValidation();
+    await creating;
+    assert.deepEqual(calls, ['validated']);
+    releaseWorktree();
+    assert.equal((await execution).execution.status, 'completed');
+    assert.deepEqual(calls, ['validated', 'worktree', 'session']);
+  } finally { releaseValidation(); releaseWorktree(); }
 });

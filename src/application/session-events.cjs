@@ -1,49 +1,112 @@
 const { OUTPUT_LIMIT } = require("../domain/session-item.cjs");
+const { presentError } = require("./error-presenter.cjs");
 const { SessionPresenter } = require("./session-presenter.cjs");
-const { USER_INPUT_METHOD, validateUserInput, userInputResponse } = require("../codex/user-input.cjs");
+const { assertCapability } = require("../domain/agent-contract.cjs");
 
-// Projects Codex notifications and interactive requests into one workspace's runtime.
+// Projects normalized agent events and interactive requests into one workspace's runtime.
 class SessionEvents {
-  constructor({ store, client, sessions, settings, emit, apiPrefix, synchronizeHistory }) {
+  constructor({ store, agent, sessions, settings, emit, apiPrefix, synchronizeHistory }) {
+    /** @type {import('../storage/run-store.cjs').RunStore} */
     this.store = store;
-    this.client = client;
+    this.agent = agent;
     this.sessions = sessions;
+    /** @type {import('./session-settings.cjs').SessionSettings} */
     this.settings = settings;
     this.synchronizeHistory = synchronizeHistory;
     this.emit = emit;
-    this.presenter = new SessionPresenter({ store, settings, apiPrefix });
+    this.presenter = new SessionPresenter({ store, settings, apiPrefix, agent });
     this.pendingCallbacks = new Set();
     this.pendingHistory = new Map();
     this.historyTimers = new Map();
     this.completions = new Map();
-    client.on("notification", (message) => this.notification(message));
-    client.on("request", (message) => this.serverRequest(message));
-    client.on("disconnected", (error) => this.disconnected(error));
+    this.incoming = new Map();
+    this.queuedRequests = new Map();
+    agent.on("event", event => {
+      const runtime = this.runtimeFor(event);
+      return this.enqueue(runtime?.key, () => this.notification(event, runtime));
+    });
+    agent.on("request", request => {
+      const runtime = this.runtimeFor(request);
+      if (runtime) this.queuedRequests.set(request, runtime);
+      return this.enqueue(runtime?.key, async () => {
+        try { await this.serverRequest(request, runtime); }
+        finally { this.queuedRequests.delete(request); }
+      });
+    });
+    agent.on("disconnected", error => this.disconnected(error));
   }
 
-  disconnected(error) {
-    for (const runtime of this.sessions.values()) {
-      this.flushHistory(runtime.key);
-      runtime.connected = false;
-      runtime.requests.clear();
-      if (runtime.turnId) {
-        runtime.status = "disconnected";
-        runtime.error = error.message;
-      }
-      clearTimeout(runtime.initial?.timer);
-      runtime.initial?.reject(error);
-      runtime.initial = null;
-      this.publish(runtime, { type: "state", requests: [] });
+  runtimeFor({ sessionId, type, requestId }) {
+    if (type === "request-resolved" && !sessionId) {
+      const queued = [...this.queuedRequests].find(([request]) => request.id === requestId);
+      if (queued) return queued[1];
+    }
+    return [...this.sessions.values()].find(entry =>
+      (typeof sessionId === "string" && entry.sessionId === sessionId) ||
+      (type === "request-resolved" && !sessionId && entry.requests.has(requestId)),
+    );
+  }
+
+  enqueue(key, operation) {
+    const runtime = this.sessions.get(key);
+    const pending = (this.incoming.get(key) || Promise.resolve()).then(operation).catch(error => {
+      if (runtime && this.sessions.get(key) === runtime && !runtime.deleting) this.fail(runtime, error);
+    }).finally(() => {
+      if (this.incoming.get(key) === pending) this.incoming.delete(key);
+    });
+    this.incoming.set(key, pending);
+    return pending;
+  }
+
+  // Commands fence only their own session; shutdown still drains every queue.
+  async drain(key) {
+    while (true) {
+      const pending = key === undefined ? [...this.incoming.values()] : [this.incoming.get(key)].filter(Boolean);
+      if (!pending.length) return;
+      await Promise.all(pending);
     }
   }
 
-  flushHistory(key) {
+  fail(runtime, error) {
+    error = presentError(error);
+    runtime.error = error.message;
+    runtime.initial?.reject(error);
+    this.emit({ key: runtime.key, type: "error", error: error.message });
+    if (runtime.turnId) void this.agent.interruptTurn({ sessionId: runtime.sessionId, turnId: runtime.turnId }).catch(() => {});
+  }
+
+  disconnected(error) {
+    error = presentError(error);
+    // Snapshot the affected runtimes before a new connection creates sessions.
+    // Each session orders this after its received events, without waiting for
+    // another session's history or persistence to finish.
+    return Promise.all([...this.sessions.values()].map(runtime =>
+      this.enqueue(runtime.key, () => this.disconnectRuntime(runtime, error)),
+    ));
+  }
+
+  async disconnectRuntime(runtime, error) {
+    if (runtime.deleting || this.sessions.get(runtime.key) !== runtime) return;
+    (await this.flushHistory(runtime.key));
+    runtime.connected = false;
+    runtime.requests.clear();
+    if (runtime.turnId) {
+      runtime.status = "disconnected";
+      runtime.error = error.message;
+    }
+    clearTimeout(runtime.initial?.timer);
+    runtime.initial?.reject(error);
+    runtime.initial = null;
+    (await this.publish(runtime, { type: "state", requests: [] }));
+  }
+
+  async flushHistory(key) {
     clearTimeout(this.historyTimers.get(key));
     this.historyTimers.delete(key);
     const pending = this.pendingHistory.get(key);
     if (!pending) return;
     this.pendingHistory.delete(key);
-    for (const item of pending.values()) this.store.saveHistoryItem(key, item);
+    for (const item of pending.values()) (await this.store.saveHistoryItem(key, item));
   }
 
   bufferHistory(runtime, item) {
@@ -52,16 +115,11 @@ class SessionEvents {
     pending.set(item.id, structuredClone(item));
     if (this.historyTimers.has(runtime.key)) return;
     this.historyTimers.set(runtime.key, setTimeout(() => {
-      try { this.flushHistory(runtime.key); }
-      catch (error) {
-        runtime.error = error.message;
-        this.emit({ key: runtime.key, type: "error", error: `会话历史保存失败：${error.message}` });
-        if (runtime.turnId) void this.client.request("turn/interrupt", { threadId: runtime.sessionId, turnId: runtime.turnId }).catch(() => {});
-      }
+      this.enqueue(runtime.key, () => this.flushHistory(runtime.key));
     }, 150));
   }
 
-  publish(runtime, event, deferHistory = false) {
+  async publish(runtime, event, deferHistory = false) {
     runtime.lastActivity = new Date().toISOString();
     const data = {
       key: runtime.key,
@@ -71,19 +129,19 @@ class SessionEvents {
       sessionId: runtime.sessionId,
       ...(event.type === "state" &&
       this.settings &&
-      this.store.hasRun(runtime.key)
-        ? this.settings.describe(runtime.key)
+      (await this.store.hasRun(runtime.key))
+        ? (await this.settings.describe(runtime.key))
         : {}),
       ...event,
     };
     if (event.type === "item") {
       if (deferHistory && this.store.database) this.bufferHistory(runtime, event.item);
       else {
-        this.flushHistory(runtime.key);
-        this.store.saveHistoryItem?.(runtime.key, event.item);
+        (await this.flushHistory(runtime.key));
+        (await this.store.saveHistoryItem?.(runtime.key, event.item));
       }
     }
-    this.store.log(
+    (await this.store.log(
       runtime.key,
       event.type === "item"
         ? {
@@ -95,34 +153,28 @@ class SessionEvents {
             },
           }
         : data,
-    );
+    ));
     this.emit(data);
   }
 
-  persist(runtime) {
-    const previous = this.store.readWeb(runtime.key);
-    this.store.writeWeb(runtime.key, {
+  async persist(runtime) {
+    const previous = (await this.store.readWeb(runtime.key));
+    (await this.store.writeWeb(runtime.key, {
       ...previous,
       sessionId: runtime.sessionId,
       turnId: runtime.turnId,
       status: runtime.status,
       lastActivity: runtime.lastActivity,
-    });
+    }));
   }
 
-  notification({ method, params = {} }) {
-    const runtime = [...this.sessions.values()].find(
-      (entry) =>
-        (typeof params.threadId === "string" &&
-          entry.sessionId === params.threadId) ||
-        (method === "serverRequest/resolved" && !params.threadId &&
-          entry.requests.has(String(params.requestId))),
-    );
-    if (!runtime) return;
+  async notification(event, runtime) {
+    const { type } = event;
+    if (!runtime || runtime.deleting || this.sessions.get(runtime.key) !== runtime) return;
     try {
-      this.store.recordNotification?.(runtime.key, { method, params });
-      if (method === "turn/started") {
-        runtime.turnId = params.turn.id;
+      (await this.store.recordNotification?.(runtime.key, event));
+      if (type === "turn-started") {
+        runtime.turnId = event.turn.id;
         runtime.status = "running";
         runtime.connected = true;
         runtime.error = null;
@@ -133,80 +185,67 @@ class SessionEvents {
           initial.callback = Promise.resolve()
             .then(initial.onStarted)
             .catch((error) => {
-              initial.callbackError = error;
+              initial.callbackError = presentError(error);
             });
           this.pendingCallbacks.add(initial.callback);
           void initial.callback.finally(() => {
             this.pendingCallbacks.delete(initial.callback);
           });
         } else if (!runtime.initial) {
-          this.store.update(runtime.key, {
+          (await this.store.update(runtime.key, {
             execution: {
               status: "running",
               session_id: runtime.sessionId,
             },
-          });
+          }));
         }
-        this.publish(runtime, { type: "state" });
-        this.persist(runtime);
-      } else if (method === "turn/completed") {
-        void this.completed(runtime, params.turn).catch((error) => {
-          runtime.error = error.message;
-          runtime.status = "error";
-          runtime.initial?.reject(error);
-          this.publish(runtime, { type: "state", error: error.message });
-        });
-      } else if (method === "item/started" || method === "item/completed") {
-        const previous = runtime.items.get(params.item.id);
-        const item = this.presenter.item(
+        (await this.publish(runtime, { type: "state" }));
+        (await this.persist(runtime));
+      } else if (type === "turn-completed") {
+        await this.completed(runtime, event.turn);
+      } else if (type === "item") {
+        const previous = runtime.items.get(event.item.id);
+        const item = (await this.presenter.item(
           runtime.key,
-          params.item,
-          params.turnId,
-        );
-        item.status =
-          params.item.status ||
-          (method === "item/started" ? "inProgress" : "completed");
+          event.item,
+          event.turnId,
+        ));
         item.output ||= previous?.output || "";
         item.text ||= previous?.text || "";
         if (!item.images?.length && previous?.images)
           item.images = previous.images;
         runtime.items.set(item.id, item);
-        this.publish(runtime, { type: "item", item });
+        (await this.publish(runtime, { type: "item", item }));
       } else if (
-        method === "item/agentMessage/delta" ||
-        method === "item/commandExecution/outputDelta"
+        type === "item-delta"
       ) {
-        const isMessage = method === "item/agentMessage/delta";
-        const item = runtime.items.get(params.itemId) || {
-          id: params.itemId,
-          turnId: params.turnId,
+        if (!["text", "output"].includes(event.field)) return;
+        const isMessage = event.field === "text";
+        const item = runtime.items.get(event.itemId) || {
+          id: event.itemId,
+          turnId: event.turnId,
           type: isMessage ? "agentMessage" : "commandExecution",
           status: "inProgress",
           text: "",
           output: "",
         };
         const property = isMessage ? "text" : "output";
-        item[property] = `${item[property] || ""}${params.delta || ""}`.slice(
+        item[property] = `${item[property] || ""}${event.delta || ""}`.slice(
           -OUTPUT_LIMIT,
         );
         runtime.items.set(item.id, item);
-        this.publish(runtime, { type: "item", item }, true);
-      } else if (method === "serverRequest/resolved") {
-        runtime.requests.delete(String(params.requestId));
-        this.publish(runtime, {
+        (await this.publish(runtime, { type: "item", item }, true));
+      } else if (type === "request-resolved") {
+        runtime.requests.delete(event.requestId);
+        (await this.publish(runtime, {
           type: "requests",
           requests: [...runtime.requests.values()],
-        });
+        }));
       }
       while (runtime.items.size > 500)
         runtime.items.delete(runtime.items.keys().next().value);
     } catch (error) {
-      runtime.error = error.message;
-      this.emit({
-        key: runtime.key,
-        type: "error",
-        error: error.message,
-      });
+      this.fail(runtime, error);
     }
   }
 
@@ -224,15 +263,16 @@ class SessionEvents {
   }
 
   async settle(key) {
+    await this.drain(key);
     while (this.completions.has(key))
       await Promise.allSettled([...this.completions.get(key)]);
-    this.flushHistory(key);
+    (await this.flushHistory(key));
   }
 
   async completeTurn(runtime, turn) {
     if (runtime.turnId && runtime.turnId !== turn.id) return;
     const initial = runtime.initial;
-    this.flushHistory(runtime.key);
+    (await this.flushHistory(runtime.key));
     runtime.completedTurns.add(turn.id);
     if (runtime.completedTurns.size > 500)
       runtime.completedTurns.delete(
@@ -251,30 +291,30 @@ class SessionEvents {
     for (const item of runtime.items.values()) {
       if (item.turnId === turn.id && item.status === "inProgress")
         item.status = turn.status;
-      this.store.saveHistoryItem?.(runtime.key, item);
+      (await this.store.saveHistoryItem?.(runtime.key, item));
     }
-    this.store.update(runtime.key, {
+    (await this.store.update(runtime.key, {
       execution: {
         status: turn.status,
         session_id: runtime.sessionId,
         completed: turn.status === "completed",
         error: runtime.error,
       },
-    });
-    this.publish(runtime, {
+    }));
+    (await this.publish(runtime, {
       type: "state",
       error: runtime.error,
       requests: [],
-    });
-    this.persist(runtime);
+    }));
+    (await this.persist(runtime));
     if (this.store.database && this.synchronizeHistory) {
       try { await this.synchronizeHistory(runtime.key); }
-      catch (error) { this.publish(runtime, { type: "error", error: `历史补齐失败：${error.message}` }); }
+      catch (error) { (await this.publish(runtime, { type: "error", error: `历史补齐失败：${presentError(error).message}` })); }
     }
     const lastMessage = [...runtime.items.values()]
       .filter((item) => item.turnId === turn.id && item.type === "agentMessage")
       .at(-1);
-    if (lastMessage) this.store.writeFinal(runtime.key, lastMessage.text);
+    if (lastMessage) (await this.store.writeFinal(runtime.key, lastMessage.text));
     if (initial) clearTimeout(initial.timer);
     runtime.initial = null;
     if (initial) {
@@ -289,74 +329,34 @@ class SessionEvents {
     }
   }
 
-  serverRequest(message) {
-    const runtime = [...this.sessions.values()].find(
-      (entry) =>
-        typeof message.params?.threadId === "string" &&
-        entry.sessionId === message.params.threadId,
-    );
-    const supported = [
-      "item/commandExecution/requestApproval",
-      "item/fileChange/requestApproval",
-      USER_INPUT_METHOD,
-    ];
-    if (!runtime || !supported.includes(message.method)) {
-      this.client.reject(
-        message.id,
-        "This Web CLI cannot handle this request. No permission was granted.",
-      );
-      if (runtime)
-        this.publish(runtime, {
-          type: "error",
-          error: `暂不支持交互请求 ${message.method}，已拒绝。`,
-        });
+  async serverRequest(request, runtime) {
+    if (!runtime || runtime.deleting || this.sessions.get(runtime.key) !== runtime || !["approval", "user-input"].includes(request.kind)) {
+      await this.agent.reject(request, "当前会话不能处理此请求，未授予任何权限。");
+      if (runtime && !runtime.deleting && this.sessions.get(runtime.key) === runtime)
+        await this.publish(runtime, { type: "error", error: "暂不支持该执行器交互请求，已拒绝。" });
       return;
     }
-    if (message.method === USER_INPUT_METHOD) {
-      try {
-        validateUserInput(message.params);
-        if (message.params.turnId && message.params.turnId !== runtime.turnId)
-          throw new Error("该问题所属轮次已结束，无法提交回答。");
-      } catch (error) {
-        this.client.reject(message.id, error.message);
-        this.publish(runtime, { type: "error", error: error.message });
-        return;
-      }
+    try {
+      assertCapability(this.agent, request.kind === "user-input" ? "userInput" : "approvals");
+      if (request.turnId && request.turnId !== runtime.turnId)
+        throw new Error("该请求所属轮次已结束，无法提交回答。");
+    } catch (error) {
+      await this.agent.reject(request, error.message);
+      await this.publish(runtime, { type: "error", error: error.message });
+      return;
     }
-    const request = {
-      id: String(message.id),
-      rpcId: message.id,
-      method: message.method,
-      params: message.params,
-    };
     runtime.requests.set(request.id, request);
-    this.publish(runtime, {
-      type: "requests",
-      requests: [...runtime.requests.values()],
-    });
+    await this.publish(runtime, { type: "requests", requests: [...runtime.requests.values()] });
   }
 
   async respond(key, requestId, response) {
     const runtime = this.sessions.get(key);
     const request = runtime?.requests.get(String(requestId));
-    if (!request || !runtime.connected)
+    if (!request || !runtime.connected || (request.turnId && request.turnId !== runtime.turnId))
       throw new Error("该请求已失效，请刷新会话。");
-    let result;
-    if (request.method === USER_INPUT_METHOD) {
-      if (request.params.turnId && request.params.turnId !== runtime.turnId)
-        throw new Error("该请求已失效，请刷新会话。");
-      result = userInputResponse(request.params, response);
-    } else {
-      if (!["accept", "decline"].includes(response.decision))
-        throw new Error("无效的审批决定。");
-      result = { decision: response.decision };
-    }
-    this.client.respond(request.rpcId, result);
+    await this.agent.respond(request, response);
     runtime.requests.delete(request.id);
-    this.publish(runtime, {
-      type: "requests",
-      requests: [...runtime.requests.values()],
-    });
+    await this.publish(runtime, { type: "requests", requests: [...runtime.requests.values()] });
   }
 }
 

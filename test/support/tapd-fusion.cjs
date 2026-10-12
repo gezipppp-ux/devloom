@@ -5,8 +5,8 @@ const { execFileSync } = require("node:child_process");
 const { setTimeout: delay } = require("node:timers/promises");
 const { createTapdChannel } = require("../../src/channels/tapd/adapter.cjs");
 const { ChannelRegistry } = require("../../src/channels/channel-registry.cjs");
-const { SessionManager } = require("../../src/application/session-manager.cjs");
-const { initializeDatabase } = require("../../src/storage/database-lifecycle.cjs");
+const { SessionManager } = require("../support/session-manager.cjs");
+const { initializeTestDatabase } = require("./database.cjs");
 const { writeConfig } = require("../../src/storage/json-files.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const { temporary, session, png } = require("./helpers.cjs");
@@ -14,7 +14,7 @@ const { temporary, session, png } = require("./helpers.cjs");
 async function fusionFixture(t, { database = true } = {}) {
   const cleanup = [];
   const root = temporary({ after: fn => cleanup.push(fn) });
-  const db = database ? await initializeDatabase(root) : null;
+  const db = database ? await initializeTestDatabase(t, root) : null;
   const repository = path.join(root, "repo");
   fs.mkdirSync(repository);
   const git = (...args) => execFileSync("git", ["-C", repository, ...args], {
@@ -25,7 +25,7 @@ async function fusionFixture(t, { database = true } = {}) {
   git("add", ".");
   git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "core.hooksPath=/dev/null", "commit", "-m", "fixture");
   const configFile = path.join(root, "config.json");
-  writeConfig(configFile, { tapd: { session }, codex: { repository, worktree_root: path.join(root, "trees"), base_ref: "main" } });
+  (await writeConfig(configFile, { tapd: { session }, agent: { provider: "codex" }, execution: { repository, worktreeRoot: path.join(root, "trees"), baseRef: "main" } }));
   const context = { root, database: db, configFile, repository, git, detailCalls: [], failId: null, detailGate: null };
   const channel = createTapdChannel(configFile, {
     detail: async (_session, selected) => {
@@ -44,7 +44,7 @@ async function fusionFixture(t, { database = true } = {}) {
   const manager = new SessionManager({ runsDirectory: path.join(root, "runs"), configFile, client,
     channels: new ChannelRegistry([channel]) });
   Object.assign(context, { client, manager, channel, store: manager.store });
-  t.after(async () => { await manager.close(); db?.close(); for (const fn of cleanup.reverse()) fn(); });
+  t.after(async () => { await manager.close(); await db?.close(); for (const fn of cleanup.reverse()) fn(); });
   return context;
 }
 
@@ -66,6 +66,7 @@ async function waitForTurn(manager, key) {
 async function finishTurn(manager, client, key) {
   const runtime = manager.sessions.get(key);
   client.notify("turn/completed", { threadId: runtime.sessionId, turn: { id: runtime.turnId, status: "completed" } });
+  await manager.events.drain();
   await runtime.operation;
   await manager.events.settle(key);
 }

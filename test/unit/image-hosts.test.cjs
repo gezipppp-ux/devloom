@@ -8,11 +8,11 @@ const { png, session, temporary } = require('../support/helpers.cjs');
 
 test('TAPD settings persist canonical image hosts that allow the configured downloads', async (t) => {
   const file = path.join(temporary(t), 'config.json');
-  const settings = saveTapdSettings(file, {
+  const settings = (await saveTapdSettings(file, {
     workspaceId: '1',
     cookie: 'dsc-token=fake',
     imageHosts: ['CDN.EXAMPLE.COM', 'cdn.example.com'],
-  });
+  }));
   const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
   assert.deepEqual(settings.imageHosts, ['cdn.example.com']);
   assert.deepEqual(saved.tapd.image_hosts, settings.imageHosts);

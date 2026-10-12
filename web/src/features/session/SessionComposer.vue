@@ -6,18 +6,20 @@ import {
   PlusOutlined,
   StopOutlined,
 } from "@antdv-next/icons";
-import CodexModelControls from "../../shared/components/CodexModelControls.vue";
+import AgentModelControls from "../../shared/components/AgentModelControls.vue";
 import PermissionSelect from "../../shared/components/PermissionSelect.vue";
 import { useModelCatalog } from "../../shared/api/use-model-catalog.js";
 import { usePermissionModes } from "../../shared/api/use-permission-modes.js";
 
 const props = defineProps({
+  agent: { type: Object, default: null },
   modelValue: { type: String, default: "" },
   images: { type: Array, default: () => [] },
   imagesUploading: Boolean,
   imagesBlocked: Boolean,
   imagesError: { type: String, default: "" },
   canSend: Boolean,
+  canStop: { type: Boolean, default: true },
   running: Boolean,
   initializing: Boolean,
   busy: Boolean,
@@ -43,18 +45,23 @@ const emit = defineEmits([
 const form = computed(() => ({ text: props.modelValue }));
 const formRef = ref();
 const imageInput = ref();
+const supportsImages = computed(() => props.agent?.capabilities?.images === true);
 const canSubmit = computed(
   () =>
     props.canSend &&
+    (props.running || permissions.isAvailable(props.executionSettings.permissionMode)) &&
+    (supportsImages.value || !props.images.length) &&
     !props.imagesBlocked &&
     Boolean(props.modelValue.trim() || props.images.length),
 );
 const sendLabel = computed(() => (props.running ? "补充指令 ↑" : "发送 ↑"));
 const catalog = useModelCatalog();
 const permissions = usePermissionModes();
+const agentLabel = computed(() => props.agent?.label || permissions.agent.value?.label || "Agent");
+const permissionUnavailable = computed(() => !permissions.loading.value && !permissions.error.value && !permissions.isAvailable(props.executionSettings.permissionMode));
 
 function paste(event) {
-  if (!props.canSend) return;
+  if (!props.canSend || !supportsImages.value) return;
   const files = [...(event.clipboardData?.items || [])]
     .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
     .map((item) => item.getAsFile())
@@ -63,6 +70,7 @@ function paste(event) {
   // Preserve native textarea pasting, including text accompanying an image.
 }
 function chooseImages(event) {
+  if (!supportsImages.value) return;
   if (event.target.files?.length) emit("images-add", [...event.target.files]);
   event.target.value = "";
 }
@@ -93,7 +101,7 @@ function send() {
       <a-form-item name="text">
         <textarea
           :value="modelValue"
-          aria-label="发送给 Codex 的指令"
+          :aria-label="`发送给 ${agentLabel} 的指令`"
           :disabled="!canSend"
           :placeholder="
             readOnlyReason
@@ -146,7 +154,7 @@ function send() {
               type="button"
               class="text-button composer-image-retry"
               :aria-label="`重试上传 ${image.name}`"
-              :disabled="!canSend"
+              :disabled="!canSend || !supportsImages"
               @click="emit('images-retry', image.localId)"
             >
               重试上传
@@ -173,7 +181,7 @@ function send() {
             accept="image/png,image/jpeg,image/webp"
             multiple
             aria-label="选择会话图片"
-            :disabled="!canSend"
+            :disabled="!canSend || !supportsImages"
             @change="chooseImages"
           />
           <button
@@ -181,7 +189,7 @@ function send() {
             class="composer-add-images"
             aria-label="添加图片"
             title="添加图片（PNG / JPEG / WebP，最多 20 张，每张 10 MiB）"
-            :disabled="!canSend || images.length >= 20"
+            :disabled="!canSend || !supportsImages || images.length >= 20"
             @click="imageInput?.click()"
           >
             <PlusOutlined aria-hidden="true" />
@@ -200,18 +208,19 @@ function send() {
           />
         </div>
         <div class="composer-tools">
-          <CodexModelControls
+          <AgentModelControls
             compact
+            :agent-label="agentLabel"
             :model="executionSettings.model"
             :reasoning-effort="executionSettings.reasoningEffort"
             :models="catalog.models.value"
             :loading="catalog.loading.value"
-            :disabled="!canEditSettings || settingsBusy"
+            :disabled="!canEditSettings || settingsBusy || !permissions.isAvailable(executionSettings.permissionMode)"
             @change="emit('settings-change', $event)"
           />
           <div class="actions composer-actions">
             <button
-              v-if="running || initializing"
+              v-if="canStop && (running || initializing)"
               type="button"
               class="stop composer-stop"
               :disabled="busy || !online"
@@ -259,7 +268,7 @@ function send() {
     >
       权限选项加载失败：{{
         permissions.error.value
-      }}。尚未确认“帮我批准”是否可用。
+      }}。{{ running ? '当前轮仍可补充指令，启动下一轮前需要确认权限。' : '确认权限可用后才能发送。' }}
       {{ permissions.errorHint.value }}
       <button
         type="button"
@@ -270,6 +279,7 @@ function send() {
         刷新权限选项
       </button>
     </p>
+    <p v-if="permissionUnavailable" role="alert" class="error composer-catalog-error">{{ running ? '下一轮权限模式不可用；当前轮仍可补充指令，请在启动下一轮前重新选择。' : '当前权限模式不可用，请选择可用的权限模式后发送。' }}</p>
     <div class="composer-hints">
       <p v-if="!settingsError" class="execution-settings-hint" role="status">
         {{

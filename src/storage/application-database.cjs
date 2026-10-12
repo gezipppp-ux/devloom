@@ -1,19 +1,20 @@
 const path = require("node:path");
 const { createHash } = require("node:crypto");
+const { PostgresDatabase } = require("./postgres-database.cjs");
 const { encodeSettings, decodeSettings } = require("./database-secrets.cjs");
 const { unregisterDatabase } = require("./database-registry.cjs");
 
-function missing() {
-  return Object.assign(new Error("工作区不存在。"), { code: "ENOENT", statusCode: 404 });
-}
+function missing() { return Object.assign(new Error("工作区不存在。"), { code: "ENOENT", statusCode: 404 }); }
+function json(value) { return JSON.parse(JSON.stringify(value)); }
+function prefixFilter(prefix) { return { startsWith: prefix.replace(/[\\%_]/g, "\\$&") }; }
 
-class ApplicationDatabase {
-  constructor(dataRoot, handle, encryptionKey) {
-    this.dataRoot = path.resolve(dataRoot);
-    this.directory = path.join(this.dataRoot, "db");
-    this.file = path.join(this.directory, "web-coding.sqlite");
-    this.handle = handle;
+class ApplicationDatabase extends PostgresDatabase {
+  constructor({ directory, encryptionKey, url }) {
+    super(url);
+    this.dataRoot = path.resolve(directory);
     this.encryptionKey = encryptionKey;
+    if (!Buffer.isBuffer(encryptionKey) || encryptionKey.length !== 32)
+      throw new Error("数据库凭据主密钥无效。");
   }
 
   relative(file) {
@@ -27,164 +28,153 @@ class ApplicationDatabase {
     const parts = relative.split("/");
     const workspaceId = parts[0] === "workspaces" ? parts[1] : null;
     const runIndex = parts.indexOf("runs", workspaceId ? 2 : 0);
-    const runKey = runIndex >= 0 ? parts[runIndex + 1] : null;
-    return { workspaceId, runKey: runKey || null, name: parts.at(-1) };
+    return { workspaceId, runKey: runIndex >= 0 ? parts[runIndex + 1] || null : null, name: parts.at(-1) };
   }
 
-  transaction(operation) {
-    return this.handle.transaction(operation).immediate();
+  workspaceRecord(row) {
+    if (!row?.settings) throw missing();
+    const config = decodeSettings(JSON.stringify(row.settings.data), this.encryptionKey);
+    return { ...config, workspace: { ...config.workspace, id: row.id, name: row.name, icon: row.icon,
+      owner_user_id: row.ownerUserId, owner_username: row.owner.username } };
   }
 
-  readWorkspace(id, ownerUserId) {
-    const row = this.handle.prepare(`SELECT w.*, s.data, u.username AS owner_username FROM workspaces w
-      JOIN workspace_settings s ON s.workspace_id=w.id
-      JOIN users u ON u.id=w.owner_user_id WHERE w.id=?`).get(id);
-    if (!row || (ownerUserId !== undefined && row.owner_user_id !== ownerUserId)) throw missing();
-    const config = decodeSettings(row.data, this.encryptionKey);
-    return { ...config, workspace: { ...config.workspace, id: row.id, name: row.name,
-      icon: row.icon, owner_user_id: row.owner_user_id, owner_username: row.owner_username } };
+  async readWorkspace(id, ownerUserId) {
+    const row = await this.client.workspace.findUnique({ where: { id }, include: { settings: true, owner: true } });
+    if (!row || (ownerUserId !== undefined && row.ownerUserId !== ownerUserId)) throw missing();
+    return this.workspaceRecord(row);
   }
 
-  listWorkspaces(ownerUserId) {
+  async listWorkspaces(ownerUserId) {
     if (!ownerUserId) return [];
-    return this.handle.prepare("SELECT id FROM workspaces WHERE owner_user_id=? ORDER BY name,id")
-      .all(ownerUserId).map(({ id }) => this.readWorkspace(id, ownerUserId));
+    return (await this.client.workspace.findMany({ where: { ownerUserId }, include: { settings: true, owner: true },
+      orderBy: [{ name: "asc" }, { id: "asc" }] })).map((row) => this.workspaceRecord(row));
   }
 
-  writeWorkspace(id, config) {
-    const existing = this.handle.prepare("SELECT owner_user_id FROM workspaces WHERE id=?").get(id);
-    const owner = config.workspace?.owner_user_id;
-    if (!owner || (existing && existing.owner_user_id !== owner))
-      throw new Error("工作区所有者不可缺失或更改。");
-    const now = new Date().toISOString();
-    return this.transaction(() => {
-      this.handle.prepare(`INSERT INTO workspaces(id,owner_user_id,name,icon,created_at,updated_at)
-        VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,icon=excluded.icon,updated_at=excluded.updated_at`)
-        .run(id, owner, config.workspace.name, config.workspace.icon ?? null, now, now);
-      this.handle.prepare(`INSERT INTO workspace_settings(workspace_id,data,updated_at) VALUES(?,?,?)
-        ON CONFLICT(workspace_id) DO UPDATE SET data=excluded.data,updated_at=excluded.updated_at`)
-        .run(id, encodeSettings(config, this.encryptionKey), now);
+  async writeWorkspace(id, config) {
+    return (await this.transaction(async () => {
+      const existing = await this.client.workspace.findUnique({ where: { id } });
+      const ownerUserId = config.workspace?.owner_user_id;
+      if (!ownerUserId || (existing && existing.ownerUserId !== ownerUserId))
+        throw new Error("工作区所有者不可缺失或更改。");
+      const data = { name: config.workspace.name, icon: config.workspace.icon ?? null };
+      await this.client.workspace.upsert({ where: { id }, create: { id, ownerUserId, ...data }, update: data });
+      const settings = JSON.parse(encodeSettings(config, this.encryptionKey));
+      await this.client.workspaceSetting.upsert({ where: { workspaceId: id },
+        create: { workspaceId: id, data: settings }, update: { data: settings } });
       return config;
-    });
+    }));
   }
 
-  readDocument(file) {
+  async readDocument(file) {
     const relative = this.relative(file);
     const { workspaceId, runKey, name } = this.scope(relative);
     if (workspaceId && relative === `workspaces/${workspaceId}/config.json`) {
-      try { return this.readWorkspace(workspaceId); }
+      try { return await this.readWorkspace(workspaceId); }
       catch (error) { if (error.code === "ENOENT") return undefined; throw error; }
     }
-    if (relative === "system-settings.json") {
-      const rows = this.handle.prepare("SELECT key,value FROM system_settings").all();
-      return Object.fromEntries(rows.map(({ key, value }) => [key, JSON.parse(value)]));
-    }
-    const table = runKey ? (name === "run.json" ? "runs" : "run_documents") : "documents";
-    const row = this.handle.prepare(`SELECT data FROM ${table} WHERE path=?`).get(relative);
-    return row ? JSON.parse(row.data) : undefined;
+    if (relative === "system-settings.json")
+      return Object.fromEntries((await this.client.systemSetting.findMany()).map(({ key, value }) => [key, value]));
+    const table = runKey ? (name === "run.json" ? this.client.run : this.client.runDocument) : this.client.document;
+    return (await table.findUnique({ where: { path: relative } }))?.data;
   }
 
-  writeDocument(file, value) {
+  async writeDocument(file, value) {
     const relative = this.relative(file);
     const { workspaceId, runKey, name } = this.scope(relative);
-    if (workspaceId && relative === `workspaces/${workspaceId}/config.json`)
-      return this.writeWorkspace(workspaceId, value);
-    const now = new Date().toISOString();
-    if (relative === "system-settings.json") return this.transaction(() => {
-      const statement = this.handle.prepare(`INSERT INTO system_settings(key,value,updated_at) VALUES(?,?,?)
-        ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at`);
-      for (const [key, setting] of Object.entries(value)) statement.run(key, JSON.stringify(setting), now);
+    if (workspaceId && relative === `workspaces/${workspaceId}/config.json`) return (await this.writeWorkspace(workspaceId, value));
+    if (relative === "system-settings.json") return (await this.transaction(async () => {
+      for (const [key, entry] of Object.entries(value))
+        await this.client.systemSetting.upsert({ where: { key }, create: { key, value: json(entry) }, update: { value: json(entry) } });
       return value;
-    });
-    const serialized = JSON.stringify(value);
+    }));
+    const data = json(value);
     if (runKey && name === "run.json") {
-      const owner = workspaceId ? this.handle.prepare("SELECT owner_user_id FROM workspaces WHERE id=?").get(workspaceId)?.owner_user_id : null;
-      this.handle.prepare(`INSERT INTO runs(path,workspace_id,owner_user_id,run_key,session_id,execution_state,source_json,data,created_at,updated_at)
-        VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET
-        session_id=excluded.session_id,execution_state=excluded.execution_state,source_json=excluded.source_json,data=excluded.data,updated_at=excluded.updated_at`)
-        .run(relative, workspaceId, owner || null, runKey, value.session_id ?? value.session?.id ?? null,
-          typeof value.execution === "string" ? value.execution : value.execution?.status ?? value.status ?? null,
-          JSON.stringify(value.source ?? null), serialized, value.created_at || now, now);
+      const owner = workspaceId ? await this.client.workspace.findUniqueOrThrow({ where: { id: workspaceId }, select: { ownerUserId: true } }) : null;
+      const fields = { sessionId: value.session_id ?? value.session?.id ?? null,
+        executionState: typeof value.execution === "string" ? value.execution : value.execution?.status ?? value.status ?? null,
+        source: value.source ? json(value.source) : this.jsonNull, data };
+      await this.client.run.upsert({ where: { path: relative }, create: {
+        path: relative, workspaceId, ownerUserId: owner?.ownerUserId || null, runKey, ...fields,
+        ...(value.created_at ? { createdAt: new Date(value.created_at) } : {}),
+      }, update: fields });
     } else if (runKey) {
-      this.handle.prepare(`INSERT INTO run_documents(path,workspace_id,run_key,name,data,updated_at) VALUES(?,?,?,?,?,?)
-        ON CONFLICT(path) DO UPDATE SET data=excluded.data,updated_at=excluded.updated_at`)
-        .run(relative, workspaceId, runKey, name, serialized, now);
+      await this.client.runDocument.upsert({ where: { path: relative }, create: { path: relative, workspaceId, runKey, name, data }, update: { data } });
     } else {
-      this.handle.prepare(`INSERT INTO documents(path,data,updated_at) VALUES(?,?,?)
-        ON CONFLICT(path) DO UPDATE SET data=excluded.data,updated_at=excluded.updated_at`).run(relative, serialized, now);
+      await this.client.document.upsert({ where: { path: relative }, create: { path: relative, data }, update: { data } });
     }
     return value;
   }
 
-  updateDocument(file, update, fallback = {}) {
-    return this.transaction(() => this.writeDocument(file, update(this.readDocument(file) ?? fallback)));
+  async updateDocument(file, update, fallback = {}) {
+    return (await this.transaction(async () => (await this.writeDocument(file, await update(await this.readDocument(file) ?? fallback)))));
   }
 
-  deleteDocument(file) {
+  async deleteDocument(file) {
     const relative = this.relative(file);
     const { runKey, name } = this.scope(relative);
-    const table = runKey ? (name === "run.json" ? "runs" : "run_documents") : "documents";
-    return this.handle.prepare(`DELETE FROM ${table} WHERE path=?`).run(relative).changes > 0;
+    const table = runKey ? (name === "run.json" ? this.client.run : this.client.runDocument) : this.client.document;
+    return (await table.deleteMany({ where: { path: relative } })).count > 0;
   }
 
-  deleteRunDirectory(directory) {
+  async deleteRunDirectory(directory) {
     const relative = this.relative(directory);
     const prefix = `${relative}/`;
-    return this.transaction(() => {
-      this.handle.prepare("DELETE FROM session_items WHERE run_path=?").run(relative);
-      for (const table of ["run_documents", "attachments", "log_chunks"])
-        this.handle.prepare(`DELETE FROM ${table} WHERE substr(path,1,?)=?`)
-          .run(prefix.length, prefix);
-      return this.handle.prepare("DELETE FROM runs WHERE path=?")
-        .run(`${relative}/run.json`).changes > 0;
-    });
+    return (await this.transaction(async () => {
+      await this.client.sessionItem.deleteMany({ where: { runPath: relative } });
+      for (const table of [this.client.runDocument, this.client.attachment, this.client.logChunk])
+        await table.deleteMany({ where: { path: prefixFilter(prefix) } });
+      return (await this.client.run.deleteMany({ where: { path: `${relative}/run.json` } })).count > 0;
+    }));
   }
 
-  listDocuments(directory) {
+  async listDocuments(directory) {
     const prefix = `${this.relative(directory).replace(/\/$/, "")}/`;
-    return ["documents", "runs", "run_documents"].flatMap((table) =>
-      this.handle.prepare(`SELECT path,data FROM ${table} WHERE substr(path,1,?)=? ORDER BY path`)
-        .all(prefix.length, prefix).map((row) => ({ path: path.join(this.dataRoot, row.path), value: JSON.parse(row.data) })));
+    const tables = [this.client.document, this.client.run, this.client.runDocument];
+    const rows = await Promise.all(tables.map((table) => table.findMany({ where: { path: prefixFilter(prefix) },
+      select: { path: true, data: true }, orderBy: { path: "asc" } })));
+    return rows.flat().map((row) => ({ path: path.join(this.dataRoot, row.path), value: row.data }));
   }
 
-  putBlob(file, data, metadata = {}) {
+  async putBlob(file, data, metadata = {}) {
     if (!Buffer.isBuffer(data)) throw new Error("附件内容必须是 Buffer。");
     const relative = this.relative(file);
     const { workspaceId, runKey } = this.scope(relative);
-    const hash = createHash("sha256").update(data).digest("hex");
-    const now = new Date().toISOString();
-    this.handle.prepare(`INSERT INTO attachments(path,workspace_id,run_key,mime_type,size,sha256,data,metadata_json,created_at,expires_at)
-      VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET
-      mime_type=excluded.mime_type,size=excluded.size,sha256=excluded.sha256,data=excluded.data,metadata_json=excluded.metadata_json,expires_at=excluded.expires_at`)
-      .run(relative, workspaceId, runKey, metadata.mimeType || "application/octet-stream", data.length, hash, data,
-        JSON.stringify(metadata), metadata.createdAt || now, metadata.expiresAt || null);
-    return this.readBlob(file);
+    const fields = { mimeType: metadata.mimeType || "application/octet-stream", size: data.length,
+      sha256: createHash("sha256").update(data).digest("hex"), data,
+      metadata: json(metadata), expiresAt: metadata.expiresAt ? new Date(metadata.expiresAt) : null };
+    await this.client.attachment.upsert({ where: { path: relative }, create: { path: relative, workspaceId, runKey, ...fields,
+      ...(metadata.createdAt ? { createdAt: new Date(metadata.createdAt) } : {}) }, update: fields });
+    return (await this.readBlob(file));
   }
 
-  readBlob(file) {
-    const row = this.handle.prepare("SELECT * FROM attachments WHERE path=?").get(this.relative(file));
-    if (!row) return undefined;
-    return { ...JSON.parse(row.metadata_json), path: file, data: row.data, mimeType: row.mime_type,
-      size: row.size, sha256: row.sha256, createdAt: row.created_at, expiresAt: row.expires_at };
+  blobRecord(row) {
+    return { ...row.metadata, path: path.join(this.dataRoot, row.path), mimeType: row.mimeType, size: row.size,
+      sha256: row.sha256, createdAt: row.createdAt.toISOString(), expiresAt: row.expiresAt?.toISOString() || null,
+      ...(row.data === undefined ? {} : { data: Buffer.from(row.data) }) };
   }
 
-  deleteBlob(file) {
-    return this.handle.prepare("DELETE FROM attachments WHERE path=?").run(this.relative(file)).changes > 0;
+  async readBlob(file) {
+    const row = await this.client.attachment.findUnique({ where: { path: this.relative(file) } });
+    return row ? this.blobRecord(row) : undefined;
   }
 
-  listBlobs(directory) {
+  async deleteBlob(file) {
+    return (await this.client.attachment.deleteMany({ where: { path: this.relative(file) } })).count > 0;
+  }
+
+  async listBlobs(directory) {
     const prefix = `${this.relative(directory).replace(/\/$/, "")}/`;
-    return this.handle.prepare("SELECT path,mime_type,size,sha256,metadata_json,created_at,expires_at FROM attachments WHERE substr(path,1,?)=? ORDER BY path")
-      .all(prefix.length, prefix).map((row) => ({ ...JSON.parse(row.metadata_json),
-        path: path.join(this.dataRoot, row.path), mimeType: row.mime_type, size: row.size,
-        sha256: row.sha256, createdAt: row.created_at, expiresAt: row.expires_at }));
+    return (await this.client.attachment.findMany({ where: { path: prefixFilter(prefix) }, orderBy: { path: "asc" },
+      omit: { data: true } })).map((row) => this.blobRecord(row));
   }
 
-  close() {
+  async appendLog(file, data) {
+    await this.client.logChunk.create({ data: { path: this.relative(file), data: Buffer.isBuffer(data) ? data : Buffer.from(data) } });
+  }
+
+  async close() {
     unregisterDatabase(this);
-    if (this.handle.open) this.handle.close();
-    this.onClose?.();
-    this.onClose = undefined;
+    await super.close();
   }
 }
 

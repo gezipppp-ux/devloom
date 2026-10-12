@@ -33,8 +33,8 @@ async function verifyGit(browser, { origin, output, errors, directory, workspace
   git(peer, "push", "origin", "main");
   const beforeFetch = git(repository, "rev-parse", "HEAD");
   const remoteHead = git(peer, "rev-parse", "HEAD");
-  const workspace = workspaces.save({ name: "Git 操作回归" });
-  seedWorkspaceProject(workspaces.configFile(workspace.id), repository, "git-browser");
+  const workspace = (await workspaces.save({ name: "Git 操作回归" }));
+  (await seedWorkspaceProject(workspaces.configFile(workspace.id), repository, "git-browser"));
   const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
   page.on("pageerror", (error) => errors.push(error.message));
   const api = `${origin}/api/workspaces/${workspace.id}`;
@@ -107,8 +107,8 @@ async function verifyGit(browser, { origin, output, errors, directory, workspace
       "active Codex turns cannot delete their worktree");
     await page.getByRole("button", { name: "收起会话资料", exact: true }).click();
     await page.getByRole("button", { name: "■ 停止", exact: true }).click();
-    const context = workspaces.get(workspace.id);
-    const record = context.sessions.list()[0];
+    const context = (await workspaces.get(workspace.id));
+    const record = (await context.sessions.list())[0];
     const key = record.key;
     const detail = await (await page.request.get(`${api}/runs/${key}`)).json();
     const { path: tree, branch } = detail.worktree;

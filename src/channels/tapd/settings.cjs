@@ -7,8 +7,8 @@ const {
 } = require("./auth-utils.cjs");
 const { request } = require("./http.cjs");
 
-function readTapdSettings(file) {
-  const config = readOptional(file);
+async function readTapdSettings(file) {
+  const config = (await readOptional(file));
   return {
     workspaceId: config.tapd?.session?.request_body?.group_id || "",
     hasCookie: Boolean(config.tapd?.session?.cookie_header),
@@ -16,7 +16,8 @@ function readTapdSettings(file) {
   };
 }
 
-function draftConfig(file, input, config = readOptional(file)) {
+async function draftConfig(file, input, config) {
+  config ??= await readOptional(file);
   if (
     !input ||
     typeof input !== "object" ||
@@ -73,13 +74,13 @@ function draftConfig(file, input, config = readOptional(file)) {
   };
 }
 
-function saveTapdSettings(file, input) {
-  updateConfig(file, (config) => draftConfig(file, input, config));
-  return readTapdSettings(file);
+async function saveTapdSettings(file, input) {
+  (await updateConfig(file, async (config) => (await draftConfig(file, input, config))));
+  return (await readTapdSettings(file));
 }
 
 async function checkTapdSettings(file, input, send = request) {
-  const session = draftConfig(file, input).tapd.session;
+  const session = (await draftConfig(file, input)).tapd.session;
   if (!session.cookie_header) throw new Error("请先填写 TAPD Cookie。");
   try {
     const result = await send(session, session.endpoint, {

@@ -1,6 +1,8 @@
 /* global document, window */
 // All account/workspace APIs are fixtures; this suite never invokes Codex or TAPD.
 const assert = require("node:assert/strict");
+const { agentDescriptor } = require("../fixtures/agent-descriptor.cjs");
+const { navigateWorkspace } = require("../support/browser-navigation.cjs");
 const fs = require("node:fs");
 const path = require("node:path");
 const { createServer } = require("node:http");
@@ -25,6 +27,8 @@ async function main() {
   const users = [{ id: "admin", username: "admin", role: "admin", status: "active", mustChangePassword: false }, { id: "member", username: "member", role: "member", status: "active", mustChangePassword: true }];
   const savedSettings = new Map(users.map((user) => [user.id, settings()]));
   const workspaceFor = (user) => ({ id: user.id === "admin" ? "11111111-1111-4111-8111-111111111111" : "22222222-2222-4222-8222-222222222222", name: `${user.username} 的私有项目` });
+  const departments = [{ id: "33333333-3333-4333-8333-333333333333", name: "研发", status: "active" }];
+  const openWorkspace = (page, user) => navigateWorkspace(page, workspaceFor(user));
   let activeUser = null, heldDetail, holdDetail = false, heldDetailReady;
   const requests = [], errors = [];
   const writesTo = (endpoint) => requests.filter((request) => request.endpoint === endpoint && request.method === "POST");
@@ -53,11 +57,13 @@ async function main() {
         if (request.method() === "POST") savedSettings.set(activeUser.id, { ...savedSettings.get(activeUser.id), ...body });
         return send({ settings: savedSettings.get(activeUser.id) });
       }
+      if (endpoint === "/api/projects") return send({ projects: [], canCreateProjects: false });
+      if (endpoint === "/api/admin/departments") return send({ departments });
       if (endpoint === "/api/account/preferences") return send({ preferences: { unreadRunKeys: [] } });
       if (endpoint === "/api/account/git-accounts") return send({ accounts: [] });
       if (endpoint === "/api/workspace-clones") return send({ clones: [] });
       if (endpoint.endsWith("/models")) return send({ models: [{ model: "fixture-model", label: "测试模型", reasoningEfforts: ["low", "high"] }] });
-      if (endpoint.endsWith("/execution-options")) return send({ permissionModes: ["ask", "auto", "full"].map((id) => ({ id, available: true })) });
+      if (endpoint.endsWith("/execution-options")) return send({ agent: agentDescriptor, permissionModes: ["ask", "auto", "full"].map((id) => ({ id, available: true })) });
       if (endpoint === "/api/admin/accounts") {
         if (activeUser.role !== "admin") return send({ error: "仅管理员可操作。" }, 403);
         if (request.method() === "POST") { const user = { ...body, id: "created", status: "active", mustChangePassword: true }; delete user.password; users.push(user); return send({ user }, 201); }
@@ -72,7 +78,7 @@ async function main() {
       const run = { key: "manual-fixture", title: `${activeUser.username} 的私有任务`, status: "completed", metadata: { type: "requirement", progress: "in_progress" } };
       if (endpoint.endsWith("/runs")) return send({ runs: [run] });
       if (endpoint.endsWith("/runs/manual-fixture")) {
-        const detail = { ...run, sessionId: `session-${activeUser.id}`, items: [{ id: "item-1", type: "agentMessage", text: `${activeUser.username} 的私有回复` }], requests: [], images: [], executionSettings: { model: "", reasoningEffort: "", permissionMode: "ask" } };
+        const detail = { ...run, agent: agentDescriptor, sessionId: `session-${activeUser.id}`, items: [{ id: "item-1", type: "agentMessage", text: `${activeUser.username} 的私有回复` }], requests: [], images: [], executionSettings: { model: "", reasoningEffort: "", permissionMode: "ask" } };
         if (holdDetail) {
           holdDetail = false;
           heldDetail = () => route.fulfill({ contentType: "application/json", headers: { "x-fixture-account": "late" }, body: JSON.stringify({ ...detail, items: [{ id: "late", type: "agentMessage", text: "不应展示的旧账号响应" }] }) });
@@ -98,9 +104,19 @@ async function main() {
     await page.getByRole("alert").filter({ hasText: "账号或密码错误" }).waitFor();
     await page.getByLabel("密码", { exact: true }).fill("fixture-password-123");
     await page.getByRole("button", { name: "登录", exact: true }).click();
+    await page.getByRole("heading", { name: "我的项目", exact: true }).waitFor();
+    await openWorkspace(page, users[0]);
     await page.getByText("admin 的私有回复", { exact: true }).waitFor();
+    await page.route("**/api/account/execution-options", route => route.fulfill({ status: 503, json: { error: "模拟权限暂不可用" } }), { times: 1 });
     await page.getByRole("button", { name: "个人设置", exact: true }).click();
     await page.getByRole("heading", { name: "个人设置", exact: true }).waitFor();
+    await page.getByRole("alert").filter({ hasText: "模拟权限暂不可用" }).waitFor();
+    assert.equal(await page.getByRole("button", { name: "保存个人设置" }).isDisabled(), true);
+    assert.equal(writesTo("/api/account/settings").length, 0);
+    await page.getByRole("combobox", { name: "权限模式", exact: true }).click();
+    await page.getByRole("button", { name: "刷新权限选项", exact: true }).click();
+    await page.getByRole("alert").filter({ hasText: "模拟权限暂不可用" }).waitFor({ state: "hidden" });
+    await page.keyboard.press("Escape");
     await page.getByLabel("Codex 模型", { exact: true }).selectOption("fixture-model");
     await page.getByLabel("思考强度", { exact: true }).selectOption("high");
     await page.getByLabel("默认任务分组").selectOption("none");
@@ -118,6 +134,7 @@ async function main() {
     await page.getByRole("button", { name: "账号管理", exact: true }).click();
     await page.getByRole("heading", { name: "账号管理", exact: true }).waitFor();
     await page.getByLabel("新账号", { exact: true }).fill("created-user");
+    await page.getByLabel("所属部门", { exact: true }).selectOption(departments[0].id);
     const temporaryPassword = page.getByLabel("临时密码", { exact: true });
     await temporaryPassword.fill("short");
     await page.getByRole("button", { name: "创建账号", exact: true }).click();
@@ -146,7 +163,7 @@ async function main() {
       await page.screenshot({ path: path.join(output, `accounts-${width}.png`), fullPage: true });
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.getByRole("button", { name: "切换工作区：admin 的私有项目", exact: true }).click();
+    await openWorkspace(page, users[0]);
     await page.getByText("admin 的私有回复", { exact: true }).waitFor();
     await page.getByRole("button", { name: "＋ 从需求启动", exact: true }).click();
     assert.equal(await page.getByLabel("Codex 模型", { exact: true }).inputValue(), "fixture-model");
@@ -173,7 +190,7 @@ async function main() {
     await capturedDetail;
     assert.equal(typeof heldDetail, "function");
     const peer = await context.newPage();
-    await peer.goto(origin);
+    await peer.goto(`${origin}/?workspace=${workspaceFor(users[0]).id}`);
     await peer.getByText("admin 的私有回复", { exact: true }).waitFor();
     await page.getByRole("button", { name: "退出登录", exact: true }).click();
     await peer.getByRole("heading", { name: "登录工作台" }).waitFor();
@@ -194,6 +211,8 @@ async function main() {
     await newPassword.fill("next12");
     await passwordConfirmation.fill("next12");
     await page.getByRole("button", { name: "修改密码", exact: true }).click();
+    await page.getByRole("heading", { name: "我的项目", exact: true }).waitFor();
+    await openWorkspace(page, users[1]);
     await page.getByText("member 的私有回复", { exact: true }).waitFor();
     assert.equal(writesTo("/api/auth/password").at(-1).body.password, "next12");
     await heldDetail();

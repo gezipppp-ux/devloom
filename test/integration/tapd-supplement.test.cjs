@@ -5,7 +5,7 @@ const { execFileSync } = require("node:child_process");
 const { test } = require("node:test");
 const { createTapdChannel } = require("../../src/channels/tapd/adapter.cjs");
 const { ChannelRegistry } = require("../../src/channels/channel-registry.cjs");
-const { SessionManager } = require("../../src/application/session-manager.cjs");
+const { SessionManager } = require("../support/session-manager.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const {
@@ -140,10 +140,11 @@ test("HTTP TAPD supplements reach the first Codex prompt and persist in task and
     configFile,
     JSON.stringify({
       tapd: { session },
-      codex: {
+      agent: { provider: "codex" },
+      execution: {
         repository,
-        worktree_root: path.join(directory, "trees"),
-        base_ref: "main",
+        worktreeRoot: path.join(directory, "trees"),
+        baseRef: "main",
       },
     }),
   );
@@ -187,7 +188,7 @@ test("HTTP TAPD supplements reach the first Codex prompt and persist in task and
     turn: { id: runtime.turnId, status: "completed" },
   });
   await runtime.operation;
-  const state = manager.store.read(key);
+  const state = (await manager.store.read(key));
   assert.equal(state.execution.status, "completed");
   assert.equal(state.workitem.supplementary_instructions, supplement);
   assert.equal(state.workitem.description, original.description);
@@ -215,7 +216,7 @@ test("HTTP TAPD supplements reach the first Codex prompt and persist in task and
     );
     assert.equal(snapshot.workitem.supplementary_instructions, supplement);
     assert.equal(snapshot.workitem.description, original.description);
-    assert.equal(snapshot.codex_prompt, prompt);
+    assert.equal(snapshot.prompt, prompt);
   }
   assert.equal(transitionItems.length, 0);
   assert.equal(state.transition.status, "skipped");

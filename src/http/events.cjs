@@ -7,9 +7,9 @@ function createEventStream() {
     else response.write(frame);
   }
 
-  function authorize(response, client) {
+  async function authorize(response, client) {
     try {
-      if (!client.authorize || client.authorize()) return true;
+      if (!client.authorize || await client.authorize()) return true;
     } catch {
       /* Authorization failure closes the stream without harming execution. */
     }
@@ -18,13 +18,23 @@ function createEventStream() {
     return false;
   }
 
+  function enqueue(response, client, frame) {
+    const bytes = Buffer.byteLength(frame);
+    client.pendingBytes += bytes;
+    if (client.pendingBytes > 1024 * 1024) { response.destroy(); return; }
+    client.pending = client.pending.then(async () => {
+      if (clients.get(response) !== client || response.destroyed || response.writableEnded) return;
+      if (await authorize(response, client) && clients.get(response) === client && !response.writableEnded)
+        write(response, frame);
+    }).catch(() => response.destroy()).finally(() => { client.pendingBytes -= bytes; });
+  }
+
   function subscribe(sessions) {
     if (subscriptions.has(sessions)) return;
     const listener = (event) => {
       for (const [response, client] of clients) {
         if (client.sessions !== sessions) continue;
-        if (!authorize(response, client)) continue;
-        write(response, `data: ${JSON.stringify(event)}\n\n`);
+        enqueue(response, client, `data: ${JSON.stringify(event)}\n\n`);
       }
     };
     subscriptions.set(sessions, listener);
@@ -44,11 +54,14 @@ function createEventStream() {
       authorize: authorization?.authorize,
       userId: authorization?.userId,
       sessionId: authorization?.sessionId,
+      pending: Promise.resolve(),
+      pendingBytes: 0,
     };
     const timer = setInterval(() => {
-      if (authorize(response, client)) write(response, ": heartbeat\n\n");
+      enqueue(response, client, ": heartbeat\n\n");
     }, 1000);
-    clients.set(response, { ...client, timer });
+    client.timer = timer;
+    clients.set(response, client);
     const cleanup = () => {
       clearInterval(timer);
       clients.delete(response);

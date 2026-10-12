@@ -8,7 +8,7 @@ const { parse } = require("vue/compiler-sfc");
 const root = path.resolve(__dirname, "../..");
 const sourceRoot = path.join(root, "web/src");
 const catalogRoot = path.join(root, "shared");
-const features = new Set(["accounts", "workspaces", "tasks", "session", "settings"]);
+const features = new Set(["accounts", "workspaces", "tasks", "session", "settings", "projects"]);
 const sharedGroups = new Set(["api", "components", "styles"]);
 
 function filesIn(directory) {

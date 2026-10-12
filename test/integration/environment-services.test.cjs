@@ -4,17 +4,17 @@ const { temporary } = require("../support/helpers.cjs");
 const { EnvironmentServices } = require("../../src/application/environment-services.cjs");
 const { saveSystemSettings } = require("../../src/config/system-settings.cjs");
 
-function fixture(t, overrides = {}) {
+async function fixture(t, overrides = {}) {
   const dataDirectory = temporary(t);
-  saveSystemSettings({ memberStorageRoot: dataDirectory }, dataDirectory);
+  (await saveSystemSettings({ memberStorageRoot: dataDirectory }, dataDirectory));
   return new EnvironmentServices({ dataDirectory, inspect: async () => ({ version: "1.0.0", satisfies: true, launch: { command: "private-command" } }), latest: async () => ({ version: "2.0.0" }), plan: async () => ({ available: true }), install: async () => {}, ...overrides });
 }
 
 test("environment report keeps failed probes and latest lookups distinct and private commands absent", async t => {
-  const service = fixture(t, {
+  const service = (await fixture(t, {
     inspect: async id => { if (id === "git") throw new Error("missing Git"); return { version: "1.0.0", satisfies: true, launch: { command: "private-command" } }; },
     latest: async id => { if (id === "npm") throw new Error("offline"); return { version: "2.0.0" }; },
-  });
+  }));
   const initial = await service.read();
   assert.equal(initial.ready, false);
   assert.equal(initial.tools[0].latestStatus, "unchecked");
@@ -28,7 +28,7 @@ test("environment report keeps failed probes and latest lookups distinct and pri
 test("update preflight serializes requests, reauthorizes and verifies the installed result", async t => {
   let release, entered, version = "1.0.0", authorized = 0;
   const installing = new Promise(resolve => { entered = resolve; });
-  const service = fixture(t, { inspect: async () => ({ version }), install: async () => { entered(); await new Promise(resolve => { release = resolve; }); version = "2.0.0"; } });
+  const service = (await fixture(t, { inspect: async () => ({ version }), install: async () => { entered(); await new Promise(resolve => { release = resolve; }); version = "2.0.0"; } }));
   const input = { id: "codex", version: "2.0.0" };
   assert.equal((await service.start(input, () => authorized++)).status, "running");
   await installing;
@@ -49,12 +49,14 @@ test("busy tasks, changed targets, revoked permission and unsupported installers
     { latest: async () => ({ version: "3.0.0" }) },
     { plan: async () => ({ available: false, reason: "unsupported" }) },
   ]) {
-    const service = fixture(t, { ...overrides, install: async () => assert.fail("must not install") });
+    const service = (await fixture(t, { ...overrides, install: async () => assert.fail("must not install") }));
     await assert.rejects(service.start(input, () => {}));
     assert.equal(service.busy, false);
   }
-  const revoked = fixture(t, { install: async () => assert.fail("must not install") });
+  const revoked = (await fixture(t, { install: async () => assert.fail("must not install") }));
   await assert.rejects(revoked.start(input, () => { throw new Error("revoked"); }), /revoked/);
+  await assert.rejects(revoked.start(input, async () => { throw new Error("async revoked"); }), /async revoked/);
+  assert.equal(revoked.busy, false);
   await assert.rejects(revoked.start({ ...input, command: "evil" }, () => {}), /参数/);
   await revoked.close();
   await assert.rejects(revoked.start(input, () => {}), /关闭/);
@@ -62,7 +64,7 @@ test("busy tasks, changed targets, revoked permission and unsupported installers
 
 test("failed installation and stale PATH never report success; polling does not repeat installation", async t => {
   for (const install of [async () => { throw new Error("permission denied"); }, async () => {}]) {
-    const service = fixture(t, { install });
+    const service = (await fixture(t, { install }));
     await service.start({ id: "npm", version: "2.0.0" }, () => {});
     await service.pending;
     assert.equal(service.status().job.status, "failed");
@@ -72,7 +74,7 @@ test("failed installation and stale PATH never report success; polling does not 
 });
 
 test("Node installation is recorded as pending restart without pretending the live runtime changed", async t => {
-  const service = fixture(t, { install: async () => ({ installedVersion: "2.0.0", restartRequired: true }) });
+  const service = (await fixture(t, { install: async () => ({ installedVersion: "2.0.0", restartRequired: true }) }));
   await service.start({ id: "node", version: "2.0.0" }, () => {});
   await service.pending;
   assert.equal(service.status().job.status, "restart-required");

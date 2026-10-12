@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { childEnvironment } = require('../../src/codex/environment.cjs');
+const { childEnvironment } = require('../../src/shared/child-environment.cjs');
 
 test('child environments strip alternate-cased TAPD credentials and invoking session identity', () => {
   const original = {

@@ -16,8 +16,8 @@ test("concurrent workspace creation keeps names unique across store instances", 
     Atomics.add(barrier, 0, 1);
     while (Atomics.load(barrier, 0) < 4)
       Atomics.wait(barrier, 0, Atomics.load(barrier, 0), 10);
-    try {
-      const config = new WorkspaceStore(workerData.directory).save(
+    (async () => { try {
+      const config = await new WorkspaceStore(workerData.directory).save(
         { name: "同名项目" }, undefined, () => {
           Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
           return { version: 3 };
@@ -26,7 +26,7 @@ test("concurrent workspace creation keeps names unique across store instances", 
       parentPort.postMessage({ id: config.workspace.id });
     } catch (error) {
       parentPort.postMessage({ error: error.message });
-    }
+    } })();
   `, {
     eval: true,
     workerData: {
@@ -44,24 +44,25 @@ test("concurrent workspace creation keeps names unique across store instances", 
   assert.equal(results.filter((result) => result.id).length, 1);
   assert.deepEqual(results.filter((result) => result.error).map((result) => result.error),
     Array(3).fill("工作区名称已存在。"));
-  const saved = new WorkspaceStore(directory).list();
+  const saved = (await new WorkspaceStore(directory).list());
   assert.equal(saved.length, 1);
   assert.equal(saved[0].workspace.name, "同名项目");
   assert.deepEqual(fs.readdirSync(directory), [saved[0].workspace.id]);
 });
 
-test("workspace updates preserve configuration and omitted icons, and invalid identities cannot create entries", (t) => {
+test("workspace updates preserve configuration and omitted icons, and invalid identities cannot create entries", async (t) => {
   const directory = temporary(t);
   const store = new WorkspaceStore(directory);
-  const initial = store.save({ name: "原始项目" }, undefined, () => ({
+  const initial = (await store.save({ name: "原始项目" }, undefined, () => ({
     version: 3,
     tapd: { session: { cookie_header: "private-cookie" } },
-    codex: { repository: "recorded-repository" },
-  }));
-  const updated = store.save({ name: "项目新名称" }, initial.workspace.id);
+    execution: { repository: "recorded-repository" },
+    agent: { provider: "codex", model: "", reasoningEffort: "", permissionMode: "ask", options: {} },
+  })));
+  const updated = (await store.save({ name: "项目新名称" }, initial.workspace.id));
   assert.deepEqual(updated, { ...initial, workspace: { ...initial.workspace, name: "项目新名称" } });
-  assert.throws(() => store.save({ name: "新项目" }, ""), /标识/);
+  (await assert.rejects(async () => (await store.save({ name: "新项目" }, "")), /标识/));
   assert.throws(() => store.paths("../outside"), /标识/);
   fs.writeFileSync(path.join(directory, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"), "unrelated");
-  assert.equal(store.list().length, 1);
+  assert.equal((await store.list()).length, 1);
 });

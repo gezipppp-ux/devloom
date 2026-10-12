@@ -25,7 +25,7 @@ test('concurrent state writers preserve independently owned fields', async (t) =
   const directory = temporary(t);
   const file = path.join(directory, 'run.json');
   const stateModule = require.resolve('../../src/storage/run-state.cjs');
-  saveState(file, { session_id: 'original', worktree: { path: 'recorded' } });
+  (await saveState(file, { session_id: 'original', worktree: { path: 'recorded' } }));
   const barrier = new SharedArrayBuffer(4);
   const workers = Array.from(
     { length: 3 },
@@ -37,8 +37,10 @@ test('concurrent state writers preserve independently owned fields', async (t) =
     const barrier = new Int32Array(workerData.barrier);
     Atomics.add(barrier, 0, 1);
     while (Atomics.load(barrier, 0) < 3) Atomics.wait(barrier, 0, Atomics.load(barrier, 0), 10);
-    for (let value = 0; value < 60; value++)
-      updateState(workerData.file, { [workerData.field]: value });
+    (async () => {
+      for (let value = 0; value < 60; value++)
+        await updateState(workerData.file, { [workerData.field]: value });
+    })().catch(error => { process.nextTick(() => { throw error; }); });
   `,
         {
           eval: true,

@@ -1,5 +1,7 @@
 /* global window */
 const assert = require("node:assert/strict");
+const { agentDescriptor } = require("../fixtures/agent-descriptor.cjs");
+const { navigateWorkspace } = require("../support/browser-navigation.cjs");
 
 async function verifyAccountPreferenceRaces(browser, origin) {
   const context = await browser.newContext();
@@ -14,12 +16,14 @@ async function verifyAccountPreferenceRaces(browser, origin) {
   const hold = (method, endpoint) => new Promise((resolve) => gates.set(`${method} ${endpoint}`, resolve));
   const preferenceKey = (user, workspaceId) => `${user.id}:${workspaceId}`;
   const readPreferences = () => preferences.get(preferenceKey(users[0], workspaces[0].id));
-  const selectWorkspace = (index) => page.getByRole("button", { name: `切换工作区：${workspaces[index].name}`, exact: true }).click();
+  const selectWorkspace = (index) => navigateWorkspace(page, workspaces[index]);
   const openTask = (name) => page.locator(".session-link").filter({ hasText: `任务 ${name}` }).click();
   const login = async (name) => {
     await page.getByLabel("账号", { exact: true }).fill(name);
     await page.getByLabel("密码", { exact: true }).fill("fixture-password");
     await page.getByRole("button", { name: "登录", exact: true }).click();
+    await page.getByRole("heading", { name: "我的项目", exact: true }).waitFor();
+    await selectWorkspace(0);
     await page.getByText("回复 a", { exact: true }).waitFor();
   };
   await page.addInitScript(() => {
@@ -70,6 +74,7 @@ async function verifyAccountPreferenceRaces(browser, origin) {
       if (body) settings.set(user.id, { ...settings.get(user.id), ...body });
       return { settings: settings.get(user.id) };
     });
+    if (endpoint === "/api/projects") return reply({ projects: [], canCreateProjects: false });
     if (endpoint === "/api/account/git-accounts") return reply({ accounts: [] });
     if (endpoint === "/api/workspace-clones") return reply({ clones: [{ id: `${user.id}-clone`, name: `${user.id} 的私有克隆`, status: "running", progress: { stage: "receiving", percent: 37 }, workspace: null }] });
     if (endpoint === "/api/account/preferences") return reply(() => {
@@ -81,15 +86,15 @@ async function verifyAccountPreferenceRaces(browser, origin) {
     if (endpoint === "/api/bootstrap") return reply({ token: "fixture-token", workspaces });
     if (endpoint.endsWith("/bootstrap")) return reply({ token: "fixture-token", channels: [{ id: "manual", label: "手动输入", capabilities: { manualInput: true } }] });
     if (endpoint.endsWith("/models")) return reply({ models: [] });
-    if (endpoint.endsWith("/execution-options")) return reply({ permissionModes: ["ask", "auto", "full"].map((id) => ({ id, available: true })) });
+    if (endpoint.endsWith("/execution-options")) return reply({ agent: agentDescriptor, permissionModes: ["ask", "auto", "full"].map((id) => ({ id, available: true })) });
     const runs = ["a", "b"].map((name) => ({ key: `manual-${name}`, title: `任务 ${name}`, status: "completed", metadata: { type: "requirement", progress: "in_progress" } }));
     if (endpoint.endsWith("/runs")) return reply({ runs });
     const run = runs.find((entry) => endpoint.endsWith(`/runs/${entry.key}`));
-    if (run) return reply({ ...run, sessionId: run.key, items: [{ id: "reply", type: "agentMessage", text: `回复 ${run.key.at(-1)}` }], requests: [], executionSettings: { model: "", reasoningEffort: "", permissionMode: "ask" } });
+    if (run) return reply({ ...run, agent: agentDescriptor, sessionId: run.key, items: [{ id: "reply", type: "agentMessage", text: `回复 ${run.key.at(-1)}` }], requests: [], executionSettings: { model: "", reasoningEffort: "", permissionMode: "ask" } });
     throw new Error(`Unconfigured preference fixture endpoint: ${endpoint}`);
   });
   try {
-    await page.goto(origin);
+    await page.goto(`${origin}/?workspace=${workspaces[0].id}`);
     await page.getByText("回复 a", { exact: true }).waitFor();
     const heldSave = hold("POST", "/api/account/settings");
     await page.getByLabel("任务分组方式").selectOption("none");
@@ -166,16 +171,6 @@ async function verifyAccountPreferenceRaces(browser, origin) {
     assert.equal(await page.evaluate(() => window.preferenceFixture.requests.filter((entry) => entry.url === "/api/account/settings" && entry.body).length), browserWritesBefore);
     assert.equal(settings.get("alice").notificationsEnabled, false);
     assert.equal(requests.filter((entry) => entry.endpoint === "/api/account/settings" && entry.body).length, settingWritesBefore, "permission granted for an unmounted account must not save another account's notification setting");
-    const pendingClones = hold("GET", "/api/workspace-clones");
-    const staleClones = await pendingClones;
-    await page.getByRole("button", { name: "退出登录", exact: true }).click();
-    await login("bob");
-    await page.getByRole("button", { name: "克隆任务（1）", exact: true }).click();
-    await page.getByRole("region", { name: "克隆任务：bob 的私有克隆", exact: true }).waitFor();
-    await staleClones.release();
-    assert.equal(await page.getByRole("region", { name: "克隆任务：alice 的私有克隆", exact: true }).count(), 0,
-      "late clone progress from the previous account must never enter the new account");
-    await page.keyboard.press("Escape");
     assert.deepEqual(errors, []);
     process.stdout.write("Account preference races passed: revalidation, queued and pre-load unread saves, remount ordering and account isolation.\n");
   } finally { await context.close(); }

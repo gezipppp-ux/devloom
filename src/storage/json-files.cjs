@@ -1,12 +1,12 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
-const { withFileLock } = require("./file-lock.cjs");
+const { withAsyncFileLock } = require("./file-lock.cjs");
 const { databaseForPath } = require("./database-registry.cjs");
 
-function readOptional(file) {
+async function readOptional(file) {
   const database = databaseForPath(file);
-  if (database) return database.readDocument(file) ?? {};
+  if (database) return (await database.readDocument(file)) ?? {};
   try {
     return JSON.parse(fs.readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
   } catch (error) {
@@ -15,9 +15,9 @@ function readOptional(file) {
   }
 }
 
-function writeConfig(file, value) {
+async function writeConfig(file, value) {
   const database = databaseForPath(file);
-  if (database) return database.writeDocument(file, value);
+  if (database) return (await database.writeDocument(file, value));
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const temporary = `${file}.${randomUUID()}.tmp`;
   try {
@@ -32,14 +32,14 @@ function writeConfig(file, value) {
 
 // Serialize read-modify-write across service processes without holding a lock
 // during network or Git operations. A crashed writer's lock fails closed.
-function updateConfig(file, update) {
+async function updateConfig(file, update) {
   const database = databaseForPath(file);
-  if (database) return database.updateDocument(file, update);
-  return withFileLock(file, () => {
-    const value = update(readOptional(file));
-    writeConfig(file, value);
+  if (database) return (await database.updateDocument(file, update));
+  return (await withAsyncFileLock(file, async () => {
+    const value = await update((await readOptional(file)));
+    (await writeConfig(file, value));
     return value;
-  });
+  }));
 }
 
 module.exports = { readOptional, writeConfig, updateConfig };

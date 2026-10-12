@@ -152,6 +152,18 @@ async function verifySessionImages(browser, origin, manager, client, key, errors
     await page.keyboard.press('ControlOrMeta+V');
     await imagesReady(page, 1);
     assert.equal(await input.inputValue(), '');
+    await input.fill('刷新后保留文字与图片草稿');
+    const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === `/api/runs/${key}`);
+    await page.getByRole('button', { name: '刷新', exact: true }).click();
+    await refreshed;
+    await imagesReady(page, 1);
+    assert.equal(await input.inputValue(), '刷新后保留文字与图片草稿');
+    await page.route(`**/api/runs/${key}`, route => route.fulfill({ status: 503, json: { error: '模拟刷新失败' } }), { times: 1 });
+    await page.getByRole('button', { name: '刷新', exact: true }).click();
+    await page.getByText('模拟刷新失败', { exact: true }).waitFor();
+    assert.equal(await input.inputValue(), '刷新后保留文字与图片草稿');
+    await imagesReady(page, 1);
+    await input.fill('');
     assert.equal(await pasteImages(page, ['补充截图一.png', '补充截图二.png']), false,
       'image paste must also preserve any native clipboard text');
     await imagesReady(page, 3);

@@ -15,7 +15,10 @@ export function useGitAccounts() {
     id: "",
     name: "",
     authType: "http",
-    remoteUrl: "",
+    host: "",
+    authorName: "",
+    authorEmail: "",
+    revision: undefined,
     username: "",
     password: "",
     keyDraftId: "",
@@ -33,7 +36,7 @@ export function useGitAccounts() {
   const ready = computed(
     () =>
       form.name.trim() &&
-      form.remoteUrl.trim() &&
+      form.host.trim() &&
       (form.authType === "http"
         ? form.username.trim() && (form.password || form.id)
         : form.publicKey),
@@ -86,7 +89,10 @@ export function useGitAccounts() {
     const value = {
       name: form.name,
       authType: form.authType,
-      remoteUrl: form.remoteUrl,
+      host: form.host,
+      authorName: form.authorName,
+      authorEmail: form.authorEmail,
+      ...(form.id ? { revision: form.revision } : {}),
     };
     if (form.authType === "http") {
       value.username = form.username;
@@ -107,7 +113,7 @@ export function useGitAccounts() {
         result.account,
       ];
       Object.assign(form, empty(), result.account);
-      notice.value = "连接检测成功，Git 账号已保存。";
+      notice.value = "Git 账号已保存。准备项目开发空间时会验证实际仓库的访问权限。";
     });
   }
   function check() {
@@ -126,7 +132,7 @@ export function useGitAccounts() {
       form.keyDraftId = result.id;
       form.publicKey = result.publicKey;
       notice.value =
-        "已生成密钥。请先将公钥添加到 Git 服务，再检测并保存。密钥草稿 24 小时内有效。";
+        "已生成密钥。请将公钥添加到 Git 服务并保存账号。密钥草稿 24 小时内有效。";
     });
   }
   function remove() {

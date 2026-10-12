@@ -6,9 +6,11 @@ Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install
 
 ## Before development
 
+- 项目协作目标与分项进度见 [PRD](../prd/project-collaboration.md) 和[实施清单](../prd/project-collaboration-implementation.md)。已确认 PostgreSQL + Prisma、平铺部门和项目权限；各阶段完成前不得把目标需求当作已上线能力。Prisma 基础约定见 [PostgreSQL 接入](./postgresql.md)。
+
 - 项目级 Skills 位于 [工程规范](../../.agents/skills/web-coding-engineering/SKILL.md) 和 [界面规范](../../.agents/skills/web-coding-ui/SKILL.md)，由根目录 AGENTS.md 引用。Skill 提供实施与审查流程，本文所列契约维护详细业务约定；两者随实现同步更新。
 
-- Read [accounts-and-database.md](./accounts-and-database.md) for current account ownership, setting scopes, SQLite persistence, authentication and schema/seed lifecycle. It supersedes historical production JSON/JSONL storage and anonymous HTTP descriptions in the older contracts; native execution/Git locks and session identity rules remain in force.
+- Read [accounts-and-database.md](./accounts-and-database.md) for current account ownership, setting scopes, PostgreSQL persistence, authentication and schema/seed lifecycle. It supersedes historical production JSON/JSONL storage and anonymous HTTP descriptions in the older contracts; native execution/Git locks and session identity rules remain in force.
 
 - Read [architecture.md](./architecture.md) for module ownership, dependency direction, directory layout and test placement before adding or moving code.
 
@@ -18,7 +20,7 @@ Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install
 - For Web CLI changes, read [web-cli.md](./web-cli.md) for session identity, streaming, approval and HTTP contracts.
 - For source integration, settings or portability changes, read [channels-and-settings.md](./channels-and-settings.md).
 - Preserve `tapd.session` and `workflow` settings during authentication refresh. Never commit local credentials, browser state, requirement snapshots or execution logs.
-- 对外 npm 命令只有 `init:admin`、`dev`、`dev:watch`、`build` 和 `start`；生产环境先构建再启动。运行参数由对应入口解析。
+- 日常 npm 命令为 `init:admin`、`dev`、`dev:watch`、`build` 和 `start`；Prisma 基础接入新增 `db:generate`（生成客户端）和 `db:deploy`（部署版本化迁移）。生产环境先构建再启动。运行参数由对应入口解析。
 - `npm run dev` serves Vite HMR and the API on one development port; `npm run dev:watch` also restarts the backend after source changes. The watch supervisor must shut down its child over IPC and wait for exit before replacement, including on Windows. Neither command automatically resumes interrupted requirements.
 
 ## Behavioral invariants
@@ -40,3 +42,5 @@ Windows / Linux 环境和 Jenkins 节点配置见 [platform-verification.md](./p
 Run the direct eslint and Node test commands from Jenkinsfile. Tests use Node's test runner, mocked TAPD responses, a fixture Codex process and temporary real Git worktrees. Include coverage for authenticated files/redirects, image-only requirements, failed startup, duplicate suppression, workspace-scoped local progress markers and skipped TAPD transition retries. Read-only live search/detail/task-preview is appropriate for smoke tests; selecting and executing a real requirement is a separate operation from integrating the runner.
 
 Web changes also require `npm run build` and the browser scripts in Jenkinsfile (Windows Edge or Linux/macOS Playwright Chromium). Do not start real turns in an already merged requirement to validate the UI.
+
+- [CLI Agent 边界](./agents.md)：执行配置、provider 接口、标准事件、能力声明及无历史兼容约束。

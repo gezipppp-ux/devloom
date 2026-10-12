@@ -6,7 +6,7 @@ const { execFileSync } = require("node:child_process");
 const { temporary } = require("../support/helpers.cjs");
 const { readTaskFile, listTaskFiles } = require("../../src/git/task-files.cjs");
 const { RunStore } = require("../../src/storage/run-store.cjs");
-const { SessionManager } = require("../../src/application/session-manager.cjs");
+const { SessionManager } = require("../support/session-manager.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 
@@ -141,7 +141,7 @@ test("file HTTP routes expose only presenter fields and never start a Codex turn
   assert.equal(result.path, "seed.ts");
   assert.equal(result.tree, undefined);
   assert.equal(result.current.text, "const value = 1;\n");
-  store.writeWorktreeDeletion("1-2", { status: "deleted", worktreeRemoved: true });
+  (await store.writeWorktreeDeletion("1-2", { status: "deleted", worktreeRemoved: true }));
   assert.equal((await fetch(`${origin}/api/runs/1-2/files`)).status, 400);
   assert.equal((await fetch(`${origin}/api/runs/1-3/files`)).status, 404);
   assert.equal(client.calls.length, 0);

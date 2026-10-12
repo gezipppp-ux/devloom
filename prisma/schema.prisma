@@ -1,0 +1,578 @@
+generator client {
+  provider               = "prisma-client"
+  output                 = "../generated/prisma"
+  moduleFormat           = "cjs"
+  generatedFileExtension = "cts"
+  importFileExtension    = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// PostgreSQL baseline. New collaboration tables are added by subsequent
+// versioned migrations; existing SQLite migrations are never replayed here.
+model User {
+  id                 String           @id @default(uuid())
+  username           String           @unique
+  passwordHash       String           @map("password_hash")
+  role               String           @default("member")
+  status             String           @default("active")
+  mustChangePassword Boolean          @default(false) @map("must_change_password")
+  authVersion        Int              @default(1) @map("auth_version")
+  departmentId       String?          @map("department_id")
+  canCreateProjects  Boolean          @default(false) @map("can_create_projects")
+  department         Department?      @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  ownedProjects      Project[]        @relation("ProjectOwner")
+  projectMemberships ProjectMember[]
+  developmentSpaces DevelopmentSpace[]
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  settings           UserSetting?
+  sessions           AuthSession[]
+  workspaces         Workspace[]
+  preferences        UserPreference[]
+  runs               Run[]
+  auditEvents        AuditEvent[]
+  gitAccounts        GitAccount[]
+  gitKeyDrafts       GitKeyDraft[]
+  workspaceClones    WorkspaceClone[]
+
+  @@map("users")
+}
+
+model AuthSession {
+  sid       String   @id
+  data      Json     @map("session_json")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  userId    String?  @map("user_id")
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([userId])
+  @@map("auth_sessions")
+}
+
+model AuthMetadata {
+  name  String @id
+  value String
+
+  @@map("auth_metadata")
+}
+
+model UserSetting {
+  userId               String   @id @map("user_id")
+  model                String?
+  reasoningEffort      String?  @map("reasoning_effort")
+  permissionMode       String   @default("ask") @map("permission_mode")
+  notificationsEnabled Boolean  @default(true) @map("notifications_enabled")
+  grouping             String   @default("type")
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
+}
+
+model SystemSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("system_settings")
+}
+
+model Workspace {
+  id          String            @id @default(uuid())
+  ownerUserId String            @map("owner_user_id")
+  name        String
+  icon        String?
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+  owner       User              @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  settings    WorkspaceSetting?
+  preferences UserPreference[]
+  runs        Run[]
+  documents   RunDocument[]
+  attachments Attachment[]
+  auditEvents AuditEvent[]
+  developmentSpace DevelopmentSpace?
+
+  @@unique([ownerUserId, name])
+  @@map("workspaces")
+}
+
+model WorkspaceSetting {
+  workspaceId String    @id @map("workspace_id")
+  data        Json
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_settings")
+}
+
+model UserPreference {
+  userId      String    @map("user_id")
+  workspaceId String    @map("workspace_id")
+  data        Json      @default("{}")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([userId, workspaceId])
+  @@map("user_preferences")
+}
+
+model Run {
+  path           String     @id
+  workspaceId    String?    @map("workspace_id")
+  ownerUserId    String?    @map("owner_user_id")
+  runKey         String     @map("run_key")
+  sessionId      String?    @map("session_id")
+  executionState String?    @map("execution_state")
+  source         Json?      @map("source_json")
+  data           Json
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  workspace      Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  owner          User?      @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+
+  @@unique([workspaceId, runKey])
+  @@index([sessionId])
+  @@map("runs")
+}
+
+model RunDocument {
+  path        String     @id
+  workspaceId String?    @map("workspace_id")
+  runKey      String?    @map("run_key")
+  name        String
+  data        Json
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId])
+  @@map("run_documents")
+}
+
+model Document {
+  path      String   @id
+  data      Json
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("documents")
+}
+
+model Attachment {
+  path        String     @id
+  workspaceId String?    @map("workspace_id")
+  runKey      String?    @map("run_key")
+  mimeType    String     @map("mime_type")
+  size        Int
+  sha256      String
+  data        Bytes
+  metadata    Json       @map("metadata_json")
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt   DateTime?  @map("expires_at") @db.Timestamptz(3)
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId])
+  @@index([expiresAt])
+  @@map("attachments")
+}
+
+model SessionItem {
+  id        Int      @id @default(autoincrement())
+  sortOrder Int      @default(0) @map("sort_order")
+  runPath   String   @map("run_path")
+  itemId    String   @map("item_id")
+  turnId    String?  @map("turn_id")
+  data      Json
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([runPath, itemId])
+  @@index([runPath, sortOrder, id])
+  @@map("session_items")
+}
+
+model LogChunk {
+  id        Int      @id @default(autoincrement())
+  path      String
+  data      Bytes
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([path, id])
+  @@map("log_chunks")
+}
+
+model AuditEvent {
+  id          Int        @id @default(autoincrement())
+  event       String
+  actorUserId String?    @map("actor_user_id")
+  workspaceId String?    @map("workspace_id")
+  details     Json       @default("{}") @map("details_json")
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  actor       User?      @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt])
+  @@map("audit_events")
+}
+
+model GitAccount {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  name        String
+  authType    String   @map("auth_type")
+  remoteUrl   String   @map("remote_url")
+  host        String   @default("")
+  authorName  String   @default("") @map("author_name")
+  authorEmail String   @default("") @map("author_email")
+  revision    Int      @default(1)
+  credentials String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  developmentSpaces DevelopmentSpace[]
+
+  @@unique([userId, name])
+  @@map("user_git_accounts")
+}
+
+model Department {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  status      String   @default("active")
+  permissions String[] @default([])
+  revision    Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  users       User[]
+  projects    Project[]
+
+  @@map("departments")
+}
+
+model Repository {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  remoteUrl   String   @map("remote_url")
+  description String   @default("")
+  status      String   @default("active")
+  revision    Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  projects    Project[]
+
+  @@map("repositories")
+}
+
+model Project {
+  id            String   @id @default(uuid())
+  name          String
+  description   String   @default("")
+  departmentId  String   @map("department_id")
+  ownerUserId   String   @map("owner_user_id")
+  repositoryId  String   @map("repository_id")
+  status        String   @default("active")
+  settings      Json     @default("{}")
+  revision      Int      @default(1)
+  issueSequence Int      @default(0) @map("issue_sequence")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  department    Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  owner         User       @relation("ProjectOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  repository    Repository @relation(fields: [repositoryId], references: [id], onDelete: Restrict)
+  members       ProjectMember[]
+  spaces        DevelopmentSpace[]
+  issues        ProjectIssue[]
+  sources       IssueSource[]
+  assets        ProjectAsset[]
+  files         ProjectFile[]
+  tasks         DevelopmentTask[]
+
+  @@unique([departmentId, name])
+  @@index([ownerUserId])
+  @@map("projects")
+}
+
+model ProjectMember {
+  projectId   String   @map("project_id")
+  userId      String   @map("user_id")
+  status      String   @default("active")
+  permissions String[] @default([])
+  revision    Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  user        User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([projectId, userId])
+  @@index([userId, status])
+  @@map("project_members")
+}
+
+model DevelopmentSpace {
+  id          String   @id @default(uuid())
+  projectId   String   @map("project_id")
+  userId      String   @map("user_id")
+  workspaceId String?  @unique @map("workspace_id")
+  gitAccountId String? @map("git_account_id")
+  status      String   @default("awaiting_credentials")
+  requestId   String?  @map("request_id")
+  workerPid   Int?     @map("worker_pid")
+  error       String?
+  revision    Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  user        User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  gitAccount  GitAccount? @relation(fields: [gitAccountId], references: [id], onDelete: Restrict)
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  tasks       DevelopmentTask[]
+
+  @@unique([projectId, userId])
+  @@unique([projectId, userId, id])
+  @@map("development_spaces")
+}
+
+model ProjectIssue {
+  id                 String   @id @default(uuid())
+  projectId          String   @map("project_id")
+  number             Int
+  type               String
+  title              String
+  description        String   @default("")
+  priority           String   @default("normal")
+  status             String
+  assigneeId         String?  @map("assignee_id")
+  participantIds     String[] @default([]) @map("participant_ids")
+  acceptanceCriteria String   @default("") @map("acceptance_criteria")
+  reproductionSteps  String   @default("") @map("reproduction_steps")
+  expectedResult     String   @default("") @map("expected_result")
+  actualResult       String   @default("") @map("actual_result")
+  severity           String   @default("normal")
+  createdById        String   @map("created_by_id")
+  updatedById        String   @map("updated_by_id")
+  revision           Int      @default(1)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  project            Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  source             IssueSource?
+  comments           IssueComment[]
+  deliverables       IssueDeliverable[]
+  history            IssueHistory[]
+  files              ProjectFile[]
+  assetLinks         AssetIssueLink[]
+  taskLinks          TaskIssueLink[]
+
+  @@unique([projectId, id])
+  @@unique([projectId, number])
+  @@index([projectId, type, status])
+  @@map("project_issues")
+}
+
+model IssueSource {
+  id         String   @id @default(uuid())
+  projectId  String   @map("project_id")
+  issueId    String   @unique @map("issue_id")
+  channel    String
+  scope      String
+  type       String
+  externalId String   @map("external_id")
+  url        String   @default("")
+  snapshot   Json
+  capturedAt DateTime @default(now()) @map("captured_at") @db.Timestamptz(3)
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  issue      ProjectIssue @relation(fields: [projectId, issueId], references: [projectId, id], onDelete: Restrict)
+
+  @@unique([projectId, channel, scope, type, externalId])
+  @@unique([projectId, issueId])
+  @@map("issue_sources")
+}
+
+model IssueComment {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  issueId   String   @map("issue_id")
+  authorId  String   @map("author_id")
+  body      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  issue     ProjectIssue @relation(fields: [projectId, issueId], references: [projectId, id], onDelete: Restrict)
+
+  @@index([projectId, issueId, createdAt])
+  @@map("issue_comments")
+}
+
+model IssueDeliverable {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  issueId   String   @map("issue_id")
+  authorId  String   @map("author_id")
+  taskId    String?  @map("task_id")
+  body      String
+  commit    String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  issue     ProjectIssue @relation(fields: [projectId, issueId], references: [projectId, id], onDelete: Restrict)
+  task      DevelopmentTask? @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
+
+  @@index([projectId, issueId, createdAt])
+  @@map("issue_deliverables")
+}
+
+model IssueHistory {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  issueId   String   @map("issue_id")
+  actorId   String   @map("actor_id")
+  action    String
+  data      Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  issue     ProjectIssue @relation(fields: [projectId, issueId], references: [projectId, id], onDelete: Restrict)
+
+  @@index([projectId, issueId, createdAt])
+  @@map("issue_history")
+}
+
+model ProjectAsset {
+  id          String   @id @default(uuid())
+  projectId   String   @map("project_id")
+  type        String
+  title       String
+  content     String   @default("")
+  url         String   @default("")
+  username    String   @default("")
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz(3)
+  category    String   @default("")
+  tags        String[] @default([])
+  environment String   @default("development")
+  ownerId     String?  @map("owner_id")
+  secret      String?
+  revision    Int      @default(1)
+  createdById String   @map("created_by_id")
+  updatedById String   @map("updated_by_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  history     AssetHistory[]
+  issueLinks  AssetIssueLink[]
+  files       ProjectFile[]
+
+  @@unique([projectId, id])
+  @@index([projectId, type])
+  @@map("project_assets")
+}
+
+model AssetHistory {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  assetId   String   @map("asset_id")
+  actorId   String   @map("actor_id")
+  revision  Int
+  data      Json
+  secret    String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  asset     ProjectAsset @relation(fields: [projectId, assetId], references: [projectId, id], onDelete: Restrict)
+
+  @@unique([assetId, revision])
+  @@map("asset_history")
+}
+
+model AssetIssueLink {
+  projectId String @map("project_id")
+  assetId   String @map("asset_id")
+  issueId   String @map("issue_id")
+  asset     ProjectAsset @relation(fields: [projectId, assetId], references: [projectId, id], onDelete: Restrict)
+  issue     ProjectIssue @relation(fields: [projectId, issueId], references: [projectId, id], onDelete: Restrict)
+
+  @@id([assetId, issueId])
+  @@map("asset_issue_links")
+}
+
+model ProjectFile {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  issueId   String?  @map("issue_id")
+  assetId   String?  @map("asset_id")
+  authorId  String   @map("author_id")
+  name      String
+  mimeType  String   @map("mime_type")
+  size      Int
+  sha256    String
+  data      Bytes
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  issue     ProjectIssue? @relation(fields: [projectId, issueId], references: [projectId, id], onDelete: Restrict)
+  asset     ProjectAsset? @relation(fields: [projectId, assetId], references: [projectId, id], onDelete: Restrict)
+
+  @@index([projectId, issueId])
+  @@index([projectId, assetId])
+  @@map("project_files")
+}
+
+model DevelopmentTask {
+  id          String   @id @default(uuid())
+  projectId   String   @map("project_id")
+  spaceId     String   @map("space_id")
+  executorId  String   @map("executor_id")
+  requestId   String   @map("request_id")
+  workspaceId String   @map("workspace_id")
+  runKey      String?  @map("run_key")
+  status      String   @default("prepared")
+  snapshot    Json
+  error       String?
+  revision    Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  space       DevelopmentSpace @relation(fields: [projectId, executorId, spaceId], references: [projectId, userId, id], onDelete: Restrict)
+  issueLinks  TaskIssueLink[]
+  deliverables IssueDeliverable[]
+
+  @@unique([projectId, id])
+  @@unique([projectId, executorId, requestId])
+  @@unique([workspaceId, runKey])
+  @@map("development_tasks")
+}
+
+model TaskIssueLink {
+  projectId String @map("project_id")
+  taskId    String @map("task_id")
+  issueId   String @map("issue_id")
+  snapshot  Json
+  task      DevelopmentTask @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
+  issue     ProjectIssue @relation(fields: [projectId, issueId], references: [projectId, id], onDelete: Restrict)
+
+  @@id([taskId, issueId])
+  @@map("task_issue_links")
+}
+
+model GitKeyDraft {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  credentials String
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(3)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("git_key_drafts")
+}
+
+model WorkspaceClone {
+  id          String    @id @default(uuid())
+  ownerUserId String    @map("owner_user_id")
+  requestId   String    @map("request_id")
+  input       Json      @map("input_json")
+  status      String
+  progress    Json      @map("progress_json")
+  workspace   Json?     @map("workspace_json")
+  error       String?
+  workerPid   Int       @map("worker_pid")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  dismissedAt DateTime? @map("dismissed_at") @db.Timestamptz(3)
+  owner       User      @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerUserId, requestId])
+  @@index([ownerUserId, dismissedAt])
+  @@map("workspace_clones")
+}

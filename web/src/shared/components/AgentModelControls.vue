@@ -12,6 +12,7 @@ import {
 } from "vue";
 
 const props = defineProps({
+  agentLabel: { type: String, default: "Agent" },
   model: { type: String, default: "" },
   reasoningEffort: { type: String, default: "" },
   models: { type: Array, default: () => [] },
@@ -191,7 +192,7 @@ onUnmounted(() => {
         ref="modelTrigger"
         type="button"
         role="combobox"
-        aria-label="Codex 模型"
+        :aria-label="`${agentLabel} 模型`"
         aria-haspopup="listbox"
         :aria-controls="menuId"
         :aria-expanded="expanded && menuMode === 'models'"
@@ -232,7 +233,7 @@ onUnmounted(() => {
     >
       <template v-if="menuMode === 'models'">
         <p class="model-menu-title">选择模型</p>
-        <div :id="menuId" role="listbox" aria-label="Codex 模型选项" @keydown="navigate">
+        <div :id="menuId" role="listbox" :aria-label="`${agentLabel} 模型选项`" @keydown="navigate">
           <button
             type="button"
             role="option"
@@ -304,14 +305,14 @@ onUnmounted(() => {
     </div>
   </div>
   <div v-else class="model-controls form-columns">
-    <a-form-item label="Codex 模型（可选）" class="model-control">
+    <a-form-item :label="`${agentLabel} 模型（可选）`" class="model-control">
       <select
-        aria-label="Codex 模型"
+        :aria-label="`${agentLabel} 模型`"
         :value="model"
         :disabled="disabled || loading"
         @change="changeModel"
       >
-        <option value="">使用 Codex 默认配置</option>
+        <option value="">使用 {{ agentLabel }} 默认配置</option>
         <option v-for="entry in models" :key="entry.model" :value="entry.model">
           {{ entry.label }}
         </option>

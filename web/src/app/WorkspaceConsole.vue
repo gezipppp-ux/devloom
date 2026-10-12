@@ -36,6 +36,9 @@ import "../features/session/session-files.css";
 const SessionFilePanel = defineAsyncComponent(() => import("../features/session/SessionFilePanel.vue"));
 
 const props = defineProps({
+  projectId: { type: String, default: "" },
+  initialTask: { type: String, default: "" },
+  permissions: { type: Array, default: null },
   workspaceName: { type: String, default: "" },
   notifyUnreadResult: { type: Function, default: () => {} },
   canManageSystem: Boolean,
@@ -44,7 +47,10 @@ const emit = defineEmits([
   "rename-workspace",
   "unread-results-change",
   "system-settings",
+  "open-project",
+  "task-change",
 ]);
+const allowed = permission => !props.projectId || props.permissions?.includes(permission);
 const settingsOpen = ref(false),
   creating = ref(false),
   repositoryOpen = ref(false);
@@ -101,6 +107,7 @@ const {
   preferenceError,
   markResultRead,
 } = useWorkspaceConsole({
+  initialTask: () => props.initialTask,
   canRefresh: () => !creating.value,
   onOpen: () => {
     settingsOpen.value = false;
@@ -117,7 +124,7 @@ const {
     void scroll(false);
   },
   onEmpty: () => {
-    if (props.workspaceName) settingsOpen.value = true;
+    if (props.workspaceName && !props.projectId) settingsOpen.value = true;
   },
   onResultRead: ({ key }) =>
     active.value === key &&
@@ -129,6 +136,7 @@ const {
 });
 const imageDraft = useSessionImages({ active, canSend });
 watch(active, () => { closeFile(false); fileWide.value = false; });
+watch(active, key => { if (key && key !== props.initialTask) emit("task-change", key); });
 
 function readVisibleSession() {
   if (
@@ -189,6 +197,11 @@ async function worktreeDeleted() {
     error.value = e.message;
   });
 }
+async function refreshCurrentSession() {
+  error.value = "";
+  try { await refreshSession(); }
+  catch (failure) { error.value = failure.message; }
+}
 </script>
 
 <template>
@@ -200,11 +213,12 @@ async function worktreeDeleted() {
     <aside class="sidebar">
       <div class="brand">
         <span v-if="!$slots['workspace-rail']" class="brand-mark">t_</span>
-        <div>需求 <b>×</b> CODEX<small>开发工作台</small></div>
+        <div>需求 <b>×</b> AGENT<small>开发工作台</small></div>
       </div>
       <div v-if="props.workspaceName" class="workspace-heading">
         <h2 :title="props.workspaceName">{{ props.workspaceName }}</h2>
         <button
+          v-if="!props.projectId"
           type="button"
           class="workspace-menu workspace-settings-button"
           :class="{ active: settingsOpen }"
@@ -221,7 +235,7 @@ async function worktreeDeleted() {
         </button>
       </div>
       <button
-        v-if="!props.workspaceName"
+        v-if="!props.workspaceName && !props.projectId"
         class="settings-link"
         :class="{ active: settingsOpen }"
         :disabled="workspaceLoading"
@@ -234,6 +248,7 @@ async function worktreeDeleted() {
         执行设置
       </button>
       <button
+        v-if="allowed('code.view')"
         type="button"
         class="settings-link repository-link"
         :class="{ active: repositoryOpen }"
@@ -248,6 +263,7 @@ async function worktreeDeleted() {
         <BranchesOutlined aria-hidden="true" />代码仓库
       </button>
       <button
+        v-if="!props.projectId && allowed('session.start')"
         class="new-task"
         :disabled="workspaceLoading"
         @click="
@@ -258,13 +274,14 @@ async function worktreeDeleted() {
       >
         ＋ 从需求启动
       </button>
+      <button v-if="props.projectId && allowed('session.start')" class="new-task" @click="emit('open-project', 'issues')">从项目事项启动开发</button>
       <TaskList
         :runs="runs"
         :active="!creating && !settingsOpen && !repositoryOpen ? active : null"
         :unread-result-keys="unreadResultKeys"
         @open="open"
       />
-      <ArchivedSessions :revision="archiveRevision" :disabled="workspaceLoading" @restored="archiveRestored" @deleted="sessionDeleted">
+      <ArchivedSessions v-if="allowed('session.continue')" :revision="archiveRevision" :disabled="workspaceLoading" @restored="archiveRestored" @deleted="sessionDeleted">
         <template #delete-dialog="{ run, deleted, close }">
           <SessionLifecycleDialog :key="run.key" mode="delete" :task-key="run.key" :title="run.title"
             :worktree="run.worktree" :deletion="run.worktreeDeletion"
@@ -295,7 +312,7 @@ async function worktreeDeleted() {
         }}</strong>
       </div>
       <SettingsPanel
-        v-if="settingsOpen"
+        v-if="settingsOpen && !props.projectId"
         :can-manage-system="canManageSystem"
         @system-settings="emit('system-settings')"
         :workspace-name="props.workspaceName"
@@ -315,7 +332,7 @@ async function worktreeDeleted() {
           }
         "
       />
-      <RepositoryGitPanel v-else-if="repositoryOpen" />
+      <RepositoryGitPanel v-else-if="repositoryOpen" :can-operate="allowed('code.operate')" />
       <template v-else-if="session">
         <header class="session-header" aria-label="会话工具栏">
           <div class="page-breadcrumb" aria-label="当前位置">
@@ -324,23 +341,25 @@ async function worktreeDeleted() {
             <strong>需求会话</strong>
           </div>
           <SessionTitleEditor
+            v-if="allowed('session.continue')"
             :key="session.key"
             :task-key="session.key"
             :title="session.title"
             @saved="titleSaved"
           />
+          <h2 v-else>{{ session.title }}</h2>
           <div class="session-toolbar">
             <span
               class="status"
               :data-status="waitingForInput ? 'waiting' : session.status"
-              >Codex ·
+              >{{ session.agent?.label || 'Agent' }} ·
               {{
                 waitingForInput
                   ? "等待你的输入"
                   : statusLabel(session.status)
               }}</span
             >
-            <button :disabled="loading" @click="open(active)">
+            <button :disabled="loading" @click="refreshCurrentSession">
               <ReloadOutlined aria-hidden="true" /> 刷新
             </button>
           </div>
@@ -365,7 +384,7 @@ async function worktreeDeleted() {
               <button
                 v-if="session.nextCursor"
                 class="load-older"
-                :disabled="busy"
+                :disabled="busy || session.agent?.capabilities?.history !== true"
                 @click="older"
               >
                 加载更早记录 ↑
@@ -381,44 +400,48 @@ async function worktreeDeleted() {
                 v-for="item in session.items"
                 :key="item.id"
                 :item="item"
+                :agent-label="session.agent?.label || 'Agent'"
                 @open-file="openFile"
               /><SessionRequest
                 v-for="request in session.requests"
                 :key="`${session.key}:${request.id}`"
                 :request="request"
-                :disabled="busy || !online"
+                :agent-label="session.agent?.label || 'Agent'"
+                :disabled="busy || !online || !allowed('session.approve') || session.agent?.capabilities?.[request.kind === 'user-input' ? 'userInput' : 'approvals'] !== true"
                 :error="error"
-                :auto-open="request.id === session.requests.find((entry) => entry.method === 'item/tool/requestUserInput' && entry.params.isBlocking !== false)?.id"
+                :auto-open="request.id === session.requests.find((entry) => entry.kind === 'user-input' && entry.blocking !== false)?.id"
                 @respond="(data) => action('responses', data)"
               />
               <p v-if="running" class="working-line">
-                <span class="connection online"></span>Codex
+                <span class="connection online"></span>{{ session.agent?.label || 'Agent' }}
                 {{ waitingForInput ? '等待你的回答或审批，可停止当前一轮。' : '正在执行，可以补充指令或停止当前一轮。' }}
               </p>
               <p v-if="initializing" class="working-line">
                 <span class="connection online"></span>正在初始化
-                worktree，完成后自动启动 Codex。
+                worktree，完成后自动启动 {{ session.agent?.label || 'Agent' }}。
               </p>
             </div>
             <SessionComposer
               v-model="composer.text"
+              :agent="session.agent"
               :images="imageDraft.images.value"
               :images-uploading="imageDraft.uploading.value"
               :images-blocked="imageDraft.blocked.value"
               :images-error="imageDraft.error.value"
-              :can-send="Boolean(canSend)"
+              :can-send="Boolean(canSend) && allowed('session.continue')"
+              :can-stop="allowed('session.stop')"
               :running="running"
               :initializing="initializing"
               :busy="busy"
               :online="online"
-              :read-only-reason="session.readOnlyReason || ''"
+              :read-only-reason="session.readOnlyReason || (!allowed('session.continue') ? '未获授继续会话权限' : '')"
               :error="error || session.error || ''"
               :notice="notice"
               :execution-settings="executionSettings"
               :settings-pending="Boolean(session.settingsPending)"
               :settings-busy="settingsBusy"
               :settings-error="settingsError"
-              :can-edit-settings="canEditSettings"
+              :can-edit-settings="canEditSettings && allowed('session.continue')"
               @send="send"
               @images-add="imageDraft.add"
               @images-remove="imageDraft.remove"
@@ -432,7 +455,9 @@ async function worktreeDeleted() {
             ref="detailsDrawer"
             :key="session.key"
             :session="session"
-            :requirements-disabled="!canSend || busy || Boolean(session.archivedAt)"
+            :can-manage="allowed('session.continue')"
+            :can-operate="allowed('code.operate')"
+            :requirements-disabled="!canSend || busy || Boolean(session.archivedAt) || !allowed('session.continue')"
             @continue-requirements="action('requirements/continue', { id: $event })"
             :active="running || initializing || ['preparing', 'starting'].includes(session.status) || Boolean(session.requests?.length)"
             @archived="archiveSaved"
@@ -442,7 +467,7 @@ async function worktreeDeleted() {
             @opened="closeFile(false)"
           >
             <template #metadata>
-              <TaskMetadataControls :task-key="session.key" :metadata="session.metadata" @saved="metadataSaved" />
+              <TaskMetadataControls v-if="allowed('session.continue')" :task-key="session.key" :metadata="session.metadata" @saved="metadataSaved" />
             </template>
             <template #append-requirements>
               <AppendRequirements v-if="session.source?.channel === 'tapd'" :key="session.key" :task-key="session.key" :workspace="workspace" :disabled="!canSend || running || busy || ['preparing', 'initializing', 'starting'].includes(session.status) || Boolean(session.archivedAt)" @saved="refreshSession(); refreshList()" @open-task="open" />
@@ -456,20 +481,22 @@ async function worktreeDeleted() {
         :aria-busy="workspaceLoading || loading"
       >
         <div class="empty-mark"><FolderOpenOutlined aria-hidden="true" /></div>
-        <div class="eyebrow">需求 × CODEX</div>
+        <div class="eyebrow">需求 × AGENT</div>
         <h1>
           {{
             workspaceLoading
               ? "正在加载工作区…"
               : loading
                 ? "正在加载会话…"
-                : "让需求与开发，在这里连起来。"
+                : active ? "指定会话暂时无法打开" : props.projectId ? "尚无开发任务" : "让需求与开发，在这里连起来。"
           }}
         </h1>
-        <p>查看执行过程、与 Codex 对话，随时调整下一步。</p>
+        <p>{{ active ? '该会话可能尚未启动、已归档或不存在。请返回项目任务查看启动状态，或重试读取。' : '查看执行过程、与 Agent 对话，随时调整下一步。' }}</p>
         <p v-if="error" role="alert" class="error">{{ error }}</p>
+        <button v-if="active && !loading" @click="refreshCurrentSession">重试读取指定会话</button>
+        <button v-if="props.projectId && active" @click="emit('open-project', 'tasks')">返回项目任务</button>
         <button
-          v-if="!workspaceLoading && !loading"
+          v-if="!workspaceLoading && !loading && !props.projectId && allowed('session.start')"
           class="primary"
           @click="
             creating = true;
@@ -479,6 +506,7 @@ async function worktreeDeleted() {
         >
           从需求启动 →
         </button>
+        <button v-if="props.projectId && allowed('session.start')" class="primary" @click="emit('open-project', 'issues')">前往项目选择事项</button>
       </section>
     </main>
   </div>

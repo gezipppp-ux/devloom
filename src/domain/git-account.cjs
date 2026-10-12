@@ -50,6 +50,20 @@ function remoteUrl(value) {
 function remoteAuthType(remote) {
   return /^https?:\/\//i.test(remoteUrl(remote)) ? "http" : "ssh";
 }
+function gitHost(value, authType) {
+  const host = requiredText(value, "Git 主机", 300);
+  try {
+    const url = new URL(authType === "http" ? host : `ssh://${host}`);
+    if (!(authType === "http" ? ["http:", "https:"].includes(url.protocol) : url.protocol === "ssh:") || url.username || url.password || url.search || url.hash || !url.hostname || !["", "/"].includes(url.pathname)) throw new Error("invalid");
+    return authType === "http" ? url.origin.toLowerCase() : `${url.hostname.toLowerCase()}${url.port && url.port !== "22" ? `:${url.port}` : ""}`;
+  } catch { throw accountError("Git 主机无效；HTTP 请填写协议及主机，SSH 请填写主机和可选端口，不包含仓库路径或凭据。"); }
+}
+function remoteHost(remote) {
+  remote = remoteUrl(remote);
+  if (!remote.includes("://")) return gitHost(remote.slice(remote.indexOf("@") + 1, remote.indexOf(":")), "ssh");
+  const url = new URL(remote);
+  return remoteAuthType(remote) === "http" ? url.origin.toLowerCase() : gitHost(`${url.hostname}${url.port ? `:${url.port}` : ""}`, "ssh");
+}
 function projectName(remote) {
   const name = remoteUrl(remote)
     .replace(/\/$/, "")
@@ -76,7 +90,10 @@ function validateGitAccount(input) {
         ![
           "name",
           "authType",
-          "remoteUrl",
+          "host",
+          "authorName",
+          "authorEmail",
+          "revision",
           "username",
           "password",
           "keyDraftId",
@@ -85,13 +102,15 @@ function validateGitAccount(input) {
   )
     throw accountError("Git 账号包含未知字段。");
   const name = requiredText(input.name, "Git 账号名称", 80);
-  const remote = remoteUrl(input.remoteUrl);
-  if (
-    !["ssh", "http"].includes(input.authType) ||
-    input.authType !== remoteAuthType(remote)
-  )
-    throw accountError("认证方式与远程地址协议不匹配。");
-  const value = { name, authType: input.authType, remoteUrl: remote };
+  if (!["ssh", "http"].includes(input.authType)) throw accountError("认证方式无效。");
+  const value = { name, authType: input.authType, host: gitHost(input.host, input.authType), remoteUrl: "" };
+  value.authorName = input.authorName === undefined || input.authorName === "" ? "" : requiredText(input.authorName, "提交作者姓名", 200);
+  value.authorEmail = input.authorEmail === undefined || input.authorEmail === "" ? "" : requiredText(input.authorEmail, "提交作者邮箱", 254);
+  if (Boolean(value.authorName) !== Boolean(value.authorEmail) || value.authorName.includes("<") || value.authorName.includes(">") || (value.authorEmail && !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value.authorEmail))) throw accountError("提交作者姓名与有效邮箱需同时填写，与 Git 登录凭据分别管理。");
+  if (input.revision !== undefined) {
+    if (!Number.isSafeInteger(input.revision) || input.revision < 1) throw accountError("Git 账号修订号无效。", 409);
+    value.revision = input.revision;
+  }
   if (input.authType === "http") {
     if (input.keyDraftId !== undefined)
       throw accountError("HTTP 账号不接受 SSH 密钥。");
@@ -121,5 +140,7 @@ module.exports = {
   gitAccountId,
   remoteUrl,
   remoteAuthType,
+  remoteHost,
+  gitHost,
   projectName,
 };

@@ -2,7 +2,7 @@
 import { computed, onUnmounted, reactive, ref, watch } from "vue";
 import UserSearchSelect from "./UserSearchSelect.vue";
 import ManualRequirementFields from "./ManualRequirementFields.vue";
-import CodexModelSettings from "./CodexModelSettings.vue";
+import AgentModelSettings from "./AgentModelSettings.vue";
 import TapdRequirementPicker from "./TapdRequirementPicker.vue";
 import FormSection from "../../shared/components/FormSection.vue";
 import { taskTypes } from "./task-metadata.js";
@@ -39,6 +39,7 @@ const items = ref([]);
 const error = ref("");
 const searching = ref(false);
 const starting = ref(false);
+const permissionsReady = ref(false);
 const busy = computed(() => searching.value || starting.value);
 const uploading = ref(false);
 const searched = ref(false);
@@ -127,7 +128,7 @@ async function search() {
   }
 }
 async function start() {
-  if (disposed || busy.value || uploading.value) return;
+  if (disposed || busy.value || uploading.value || !permissionsReady.value) return;
   starting.value = true;
   error.value = "";
   try {
@@ -345,7 +346,8 @@ async function start() {
           /></a-form-item>
         </div>
       </FormSection>
-      <CodexModelSettings
+      <AgentModelSettings
+        @validity-change="permissionsReady = $event"
         v-model:model="form.model"
         v-model:reasoning-effort="form.reasoningEffort"
         v-model:permission-mode="form.permissionMode"
@@ -359,7 +361,7 @@ async function start() {
           @click="emit('cancel')"
         >
           取消</button
-        ><button class="primary" :disabled="busy || uploading" type="submit">
+        ><button class="primary" :disabled="busy || uploading || !permissionsReady" type="submit">
           {{ busy ? "正在处理…" : "创建 session 并开始开发 →" }}
         </button>
       </div>

@@ -8,7 +8,7 @@ function json(response, status, data) {
   response.end(JSON.stringify(data));
 }
 
-async function body(request) {
+async function body(request, limit = 256000) {
   const contentType = request.headers["content-type"]?.split(";", 1)[0].trim().toLowerCase();
   if (contentType !== "application/json")
     throw new Error("请求必须使用 application/json");
@@ -17,7 +17,7 @@ async function body(request) {
   request.setEncoding("utf8");
   for await (const chunk of request) {
     size += Buffer.byteLength(chunk);
-    if (size > 256000) throw new Error("请求内容过大");
+    if (size > limit) throw new Error("请求内容过大");
     chunks.push(chunk);
   }
   const input = JSON.parse(chunks.join("") || "{}");

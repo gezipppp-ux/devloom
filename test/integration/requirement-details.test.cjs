@@ -6,12 +6,13 @@ const { RunStore } = require('../../src/storage/run-store.cjs');
 const { SessionPresenter } = require('../../src/application/session-presenter.cjs');
 const { temporary } = require('../support/helpers.cjs');
 
-test('requirement snapshots preserve complete body/prompt and support legacy task packages', (t) => {
+test('requirement snapshots preserve complete body and generic agent prompt', async (t) => {
   const store = new RunStore(temporary(t));
   const presenter = new SessionPresenter({ store });
   const key = '1-2';
   fs.mkdirSync(store.dir(key));
   const state = {
+    agent: { provider: 'codex' },
     workitem: { id: '2', title: '运行记录', description: 'fallback' },
     created_at: '2026-09-17T00:00:00Z',
   };
@@ -27,7 +28,7 @@ test('requirement snapshots preserve complete body/prompt and support legacy tas
       supplementary_instructions: supplementaryInstructions,
       detail_url: 'https://example.com/story/2',
     },
-    codex_prompt: prompt,
+    prompt: prompt,
     images: [
       {
         source: 'https://example.com/image.png',
@@ -37,10 +38,10 @@ test('requirement snapshots preserve complete body/prompt and support legacy tas
     private: 'should-not-be-exposed',
   };
   fs.writeFileSync(
-    path.join(store.dir(key), 'tapd-task.json'),
+    path.join(store.dir(key), 'requirement.json'),
     JSON.stringify(snapshot),
   );
-  const result = presenter.requirement(key, state);
+  const result = (await presenter.requirement(key, state));
   assert.equal(result.description, description);
   assert.equal(result.prompt, prompt);
   assert.equal(result.supplementaryInstructions, supplementaryInstructions);
@@ -65,31 +66,31 @@ test('requirement snapshots preserve complete body/prompt and support legacy tas
       },
     }),
   );
-  assert.equal(presenter.requirement(key, state).markdown, '# Markdown 正文');
+  assert.equal((await presenter.requirement(key, state)).markdown, '# Markdown 正文');
   assert.equal(
-    presenter.requirement(key, state).supplementaryInstructions,
+    (await presenter.requirement(key, state)).supplementaryInstructions,
     supplementaryInstructions,
   );
 });
 
-test('missing or corrupt snapshot falls back to saved requirement without failing the session', (t) => {
+test('missing or corrupt snapshot falls back to saved requirement without failing the session', async (t) => {
   const store = new RunStore(temporary(t));
   const presenter = new SessionPresenter({ store });
   const key = '1-2';
   fs.mkdirSync(store.dir(key));
-  const state = { workitem: { id: '2', description: '运行记录完整正文' } };
+  const state = { agent: { provider: 'codex' }, workitem: { id: '2', description: '运行记录完整正文' } };
   assert.equal(
-    presenter.requirement(key, state).description,
+    (await presenter.requirement(key, state)).description,
     state.workitem.description,
   );
-  assert.match(presenter.requirement(key, state).warning, /缺失/);
+  assert.match((await presenter.requirement(key, state)).warning, /缺失/);
   fs.writeFileSync(path.join(store.dir(key), 'requirement.json'), 'bad json');
-  assert.match(presenter.requirement(key, state).warning, /无法读取/);
-  assert.deepEqual(presenter.requirement(key, state).images, []);
-  assert.equal(presenter.requirement(key, state).supplementaryInstructions, '');
+  assert.match((await presenter.requirement(key, state)).warning, /无法读取/);
+  assert.deepEqual((await presenter.requirement(key, state)).images, []);
+  assert.equal((await presenter.requirement(key, state)).supplementaryInstructions, '');
   state.workitem.supplementary_instructions = '保留记录中的补充说明\n第二行';
   assert.equal(
-    presenter.requirement(key, state).supplementaryInstructions,
+    (await presenter.requirement(key, state)).supplementaryInstructions,
     state.workitem.supplementary_instructions,
   );
 });

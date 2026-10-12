@@ -44,7 +44,7 @@ async function buildFusionTask({ session, item, directory, config, services }) {
   });
   if (prompt.length > 240000) throw new Error("融合资料超过 240000 字，请减少所选需求。");
   const task = { generated_at: new Date().toISOString(), execution_ready: true,
-    workitem: item, requirements, images, codex_prompt: prompt };
+    workitem: item, requirements, images, prompt };
   return { workitem: item, task };
 }
 

@@ -7,7 +7,7 @@ const {
   validateWorkspaceInput,
 } = require("../domain/workspace.cjs");
 const { readOptional, writeConfig, updateConfig } = require("./json-files.cjs");
-const { withFileLock } = require("./file-lock.cjs");
+const { withAsyncFileLock } = require("./file-lock.cjs");
 const { databaseForPath } = require("./database-registry.cjs");
 
 class WorkspaceStore {
@@ -29,48 +29,48 @@ class WorkspaceStore {
     return this.paths(id).configFile;
   }
 
-  read(id, ownerUserId) {
+  async read(id, ownerUserId) {
     validateWorkspaceId(id);
-    if (this.database) return this.database.readWorkspace(id, ownerUserId);
-    const config = readOptional(this.configFile(id));
+    if (this.database) return (await this.database.readWorkspace(id, ownerUserId));
+    const config = (await readOptional(this.configFile(id)));
     if (config.workspace?.id !== id)
       throw Object.assign(new Error("工作区不存在。"), { code: "ENOENT" });
     return config;
   }
 
-  list(ownerUserId) {
-    if (this.database) return this.database.listWorkspaces(ownerUserId);
+  async list(ownerUserId) {
+    if (this.database) return (await this.database.listWorkspaces(ownerUserId));
     if (!fs.existsSync(this.directory)) return [];
-    return fs.readdirSync(this.directory, { withFileTypes: true })
+    return (await Promise.all(fs.readdirSync(this.directory, { withFileTypes: true })
       .filter((entry) => entry.isDirectory() && WORKSPACE_ID.test(entry.name))
-      .map((entry) => this.read(entry.name));
+      .map(async (entry) => (await this.read(entry.name)))));
   }
 
-  save(input, id, createConfig, ownerUserId) {
+  async save(input, id, createConfig, ownerUserId) {
     const workspace = validateWorkspaceInput(input);
     if (this.database) {
       if (!ownerUserId) throw new Error("创建或更新工作区必须指定账号。");
       if (id !== undefined) validateWorkspaceId(id);
       try {
-        return this.database.transaction(() => {
-          const current = id === undefined ? null : this.read(id, ownerUserId);
-          if (this.list(ownerUserId).some((entry) => entry.workspace.id !== id && entry.workspace.name === workspace.name))
+        return (await this.database.transaction(async () => {
+          const current = id === undefined ? null : (await this.read(id, ownerUserId));
+          if ((await this.list(ownerUserId)).some((entry) => entry.workspace.id !== id && entry.workspace.name === workspace.name))
             throw new Error("工作区名称已存在。");
           const key = id ?? randomUUID();
-          const config = current || createConfig(key);
-          this.database.writeWorkspace(key, { ...config,
-            workspace: { ...config.workspace, ...workspace, id: key, owner_user_id: ownerUserId } });
-          return this.read(key, ownerUserId);
-        });
+          const config = current || (await createConfig(key));
+          (await this.database.writeWorkspace(key, { ...config,
+            workspace: { ...config.workspace, ...workspace, id: key, owner_user_id: ownerUserId } }));
+          return (await this.read(key, ownerUserId));
+        }));
       } catch (error) {
-        if (error.code === "SQLITE_CONSTRAINT_UNIQUE") throw new Error("工作区名称已存在。");
+        if (["P2002", "P2034"].includes(error.code)) throw new Error("工作区名称已存在。");
         throw error;
       }
     }
     // Names are unique across the catalog, not just within one config file.
-    return withFileLock(path.join(this.directory, ".catalog"), () => {
-      if (id !== undefined) this.read(id);
-      if (this.list().some((config) =>
+    return (await withAsyncFileLock(path.join(this.directory, ".catalog"), async () => {
+      if (id !== undefined) (await this.read(id));
+      if ((await this.list()).some((config) =>
         config.workspace.id !== id && config.workspace.name === workspace.name))
         throw new Error("工作区名称已存在。");
       const key = id ?? randomUUID();
@@ -79,10 +79,10 @@ class WorkspaceStore {
         ...config,
         workspace: { ...config.workspace, id: key, ...workspace },
       });
-      if (id !== undefined) updateConfig(file, setWorkspace);
-      else writeConfig(file, setWorkspace(createConfig(key)));
-      return this.read(key);
-    }, "Workspace catalog");
+      if (id !== undefined) (await updateConfig(file, setWorkspace));
+      else (await writeConfig(file, setWorkspace((await createConfig(key)))));
+      return (await this.read(key));
+    }, "Workspace catalog"));
   }
 }
 

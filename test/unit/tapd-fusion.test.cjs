@@ -9,7 +9,7 @@ const { session, temporary, png } = require("../support/helpers.cjs");
 
 test("fusion validation preserves legacy identities and rejects duplicate, foreign, oversized and invalid selections before network", async t => {
   const root = temporary(t), configFile = path.join(root, "config.json");
-  writeConfig(configFile, { workspace: { id: randomUUID() }, tapd: { session } });
+  (await writeConfig(configFile, { workspace: { id: randomUUID() }, tapd: { session } }));
   const channel = createTapdChannel(configFile, { detail: () => assert.fail("validation must not fetch") });
   const input = { requestId: randomUUID(), workspace: "1", title: "融合", items: [{ id: "11" }] };
   const result = await channel.resolve(input);
@@ -33,7 +33,7 @@ test("ordered fusion renders its captured template once with raw sources and glo
     tapd: "单条模板不应混入\n{{title}}\n{{id}}\n{{content}}\n{{images}}\n{{supplement}}",
     tapd_fusion: "自定义融合约束\n{{title}} / {{workspace_id}} / {{requirement_count}}\n{{requirements}}\n{{images}}\n{{supplement}}",
   } };
-  writeConfig(configFile, config);
+  (await writeConfig(configFile, config));
   const channel = createTapdChannel(configFile, { detail: async (_, item) => ({ ...item, title: `标题 ${item.id}`,
     detail_url: `https://www.tapd.cn/1/prong/stories/view/${item.id}`,
     markdown_description: `正文 ${item.id} 保留 {{title}} $&\n![截图](data:image/png;base64,${png.toString("base64")})`,
@@ -41,21 +41,21 @@ test("ordered fusion renders its captured template once with raw sources and glo
   const resolved = await channel.resolve({ requestId: randomUUID(), workspace: "1", title: "整体改造",
     supplementaryInstructions: "融合说明保留 {{images}} $&",
     items: [{ id: "12", type: "bug" }, { id: "11", type: "story" }] });
-  writeConfig(configFile, { ...config, prompt_templates: { ...config.prompt_templates,
-    tapd_fusion: config.prompt_templates.tapd_fusion.replace("自定义融合约束", "新模板") } });
+  (await writeConfig(configFile, { ...config, prompt_templates: { ...config.prompt_templates,
+    tapd_fusion: config.prompt_templates.tapd_fusion.replace("自定义融合约束", "新模板") } }));
   const { task } = await channel.prepare({ ...resolved, directory: root });
   assert.deepEqual(task.requirements.map(entry => entry.workitem.id), ["12", "11"]);
-  assert.equal(task.codex_prompt.split("自定义融合约束").length - 1, 1);
-  assert.doesNotMatch(task.codex_prompt, /单条模板不应混入|新模板/);
-  assert.match(task.codex_prompt, /整体改造 \/ 1 \/ 2/);
-  assert.ok(task.codex_prompt.includes("正文 12 保留 {{title}} $&"));
-  assert.ok(task.codex_prompt.includes("融合说明保留 {{images}} $&"));
-  assert.match(task.codex_prompt, /来源：https:\/\/www.tapd.cn\/1\/prong\/stories\/view\/11/);
+  assert.equal(task.prompt.split("自定义融合约束").length - 1, 1);
+  assert.doesNotMatch(task.prompt, /单条模板不应混入|新模板/);
+  assert.match(task.prompt, /整体改造 \/ 1 \/ 2/);
+  assert.ok(task.prompt.includes("正文 12 保留 {{title}} $&"));
+  assert.ok(task.prompt.includes("融合说明保留 {{images}} $&"));
+  assert.match(task.prompt, /来源：https:\/\/www.tapd.cn\/1\/prong\/stories\/view\/11/);
   assert.deepEqual(task.images.map(image => [image.index, image.source_id]), [[1, "12"], [2, "11"]]);
   for (const [index, source] of task.requirements.entries()) {
-    assert.equal(source.codex_prompt, undefined, "child snapshots contain raw materials without repeated execution rules");
-    assert.ok(task.codex_prompt.includes(source.workitem.markdown_description));
-    assert.ok(task.codex_prompt.includes(`图片 ${index + 1}（第 ${index + 1} 条需求 #${source.workitem.id}）：${source.images[0].path}`));
+    assert.equal(source.prompt, undefined, "child snapshots contain raw materials without repeated execution rules");
+    assert.ok(task.prompt.includes(source.workitem.markdown_description));
+    assert.ok(task.prompt.includes(`图片 ${index + 1}（第 ${index + 1} 条需求 #${source.workitem.id}）：${source.images[0].path}`));
   }
   // Use the image service seam to exercise the aggregate limit independently
   // of per-source duplicate-URL normalization.

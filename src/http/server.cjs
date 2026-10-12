@@ -12,6 +12,13 @@ const { WorkspaceCloneManager } = require("../application/workspace-clone-manage
 const { SystemServices } = require("../application/system-services.cjs");
 const { EnvironmentServices } = require("../application/environment-services.cjs");
 const { GitAccountServices } = require("../application/git-account-services.cjs");
+const { presentError } = require("../application/error-presenter.cjs");
+const { ProjectServices } = require("../application/project-services.cjs");
+const { ProjectContentServices } = require("../application/project-content-services.cjs");
+const { ProjectDevelopmentServices } = require("../application/project-development-services.cjs");
+const { serveProjectContent } = require("./project-content-api.cjs");
+const { serveProjectDevelopment } = require("./project-development-api.cjs");
+const { serveProjectApi } = require("./project-api.cjs");
 const {
   AccountServices,
   initializeAccountServices,
@@ -49,6 +56,18 @@ function responseStream(reply) {
   return stream;
 }
 
+function workspacePermission(route, method) {
+  if (route.startsWith("/settings")) return route === "/settings/refs" ? "code.view" : "project.configure";
+  if (route.startsWith("/repository/git")) return method === "GET" ? "code.view" : "code.operate";
+  if (/\/files?$|\/git$/.test(route)) return "code.view";
+  if (method === "GET") return "session.view";
+  if (route === "/runs" || route === "/channels/manual/images") return "session.start";
+  if (route.endsWith("/responses")) return "session.approve";
+  if (route.endsWith("/interrupt")) return "session.stop";
+  if (/\/(?:worktree\/delete|delete)$/.test(route)) return "code.operate";
+  return "session.continue";
+}
+
 function createWebServer({
   host = "127.0.0.1",
   configFile,
@@ -84,14 +103,21 @@ function createWebServer({
   };
   let fixtureSettings = { ...DEFAULT_ACCOUNT_SETTINGS };
   const fixturePreferences = new Map();
+  /** @type {WorkspaceManager} */
   let workspaces = suppliedWorkspaces;
+  /** @type {WorkspaceCloneManager} */
   let workspaceClones = suppliedWorkspaceClones;
   let environment = suppliedEnvironment;
-  let accounts,
-    gitAccounts,
-    systemServices,
-    closing = false,
-    closePromise;
+  /** @type {AccountServices} */
+  let accounts;
+  /** @type {GitAccountServices} */
+  let gitAccounts;
+  /** @type {SystemServices} */
+  let systemServices;
+  let projects;
+  let projectContent;
+  let projectDevelopment;
+  let closing = false, closePromise;
   const ownedDatabase = !testIdentity && !database;
 
   app.register(async (instance) => {
@@ -99,16 +125,21 @@ function createWebServer({
       accounts = database
         ? new AccountServices(database)
         : await initializeAccountServices(dataDirectory);
-      gitAccounts = new GitAccountServices(accounts.database);
       if (!workspaces)
         workspaces = new WorkspaceManager({
           directory: path.join(dataDirectory, "workspaces"),
           database: accounts.database,
         });
       workspaceClones ||= new WorkspaceCloneManager(accounts.database, workspaces);
+      projects = new ProjectServices(accounts.database, { workspaces, onRevoke: value => events.revoke(value) });
+      projectContent = new ProjectContentServices(accounts.database, projects);
+      projectDevelopment = new ProjectDevelopmentServices(accounts.database, projects, workspaces);
+      await projects.initialize();
+      workspaces.authorizeProject = (id, actor, permission) => projects.workspaceAuthorization(id, actor, permission);
+      gitAccounts = new GitAccountServices(accounts.database, { projects });
       await instance.register(cookie);
       await instance.register(session, {
-        secret: accounts.sessionSecret(),
+        secret: (await accounts.sessionSecret()),
         cookieName: "web_coding_session",
         cookie: {
           path: "/",
@@ -184,11 +215,11 @@ function createWebServer({
         reply.statusCode < 400 &&
         request.applicationActor
       )
-        accounts.audit(
+        (await accounts.audit(
           request.applicationActor,
           `http.${request.raw.url.split("?")[0]}`,
           request.applicationWorkspace,
-        );
+        ));
     });
     const dispatch = async (request, reply) => {
       await handle(request, reply);
@@ -208,6 +239,7 @@ function createWebServer({
         handler: dispatch,
       });
     instance.setErrorHandler((error, _request, reply) => {
+      error = presentError(error);
       reply.code(error.statusCode || 400).send({
         error:
           error.statusCode === 429
@@ -239,22 +271,22 @@ function createWebServer({
     }
     const response = responseStream(reply);
     try {
-      let actor = testIdentity ? fixtureUser : accounts.actor(request.session);
+      let actor = testIdentity ? fixtureUser : (await accounts.actor(request.session));
       request.applicationActor = actor;
       const csrfToken = () => (testIdentity ? token : reply.generateCsrf());
-      const description = () => ({
+      const description = async () => ({
         user: actor,
         token: csrfToken(),
         ...(actor
           ? {
               settings: testIdentity
                 ? fixtureSettings
-                : accounts.settings(actor),
+                : (await accounts.settings(actor)),
             }
           : {}),
       });
       if (request.method === "GET" && url.pathname === "/api/auth/session")
-        return json(response, 200, description());
+        return json(response, 200, (await description()));
       if (
         request.method === "POST" &&
         url.pathname === "/api/auth/login" &&
@@ -264,12 +296,12 @@ function createWebServer({
         await establish(request, row);
         actor = accounts.describe(row);
         request.applicationActor = actor;
-        return json(response, 200, description());
+        return json(response, 200, (await description()));
       }
       if (!actor) throw accountError("请先登录。", 401, "AUTH_REQUIRED");
-      const authorize = () => {
+      const authorize = async () => {
         if (testIdentity) return fixtureUser;
-        const current = accounts.actor(request.session);
+        const current = (await accounts.actor(request.session));
         if (!current) throw accountError("请先登录。", 401, "AUTH_REQUIRED");
         return current;
       };
@@ -277,7 +309,7 @@ function createWebServer({
       // A session can be revoked while the client is still sending its body.
       const input =
         request.method === "POST" ? await readApiBody(raw, url) : {};
-      actor = authorize();
+      actor = (await authorize());
       request.applicationActor = actor;
       if (request.method === "POST" && url.pathname === "/api/auth/logout") {
         if (!testIdentity) {
@@ -296,7 +328,7 @@ function createWebServer({
         events.revoke({ userId: actor.id });
         await establish(request, row);
         actor = accounts.describe(row);
-        return json(response, 200, description());
+        return json(response, 200, (await description()));
       }
       if (actor.mustChangePassword)
         throw accountError(
@@ -306,16 +338,19 @@ function createWebServer({
         );
       if (request.method === "POST" && environment.status().busy && !url.pathname.startsWith("/api/auth/"))
         throw accountError("环境工具正在更新，请完成后再提交操作。", 409);
+      if (projects && await serveProjectApi(request, response, url, { projects, actor, input })) return;
+      if (projectContent && await serveProjectContent(request.raw, response, url, { services: projectContent, actor, input })) return;
+      if (projectDevelopment && await serveProjectDevelopment(request.raw, response, url, { services: projectDevelopment, actor, input })) return;
       if (url.pathname === "/api/account/settings") {
         if (request.method === "POST") {
           if (testIdentity) fixtureSettings = { ...fixtureSettings, ...input };
           else
             return json(response, 200, {
-              settings: accounts.saveSettings(actor, input),
+              settings: (await accounts.saveSettings(actor, input)),
             });
         }
         return json(response, 200, {
-          settings: testIdentity ? fixtureSettings : accounts.settings(actor),
+          settings: testIdentity ? fixtureSettings : (await accounts.settings(actor)),
         });
       }
       if (request.method === "GET" && url.pathname === "/api/account/models")
@@ -335,7 +370,7 @@ function createWebServer({
         );
       if (url.pathname === "/api/account/git-accounts" && !testIdentity) {
         if (request.method === "GET")
-          return json(response, 200, { accounts: gitAccounts.list(actor) });
+          return json(response, 200, { accounts: (await gitAccounts.list(actor)) });
         if (request.method === "POST")
           return json(response, 201, { account: await gitAccounts.save(actor, input, undefined, authorize) });
       }
@@ -349,7 +384,7 @@ function createWebServer({
         if (action === "test")
           return json(response, 200, await gitAccounts.check(actor, input, id));
         if (action === "delete") {
-          gitAccounts.remove(actor, id);
+          (await gitAccounts.remove(actor, id));
           return json(response, 200, { ok: true });
         }
         return json(response, 200, { account: await gitAccounts.save(actor, input, id, authorize) });
@@ -357,7 +392,8 @@ function createWebServer({
       if (url.pathname === "/api/account/preferences") {
         const id = input.workspaceId || url.searchParams.get("workspaceId");
         if (!testIdentity || workspaces)
-          workspaces.read(id, testIdentity ? undefined : actor);
+          (await workspaces.read(id, testIdentity ? undefined : actor));
+        if (!testIdentity) await projects.workspaceAuthorization(id, actor, "session.view");
         if (testIdentity) {
           if (request.method === "POST")
             fixturePreferences.set(id, {
@@ -370,13 +406,13 @@ function createWebServer({
         return json(response, 200, {
           preferences:
             request.method === "POST"
-              ? accounts.savePreferences(actor, id, input)
-              : accounts.preferences(actor, id),
+              ? (await accounts.savePreferences(actor, id, input))
+              : (await accounts.preferences(actor, id)),
         });
       }
       if (url.pathname === "/api/admin/accounts" && !testIdentity) {
         if (request.method === "GET")
-          return json(response, 200, { users: accounts.list(actor) });
+          return json(response, 200, { users: (await accounts.list(actor)) });
         if (request.method === "POST")
           return json(response, 201, {
             user: await accounts.create(input, actor, false, authorize),
@@ -393,6 +429,7 @@ function createWebServer({
           authorize,
         );
         events.revoke({ userId: user.id });
+        await projects.enforce();
         return json(response, 200, { user });
       }
       const contextActor = testIdentity ? undefined : actor;
@@ -400,42 +437,46 @@ function createWebServer({
         !manager &&
         request.method === "GET" &&
         url.pathname === "/api/bootstrap"
-      )
+      ) {
+        const available = testIdentity ? await workspaces.list(contextActor) : (await projects.list(actor)).projects.filter(project => project.space?.status === "ready" && project.permissions.includes("code.view")).map(project => ({ id: project.space.workspaceId, name: project.name, projectId: project.id, permissions: project.permissions }));
         return json(response, 200, {
           token: csrfToken(),
-          workspaces: workspaces.list(contextActor),
+          workspaces: available,
         });
+      }
       if (url.pathname === "/api/workspaces") {
         if (request.method === "GET")
           return json(response, 200, {
-            workspaces: workspaces.list(contextActor),
+            workspaces: testIdentity ? await workspaces.list(contextActor) : (await projects.list(actor)).projects.filter(project => project.space?.status === "ready" && project.permissions.includes("code.view")).map(project => ({ id: project.space.workspaceId, name: project.name, projectId: project.id, permissions: project.permissions })),
           });
         if (request.method === "POST") {
-          return json(response, 202, { clone: workspaceClones.start(input, actor) });
+          if (!testIdentity) throw accountError("个人空间创建已关闭，请在项目中准备系统分配的开发空间。", 403);
+          return json(response, 202, { clone: (await workspaceClones.start(input, actor)) });
         }
       }
       if (url.pathname === "/api/workspace-clones" && request.method === "GET")
-        return json(response, 200, { clones: workspaceClones.list(actor) });
+        return json(response, 200, { clones: testIdentity ? await workspaceClones.list(actor) : [] });
       const cloneRoute = /^\/api\/workspace-clones\/([^/]+)(\/dismiss)?$/.exec(url.pathname);
       if (cloneRoute) {
+        if (!testIdentity) throw accountError("请通过项目开发空间查看准备状态。", 404);
         if (request.method === "GET" && !cloneRoute[2])
-          return json(response, 200, { clone: workspaceClones.read(cloneRoute[1], actor) });
+          return json(response, 200, { clone: (await workspaceClones.read(cloneRoute[1], actor)) });
         if (request.method === "POST" && cloneRoute[2]) {
-          workspaceClones.dismiss(cloneRoute[1], actor);
+          (await workspaceClones.dismiss(cloneRoute[1], actor));
           return json(response, 200, { ok: true });
         }
       }
       if (url.pathname.startsWith("/api/system/")) {
-        if (!testIdentity) accounts.requireAdmin(actor);
+        if (!testIdentity) (await accounts.requireAdmin(actor));
         if (request.method === "GET" && url.pathname === "/api/system/environment")
           return json(response, 200, await environment.read());
         if (request.method === "POST" && url.pathname === "/api/system/environment/check")
           return json(response, 200, await environment.checkLatest());
         if (url.pathname === "/api/system/environment/update") {
           if (request.method === "GET") return json(response, 200, environment.status());
-          if (request.method === "POST") return json(response, 202, await environment.start(input, () => {
-            const current = authorize();
-            if (!testIdentity) accounts.requireAdmin(current);
+          if (request.method === "POST") return json(response, 202, await environment.start(input, async () => {
+            const current = (await authorize());
+            if (!testIdentity) (await accounts.requireAdmin(current));
           }));
         }
         if (url.pathname === "/api/system/settings") {
@@ -463,10 +504,18 @@ function createWebServer({
       if (scoped) {
         const id = scoped[1];
         request.applicationWorkspace = id;
-        workspaces.read(id, contextActor);
+        (await workspaces.read(id, contextActor));
+        if (!testIdentity) {
+          const permission = workspacePermission(scoped[2] || "/bootstrap", request.method);
+          await projects.workspaceAuthorization(id, actor, permission);
+          if (request.method === "POST" && scoped[2] === "/runs")
+            throw accountError("请从项目事项显式创建开发任务。", 403);
+          if (request.method === "POST" && (!scoped[2] || scoped[2].startsWith("/settings")))
+            throw accountError("请通过项目设置更新共享配置。", 403);
+        }
         if (!scoped[2] && request.method === "POST")
-          return json(response, 200, workspaces.save(input, id, contextActor));
-        context = workspaces.get(id, contextActor);
+          return json(response, 200, (await workspaces.save(input, id, contextActor)));
+        context = (await workspaces.get(id, contextActor));
         url.pathname = `/api${scoped[2] || "/bootstrap"}`;
       } else if (manager && testIdentity)
         context = { configFile, channels, sessions: manager };
@@ -477,14 +526,17 @@ function createWebServer({
         : {
             userId: actor.id,
             sessionId: sid,
-            authorize() {
+            async authorize(permission = "session.view") {
               if (
-                !accounts.actor(request.session) ||
-                !accounts.sessionValid(sid, actor.id)
+                !(await accounts.actor(request.session)) ||
+                !(await accounts.sessionValid(sid, actor.id))
               )
                 return false;
               try {
-                workspaces.read(scoped[1], actor);
+                (await workspaces.read(scoped[1], actor));
+                await projects.workspaceAuthorization(scoped[1], actor, "session.view");
+                if (permission !== "session.view")
+                  await projects.workspaceAuthorization(scoped[1], actor, permission);
                 return true;
               } catch {
                 return false;
@@ -495,10 +547,11 @@ function createWebServer({
         token: csrfToken(),
         events,
         authorization,
-        accountSettings: testIdentity ? undefined : accounts.settings(actor),
+        accountSettings: testIdentity ? undefined : (await accounts.settings(actor)),
         input,
       });
     } catch (error) {
+      error = presentError(error);
       if (!response.headersSent)
         json(
           response,
@@ -518,6 +571,7 @@ function createWebServer({
     get accounts() {
       return accounts;
     },
+    get projects() { return projects; },
     async listen(port = 4317) {
       await app.ready();
       await app.listen({ port, host });
@@ -538,12 +592,13 @@ function createWebServer({
       closePromise = Promise.allSettled([
         app.close(),
         Promise.resolve().then(() => manager?.close()),
-        Promise.resolve().then(() => workspaces?.close()),
-        Promise.resolve().then(() => workspaceClones?.close()),
+        Promise.resolve().then(async () => (await workspaces?.close())),
+        Promise.resolve().then(async () => (await workspaceClones?.close())),
         Promise.resolve().then(() => environment?.close()),
-        Promise.resolve().then(() => accounts?.close()),
-      ]).then((results) => {
-        if (ownedDatabase) accounts?.closeDatabase();
+        Promise.resolve().then(() => projects?.close()),
+        Promise.resolve().then(async () => (await accounts?.close())),
+      ]).then(async (results) => {
+        if (ownedDatabase) (await accounts?.closeDatabase());
         const failure = results.find((result) => result.status === "rejected");
         if (failure) throw failure.reason;
       });

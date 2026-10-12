@@ -122,18 +122,18 @@ test('type detection preserves failures and never retries network, login or iden
   assert.equal(calls, 3, 'all candidate failures remain visible; none is silently skipped');
 });
 
-test('refreshing credentials preserves repository mapping, image hosts and workflow fields', (t) => {
+test('refreshing credentials preserves repository mapping, image hosts and workflow fields', async (t) => {
   const file = path.join(temporary(t), 'tapd.local.json');
   const config = {
     tapd: { session, image_hosts: ['cdn.example.com'] },
     workflow: { allow_write: true, fields: { owner: 'me' } },
-    codex: { repositories: { 1: '/repo' } },
+    execution: { repositories: { 1: '/repo' } },
   };
   fs.writeFileSync(file, JSON.stringify(config));
-  saveSession({ ...session, cookie_header: 'refreshed' }, file);
+  (await saveSession({ ...session, cookie_header: 'refreshed' }, file));
   const saved = JSON.parse(fs.readFileSync(file));
   assert.deepEqual(saved.workflow, config.workflow);
-  assert.deepEqual(saved.codex, config.codex);
+  assert.deepEqual(saved.execution, config.execution);
   assert.deepEqual(saved.tapd.image_hosts, ['cdn.example.com']);
   assert.equal(saved.tapd.session.cookie_header, 'refreshed');
 });

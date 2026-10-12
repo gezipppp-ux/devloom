@@ -5,12 +5,13 @@ const props = defineProps({
   request: { type: Object, required: true },
   disabled: Boolean,
   autoOpen: Boolean,
+  agentLabel: { type: String, default: 'Agent' },
   error: { type: String, default: '' },
 });
 const emit = defineEmits(['respond']);
 const dialog = ref(), trigger = ref(), validation = ref('');
 const answers = reactive(Object.create(null));
-const blocking = computed(() => props.request.params.isBlocking !== false);
+const blocking = computed(() => props.request.blocking !== false);
 function open() {
   if (!dialog.value || dialog.value.open) return;
   dialog.value.showModal();
@@ -22,7 +23,7 @@ function close() {
 }
 function submit() {
   if (props.disabled) return;
-  if (props.request.params.questions.some((question) => !answers[question.id]?.trim())) {
+  if (props.request.questions.some((question) => !answers[question.id]?.trim())) {
     validation.value = '请回答每个问题。';
     return;
   }
@@ -38,17 +39,17 @@ onBeforeUnmount(() => dialog.value?.close());
 <template>
   <section class="request-panel">
     <div class="eyebrow">{{ blocking ? '需要你的输入' : '有待回答的问题' }}</div>
-    <p>{{ request.params.questions.map((question) => question.question).join('；') }}</p>
+    <p>{{ request.questions.map((question) => question.question).join('；') }}</p>
     <button ref="trigger" type="button" class="primary" @click="open">回答问题</button>
     <Teleport to="body">
-      <dialog ref="dialog" class="workspace-dialog session-question-dialog" aria-label="Codex 的问题" @cancel.prevent="close">
+      <dialog ref="dialog" class="workspace-dialog session-question-dialog" :aria-label="`${agentLabel} 的问题`" @cancel.prevent="close">
         <div class="workspace-dialog-heading">
-          <h2>Codex 的问题</h2>
+          <h2>{{ agentLabel }} 的问题</h2>
           <button type="button" class="workspace-menu" aria-label="收起问题" @click="close">×</button>
         </div>
-        <p class="muted">{{ blocking ? '回答后 Codex 将继续当前任务。' : 'Codex 可以继续执行，你也可以随时补充回答。' }}</p>
+        <p class="muted">{{ blocking ? `回答后 ${agentLabel} 将继续当前任务。` : `${agentLabel} 可以继续执行，你也可以随时补充回答。` }}</p>
         <form @submit.prevent="submit">
-          <fieldset v-for="(question, index) in request.params.questions" :key="question.id" class="question-field" :disabled="disabled">
+          <fieldset v-for="(question, index) in request.questions" :key="question.id" class="question-field" :disabled="disabled">
             <legend><span v-if="question.header" class="question-header">{{ index + 1 }} · {{ question.header }}</span>{{ question.question }}</legend>
             <div v-if="question.options?.length" class="answer-options">
               <button v-for="option in question.options" :key="option.label" type="button"

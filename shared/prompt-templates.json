@@ -16,7 +16,7 @@
     "placeholders": [
       { "name": "title", "label": "需求标题", "required": true, "example": "增加需求筛选功能" },
       { "name": "content", "label": "完整需求内容", "required": true, "example": "支持按状态筛选，并展示无结果提示。" },
-      { "name": "images", "label": "完整图片说明与有序列表", "required": true, "example": "已附带 1 张图片（通过 --image 传入），顺序如下：\n1. 01.png\n请结合图片中的界面、标注和文字理解需求。" },
+      { "name": "images", "label": "完整图片说明与有序列表", "required": true, "example": "已附带 1 张图片（作为任务图片附件传入），顺序如下：\n1. 01.png\n请结合图片中的界面、标注和文字理解需求。" },
       { "name": "supplement", "label": "补充说明块（为空时不输出，含末尾空行）", "required": true, "example": "--- 补充说明与指导意见开始 ---\n筛选条件需在刷新后保留。\n--- 补充说明与指导意见结束 ---\n\n" },
       { "name": "id", "label": "TAPD 需求 ID", "required": false, "example": "1130141304001000752" },
       { "name": "workspace_id", "label": "TAPD 项目 ID", "required": false, "example": "1" },

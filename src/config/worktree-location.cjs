@@ -4,7 +4,7 @@ const os = require("node:os");
 const { samePath } = require("../shared/paths.cjs");
 
 function defaultWorktreeRoot() {
-  return path.join(os.homedir(), ".codex-workspaces");
+  return path.join(os.homedir(), ".web-coding-workspaces");
 }
 
 function inside(base, target) {

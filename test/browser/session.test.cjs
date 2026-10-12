@@ -6,7 +6,7 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { chromium } = require('playwright');
 const { RunStore } = require('../../src/storage/run-store.cjs');
-const { SessionManager } = require('../../src/application/session-manager.cjs');
+const { SessionManager } = require('../support/session-manager.cjs');
 const { createWebServer } = require('../../src/http/server.cjs');
 const { FakeClient } = require('../fixtures/web-client.cjs');
 const { verifySessionFiles } = require('./session-files.test.cjs');
@@ -56,6 +56,7 @@ async function verifyLanManualCreation(browser, directory, errors) {
     return;
   }
   const configFile = path.join(directory, 'lan-missing.json');
+  fs.writeFileSync(configFile, JSON.stringify({ agent: { provider: 'codex' }, execution: {} }));
   const manual = createManualChannel(configFile, { uploadDirectory: path.join(directory, 'lan-uploads') });
   const client = new FakeClient();
   const manager = new SessionManager({
@@ -133,13 +134,13 @@ async function verifyPermissionDiscoveryFailures(browser, origin, client, errors
           : { permissionModes: ['ask', 'auto', 'full'].map((id) => ({ id, available: true })) },
     }));
     const alert = page.getByRole('alert').filter({ hasText: '权限选项加载失败' });
-    async function verifyOptions(autoAvailable) {
+    async function verifyOptions(available) {
       await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
       const automatic = page.locator('.permission-option[data-value="auto"]');
       await automatic.waitFor();
-      assert.equal(await automatic.isDisabled(), !autoAvailable, surface);
+      assert.equal(await automatic.isDisabled(), !available, surface);
       for (const mode of ['ask', 'full'])
-        assert.equal(await page.locator(`.permission-option[data-value="${mode}"]`).isDisabled(), false, surface);
+        assert.equal(await page.locator(`.permission-option[data-value="${mode}"]`).isDisabled(), !available, surface);
       await page.keyboard.press('Escape');
     }
     try {
@@ -154,6 +155,12 @@ async function verifyPermissionDiscoveryFailures(browser, origin, client, errors
       assert.match(await alert.textContent(), /HTTP 404/);
       assert.match(await alert.textContent(), /当前服务缺少权限接口，请重启 Web 服务并刷新页面/);
       await verifyOptions(false);
+      if (surface === 'session') {
+        await page.getByRole('textbox', { name: '发送给 Codex 的指令' }).fill('能力未知时保留消息草稿');
+        assert.equal(await page.locator('.composer-send').isDisabled(), true);
+      } else {
+        assert.equal(await page.getByRole('button', { name: '创建 session 并开始开发 →', exact: true }).isDisabled(), true);
+      }
 
       responseMode = 'supported';
       await alert.getByRole('button', { name: '刷新权限选项', exact: true }).click();
@@ -179,6 +186,101 @@ async function verifyPermissionDiscoveryFailures(browser, origin, client, errors
   assert.equal(client.calls.slice(callsBefore).some(({ method }) =>
     ['thread/start', 'thread/resume', 'turn/start', 'turn/steer', 'turn/interrupt'].includes(method)), false,
   'permission discovery must not execute or resume a Codex turn');
+}
+
+async function verifySteeringPermissionDiscoveryFailures(browser, origin, manager, client, key, errors) {
+  if (manager.sessions.get(key)?.turnId) await manager.interrupt(key);
+  await manager.send(key, '启动当前轮权限发现回归');
+  await manager.events.drain();
+  const activeTurn = manager.sessions.get(key).turnId;
+  assert.ok(activeTurn);
+  const page = await browser.newPage();
+  let loading = false, pendingRoute, captured;
+  const requested = new Promise(resolve => { captured = resolve; });
+  const before = client.calls.length;
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route('**/api/execution-options', route => {
+    if (loading) { pendingRoute = route; captured(); return; }
+    return route.fulfill({ status: 503, json: { error: '模拟下一轮权限能力离线' } });
+  });
+  try {
+    await page.goto(origin);
+    const alert = page.getByRole('alert').filter({ hasText: '权限选项加载失败' });
+    await alert.waitFor();
+    const input = page.getByRole('textbox', { name: '发送给 Codex 的指令', exact: true });
+    async function steer(text) {
+      await input.fill(text);
+      assert.equal(await page.locator('.composer-send').isEnabled(), true, 'next-turn discovery cannot block active-turn steering');
+      const response = page.waitForResponse(response => new URL(response.url()).pathname === `/api/runs/${key}/messages`);
+      await input.press('Enter');
+      assert.equal((await response).status(), 202);
+      await page.waitForFunction(() => document.querySelector('.session-composer textarea').value === '');
+    }
+    await steer('权限接口503时继续当前轮');
+    loading = true;
+    await alert.getByRole('button', { name: '刷新权限选项', exact: true }).click();
+    await requested;
+    await steer('权限接口仍加载时继续当前轮');
+    assert.equal(client.calls.slice(before).filter(call => call.method === 'turn/steer').length, 2);
+    assert.equal(client.calls.slice(before).some(call => call.method === 'turn/start'), false);
+    assert.equal(manager.sessions.get(key).turnId, activeTurn);
+  } finally {
+    if (pendingRoute) await pendingRoute.fulfill({ status: 503, json: { error: '模拟下一轮权限能力离线' } }).catch(() => {});
+    await page.close();
+    await manager.interrupt(key);
+  }
+}
+
+async function verifyAgentRequests(browser, origin, key, errors) {
+  const page = await browser.newPage();
+  const writes = [];
+  let mode = 'unsupported';
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('request', (request) => { if (request.method() === 'POST') writes.push(request.url()); });
+  await page.route(`**/api/runs/${key}`, async (route) => {
+    const response = await route.fetch();
+    const original = await response.json();
+    const requests = mode === 'unsupported'
+      ? [{ id: mode, kind: 'unsupported', blocking: false }]
+      : mode === 'question'
+        ? [{ id: mode, kind: 'user-input', blocking: false, questions: [{ id: 'scope', question: '是否保留现有行为？' }] }]
+        : mode === 'approval'
+          ? [{ id: mode, kind: 'approval', action: 'command', blocking: true, command: 'echo fixture', reason: '模拟通用审批' }]
+          : [];
+    await route.fulfill({ response, json: { ...original, status: 'completed', turnId: null, requests,
+      ...(mode === 'unknown-permission' ? { executionSettings: { ...original.executionSettings, permissionMode: 'unrecognized' } } : {}),
+      agent: { provider: 'fixture', label: '测试 Agent', capabilities: mode === 'missing-capabilities' ? {} : { history: true, images: false, steer: false, approvals: true, userInput: true, resume: mode !== 'no-resume' } } } });
+  });
+  try {
+    await page.goto(origin);
+    const input = page.getByRole('textbox', { name: '发送给 测试 Agent 的指令', exact: true });
+    await page.getByRole('heading', { name: '暂不支持此交互请求', exact: true }).waitFor();
+    assert.equal(await input.isDisabled(), true, 'unknown requests block even if they claim to be nonblocking');
+    assert.equal(await page.getByRole('button', { name: '允许本次操作', exact: true }).count(), 0);
+    assert.equal(await page.getByRole('button', { name: '添加图片', exact: true }).isDisabled(), true);
+    for (const next of ['question', 'approval', 'no-resume', 'missing-capabilities', 'unknown-permission']) {
+      mode = next;
+      await page.locator('.session-toolbar').getByRole('button', { name: '刷新', exact: true }).click();
+      if (mode === 'question') {
+        await page.getByRole('button', { name: '回答问题', exact: true }).waitFor();
+        assert.equal(await input.isDisabled(), false, 'supported nonblocking questions allow follow-up messages');
+        assert.equal(await page.getByRole('dialog', { name: '测试 Agent 的问题', exact: true }).isVisible(), false);
+      } else if (mode === 'approval') {
+        await page.getByRole('heading', { name: '测试 Agent 请求执行命令', exact: true }).waitFor();
+        assert.equal(await page.getByRole('button', { name: '允许本次操作', exact: true }).isEnabled(), true);
+        assert.equal(await input.isDisabled(), true);
+      } else if (mode === 'unknown-permission') {
+        await page.getByRole('alert').filter({ hasText: '当前权限模式不可用' }).waitFor();
+        assert.equal(await page.getByRole('combobox', { name: '权限模式', exact: true }).getAttribute('data-permission'), 'unrecognized');
+        await input.fill('未知权限模式保留草稿');
+        assert.equal(await page.locator('.composer-send').isDisabled(), true);
+      } else {
+        await page.getByRole('button', { name: '允许本次操作', exact: true }).waitFor({ state: 'hidden' });
+        assert.equal(await input.isDisabled(), true, 'an engine without resume must not offer continuation');
+      }
+    }
+    assert.deepEqual(writes, [], 'rendering generic requests must never grant approval or execute a task');
+  } finally { await page.close(); }
 }
 
 async function verifyExecutionSettings(browser, origin, manager, client, key, errors) {
@@ -259,7 +361,7 @@ async function verifyExecutionSettings(browser, origin, manager, client, key, er
 async function verifyInitialListRefresh(browser, origin, manager, key, errors) {
   const page = await browser.newPage();
   page.on('pageerror', (error) => errors.push(error.message));
-  const previousMetadata = manager.store.readTaskMetadata(key);
+  const previousMetadata = (await manager.store.readTaskMetadata(key));
   const progress = previousMetadata.progress === 'review' ? 'merge' : 'review';
   const snapshots = [];
   let captureFirst, captureSecond;
@@ -278,7 +380,7 @@ async function verifyInitialListRefresh(browser, origin, manager, key, errors) {
     const first = await firstCaptured;
     await page.waitForFunction(() =>
       document.querySelector('.sidebar-footer')?.textContent.includes('服务已连接'));
-    manager.updateTaskMetadata(key, { progress });
+    (await manager.updateTaskMetadata(key, { progress }));
     // Keep the first list pending beyond the 400 ms SSE refresh debounce. The
     // connection stays subscribed, but cannot invalidate the startup decision.
     await page.waitForTimeout(650);
@@ -298,7 +400,7 @@ async function verifyInitialListRefresh(browser, origin, manager, key, errors) {
     assert.equal(snapshots.length, 2, 'refresh queued during startup must still run');
   } finally {
     await page.close();
-    manager.updateTaskMetadata(key, previousMetadata);
+    (await manager.updateTaskMetadata(key, previousMetadata));
   }
 }
 
@@ -362,7 +464,9 @@ async function verifyActionSelection(browser, origin, key, errors) {
     await page.waitForFunction((value) => window.processedMessages.includes(value), marker);
   }
   async function reopen() {
-    await page.locator('.session-header').getByRole('button', { name: '刷新', exact: true }).click();
+    // A real selection starts a new view generation; refreshing the current
+    // snapshot intentionally preserves its draft and in-flight action lock.
+    await page.locator('.session-link.active').click();
     await page.waitForFunction(() => {
       const input = document.querySelector('textarea[aria-label="发送给 Codex 的指令"]');
       return input && !input.disabled;
@@ -493,12 +597,12 @@ async function verifyRefreshConsistency(browser, origin, manager, client, key, e
     client.notify('item/agentMessage/delta', {
       turnId: 'refresh-race', itemId: 'refresh-new', delta: '请求期间新增的消息',
     });
-    manager.updateTaskMetadata(key, { progress: 'review' });
+    (await manager.updateTaskMetadata(key, { progress: 'review' }));
     await page.getByText('旧流式消息，保留最新内容', { exact: true }).waitFor();
     await page.waitForFunction(() =>
       document.querySelector('select[aria-label="任务进度"]').value === 'review');
     await release(streamSnapshot, 'stream-overlay');
-    assert.equal(await page.locator('.session-header .session-heading').textContent(), manager.list().find((run) => run.key === key).title);
+    assert.equal(await page.locator('.session-header .session-heading').textContent(), (await manager.list()).find((run) => run.key === key).title);
     assert.equal(await page.getByText('旧流式消息，保留最新内容', { exact: true }).count(), 1);
     assert.equal(await page.getByText('请求期间新增的消息', { exact: true }).count(), 1);
     assert.equal(await page.getByLabel('任务进度', { exact: true }).inputValue(), 'review');
@@ -515,7 +619,7 @@ async function verifyRefreshConsistency(browser, origin, manager, client, key, e
     });
     const approvalSnapshot = await approval.captured;
     assert.equal(approvalSnapshot.body.requests.length, 1);
-    await manager.respond(key, '9042', { decision: 'decline' });
+    await manager.respond(key, approvalSnapshot.body.requests[0].id, { decision: 'decline' });
     await page.getByRole('button', { name: '允许本次操作', exact: true }).waitFor({ state: 'hidden' });
     await release(approvalSnapshot, 'resolved-approval');
     assert.equal(await page.getByRole('button', { name: '允许本次操作', exact: true }).count(), 0);
@@ -531,7 +635,7 @@ async function verifyRefreshConsistency(browser, origin, manager, client, key, e
     await release(settingsSnapshot, 'settings-overlay');
     assert.equal(await sessionModel(page), 'fixture-model-b');
     assert.equal(await sessionEffort(page), 'medium');
-    const previousMetadata = manager.store.readTaskMetadata(key);
+    const previousMetadata = (await manager.store.readTaskMetadata(key));
     const requestedType = previousMetadata.type === 'bug' ? 'other' : 'bug';
     let captureMetadata;
     const metadataCaptured = new Promise((resolve) => { captureMetadata = resolve; });
@@ -542,14 +646,14 @@ async function verifyRefreshConsistency(browser, origin, manager, client, key, e
     await page.getByRole('button', { name: '会话信息', exact: true }).click();
     await page.getByLabel('任务类型', { exact: true }).selectOption(requestedType);
     const metadataSnapshot = await metadataCaptured;
-    manager.updateTaskMetadata(key, { type: 'requirement', progress: 'merge' });
+    (await manager.updateTaskMetadata(key, { type: 'requirement', progress: 'merge' }));
     await page.waitForFunction(() =>
       document.querySelector('select[aria-label="任务进度"]')?.value === 'merge');
     await release(metadataSnapshot, 'older-metadata-save');
     assert.equal(await page.getByLabel('任务类型', { exact: true }).inputValue(), 'requirement');
     assert.equal(await page.getByLabel('任务进度', { exact: true }).inputValue(), 'merge');
     assert.equal(await page.locator('.session-link.active .task-type-tag').getAttribute('data-type'), 'requirement');
-    manager.updateTaskMetadata(key, previousMetadata);
+    (await manager.updateTaskMetadata(key, previousMetadata));
   } finally {
     await page.close();
   }
@@ -560,6 +664,7 @@ async function main() {
   const directory = temporary({ after: (callback) => cleanup.push(callback) });
   const store = new RunStore(directory),
     key = '1-2';
+  fs.writeFileSync(path.join(directory, 'missing.json'), JSON.stringify({ agent: { provider: 'codex' }, execution: {} }));
   fs.mkdirSync(store.dir(key));
   const requirementFixture = {
     generated_at: '2026-09-17T00:00:00Z',
@@ -578,18 +683,19 @@ async function main() {
         path: path.join(store.dir(key), 'fixture.png'),
       },
     ],
-    codex_prompt:
+    prompt:
       '完整提示词：<script>window.requirementXss=1</script>\n提示词末尾',
   };
   fs.writeFileSync(path.join(store.dir(key), 'fixture.png'), png);
   fs.writeFileSync(
-    path.join(store.dir(key), 'tapd-task.json'),
+    path.join(store.dir(key), 'requirement.json'),
     JSON.stringify(requirementFixture),
   );
   fs.writeFileSync(
     path.join(store.dir(key), 'run.json'),
     JSON.stringify({
       workitem: { title: '【演示】套餐充值入口', id: '2', workspace_id: '1' },
+      agent: { provider: 'codex' },
       session_id: 'original',
       worktree: {
         path: directory,
@@ -617,10 +723,11 @@ async function main() {
     fs.mkdirSync(store.dir(otherKey));
     fs.writeFileSync(path.join(store.dir(otherKey), 'run.json'), JSON.stringify({
       workitem: { title, id: otherKey.slice(2), workspace_id: '1' },
+      agent: { provider: 'codex' },
       execution: { status: 'completed' },
       updated_at: '2025-01-01T00:00:00Z',
     }));
-    store.writeTaskMetadata(otherKey, { type, progress });
+    (await store.writeTaskMetadata(otherKey, { type, progress }));
   }
   const client = new FakeClient(),
     manager = new SessionManager({ store, client, worktreeReason: () => null });
@@ -727,7 +834,7 @@ async function main() {
     await page.getByLabel('任务进度', { exact: true }).selectOption('done');
     await page.getByText('模拟进度保存失败', {exact:true}).waitFor();
     assert.equal(await page.getByLabel('任务进度', {exact:true}).inputValue(), 'review');
-    assert.equal(store.readTaskMetadata(key).progress, 'review');
+    assert.equal((await store.readTaskMetadata(key)).progress, 'review');
     await page.unroute('**/runs/1-2/metadata');
     for (const value of ['merge', 'done', 'on_hold']) {
       await page.getByLabel('任务进度', { exact: true }).selectOption(value);
@@ -757,7 +864,7 @@ async function main() {
     await page.locator('.session-link.active').getByText('套餐充值入口（已重命名）', { exact: true }).waitFor();
     await page.reload();
     await page.locator('.session-header .session-heading').getByText('套餐充值入口（已重命名）', { exact: true }).waitFor();
-    assert.equal(store.read('1-2').workitem.title, '【演示】套餐充值入口');
+    assert.equal((await store.read('1-2')).workitem.title, '【演示】套餐充值入口');
     await page.getByRole('button', { name: '会话信息', exact: true }).click();
     await page.getByRole('button', { name: '归档会话', exact: true }).click();
     await page.getByRole('heading', { name: '归档会话', exact: true }).waitFor();
@@ -798,7 +905,7 @@ async function main() {
     await page.getByText('发送给 Codex 的完整内容', { exact: true }).click();
     assert.equal(
       await page.locator('.requirement-prompt pre').textContent(),
-      requirementFixture.codex_prompt,
+      requirementFixture.prompt,
     );
     fs.writeFileSync(
       path.join(store.dir(key), 'requirement.json'),
@@ -1008,7 +1115,7 @@ async function main() {
     await page.getByRole('button', { name: '检索', exact: true }).click();
     await page.locator('.search-results').getByText('本系统已有任务', { exact: true }).waitFor();
     assert.equal(await page.locator('.search-results').getByText('本系统进行中', { exact: true }).count(), 0);
-    manager.updateTaskMetadata(key, { progress: 'in_progress' });
+    (await manager.updateTaskMetadata(key, { progress: 'in_progress' }));
     await page.getByRole('button', { name: '检索', exact: true }).click();
     await page.locator('.search-results').getByText('本系统进行中', { exact: true }).waitFor();
     await page.getByRole('button', { name: /模拟缺陷/ }).click();
@@ -1173,7 +1280,7 @@ async function main() {
       '-m',
       'fixture',
     );
-    require('../../src/config/execution-settings.cjs').saveSettings({ repository, worktreeRoot: path.join(directory, 'custom trees'), baseRef: 'HEAD' }, path.join(directory, 'missing.json'));
+    (await require('../../src/config/execution-settings.cjs').saveSettings({ repository, worktreeRoot: path.join(directory, 'custom trees'), baseRef: 'HEAD' }, path.join(directory, 'missing.json')));
     await page.getByRole('button', { name: '执行设置', exact: true }).click();
     await page.waitForFunction(expected => document.querySelector('[aria-label="项目代码仓库路径"]')?.textContent === expected, repository);
     assert.equal(await page.getByLabel('项目代码仓库路径', { exact: true }).innerText(), repository);
@@ -1212,6 +1319,8 @@ async function main() {
     );
     await verifyExecutionSettings(browser, origin, manager, client, key, errors);
     await verifyPermissionDiscoveryFailures(browser, origin, client, errors);
+    await verifySteeringPermissionDiscoveryFailures(browser, origin, manager, client, key, errors);
+    await verifyAgentRequests(browser, origin, key, errors);
     await verifyInitialListRefresh(browser, origin, manager, key, errors);
     await verifyUnreadResults(browser, origin, manager, key, errors);
     await verifyActionSelection(browser, origin, key, errors);
@@ -1232,7 +1341,7 @@ async function main() {
   } finally {
     await browser?.close();
     await application.close();
-    for (const callback of cleanup.reverse()) callback();
+    for (const callback of cleanup.reverse()) await callback();
   }
 }
 main().catch((error) => {

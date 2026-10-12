@@ -1,7 +1,8 @@
 const path = require("node:path");
 const { createWorktree, worktreePlan } = require("../git/worktrees.cjs");
 const { repositoryFor } = require("../config/repository.cjs");
-const { startSession } = require("../codex/cli-session.cjs");
+const { getAgentProvider } = require("../agents/registry.cjs");
+const { agentConfig, taskPrompt } = require("../domain/agent-config.cjs");
 const { executionConfig } = require("../config/execution-settings.cjs");
 const { assertWorktreeLocation, assertMemberWorktreeLocation } = require("../config/worktree-location.cjs");
 const { sourceFor, runKey } = require("../domain/run-identity.cjs");
@@ -16,7 +17,6 @@ async function runExecution(
     repositoryFor,
     worktreePlan,
     createWorktree,
-    startSession,
     initializeWorktree,
     ...dependencies,
   };
@@ -25,7 +25,7 @@ async function runExecution(
   store.lock();
   let state;
   async function transition() {
-    state = store.update({ transition: { status: "pending" } });
+    state = (await store.update({ transition: { status: "pending" } }));
     let transition;
     try {
       const result = await channel.transition({ session, state, config });
@@ -33,11 +33,12 @@ async function runExecution(
     } catch (error) {
       transition = { status: "failed", error: error.message };
     }
-    state = store.update({ transition });
+    state = (await store.update({ transition }));
   }
   try {
-    if (store.exists()) {
-      state = store.read();
+    if ((await store.exists())) {
+      state = (await store.read());
+      getAgentProvider(agentConfig(state).provider);
       if (
         (state.source?.channel || "tapd") !== channel.id ||
         String(state.workitem.id) !== String(item.id) ||
@@ -53,17 +54,20 @@ async function runExecution(
         throw new Error(
           "No confirmed execution start is recorded; cannot retry the channel transition.",
         );
-      channel.validate?.(config);
+      await channel.validate?.(config);
       await transition();
       return state;
     }
     if (retry) throw new Error("No previous run exists for this requirement.");
-    store.claimSources(runKey(source), item.sources || [source], {
+    getAgentProvider(agentConfig(config).provider);
+    if (typeof services.startSession !== "function")
+      throw new Error("执行流程必须显式提供 Agent 会话执行接口。");
+    (await store.claimSources(runKey(source), item.sources || [source], {
       fingerprint: item.request_fingerprint,
-    });
-    config = executionConfig(config, configFile);
-    channel.validate?.(config);
-    const repository = services.repositoryFor(
+    }));
+    config = (await executionConfig(config, configFile));
+    await channel.validate?.(config);
+    const repository = await services.repositoryFor(
       config,
       configFile,
       item.workspace_id,
@@ -77,17 +81,18 @@ async function runExecution(
         config,
       });
     if (!task.execution_ready) throw new Error(task.blocked_reason);
+    if (typeof taskPrompt(task) !== "string") throw new Error("任务必须包含 prompt 文本。");
     if (runKey(sourceFor(channel.id, workitem)) !== runKey(source))
       throw new Error("Channel returned a different requirement identity.");
-    store.writeTask(task);
-    const worktree = services.worktreePlan(
+    (await store.writeTask(task));
+    const worktree = await services.worktreePlan(
       repository,
       workitem,
-      config.codex?.base_ref,
+      config.execution.baseRef,
       {
         root: path.resolve(
           path.dirname(configFile),
-          config.codex.worktree_root,
+          config.execution.worktreeRoot,
         ),
         source,
         workspaceId: config.workspace?.id,
@@ -104,62 +109,65 @@ async function runExecution(
       worktree,
       target_status: target,
       session_id: null,
-      codex: {
-        model: config.codex?.model || "",
-        reasoning_effort: config.codex?.reasoning_effort || "",
-        permission_mode: config.codex?.permission_mode || "ask",
+      agent: {
+        provider: config.agent.provider,
+        model: config.agent.model,
+        reasoningEffort: config.agent.reasoningEffort,
+        permissionMode: config.agent.permissionMode,
       },
       execution: { status: "preparing" },
       transition: { status: "not_started" },
       image_count: task.images.length,
     };
     // Persist intent before any external side effect; an uncertain run is never redispatched.
-    store.save(state);
+    (await store.save(state));
     if (dependencies.signal?.aborted) throw new Error("任务准备已停止。");
     if (config.workspace) {
-      if (config.codex.member_root)
-        assertMemberWorktreeLocation(config.codex.member_storage_root, config.codex.member_root, worktree.path);
-      else assertWorktreeLocation(config.codex.member_storage_root, worktree.path);
+      if (config.execution.memberRoot)
+        assertMemberWorktreeLocation(config.execution.memberStorageRoot, config.execution.memberRoot, worktree.path);
+      else assertWorktreeLocation(config.execution.memberStorageRoot, worktree.path);
     }
-    services.createWorktree(worktree);
-    if (config.codex.init_commands.length) {
+    await services.createWorktree(worktree);
+    if (config.execution.initCommands.length) {
       state.execution = { status: "initializing" };
-      store.save(state);
+      (await store.save(state));
       await services.initializeWorktree({
-        commands: config.codex.init_commands,
+        commands: config.execution.initCommands,
         cwd: worktree.path,
         directory,
         signal: dependencies.signal,
-        onUpdate(initialization, index) {
+        async onUpdate(initialization, index) {
           state.initialization = initialization;
-          store.save(state);
-          dependencies.onInitialization?.(initialization, index);
+          (await store.save(state));
+          await dependencies.onInitialization?.(initialization, index);
         },
       });
     }
     if (dependencies.signal?.aborted) throw new Error("任务准备已停止。");
     state.execution = { status: "starting" };
-    store.save(state);
+    (await store.save(state));
     try {
       const execution = await services.startSession({
-        config: config.codex || {},
+        agent: config.agent,
+        config: config.agent.options,
         repository: worktree.path,
         directory,
         task,
-        onEvent: (line) => store.append("events.jsonl", line),
-        onStderr: (chunk) => store.append("stderr.log", chunk),
-        onFinal: () => store.captureFinal(),
-        onSession(sessionId) {
+        onItem: async (item) => (await store.saveHistoryItem(item)),
+        onEvent: async (line) => (await store.append("events.jsonl", line)),
+        onStderr: async (chunk) => (await store.append("stderr.log", chunk)),
+        onFinal: async () => (await store.captureFinal()),
+        async onSession(sessionId) {
           state.session_id = sessionId;
-          store.save(state);
-          dependencies.onSession?.(sessionId, worktree);
+          (await store.save(state));
+          await dependencies.onSession?.(sessionId, worktree);
         },
         async onStarted() {
           state.execution_started_at = new Date().toISOString();
           state.execution = { status: "running" };
-          store.save(state);
+          (await store.save(state));
           await transition();
-          dependencies.onTransition?.(state.transition);
+          await dependencies.onTransition?.(state.transition);
         },
       });
       state.execution = {
@@ -169,7 +177,7 @@ async function runExecution(
     } catch (error) {
       state.execution = { status: "failed", error: error.message };
     }
-    store.save(state);
+    (await store.save(state));
     return state;
   } catch (error) {
     if (
@@ -178,12 +186,12 @@ async function runExecution(
       ["preparing", "initializing"].includes(state.execution.status)
     ) {
       state.execution = { status: "failed", error: error.message };
-      store.save(state);
+      (await store.save(state));
     }
     throw error;
   } finally {
     store.release();
-    store.releaseUnstartedSources();
+    (await store.releaseUnstartedSources());
   }
 }
 

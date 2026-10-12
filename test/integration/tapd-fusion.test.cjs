@@ -3,14 +3,14 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { test } = require("node:test");
 const { RunStore } = require("../../src/storage/run-store.cjs");
-const { SessionManager } = require("../../src/application/session-manager.cjs");
+const { SessionManager } = require("../support/session-manager.cjs");
 const { WorkspaceServices } = require("../../src/application/workspace-services.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const { savePromptSettings } = require("../../src/config/prompt-settings.cjs");
 const { fusionFixture, fusionInput, waitForTurn, finishTurn } = require("../support/tapd-fusion.cjs");
 
-for (const database of [true, false]) test(`fusion preserves each source and one worktree, appends without sending, and continues once (${database ? "SQLite" : "file fixture"})`, async t => {
+for (const database of [true, false]) test(`fusion preserves each source and one worktree, appends without sending, and continues once (${database ? "PostgreSQL" : "file fixture"})`, async t => {
   const { manager, client, store, configFile, channel, git } = await fusionFixture(t, { database });
   const input = fusionInput();
   const { key } = await manager.start(input);
@@ -22,9 +22,9 @@ for (const database of [true, false]) test(`fusion preserves each source and one
   assert.match(start.params.input[0].text, /验收 12/);
   assert.match(start.params.input[0].text, /共同根因/);
   assert.equal(git("branch", "--show-current"), "main");
-  const state = store.read(key);
-  const original = store.readTask(key);
-  const oldImage = fs.readFileSync(store.imagePath(key, "0"));
+  const state = (await store.read(key));
+  const original = (await store.readTask(key));
+  const oldImage = fs.readFileSync((await store.imagePath(key, "0")));
   const repeated = await manager.start(input);
   assert.equal(repeated.reused, true);
   await assert.rejects(manager.start({ ...input, title: "不同内容" }), /已有运行记录|不同需求/);
@@ -33,21 +33,21 @@ for (const database of [true, false]) test(`fusion preserves each source and one
   await finishTurn(manager, client, key);
   const before = client.calls.filter(call => call.method === "turn/start").length;
   const template = "追加专用模板\n{{title}}\n{{requirements}}\n{{supplement}}\n{{images}}";
-  savePromptSettings(configFile, { tapd_fusion: template });
+  (await savePromptSettings(configFile, { tapd_fusion: template }));
   const response = await manager.requirements.append(key, addition);
   assert.equal(response.requirement.additions[0].status, "ready");
   assert.equal(client.calls.filter(call => call.method === "turn/start").length, before);
-  assert.deepEqual(store.readTask(key), original);
-  assert.deepEqual(fs.readFileSync(store.imagePath(key, "0")), oldImage);
-  assert.equal(manager.list()[0].requirementCount, 3);
+  assert.deepEqual((await store.readTask(key)), original);
+  assert.deepEqual(fs.readFileSync((await store.imagePath(key, "0"))), oldImage);
+  assert.equal((await manager.list())[0].requirementCount, 3);
   assert.match(response.requirement.additions[0].requirement.prompt, /^追加专用模板/);
   assert.equal(response.requirement.additions[0].requirement.requirements[0].type, "board_card");
-  savePromptSettings(configFile, { tapd_fusion: template.replace("追加专用模板", "后续模板") });
+  (await savePromptSettings(configFile, { tapd_fusion: template.replace("追加专用模板", "后续模板") }));
   await manager.requirements.append(key, addition);
-  assert.equal(store.requirements.read(key).additions.length, 1);
+  assert.equal((await store.requirements.read(key)).additions.length, 1);
   await assert.rejects(manager.requirements.append(key, { ...addition, items: [{ id: "14", type: "story" }] }), /不同需求/);
   await assert.rejects(manager.start({ channel: "tapd", workspace: "1", id: "13" }), /归属任务/);
-  const beforeSnapshot = store.read(key);
+  const beforeSnapshot = (await store.read(key));
   await manager.requirements.continue(key, addition.requestId);
   assert.equal(client.calls.filter(call => call.method === "turn/start").length, before + 1);
   const followup = client.calls.filter(call => call.method === "turn/start").at(-1);
@@ -56,8 +56,8 @@ for (const database of [true, false]) test(`fusion preserves each source and one
   assert.match(followup.params.input[0].text, /追加专用模板/);
   assert.doesNotMatch(followup.params.input[0].text, /后续模板/);
   assert.equal(followup.params.input.filter(part => part.type === "localImage").length, 1);
-  assert.deepEqual(store.read(key).worktree, beforeSnapshot.worktree);
-  assert.equal(store.read(key).source.id, state.source.id);
+  assert.deepEqual((await store.read(key)).worktree, beforeSnapshot.worktree);
+  assert.equal((await store.read(key)).source.id, state.source.id);
   await manager.requirements.continue(key, addition.requestId);
   assert.equal(client.calls.filter(call => call.method === "turn/start").length, before + 1);
   await finishTurn(manager, client, key);
@@ -86,11 +86,11 @@ test("failed preparation is atomic; overlapping starts and appends cannot claim 
   const { key } = await manager.start(fusionInput());
   await waitForTurn(manager, key);
   await finishTurn(manager, client, key);
-  const before = store.requirements.read(key);
+  const before = (await store.requirements.read(key));
   context.failId = "14";
   await assert.rejects(manager.requirements.append(key, fusionInput(["13", "14"])), /模拟资料读取失败/);
-  assert.deepEqual(store.requirements.read(key), before);
-  assert.equal(store.requirements.assignments().has("1-13"), false);
+  assert.deepEqual((await store.requirements.read(key)), before);
+  assert.equal((await store.requirements.assignments()).has("1-13"), false);
   context.failId = null;
   let release;
   context.detailGate = new Promise(resolve => { release = resolve; });
@@ -101,22 +101,22 @@ test("failed preparation is atomic; overlapping starts and appends cannot claim 
   await assert.rejects(append, /归属任务/);
   await waitForTurn(manager, other.key);
   await finishTurn(manager, client, other.key);
-  assert.deepEqual(store.requirements.read(key), before);
-  assert.equal(store.requirements.assignments().get("1-13"), other.key);
+  assert.deepEqual((await store.requirements.read(key)), before);
+  assert.equal((await store.requirements.assignments()).get("1-13"), other.key);
 });
 
 test("failed Web preparation cannot release a concurrent CLI reservation", async t => {
   const { manager, store } = await fusionFixture(t);
   const key = "1-11";
-  store.requirements.claim(key, [{ channel: "tapd", scope: "1", id: "11" }]);
+  (await store.requirements.claim(key, [{ channel: "tapd", scope: "1", id: "11" }]));
   fs.mkdirSync(path.join(store.dir(key), ".lock"), { recursive: true });
   const result = await manager.start({ channel: "tapd", workspace: "1", id: "11" });
   await manager.sessions.get(result.key)?.operation;
-  assert.equal(store.requirements.assignments().get("1-11"), key);
+  assert.equal((await store.requirements.assignments()).get("1-11"), key);
   await assert.rejects(manager.start(fusionInput(["11", "12"])), /归属任务/);
   fs.rmdirSync(path.join(store.dir(key), ".lock"));
-  store.requirements.releaseUnstarted(key);
-  assert.equal(store.requirements.assignments().has("1-11"), false);
+  (await store.requirements.releaseUnstarted(key));
+  assert.equal((await store.requirements.assignments()).has("1-11"), false);
 });
 
 test("append failures before dispatch stay ready; unknown RPC outcome is persisted and cannot replay after restart", async t => {
@@ -132,13 +132,13 @@ test("append failures before dispatch stay ready; unknown RPC outcome is persist
     return originalRequest(method, params);
   };
   await assert.rejects(manager.requirements.continue(key, input.requestId), /模拟模型读取失败/);
-  assert.equal(store.requirements.read(key).additions[0].status, "ready");
+  assert.equal((await store.requirements.read(key)).additions[0].status, "ready");
   client.request = async (method, params) => {
     if (method === "turn/start") throw new Error("模拟响应丢失");
     return originalRequest(method, params);
   };
   await assert.rejects(manager.requirements.continue(key, input.requestId), /模拟响应丢失/);
-  assert.equal(store.requirements.read(key).additions[0].status, "uncertain");
+  assert.equal((await store.requirements.read(key)).additions[0].status, "uncertain");
   await manager.close();
   const replacement = new FakeClient();
   const restarted = new SessionManager({ store: new RunStore(store.directory), client: replacement, configFile, channels: manager.channels });
@@ -153,8 +153,8 @@ test("legacy single TAPD task accepts additions without changing its original id
   await waitForTurn(manager, key);
   await finishTurn(manager, client, key);
   // Reproduce a pre-feature record with no membership document.
-  store.database.deleteDocument(store.requirements.file(key));
-  const state = store.read(key);
+  (await store.database.deleteDocument(store.requirements.file(key)));
+  const state = (await store.read(key));
   const input = fusionInput(["12"]);
   const application = createWebServer({ manager, configFile, testIdentity: true });
   t.after(() => application.close());
@@ -169,9 +169,9 @@ test("legacy single TAPD task accepts additions without changing its original id
   const image = result.requirement.additions[0].requirement.requirements[0].images[0];
   assert.equal((await fetch(`${origin}${image.url}`)).status, 200);
   assert.equal((await fetch(`${origin}/api/runs/${key}/addition-images/${fusionInput().requestId}/0`)).status, 400);
-  assert.deepEqual(store.read(key).source, state.source);
-  assert.equal(manager.list()[0].requirementCount, 2);
-  assert.equal(store.requirements.assignments().get("1-11"), key);
+  assert.deepEqual((await store.read(key)).source, state.source);
+  assert.equal((await manager.list())[0].requirementCount, 2);
+  assert.equal((await store.requirements.assignments()).get("1-11"), key);
   await assert.rejects(manager.requirements.append(key, { ...fusionInput(["13"]), workspace: "2" }), /同一个 TAPD 项目/);
   assert.equal(path.basename(store.dir(key)), "1-11");
 });

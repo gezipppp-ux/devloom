@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { test } = require("node:test");
-const { SessionManager } = require("../../src/application/session-manager.cjs");
+const { SessionManager } = require("../support/session-manager.cjs");
 const { WorkspaceManager } = require("../../src/application/workspace-manager.cjs");
 const { RunStore } = require("../../src/storage/run-store.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
@@ -16,6 +16,7 @@ const { temporary, png } = require("../support/helpers.cjs");
 
 function saveRun(store, key = "1-2") {
   const state = {
+    agent: { provider: "codex" },
     workitem: { id: "2", workspace_id: "1", title: "图片会话" },
     source: { channel: "tapd", scope: "1", id: "2" },
     session_id: "original",
@@ -60,10 +61,11 @@ test("session pictures persist, start and steer the original thread, and remain 
   assert.equal(uploaded.contentType, "image/png");
   assert.equal(uploaded.path, undefined);
   assert.equal(uploaded.size, png.length);
-  const file = manager.messageImagePath(key, uploaded.id);
+  const file = (await manager.messageImagePath(key, uploaded.id));
   assert.deepEqual(fs.readFileSync(file), png);
 
   const started = await manager.send(key, "", [uploaded.id]);
+  await manager.events.drain();
   const firstInput = client.calls.find((call) => call.method === "turn/start")
     .params.input;
   assert.deepEqual(firstInput, [{ type: "localImage", path: file }]);
@@ -77,6 +79,7 @@ test("session pictures persist, start and steer the original thread, and remain 
   );
 
   await manager.send(key, "请对照截图", [uploaded.id]);
+  await manager.events.drain();
   const steer = client.calls.at(-1);
   assert.equal(steer.method, "turn/steer");
   assert.equal(steer.params.expectedTurnId, started.turnId);
@@ -86,7 +89,7 @@ test("session pictures persist, start and steer the original thread, and remain 
   ]);
   await manager.send(key, undefined, [uploaded.id]);
   assert.deepEqual(client.calls.at(-1).params.input, firstInput);
-  const saved = store.read(key);
+  const saved = (await store.read(key));
   for (const property of ["session_id", "source", "worktree", "transition"])
     assert.deepEqual(saved[property], state[property]);
   await manager.close();
@@ -146,7 +149,7 @@ test("session pictures persist, start and steer the original thread, and remain 
   assert.equal(history.items[0].images, undefined);
   assert.equal(JSON.stringify(history).includes(file), false);
   assert.deepEqual(
-    fs.readFileSync(restored.messageImagePath(key, uploaded.id)),
+    fs.readFileSync((await restored.messageImagePath(key, uploaded.id))),
     png,
   );
 });
@@ -195,12 +198,12 @@ test("session image validation rejects empty messages, invalid references, unsup
   await assert.rejects(manager.send("1-3", "", [picture.id]), {
     code: "ENOENT",
   });
-  const file = manager.messageImagePath(key, picture.id);
+  const file = (await manager.messageImagePath(key, picture.id));
   const modified = Buffer.from(png);
   modified[modified.length - 1] ^= 1;
   fs.writeFileSync(file, modified);
   await assert.rejects(manager.send(key, "", [picture.id]), /发生变化/);
-  assert.throws(() => manager.messageImagePath(key, ".."), /无效/);
+  (await assert.rejects(async () => (await manager.messageImagePath(key, "..")), /无效/));
   assert.equal(client.calls.length, 0);
 });
 
@@ -254,10 +257,10 @@ test("HTTP message images require origin/token and isolate workspace and run IDs
         worktreeReason: () => null,
       }),
   });
-  const a = workspaces.save({ name: "A" });
-  const b = workspaces.save({ name: "B" });
+  const a = (await workspaces.save({ name: "A" }));
+  const b = (await workspaces.save({ name: "B" }));
   for (const id of [a.id, b.id]) {
-    const store = workspaces.get(id).sessions.store;
+    const store = (await workspaces.get(id)).sessions.store;
     saveRun(store);
     saveRun(store, "1-3");
   }
@@ -321,5 +324,5 @@ test("HTTP message images require origin/token and isolate workspace and run IDs
     404,
   );
   assert.equal((await send(`${endpoint}/messages`)).status, 202);
-  assert.equal(workspaces.get(b.id).sessions.client.calls.length, 0);
+  assert.equal((await workspaces.get(b.id)).sessions.client.calls.length, 0);
 });

@@ -14,13 +14,14 @@ const { worktreePlan, createWorktree } = require('../../src/git/worktrees.cjs');
 const { validateWorktreeName } = require('../../src/domain/worktree-name.cjs');
 const { sourceFor } = require('../../src/domain/run-identity.cjs');
 const { createWebServer } = require('../../src/http/server.cjs');
-const { SessionManager } = require('../../src/application/session-manager.cjs');
+const { SessionManager } = require('../support/session-manager.cjs');
 const { saveSettings } = require('../../src/config/execution-settings.cjs');
 const { FakeClient } = require('../fixtures/web-client.cjs');
 
 function fixture(t) {
   const directory = temporary(t);
   const configFile = path.join(directory, 'missing.json');
+  fs.writeFileSync(configFile, JSON.stringify({ agent: { provider: "codex" } }));
   const uploadDirectory = path.join(directory, 'uploads');
   return {
     directory,
@@ -66,11 +67,11 @@ test('manual channel validates input, preserves full text and copies image-only 
   const resolved = await channel.resolve(base);
   assert.match(resolved.config.prompt_templates.manual, /\{\{content\}\}/);
   const text = await channel.prepare({ ...resolved, directory });
-  assert.ok(text.task.codex_prompt.includes(base.content));
+  assert.ok(text.task.prompt.includes(base.content));
   assert.equal(text.worktreeSlug, 'xin-zeng-deng-lu-ru-kou');
-  const uploaded = channel.uploadImage(png);
+  const uploaded = (await channel.uploadImage(png));
   const jpeg = Buffer.from([255, 216, 255, 217]);
-  const second = channel.uploadImage(jpeg);
+  const second = (await channel.uploadImage(jpeg));
   const imageOnly = await channel.resolve({
     ...base,
     content: '',
@@ -87,7 +88,7 @@ test('manual channel validates input, preserves full text and copies image-only 
     { index: 1, source: `manual-image:${uploaded.id}`, name: '01.png' },
     { index: 2, source: `manual-image:${second.id}`, name: '02.jpg' },
   ]);
-  assert.ok(prepared.task.codex_prompt.endsWith([
+  assert.ok(prepared.task.prompt.endsWith([
     '附带 2 张本地图片，顺序与用户上传顺序一致，请结合图片理解需求。',
     `图片 1：${prepared.task.images[0].path}`,
     `图片 2：${prepared.task.images[1].path}`,
@@ -111,30 +112,30 @@ test('manual channel validates input, preserves full text and copies image-only 
     { worktreeName: 'D:\\task' },
   ])
     await assert.rejects(channel.resolve({ ...base, ...invalid }));
-  assert.throws(
-    () => channel.uploadImage(Buffer.from('<html>no image</html>')),
+  (await assert.rejects(
+    async () => (await channel.uploadImage(Buffer.from('<html>no image</html>'))),
     /PNG/,
-  );
-  assert.throws(
-    () => channel.uploadImage(Buffer.alloc(10 * 1024 * 1024 + 1)),
+  ));
+  (await assert.rejects(
+    async () => (await channel.uploadImage(Buffer.alloc(10 * 1024 * 1024 + 1))),
     /10 MiB/,
-  );
+  ));
   const expired = new Date(Date.now() - 25 * 60 * 60 * 1000);
   fs.utimesSync(path.join(uploadDirectory, uploaded.id), expired, expired);
   await assert.rejects(
     channel.resolve({ ...base, images: [uploaded.id] }),
     /过期/,
   );
-  channel.uploadImage(png);
+  (await channel.uploadImage(png));
   assert.equal(fs.existsSync(path.join(uploadDirectory, uploaded.id)), false);
   assert.equal(fs.existsSync(path.join(uploadDirectory, second.id)), true);
   assert.deepEqual(fs.readFileSync(prepared.task.images[0].path), png);
 });
 
-test('concurrent cleanup of expired uploads does not reject an unrelated new upload', (t) => {
+test('concurrent cleanup of expired uploads does not reject an unrelated new upload', async (t) => {
   const directory = temporary(t);
   const uploads = new ManualUploadStore(directory);
-  const expired = uploads.upload(png);
+  const expired = (await uploads.upload(png));
   const file = path.join(directory, expired.id);
   const old = new Date(Date.now() - 25 * 60 * 60 * 1000);
   fs.utimesSync(file, old, old);
@@ -144,8 +145,8 @@ test('concurrent cleanup of expired uploads does not reject an unrelated new upl
     if (target === directory && fs.existsSync(file)) fs.unlinkSync(file);
     return names;
   });
-  const next = uploads.upload(png);
-  assert.deepEqual(uploads.read(next.id).bytes, png);
+  const next = (await uploads.upload(png));
+  assert.deepEqual((await uploads.read(next.id)).bytes, png);
 });
 
 test('manual names preserve English, transliterate Chinese, isolate duplicates and keep custom names inside configured root', (t) => {
@@ -261,7 +262,7 @@ test(
     const { channel, directory, configFile } = fixture(t);
     const repo = path.join(directory, 'repo');
     const git = repository(repo);
-    saveSettings(
+    (await saveSettings(
       {
         repository: repo,
         worktreeRoot: path.join(directory, 'worktrees'),
@@ -269,7 +270,7 @@ test(
         initCommands: [],
       },
       configFile,
-    );
+    ));
     const client = new FakeClient();
     const manager = new SessionManager({
       configFile,
@@ -282,7 +283,7 @@ test(
       channel: 'manual',
       requestId: randomUUID(),
       title: '新增登录入口',
-      images: [channel.uploadImage(png).id],
+      images: [(await channel.uploadImage(png)).id],
       worktreeName: 'login-entry',
     };
     const started = await manager.start(input);
@@ -296,7 +297,7 @@ test(
       turn: { id: runtime.turnId, status: 'completed' },
     });
     await runtime.operation;
-    const state = manager.store.read(started.key);
+    const state = (await manager.store.read(started.key));
     assert.match(path.basename(state.worktree.path), /^login-entry-[a-f0-9]{12}$/);
     assert.equal(state.transition.status, 'skipped');
     assert.equal(git('branch', '--show-current'), 'main');

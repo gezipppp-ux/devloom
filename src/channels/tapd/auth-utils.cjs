@@ -1,14 +1,13 @@
 const path = require('node:path');
 const { updateConfig } = require('../../storage/json-files.cjs');
 
-function saveSession(session, file) {
+async function saveSession(session, file) {
   const resolved = path.resolve(file);
-  updateConfig(resolved, (previous) => ({
+  (await updateConfig(resolved, (previous) => ({
     ...previous,
     version: previous.version ?? 1,
     tapd: { ...previous.tapd, session },
-    codex: previous.codex || {},
-  }));
+  })));
   return resolved;
 }
 

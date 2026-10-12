@@ -4,7 +4,7 @@ const readline = require('node:readline');
 const { resolveCodex } = require('./command.cjs');
 const { inspectExecutionCapabilities } = require('./capabilities.cjs');
 const { stopProcessTree } = require('../shared/process-tree.cjs');
-const { childEnvironment } = require('./environment.cjs');
+const { childEnvironment } = require('../shared/child-environment.cjs');
 
 class AppServerClient extends EventEmitter {
   constructor(config = {}, { gitCredentialProvider, gitCredentialRevision } = {}) {
@@ -131,11 +131,15 @@ class AppServerClient extends EventEmitter {
   }
 
   // The application must first fence active turns, approvals and startup work.
-  // This synchronous check/disconnect cannot race another command reservation.
-  refreshGitCredentials() {
+  // The application reserves the operation while the revision is checked.
+  async refreshGitCredentials() {
     if (this.closed || !this.child || this.pending.size ||
       !this.gitCredentials || !this.gitCredentialRevision) return false;
-    if (this.gitCredentialRevision() === this.gitCredentials.revision) return false;
+    const child = this.child;
+    const credentials = this.gitCredentials;
+    const revision = await this.gitCredentialRevision();
+    if (this.closed || this.child !== child || this.gitCredentials !== credentials || this.pending.size) return false;
+    if (revision === credentials.revision) return false;
     this.disconnected(new Error('Git 账号已更新，将使用新凭据继续原 session。'));
     return true;
   }

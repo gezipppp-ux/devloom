@@ -4,7 +4,7 @@ const path = require("node:path");
 const { test } = require("node:test");
 const { createTapdChannel } = require("../../src/channels/tapd/adapter.cjs");
 const { WorkspaceServices } = require("../../src/application/workspace-services.cjs");
-const { SessionManager } = require("../../src/application/session-manager.cjs");
+const { SessionManager } = require("../support/session-manager.cjs");
 const { saveState } = require("../../src/storage/run-state.cjs");
 const { readTapdSettings, saveTapdSettings } = require("../../src/channels/tapd/settings.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
@@ -14,6 +14,7 @@ test("TAPD searches all todo pages, types and statuses and marks only this works
   const root = temporary(t);
   const configFile = path.join(root, "config.json");
   const config = {
+    agent: { provider: "codex" },
     tapd: { session: { ...session, request_body: {
       ...session.request_body,
       tab: "done",
@@ -28,16 +29,16 @@ test("TAPD searches all todo pages, types and statuses and marks only this works
   t.after(() => first.close());
   t.after(() => second.close());
   for (const id of ["1", "2", "3"]) {
-    saveState(path.join(first.store.dir(`1-${id}`), "run.json"), {
-      workitem: { ...item, id },
+    (await saveState(path.join(first.store.dir(`1-${id}`), "run.json"), {
+      agent: { provider: "codex" }, workitem: { ...item, id },
       execution: { status: id === "1" ? "completed" : "running" },
       session_id: `existing-${id}`,
-    });
+    }));
   }
-  first.store.writeTaskMetadata("1-2", { progress: "done" });
-  first.store.writeTaskMetadata("1-3", { progress: "on_hold" });
+  (await first.store.writeTaskMetadata("1-2", { progress: "done" }));
+  (await first.store.writeTaskMetadata("1-3", { progress: "on_hold" }));
   // An equal item ID in a different TAPD project must not mark this result.
-  saveState(path.join(first.store.dir("9-4"), "run.json"), { workitem: { ...item, id: "4", workspace_id: "9" } });
+  (await saveState(path.join(first.store.dir("9-4"), "run.json"), { agent: { provider: "codex" }, workitem: { ...item, id: "4", workspace_id: "9" } }));
   const rows = Array.from({ length: 21 }, (_, i) => ({
     ...item,
     id: String(i + 1),
@@ -91,6 +92,6 @@ test("TAPD preparation and legacy transition hooks never call workflow or person
     }
     await assert.rejects(channel.resolve({ id: item.id, workspace: "1", type: "invalid" }), /类型/);
   }
-  assert.equal(Object.hasOwn(readTapdSettings(configFile), "targetStatus"), false);
-  assert.throws(() => saveTapdSettings(configFile, { workspaceId: "1", targetStatus: "developing" }), /无效的 TAPD 配置字段/);
+  assert.equal(Object.hasOwn((await readTapdSettings(configFile)), "targetStatus"), false);
+  (await assert.rejects(async () => (await saveTapdSettings(configFile, { workspaceId: "1", targetStatus: "developing" })), /无效的 TAPD 配置字段/));
 });

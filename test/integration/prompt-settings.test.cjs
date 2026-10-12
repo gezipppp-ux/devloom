@@ -7,7 +7,7 @@ const { execFileSync } = require("node:child_process");
 const { temporary, png } = require("../support/helpers.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const { WorkspaceManager } = require("../../src/application/workspace-manager.cjs");
-const { SessionManager } = require("../../src/application/session-manager.cjs");
+const { SessionManager } = require("../support/session-manager.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { saveSettings } = require("../../src/config/execution-settings.cjs");
 const {
@@ -30,15 +30,15 @@ function workspaceCatalog(directory) {
   });
 }
 
-function fixture(t) {
+async function fixture(t) {
   const directory = temporary(t);
-  writeConfig(path.join(directory, "system-settings.json"), {
+  (await writeConfig(path.join(directory, "system-settings.json"), {
     version: 1,
     memberStorageRoot: path.join(directory, "trees"),
-  });
+  }));
   const workspaces = workspaceCatalog(path.join(directory, "workspaces"));
-  const a = workspaces.save({ name: "模板项目 A" });
-  const b = workspaces.save({ name: "模板项目 B" });
+  const a = (await workspaces.save({ name: "模板项目 A" }));
+  const b = (await workspaces.save({ name: "模板项目 B" }));
   return { directory, workspaces, a, b };
 }
 
@@ -62,7 +62,7 @@ async function httpFixture(t, workspaces) {
   return { app, origin, get, post, token: boot.token };
 }
 
-function configureRepository(directory, configFile) {
+async function configureRepository(directory, configFile) {
   const repository = path.join(directory, "repository");
   fs.mkdirSync(repository);
   const git = (...args) =>
@@ -86,8 +86,8 @@ function configureRepository(directory, configFile) {
     baseRef: "main",
     initCommands: [],
   };
-  seedWorkspaceProject(configFile, repository, "project");
-  saveSettings({ baseRef: settings.baseRef, initCommands: settings.initCommands }, configFile);
+  (await seedWorkspaceProject(configFile, repository, "project"));
+  (await saveSettings({ baseRef: settings.baseRef, initCommands: settings.initCommands }, configFile));
   return settings;
 }
 
@@ -102,17 +102,17 @@ async function awaitTurn(manager, key) {
 }
 
 test("workspace prompt settings guard writes, isolate credentials and persist templates atomically", async (t) => {
-  const { workspaces, a, b } = fixture(t);
+  const { workspaces, a, b } = (await fixture(t));
   const file = workspaces.configFile(a.id);
-  saveTapdSettings(file, {
+  (await saveTapdSettings(file, {
     workspaceId: "42",
     cookie: "dsc-token=private-template-secret; auth=private-session",
-  });
-  saveTapdSettings(workspaces.configFile(b.id), {
+  }));
+  (await saveTapdSettings(workspaces.configFile(b.id), {
     workspaceId: "84",
     cookie: "dsc-token=other-workspace-secret; auth=other-session",
-  });
-  const originalConfig = readOptional(file);
+  }));
+  const originalConfig = (await readOptional(file));
   const otherConfig = fs.readFileSync(workspaces.configFile(b.id), "utf8");
   const before = fs.readFileSync(file, "utf8");
   const { app, origin, get, post, token } = await httpFixture(t, workspaces);
@@ -149,8 +149,8 @@ test("workspace prompt settings guard writes, isolate credentials and persist te
   assert.doesNotMatch(JSON.stringify(response), /private-template-secret|private-session|cookie_header|dsc_token/);
   assert.deepEqual((await (await get(a.id)).json()).templates, response.templates);
   assert.deepEqual((await (await get(b.id)).json()).templates, defaults.templates);
-  const changedConfig = readOptional(file);
-  for (const field of ["workspace", "codex", "tapd", "workflow"])
+  const changedConfig = (await readOptional(file));
+  for (const field of ["workspace", "execution", "agent", "tapd", "workflow"])
     assert.deepEqual(changedConfig[field], originalConfig[field]);
   assert.deepEqual(changedConfig.prompt_templates, response.templates);
   assert.equal(fs.readFileSync(workspaces.configFile(b.id), "utf8"), otherConfig);
@@ -186,24 +186,24 @@ test("workspace prompt settings guard writes, isolate credentials and persist te
   });
   assert.equal((await restarted.post(a.id, { tapd: null })).status, 200);
   assert.equal((await restarted.post(a.id, { tapd_fusion: null })).status, 200);
-  assert.deepEqual(readPromptSettings(file), defaults.templates);
-  assert.deepEqual(readOptional(file).tapd, originalConfig.tapd);
+  assert.deepEqual((await readPromptSettings(file)), defaults.templates);
+  assert.deepEqual((await readOptional(file)).tapd, originalConfig.tapd);
   assert.equal(fs.readFileSync(file, "utf8"), before);
   assert.equal(fs.readFileSync(workspaces.configFile(b.id), "utf8"), otherConfig);
 });
 
 test("new fake sessions use saved prompts while existing snapshots and continuation keep their identity", async (t) => {
-  const { directory, workspaces, a, b } = fixture(t);
-  const context = workspaces.get(a.id);
-  const second = workspaces.get(b.id);
-  const settings = configureRepository(directory, context.configFile);
-  seedWorkspaceProject(second.configFile, settings.repository, "project");
-  saveSettings({ baseRef: settings.baseRef, initCommands: settings.initCommands }, second.configFile);
+  const { directory, workspaces, a, b } = (await fixture(t));
+  const context = (await workspaces.get(a.id));
+  const second = (await workspaces.get(b.id));
+  const settings = (await configureRepository(directory, context.configFile));
+  (await seedWorkspaceProject(second.configFile, settings.repository, "project"));
+  (await saveSettings({ baseRef: settings.baseRef, initCommands: settings.initCommands }, second.configFile));
   const { get, post } = await httpFixture(t, workspaces);
   const secondTemplate = manualTemplate.replace("自定义手动模板", "项目 B 独立模板");
   assert.equal((await post(a.id, { manual: manualTemplate })).status, 200);
   assert.equal((await post(b.id, { manual: secondTemplate })).status, 200);
-  const upload = context.channels.get("manual").uploadImage(png);
+  const upload = (await context.channels.get("manual").uploadImage(png));
   const input = {
     channel: "manual",
     requestId: randomUUID(),
@@ -214,9 +214,9 @@ test("new fake sessions use saved prompts while existing snapshots and continuat
   const manager = context.sessions;
   const { key } = await manager.start(input);
   await awaitTurn(manager, key);
-  const state = manager.store.read(key);
-  const task = manager.store.readTask(key);
-  const initialPrompt = task.codex_prompt;
+  const state = (await manager.store.read(key));
+  const task = (await manager.store.readTask(key));
+  const initialPrompt = task.prompt;
   assert.ok(initialPrompt.startsWith("自定义手动模板\n占位符需求标题\n"));
   assert.ok(initialPrompt.includes(input.content));
   assert.ok(initialPrompt.includes(task.images[0].path));
@@ -241,7 +241,7 @@ test("new fake sessions use saved prompts while existing snapshots and continuat
   assert.deepEqual(continued.params.input, [
     { type: "text", text: "按原需求继续开发", text_elements: [] },
   ]);
-  assert.equal(manager.store.read(key).worktree.path, state.worktree.path);
+  assert.equal((await manager.store.read(key)).worktree.path, state.worktree.path);
   assert.equal(manager.client.calls.filter((call) => call.method === "thread/start").length, 1);
   assert.equal(fs.readFileSync(snapshotFile, "utf8"), snapshot);
   await manager.interrupt(key);
@@ -252,11 +252,11 @@ test("new fake sessions use saved prompts while existing snapshots and continuat
   ]) {
     const next = await sessions.start({ ...input, requestId: randomUUID(), images: [] });
     await awaitTurn(sessions, next.key);
-    const nextTask = sessions.store.readTask(next.key);
-    assert.ok(nextTask.codex_prompt.startsWith(prefix));
-    assert.equal(sessions.client.calls.filter((call) => call.method === "turn/start").at(-1).params.input[0].text, nextTask.codex_prompt);
-    assert.equal(sessions.store.read(next.key).workspace_id, workspaceId);
-    assert.notEqual(sessions.store.read(next.key).worktree.path, state.worktree.path);
+    const nextTask = (await sessions.store.readTask(next.key));
+    assert.ok(nextTask.prompt.startsWith(prefix));
+    assert.equal(sessions.client.calls.filter((call) => call.method === "turn/start").at(-1).params.input[0].text, nextTask.prompt);
+    assert.equal((await sessions.store.read(next.key)).workspace_id, workspaceId);
+    assert.notEqual((await sessions.store.read(next.key)).worktree.path, state.worktree.path);
     assert.equal((await manager.view(key)).requirement.prompt, initialPrompt);
     await sessions.interrupt(next.key);
     await sessions.sessions.get(next.key).operation;
@@ -265,20 +265,20 @@ test("new fake sessions use saved prompts while existing snapshots and continuat
 });
 
 test("manual preparation uses the template captured when the requirement was resolved", async (t) => {
-  const { directory, workspaces, a } = fixture(t);
+  const { directory, workspaces, a } = (await fixture(t));
   t.after(() => workspaces.close());
-  const context = workspaces.get(a.id);
-  savePromptSettings(context.configFile, { manual: manualTemplate });
+  const context = (await workspaces.get(a.id));
+  (await savePromptSettings(context.configFile, { manual: manualTemplate }));
   const channel = context.channels.get("manual");
   const resolved = await channel.resolve({
     requestId: randomUUID(),
     title: "已解析需求",
     content: "准备之前保存了另一份模板。",
   });
-  savePromptSettings(context.configFile, {
+  (await savePromptSettings(context.configFile, {
     manual: manualTemplate.replace("自定义手动模板", "准备期间更改的模板"),
-  });
+  }));
   const prepared = await channel.prepare({ ...resolved, directory: path.join(directory, "prepared") });
-  assert.ok(prepared.task.codex_prompt.startsWith("自定义手动模板\n已解析需求\n"));
-  assert.ok(readPromptSettings(context.configFile).manual.startsWith("准备期间更改的模板\n"));
+  assert.ok(prepared.task.prompt.startsWith("自定义手动模板\n已解析需求\n"));
+  assert.ok((await readPromptSettings(context.configFile)).manual.startsWith("准备期间更改的模板\n"));
 });

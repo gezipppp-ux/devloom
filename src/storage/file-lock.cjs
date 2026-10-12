@@ -34,4 +34,21 @@ function withFileLock(file, operation, label = "JSON configuration") {
   }
 }
 
-module.exports = { withFileLock };
+async function withAsyncFileLock(file, operation, label = "JSON configuration") {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const lock = `${file}.lock`;
+  const deadline = Date.now() + 5000;
+  for (;;) {
+    try { fs.mkdirSync(lock); break; }
+    catch (error) {
+      const pendingDelete = process.platform === "win32" && error.code === "EPERM";
+      if (error.code !== "EEXIST" && !pendingDelete) throw error;
+      if (Date.now() >= deadline) throw new Error(`${label} is locked: ${lock}. Check that all writers have stopped before removing an abandoned lock.`);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+  try { return await operation(); }
+  finally { fs.rmdirSync(lock); }
+}
+
+module.exports = { withFileLock, withAsyncFileLock };

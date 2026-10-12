@@ -5,7 +5,7 @@ const { test } = require("node:test");
 const { temporary } = require("../support/helpers.cjs");
 const { loadConfig, runsPath } = require("../../src/config/runtime.cjs");
 
-test("configuration reads only the explicitly selected file without inspecting CLI arguments", (t) => {
+test("configuration reads only the explicitly selected file without inspecting CLI arguments", async (t) => {
   const directory = temporary(t);
   const file = path.join(directory, "config.json");
   fs.writeFileSync(file, '\uFEFF{"workspace":{"id":"selected"}}');
@@ -14,12 +14,12 @@ test("configuration reads only the explicitly selected file without inspecting C
   t.after(() => {
     process.argv = argv;
   });
-  const config = loadConfig(file);
+  const config = (await loadConfig(file));
   assert.equal(config.workspace.id, "selected");
   assert.equal(runsPath(config, file), path.join(directory, "runs"));
-  assert.throws(() => loadConfig(), /absolute configuration file path/);
-  assert.throws(
-    () => loadConfig("relative.json"),
+  (await assert.rejects(async () => (await loadConfig()), /absolute configuration file path/));
+  (await assert.rejects(
+    async () => (await loadConfig("relative.json")),
     /absolute configuration file path/,
-  );
+  ));
 });

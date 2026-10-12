@@ -7,16 +7,12 @@ function missing(file) {
   return Object.assign(new Error(`保存的资料不存在：${path.basename(file)}`), { code: "ENOENT" });
 }
 
-function artifactKey(database, file) {
-  return path.relative(database.dataRoot, path.resolve(file)).split(path.sep).join("/");
-}
-
 // Database blobs are authoritative; files in the data root are disposable inputs
 // for external processes. Never follow a cache symlink outside that root.
-function materializeArtifact(file) {
+async function materializeArtifact(file) {
   const database = databaseForPath(file);
   if (!database) return file;
-  const blob = database.readBlob(file);
+  const blob = (await database.readBlob(file));
   if (!blob) throw missing(file);
   const relative = path.relative(database.dataRoot, path.resolve(file));
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative))
@@ -45,26 +41,25 @@ function materializeArtifact(file) {
   return file;
 }
 
-function writeArtifact(file, data, options = {}) {
+async function writeArtifact(file, data, options = {}) {
   const database = databaseForPath(file);
   if (database) {
-    database.putBlob(file, Buffer.isBuffer(data) ? data : Buffer.from(data), options);
-    if (options.materialize) materializeArtifact(file);
+    (await database.putBlob(file, Buffer.isBuffer(data) ? data : Buffer.from(data), options));
+    if (options.materialize) (await materializeArtifact(file));
     return;
   }
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, data, { mode: 0o600 });
 }
 
-function appendArtifact(file, data) {
+async function appendArtifact(file, data) {
   const database = databaseForPath(file);
   if (!database) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.appendFileSync(file, data, { mode: 0o600 });
     return;
   }
-  database.handle.prepare("INSERT INTO log_chunks(path,data,created_at) VALUES (?,?,?)")
-    .run(artifactKey(database, file), Buffer.isBuffer(data) ? data : Buffer.from(data), new Date().toISOString());
+  return (await database.appendLog(file, data));
 }
 
 module.exports = { writeArtifact, materializeArtifact, appendArtifact };

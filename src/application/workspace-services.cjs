@@ -12,8 +12,7 @@ const {
   MAX_PROMPT_TEMPLATE_LENGTH,
 } = require("../domain/prompt-templates.cjs");
 const { listBaseRefs } = require("../git/repository.cjs");
-const { listModels } = require("../codex/models.cjs");
-const { permissionOptions } = require("../codex/permissions.cjs");
+const { describeAgent } = require("./agent-presenter.cjs");
 const { readRepository, mutateRepository } = require("./repository-services.cjs");
 const { presentRequirements } = require("./requirement-presenter.cjs");
 const {
@@ -36,11 +35,12 @@ class WorkspaceServices {
   constructor({ configFile, channels, sessions }) {
     this.configFile = configFile;
     this.channels = channels || defaultChannels(configFile);
+    /** @type {import('./session-manager.cjs').SessionManager} */
     this.sessions = sessions;
   }
 
-  describe() {
-    const channels = this.channels.list();
+  async describe() {
+    const channels = await this.channels.list();
     return {
       workspace:
         channels.find((source) => source.id === "tapd")?.workspace || "",
@@ -48,41 +48,41 @@ class WorkspaceServices {
     };
   }
 
-  readSettings() {
-    return readSettings(this.configFile);
+  async readSettings() {
+    return (await readSettings(this.configFile));
   }
-  readRepository() {
-    return readRepository(this.configFile);
+  async readRepository() {
+    return (await readRepository(this.configFile));
   }
-  mutateRepository(action, input) {
-    return mutateRepository(this.configFile, action, input);
+  async mutateRepository(action, input) {
+    return (await mutateRepository(this.configFile, action, input, () => this.sessions.authorize?.("code.operate")));
   }
-  saveSettings(input) {
-    return saveSettings(input, this.configFile);
+  async saveSettings(input) {
+    return (await saveSettings(input, this.configFile));
   }
-  readPromptSettings() {
-    return presentPromptSettings(readPromptSettings(this.configFile));
+  async readPromptSettings() {
+    return presentPromptSettings((await readPromptSettings(this.configFile)));
   }
-  savePromptSettings(input) {
-    return presentPromptSettings(savePromptSettings(this.configFile, input));
+  async savePromptSettings(input) {
+    return presentPromptSettings((await savePromptSettings(this.configFile, input)));
   }
-  listBaseRefs() {
-    return listBaseRefs(readSettings(this.configFile).repository);
+  async listBaseRefs() {
+    return listBaseRefs((await readSettings(this.configFile)).repository);
   }
-  listModels() {
-    return listModels(this.sessions.client);
+  async listModels() {
+    return (await this.sessions.agent.listModels());
   }
   async executionOptions() {
-    return { permissionModes: await permissionOptions(this.sessions.client) };
+    return { agent: describeAgent(this.sessions.agent), permissionModes: await this.sessions.agent.permissionOptions() };
   }
-  readTapdSettings() {
-    return readTapdSettings(this.configFile);
+  async readTapdSettings() {
+    return (await readTapdSettings(this.configFile));
   }
-  saveTapdSettings(input) {
-    return saveTapdSettings(this.configFile, input);
+  async saveTapdSettings(input) {
+    return (await saveTapdSettings(this.configFile, input));
   }
-  checkTapdSettings(input) {
-    return checkTapdSettings(this.configFile, input);
+  async checkTapdSettings(input) {
+    return (await checkTapdSettings(this.configFile, input));
   }
 
   async search(channelId, input) {
@@ -91,7 +91,7 @@ class WorkspaceServices {
       throw new Error("该渠道不支持需求检索。");
     const items = await channel.search(input);
     return channelId === "tapd"
-      ? presentRequirements(channelId, items, [...this.sessions.list(), ...this.sessions.list({ archived: true })])
+      ? presentRequirements(channelId, items, [...(await this.sessions.list()), ...(await this.sessions.list({ archived: true }))])
       : items;
   }
 
@@ -103,10 +103,10 @@ class WorkspaceServices {
     return users.map(({ id, nick, name }) => ({ id, nick, name }));
   }
 
-  uploadImage(bytes) {
-    return this.channels.get("manual").uploadImage(bytes);
+  async uploadImage(bytes) {
+    return await this.channels.get("manual").uploadImage(bytes);
   }
-  startRun(input, accountSettings) {
+  async startRun(input, accountSettings) {
     const selected = { ...input };
     if (accountSettings)
       for (const key of ["model", "reasoningEffort", "permissionMode"])
@@ -114,13 +114,13 @@ class WorkspaceServices {
           selected[key] = key === "permissionMode"
             ? accountSettings[key]
             : accountSettings[key] ?? "";
-    return this.sessions.start(selected);
+    return (await this.sessions.start(selected));
   }
-  imagePath(key, index) {
-    return this.sessions.store.imagePath(key, index);
+  async imagePath(key, index) {
+    return (await this.sessions.store.imagePath(key, index));
   }
-  additionImagePath(key, id, index) {
-    return this.sessions.store.additionImagePath(key, id, index);
+  async additionImagePath(key, id, index) {
+    return (await this.sessions.store.additionImagePath(key, id, index));
   }
 }
 

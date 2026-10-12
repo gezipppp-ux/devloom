@@ -1,6 +1,6 @@
 # 需求渠道模块
 
-渠道负责来源认证、需求读取、素材准备和上游状态同步。执行调度、Git worktree、Codex 传输、任务记录和 Web 会话由通用模块管理。完整接口见 [渠道扩展契约](../../docs/channels.md)，配置与工作区边界见 [工程约定](../../docs/engineering/channels-and-settings.md) 和 [工作区契约](../../docs/engineering/workspaces.md)。
+渠道负责来源认证、需求读取、素材准备和上游状态同步。执行调度、Git worktree、Agent 传输、任务记录和 Web 会话由通用模块管理。完整接口见 [渠道扩展契约](../../docs/channels.md)，配置与工作区边界见 [工程约定](../../docs/engineering/channels-and-settings.md) 和 [工作区契约](../../docs/engineering/workspaces.md)。
 
 ## 目录职责
 
@@ -13,7 +13,7 @@
 | `tapd/auth-utils.cjs` | Cookie 解析、HTTP session 构造和凭据刷新 |
 | `tapd/http.cjs` | TAPD API 请求、响应解包和成功状态校验 |
 | `tapd/detail.cjs`、`tapd/users.cjs` | 待办、详情和人员查询 |
-| `tapd/images.cjs`、`tapd/task-package.cjs` | 图片解析与下载、需求快照和 Codex 提示词 |
+| `tapd/images.cjs`、`tapd/task-package.cjs` | 图片解析与下载、需求快照和通用任务提示词 |
 | `tapd/fusion-task.cjs` | 按顺序准备完整来源快照，使用独立融合模板一次渲染，统一图片编号与来源归属并校验整批上限 |
 | `manual/adapter.cjs` | 手动需求输入校验与渠道组合；无需 TAPD 登录 |
 | `manual/manual-upload-store.cjs` | ManualUploadStore 管理工作区图片暂存、读取、大小/格式验证与过期清理 |
@@ -23,7 +23,7 @@
 
 新增渠道应放在独立子目录中，由 `channel-registry.cjs` 显式注册适配器。适配器实现 `describe`、`resolve`、`prepare`、`transition`，按需提供查询能力和执行前校验。`describe` 返回界面所需的公开信息，不能包含 Cookie、令牌或其他凭据。
 
-`resolve` 校验渠道输入并返回 `{item, config, session}`；这里的 `session` 是来源访问上下文。`prepare` 返回 `{workitem, task, target}`，在 Codex 执行前准备完整文本和本地图片，需要同步的渠道可完成流转预检。`transition` 只处理来源状态；TAPD 和手动渠道返回 `{status: 'skipped'}`。通用执行器确认 Codex 实际开始执行后才调用状态同步，执行状态与渠道状态分别保存。
+`resolve` 校验渠道输入并返回 `{item, config, session}`；这里的 `session` 是来源访问上下文。`prepare` 返回 `{workitem, task, target}`，在 Agent 执行前准备完整文本和本地图片，需要同步的渠道可完成流转预检。任务正文使用 `task.prompt`，图片使用 `task.images`，不包含特定 CLI 参数，不读取旧提示词字段。`transition` 只处理来源状态；TAPD 和手动渠道返回 `{status: 'skipped'}`。通用执行器确认 Agent 实际开始执行后才调用状态同步，执行状态与渠道状态分别保存。
 
 渠道可以调用通用配置、图片签名验证、任务身份和命名工具；通用执行与会话模块通过适配器调用来源功能，不导入 TAPD HTTP、人员选择或工作流实现。其他渠道也不应依赖 TAPD 模块。TAPD session 格式和项目 ID 规则由 `tapd/config.cjs` 管理，通用 `config/runtime.cjs` 读取调用方明确传入的配置文件路径。
 

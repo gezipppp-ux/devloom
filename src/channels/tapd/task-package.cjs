@@ -49,17 +49,17 @@ async function buildTask(workitem, session, directory, config = {}) {
       ? `--- 补充说明与指导意见开始 ---\n${supplement}\n--- 补充说明与指导意见结束 ---\n\n`
       : "",
     images: images.length
-      ? `已附带 ${images.length} 张图片（通过 --image 传入），顺序如下：\n${imageList}\n请结合图片中的界面、标注和文字理解需求。`
+      ? `已附带 ${images.length} 张图片，顺序如下：\n${imageList}\n请结合图片中的界面、标注和文字理解需求。`
       : "该需求未包含内嵌图片。",
     image_count: images.length,
     image_list: imageList,
   });
   const task = {
     ...materials,
-    codex_prompt: prompt,
+    prompt,
   };
-  writeConfig(path.join(directory, "tapd-task.json"), task);
-  writeArtifact(path.join(directory, "task.md"), prompt, { mimeType: "text/markdown" });
+  (await writeConfig(path.join(directory, "tapd-task.json"), task));
+  (await writeArtifact(path.join(directory, "task.md"), prompt, { mimeType: "text/markdown" }));
   return task;
 }
 

@@ -2,8 +2,9 @@ const { RUN_KEY } = require("../domain/run-identity.cjs");
 const { WorkspaceServices } = require("../application/workspace-services.cjs");
 const { json, body, imageBody } = require("./messages.cjs");
 const { sendFile } = require("./assets.cjs");
+const { accountError } = require("../domain/account.cjs");
 
-function readApiBody(request, url) {
+async function readApiBody(request, url) {
   const pathname = url.pathname.replace(
     /^\/api\/workspaces\/[^/]+(?=\/)/,
     "/api",
@@ -21,7 +22,9 @@ function readApiBody(request, url) {
     /^\/api\/(?:channels\/manual\/images|runs\/[^/]+\/message-images)$/.test(
       pathname,
     );
-  return imageUpload ? imageBody(request) : body(request);
+  const projectFile = /^\/api\/projects\/[^/]+\/(?:issues|assets)\/[^/]+\/files$/.test(pathname);
+  if (request.method === "POST" && /^\/api\/projects\/[^/]+\/issues(?:\/[^/]+)?$/.test(pathname)) return body(request, 30 * 1024 * 1024);
+  return imageUpload || projectFile ? (await imageBody(request)) : (await body(request));
 }
 
 async function serveApi(
@@ -31,10 +34,11 @@ async function serveApi(
   context,
   { token, events, authorization, accountSettings, input },
 ) {
-  const { sessions } = context;
+  /** @type {import('../application/session-manager.cjs').SessionManager} */
+  const sessions = context.sessions;
   const services = new WorkspaceServices(context);
   if (request.method === "GET" && url.pathname === "/api/repository/git")
-    return json(response, 200, services.readRepository());
+    return json(response, 200, (await services.readRepository()));
   if (
     request.method === "POST" &&
     ["/api/repository/git/fetch", "/api/repository/git/update"].includes(
@@ -50,22 +54,22 @@ async function serveApi(
       ),
     );
   if (request.method === "GET" && url.pathname === "/api/bootstrap")
-    return json(response, 200, { token, ...services.describe() });
+    return json(response, 200, { token, ...(await services.describe()) });
   if (request.method === "GET" && url.pathname === "/api/settings/tapd")
-    return json(response, 200, services.readTapdSettings());
+    return json(response, 200, (await services.readTapdSettings()));
   if (request.method === "POST" && url.pathname === "/api/settings/tapd")
-    return json(response, 200, services.saveTapdSettings(input));
+    return json(response, 200, (await services.saveTapdSettings(input)));
   if (request.method === "GET" && url.pathname === "/api/settings/prompts")
-    return json(response, 200, services.readPromptSettings());
+    return json(response, 200, (await services.readPromptSettings()));
   if (request.method === "POST" && url.pathname === "/api/settings/prompts")
-    return json(response, 200, services.savePromptSettings(input));
+    return json(response, 200, (await services.savePromptSettings(input)));
   if (request.method === "POST" && url.pathname === "/api/settings/tapd/check")
     return json(response, 200, await services.checkTapdSettings(input));
   if (request.method === "GET" && url.pathname === "/api/settings")
-    return json(response, 200, services.readSettings());
+    return json(response, 200, (await services.readSettings()));
   if (request.method === "GET" && url.pathname === "/api/settings/refs")
     return json(response, 200, {
-      refs: services.listBaseRefs(),
+      refs: (await services.listBaseRefs()),
     });
   if (request.method === "GET" && url.pathname === "/api/models")
     return json(response, 200, {
@@ -74,16 +78,21 @@ async function serveApi(
   if (request.method === "GET" && url.pathname === "/api/execution-options")
     return json(response, 200, await services.executionOptions());
   if (request.method === "POST" && url.pathname === "/api/settings") {
-    return json(response, 200, services.saveSettings(input));
+    return json(response, 200, (await services.saveSettings(input)));
   }
   if (request.method === "GET" && url.pathname === "/api/events")
     return events.connect(request, response, sessions, authorization);
   if (request.method === "GET" && url.pathname === "/api/runs")
-    return json(response, 200, { runs: sessions.list({ archived: url.searchParams.get("archived") === "true" }) });
+    return json(response, 200, { runs: (await sessions.list({ archived: url.searchParams.get("archived") === "true" })) });
   if (
     request.method === "GET" &&
     ["/api/stories", "/api/requirements"].includes(url.pathname)
   ) {
+    const authorizeSearch = async () => {
+      if (authorization && !(await authorization.authorize("issue.view")))
+        throw accountError("没有查看项目需求的权限。", 403);
+    };
+    await authorizeSearch();
     const items = await services.search(
       url.pathname === "/api/stories"
         ? "tapd"
@@ -93,6 +102,7 @@ async function serveApi(
         workspace: url.searchParams.get("workspace"),
       },
     );
+    await authorizeSearch();
     return json(response, 200, { items });
   }
   if (request.method === "GET" && url.pathname === "/api/users") {
@@ -109,7 +119,7 @@ async function serveApi(
     request.method === "POST" &&
     url.pathname === "/api/channels/manual/images"
   )
-    return json(response, 201, services.uploadImage(input));
+    return json(response, 201, (await services.uploadImage(input)));
   if (request.method === "POST" && url.pathname === "/api/runs") {
     return json(response, 202, await services.startRun(input, accountSettings));
   }
@@ -122,7 +132,7 @@ async function serveApi(
       return json(response, 202, await sessions.requirements.continue(key, input.id));
     if (request.method === "GET" && /^addition-images\/[^/]+\/\d+$/.test(action || "")) {
       const [, id, index] = action.split("/");
-      sendFile(response, services.additionImagePath(key, id, index), "private, no-store");
+      sendFile(response, (await services.additionImagePath(key, id, index)), "private, no-store");
       return;
     }
     if (request.method === "GET" && action === "files")
@@ -130,7 +140,7 @@ async function serveApi(
     if (request.method === "GET" && action === "file")
       return json(response, 200, await sessions.readFile(key, url.searchParams.get("path"), url.searchParams.get("scope") || "task"));
     if (request.method === "GET" && action === "git")
-      return json(response, 200, sessions.readGit(key));
+      return json(response, 200, (await sessions.readGit(key)));
     if (request.method === "POST" && action === "worktree/delete")
       return json(response, 200, await sessions.deleteWorktree(key, input));
     if (request.method === "GET" && !action)
@@ -142,7 +152,7 @@ async function serveApi(
         await sessions.history(key, url.searchParams.get("cursor")),
       );
     if (request.method === "GET" && /^images\/\d+$/.test(action || "")) {
-      const file = services.imagePath(key, action.split("/")[1]);
+      const file = (await services.imagePath(key, action.split("/")[1]));
       sendFile(response, file, "private, no-store");
       return;
     }
@@ -154,7 +164,7 @@ async function serveApi(
     ) {
       sendFile(
         response,
-        sessions.messageImagePath(key, action.split("/")[1]),
+        (await sessions.messageImagePath(key, action.split("/")[1])),
         "private, no-store",
       );
       return;
@@ -167,9 +177,9 @@ async function serveApi(
       );
     }
     if (request.method === "POST" && action === "metadata")
-      return json(response, 200, sessions.updateTaskMetadata(key, input));
+      return json(response, 200, (await sessions.updateTaskMetadata(key, input)));
     if (request.method === "POST" && action === "title")
-      return json(response, 200, sessions.updateTitle(key, input.title));
+      return json(response, 200, (await sessions.updateTitle(key, input.title)));
     if (request.method === "POST" && action === "archive")
       return json(response, 200, await sessions.archive(key));
     if (request.method === "POST" && action === "restore")

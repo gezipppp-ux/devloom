@@ -14,17 +14,17 @@ const {
   writeFetchState,
 } = require("../storage/git-operations.cjs");
 
-function repositoryContext(configFile) {
-  const { repository, baseRef } = readSettings(configFile);
+async function repositoryContext(configFile) {
+  const { repository, baseRef } = (await readSettings(configFile));
   if (!repository) throw new Error("工作区尚无项目仓库，请从 Git 远程地址创建工作区。");
   const commonDirectory = repositoryCommonDirectory(repository);
   return { repository, baseRef, commonDirectory };
 }
 
-function readRepository(configFile) {
-  const context = repositoryContext(configFile);
+async function readRepository(configFile) {
+  const context = (await repositoryContext(configFile));
   const status = readRepositoryStatus(context.repository, context.baseRef);
-  const fetched = readFetchState(context.commonDirectory, configFile);
+  const fetched = (await readFetchState(context.commonDirectory, configFile));
   return {
     ...status,
     lastFetchedAt: fetched.fetchedAt || null,
@@ -32,7 +32,8 @@ function readRepository(configFile) {
   };
 }
 
-async function mutateRepository(configFile, action, input) {
+async function mutateRepository(configFile, action, input, authorize = async () => {}) {
+  await authorize();
   if (
     !input ||
     typeof input !== "object" ||
@@ -43,13 +44,14 @@ async function mutateRepository(configFile, action, input) {
     (action === "fetch" && !input.remote)
   )
     throw new Error("请选择此仓库已有的远端。");
-  const context = repositoryContext(configFile);
-  const config = readOptional(configFile);
-  const credentials = config.codex?.git_account_id ? {
-    account: new GitAccountStore(databaseForPath(configFile)).read(config.codex.git_account_id, config.workspace.owner_user_id),
-    remoteUrl: config.codex.remote_url,
+  const context = (await repositoryContext(configFile));
+  const config = (await readOptional(configFile));
+  const credentials = config.execution?.gitAccountId ? {
+    account: (await new GitAccountStore(databaseForPath(configFile)).read(config.execution.gitAccountId, config.workspace.owner_user_id)),
+    remoteUrl: config.execution.remoteUrl,
   } : undefined;
-  return withRepositoryOperation(context.commonDirectory, async () => {
+  return (await withRepositoryOperation(context.commonDirectory, async () => {
+    await authorize();
     let result;
     if (action === "fetch")
       result = await fetchRepository(context.repository, input.remote, credentials);
@@ -59,17 +61,20 @@ async function mutateRepository(configFile, action, input) {
         context.baseRef,
         input.remote,
         credentials,
+        authorize,
       );
     else throw new Error("不支持的 Git 操作。");
-    writeFetchState(context.commonDirectory, result.remote, configFile);
+    await authorize();
+    (await writeFetchState(context.commonDirectory, result.remote, configFile));
     const status = readRepositoryStatus(context.repository, context.baseRef);
-    const fetched = readFetchState(context.commonDirectory, configFile);
+    const fetched = (await readFetchState(context.commonDirectory, configFile));
+    await authorize();
     return {
       ...status,
       lastFetchedAt: fetched.fetchedAt,
       lastFetchedRemote: fetched.remote,
     };
-  });
+  }));
 }
 
 module.exports = { readRepository, mutateRepository };

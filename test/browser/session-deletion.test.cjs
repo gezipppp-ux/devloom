@@ -20,11 +20,12 @@ async function verifySessionDeletion(browser, origin, manager, directory, errors
   git("worktree", "add", "-b", branch, tree, "HEAD");
   fs.writeFileSync(path.join(tree, "tracked.txt"), "uncommitted");
   fs.writeFileSync(path.join(tree, "untracked.txt"), "untracked");
-  saveState(path.join(manager.store.dir(key), "run.json"), {
+  (await saveState(path.join(manager.store.dir(key), "run.json"), {
     workitem: { id: key.slice(2), workspace_id: "1", title },
+    agent: { provider: "codex" },
     session_id: "delete-fixture", execution: { status: "completed" },
     worktree: { repository, path: tree, branch },
-  });
+  }));
   if (archived) await manager.archive(key);
   const page = await browser.newPage();
   page.on("pageerror", (error) => errors.push(error.message));
@@ -95,7 +96,7 @@ async function verifySessionDeletion(browser, origin, manager, directory, errors
     }
     releaseDeletion();
     await dialog.waitFor({ state: "hidden" });
-    assert.equal(manager.store.hasRun(key), false);
+    assert.equal((await manager.store.hasRun(key)), false);
     assert.equal(fs.existsSync(tree), false);
     const snapshotApplied = page.waitForResponse((response) => response.headers()["x-deletion-snapshot"] === "old");
     releaseSnapshot();

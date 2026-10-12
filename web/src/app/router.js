@@ -6,10 +6,18 @@ import WorkbenchApp from "./WorkbenchApp.vue";
 
 export const router = createRouter({
   history: createWebHistory(),
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition;
+    if (to.hash) return { el: to.hash };
+    if (to.path !== from.path) return { top: 0 };
+  },
   routes: [
     { path: "/login", name: "login", component: LoginPage },
     { path: "/password", name: "password", component: PasswordPage },
     { path: "/", name: "workspace", component: WorkbenchApp },
+    { path: "/projects/:projectId", name: "project", component: WorkbenchApp },
+    { path: "/departments", name: "departments", component: WorkbenchApp, meta: { admin: true } },
+    { path: "/repositories", name: "repositories", component: WorkbenchApp, meta: { admin: true } },
     { path: "/personal", name: "personal", component: WorkbenchApp },
     { path: "/system", name: "system", component: WorkbenchApp, meta: { admin: true } },
     { path: "/environment", redirect: to => ({ name: "system", query: { ...to.query, tab: "environment" }, hash: to.hash }) },

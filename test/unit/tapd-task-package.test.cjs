@@ -25,15 +25,15 @@ test("TAPD supplementary instructions provide execution content without changing
   assert.equal(task.workitem.description, "");
   assert.equal(task.workitem.markdown_description, "");
   assert.ok(
-    task.codex_prompt.includes(
+    task.prompt.includes(
       `--- 补充说明与指导意见开始 ---\n${supplementary}\n--- 补充说明与指导意见结束 ---`,
     ),
   );
-  assert.match(task.codex_prompt, /TAPD 原始描述为空，请阅读补充说明/);
-  assert.doesNotMatch(task.codex_prompt, /仅有图片/);
+  assert.match(task.prompt, /TAPD 原始描述为空，请阅读补充说明/);
+  assert.doesNotMatch(task.prompt, /仅有图片/);
   assert.equal(
     fs.readFileSync(path.join(directory, "task.md"), "utf8"),
-    task.codex_prompt,
+    task.prompt,
   );
   const saved = JSON.parse(
     fs.readFileSync(path.join(directory, "tapd-task.json"), "utf8"),
@@ -50,8 +50,8 @@ test("omitted or blank TAPD supplementary instructions retain the original execu
     temporary(t),
   );
   assert.equal(original.execution_ready, true);
-  assert.equal(blank.codex_prompt, original.codex_prompt);
-  assert.doesNotMatch(blank.codex_prompt, /补充说明与指导意见/);
+  assert.equal(blank.prompt, original.prompt);
+  assert.doesNotMatch(blank.prompt, /补充说明与指导意见/);
   const empty = await buildTask(
     {
       ...item,

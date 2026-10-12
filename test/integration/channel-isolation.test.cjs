@@ -13,7 +13,7 @@ const { worktreePlan, createWorktree } = require('../../src/git/worktrees.cjs');
 const { repositoryFor } = require('../../src/config/repository.cjs');
 const { sourceFor, runKey } = require('../../src/domain/run-identity.cjs');
 const { ChannelRegistry } = require('../../src/channels/channel-registry.cjs');
-const { SessionManager } = require('../../src/application/session-manager.cjs');
+const { SessionManager } = require('../support/session-manager.cjs');
 const { RunStore } = require('../../src/storage/run-store.cjs');
 const { SessionPresenter } = require('../../src/application/session-presenter.cjs');
 const { createWebServer } = require('../../src/http/server.cjs');
@@ -44,18 +44,19 @@ function repository(directory) {
   return git;
 }
 
-test('Web settings persist outside credentials, validate Git and place future worktrees in configured root', (t) => {
+test('Web settings persist outside credentials, validate Git and place future worktrees in configured root', async (t) => {
   const directory = temporary(t),
     repo = path.join(directory, '项目 repo'),
     configFile = path.join(directory, 'tapd.local.json');
   repository(repo);
   const credential = JSON.stringify({
+    agent: { provider: "codex" },
     tapd: { session: { cookie_header: 'private-test' } },
-    codex: { repository: repo },
+    execution: { repository: repo },
   });
   fs.writeFileSync(configFile, credential);
   const root = path.join(directory, 'another disk');
-  const saved = saveSettings(
+  const saved = (await saveSettings(
     {
       repository: repo,
       worktreeRoot: root,
@@ -63,56 +64,56 @@ test('Web settings persist outside credentials, validate Git and place future wo
       initCommands: ['pnpm install', 'pnpm build'],
     },
     configFile,
-  );
+  ));
   assert.equal(fs.readFileSync(configFile, 'utf8'), credential);
-  assert.equal(readSettings(configFile).worktreeRoot, fs.realpathSync(root));
+  assert.equal((await readSettings(configFile)).worktreeRoot, fs.realpathSync(root));
   assert.equal(JSON.stringify(saved).includes('private-test'), false);
-  assert.throws(
-    () =>
-      saveSettings(
+  (await assert.rejects(
+    async () =>
+      (await saveSettings(
         { repository: repo, worktreeRoot: 'relative', baseRef: 'main' },
         configFile,
-      ),
+      )),
     /绝对路径/,
-  );
-  assert.throws(() =>
-    saveSettings(
+  ));
+  (await assert.rejects(async () =>
+    (await saveSettings(
       { repository: repo, worktreeRoot: root, baseRef: 'does-not-exist' },
       configFile,
-    ),
-  );
-  assert.throws(
-    () =>
-      saveSettings(
+    )),
+  ));
+  (await assert.rejects(
+    async () =>
+      (await saveSettings(
         { repository: repo, worktreeRoot: root, command: 'malicious' },
         configFile,
-      ),
+      )),
     /仅允许/,
-  );
-  assert.throws(
-    () => saveSettings({ repository: repo, worktreeRoot: repo }, configFile),
+  ));
+  (await assert.rejects(
+    async () => (await saveSettings({ repository: repo, worktreeRoot: repo }, configFile)),
     /不能等于/,
-  );
-  assert.equal(readSettings(configFile).baseRef, 'main');
-  assert.deepEqual(readSettings(configFile).initCommands, [
+  ));
+  assert.equal((await readSettings(configFile)).baseRef, 'main');
+  assert.deepEqual((await readSettings(configFile)).initCommands, [
     'pnpm install',
     'pnpm build',
   ]);
-  const config = executionConfig({}, configFile);
-  assert.deepEqual(config.codex.init_commands, ['pnpm install', 'pnpm build']);
-  saveSettings(
+  const config = (await executionConfig({ agent: { provider: "codex" } }, configFile));
+  assert.deepEqual(config.execution.initCommands, ['pnpm install', 'pnpm build']);
+  (await saveSettings(
     { repository: repo, worktreeRoot: root, baseRef: 'main' },
     configFile,
-  );
-  assert.deepEqual(readSettings(configFile).initCommands, [
+  ));
+  assert.deepEqual((await readSettings(configFile)).initCommands, [
     'pnpm install',
     'pnpm build',
   ]);
-  saveSettings(
+  (await saveSettings(
     { repository: repo, worktreeRoot: root, baseRef: 'main', initCommands: [] },
     configFile,
-  );
-  assert.deepEqual(readSettings(configFile).initCommands, []);
+  ));
+  assert.deepEqual((await readSettings(configFile)).initCommands, []);
   assert.equal(repositoryFor(config, configFile, 'scope'), repo);
   const item = { workspace_id: 'scope', id: 'issue/123' },
     source = sourceFor('tracker', item);
@@ -150,7 +151,7 @@ test('path validation respects Linux case and Windows drives; repositories are e
   );
   assert.equal(
     repositoryFor(
-      { codex: { repositories: { 'tracker:1': repo, 1: 'wrong' } } },
+      { execution: { repositories: { 'tracker:1': repo, 1: 'wrong' } } },
       path.join(directory, 'config.json'),
       '1',
       'tracker',
@@ -159,18 +160,19 @@ test('path validation respects Linux case and Windows drives; repositories are e
   );
 });
 
-test('repository settings and continuation preserve Unicode, spaces and filesystem aliases', (t) => {
+test('repository settings and continuation preserve Unicode, spaces and filesystem aliases', async (t) => {
   const directory = temporary(t);
   const repo = path.join(directory, process.platform === 'win32' ? '项目 repo' : '项目 repo ');
   repository(repo);
   const alias = path.join(directory, 'repository alias');
   fs.symlinkSync(repo, alias, process.platform === 'win32' ? 'junction' : 'dir');
   const configFile = path.join(directory, 'config.json');
+  fs.writeFileSync(configFile, JSON.stringify({ agent: { provider: "codex" } }));
   const root = path.join(directory, process.platform === 'win32' ? '任务 trees' : '任务 trees ');
-  const settings = saveSettings({ repository: alias, worktreeRoot: root }, configFile);
+  const settings = (await saveSettings({ repository: alias, worktreeRoot: root }, configFile));
   assert.equal(settings.repository, fs.realpathSync(repo));
   assert.equal(settings.worktreeRoot, fs.realpathSync(root));
-  const config = executionConfig({}, configFile);
+  const config = (await executionConfig({ agent: { provider: "codex" } }, configFile));
   assert.equal(repositoryFor(config, configFile, '1'), fs.realpathSync(repo));
   const plan = createWorktree(worktreePlan(settings.repository, { workspace_id: '1', id: '9' }, 'HEAD', { root }));
   assert.equal(worktreeReason({ worktree: plan }), null);
@@ -183,14 +185,15 @@ test('a non-TAPD channel runs through real Git, session controller and history w
     repo = path.join(directory, 'repo');
   const git = repository(repo);
   const configFile = path.join(directory, 'missing.json');
-  saveSettings(
+  fs.writeFileSync(configFile, JSON.stringify({ agent: { provider: "codex" } }));
+  (await saveSettings(
     {
       repository: repo,
       worktreeRoot: path.join(directory, 'trees'),
       baseRef: 'main',
     },
     configFile,
-  );
+  ));
   const item = {
     id: 'DEV-42',
     workspace_id: 'platform',
@@ -206,11 +209,11 @@ test('a non-TAPD channel runs through real Git, session controller and history w
       capabilities: { assignees: false, search: true },
       workspace: 'platform',
     }),
-    resolve: async () => ({ item, config: {}, session: null }),
+    resolve: async () => ({ item, config: { agent: { provider: "codex" } }, session: null }),
     search: async () => [item],
     prepare: async () => ({
       workitem: item,
-      task: { execution_ready: true, images: [], codex_prompt: '实现测试需求' },
+      task: { execution_ready: true, images: [], prompt: '实现测试需求' },
       target: 'developing',
     }),
     transition: async ({ state }) => {
@@ -240,7 +243,7 @@ test('a non-TAPD channel runs through real Git, session controller and history w
     turn: { id: runtime.turnId, status: 'completed' },
   });
   await runtime.operation;
-  const state = manager.store.read(started.key);
+  const state = (await manager.store.read(started.key));
   assert.equal(state.source.channel, 'tracker');
   assert.deepEqual(calls, ['transition']);
   assert.equal(git('branch', '--show-current'), 'main');
@@ -253,20 +256,20 @@ test('a non-TAPD channel runs through real Git, session controller and history w
   await manager.send(started.key, '继续');
   assert.equal(client.calls.at(-1).params.threadId, 'original');
   const oldPath = state.worktree.path;
-  saveSettings(
+  (await saveSettings(
     {
       repository: repo,
       worktreeRoot: path.join(directory, 'new-root'),
       baseRef: 'main',
     },
     configFile,
-  );
-  assert.equal(manager.store.read(started.key).worktree.path, oldPath);
+  ));
+  assert.equal((await manager.store.read(started.key)).worktree.path, oldPath);
   await assert.rejects(manager.start({ channel: 'missing' }), /未接入/);
   await assert.rejects(manager.start({ channel: 'tracker' }), /已有运行记录/);
 });
 
-test('channel identity isolates duplicate IDs while legacy TAPD keys and images remain readable', (t) => {
+test('channel identity isolates duplicate IDs while preserving recorded TAPD source and images', async (t) => {
   const item = { workspace_id: '1', id: '2' };
   assert.equal(runKey(sourceFor('tapd', item)), '1-2');
   assert.notEqual(
@@ -278,14 +281,16 @@ test('channel identity isolates duplicate IDs while legacy TAPD keys and images 
   assert.throws(() => sourceFor('../tracker', item), /Invalid/);
   fs.mkdirSync(store.dir('1-2'));
   fs.writeFileSync(
-    path.join(store.dir('1-2'), 'tapd-task.json'),
+    path.join(store.dir('1-2'), 'requirement.json'),
     JSON.stringify({
       images: [{ path: path.join(store.dir('1-2'), 'a.png') }],
     }),
   );
   const presenter = new SessionPresenter({ store });
-  assert.equal(presenter.images('1-2').length, 1);
-  assert.equal(presenter.summary('1-2', { workitem: item }).source.channel, 'tapd');
+  assert.equal((await presenter.images('1-2')).length, 1);
+  assert.equal((await presenter.summary('1-2', {
+    workitem: item, source: sourceFor('tapd', item), agent: { provider: "codex" },
+  })).source.channel, 'tapd');
 });
 
 test('HTTP dispatches source searches and protects persisted settings with same-origin token', async (t) => {
@@ -295,7 +300,7 @@ test('HTTP dispatches source searches and protects persisted settings with same-
   const configFile = path.join(directory, 'tapd.local.json');
   fs.writeFileSync(
     configFile,
-    JSON.stringify({ tapd: { session: { cookie_header: 'secret-cookie' } } }),
+    JSON.stringify({ agent: { provider: "codex" }, tapd: { session: { cookie_header: 'secret-cookie' } } }),
   );
   const calls = [];
   const channel = {

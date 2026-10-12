@@ -2,7 +2,7 @@
 
 项目使用 Node.js CommonJS 后端和 Vue 3 前端。按职责放置后端代码，按功能组织前端；源码目录和运行数据目录分别管理。后端模块依赖由 `test/architecture/modules.test.cjs` 自动检查，前端目录、命名与依赖边界由 `test/architecture/frontend.test.cjs` 自动检查。
 
-生产持久化和账号约定见 [账号与数据库](./accounts-and-database.md)。Fastify 负责 HTTP 生命周期及会话插件；SQLite、Knex 升级、BLOB、账号与会话存储均属于 storage。原有 JSON 路径在数据库模式下只是存储资源标识，不在磁盘保存业务 JSON，也不回读旧数据。显式文件配置和隔离测试保留文件适配。
+生产持久化和账号约定见 [账号与数据库](./accounts-and-database.md)。Fastify 负责 HTTP 生命周期及会话插件；PostgreSQL、Prisma 迁移、BLOB、账号与会话存储均属于 storage。原有 JSON 路径在数据库模式下只是存储资源标识，不在磁盘保存业务 JSON，也不回读旧数据。显式文件配置和隔离测试保留文件适配。
 
 ## 目录
 
@@ -10,10 +10,11 @@
 src/
   domain/          # 身份、类型、图标、图片格式、会话消息与纯校验
   shared/          # 与业务无关的路径工具
-  storage/         # SQLite、升级、账号、运行记录、BLOB、写锁与文件适配
+  storage/         # PostgreSQL、迁移、账号、运行记录、BLOB、写锁与文件适配
   config/          # 安装/数据位置、显式配置读取、执行设置与仓库选择
   git/             # Git 命令、仓库/引用查询、worktree 创建与身份校验
-  codex/           # 命令定位、app-server RPC、模型/权限能力、CLI 会话
+  codex/           # Codex 原生协议、进程与条目转换
+  agents/          # 显式 provider 注册、Codex 适配器与标准会话接口
   execution/       # 通用任务流水线、初始化命令执行
   channels/        # 注册表及 tapd/、manual/ 来源适配器
   application/     # 工作区服务、会话命令/事件/查询/呈现与 TAPD 执行用例
@@ -22,7 +23,7 @@ src/
 web/src/
   main.js          # Vue 挂载与主题入口
   app/             # 应用壳层、工作区选择、跨功能协调
-  features/        # accounts/、workspaces/、tasks/、session/、settings/
+  features/        # accounts/、projects/、workspaces/、tasks/、session/、settings/
   shared/          # api/、components/、styles/
 shared/            # 前后端共用的 JSON 目录与枚举
 test/
@@ -47,15 +48,18 @@ docs/engineering/  # 行为契约与架构规则
 | git | git、domain、shared |
 | config | config、git、storage、domain、shared |
 | codex | codex、domain、shared |
-| execution | execution、codex、git、config、storage、domain、shared |
+| agents | agents、codex、domain、shared |
+| execution | execution、agents、git、config、storage、domain、shared |
 | channels | channels、config、storage、domain、shared |
-| application | application 及以上模块 |
+| application | application、agents、channels、execution、git、config、storage、domain、shared |
 | http | http、application、domain、shared，以及 config/runtime 的安装位置 |
 | cli | 组合命令所需的模块；其他模块不能依赖 cli |
 
 禁止循环依赖和动态加载浏览器提交的模块名。渠道实现只依赖本渠道或通用模块，不能依赖其他渠道或反向依赖注册表。通用执行器通过渠道接口调用准备和流转，不导入 TAPD 实现；新增渠道在独立子目录实现并显式注册。domain 不进行文件、子进程和网络 I/O，storage/config 不直接启动子进程；Git 操作通过 git 模块调用。
 
 纯校验放在 domain，SQL、持久化格式和文件适配放在 storage，路径比较放在 shared，避免为了复用一个函数反向依赖整个执行模块。application 不直接导入文件系统或底层 Git 命令，而调用存储和 Git 操作接口；执行流水线通过 ExecutionStore 管理运行记录与锁。模块从实际归属文件导入函数，不用无关模块转导出它们。不要通过聚合入口加载有副作用的认证脚本。
+
+项目协作重构的 PostgreSQL 基础约定见 [postgresql.md](./postgresql.md)。根目录 `prisma/` 的 schema 与迁移归 storage；`generated/` 仅含忽略的生成产物。仅 `storage/postgres-database.cjs` 可导入确切的 `generated/prisma-runtime/client.cjs` 入口；其他层不得直接导入 Prisma、pg 或生成客户端。该边界由架构检查约束，不开放任意生成目录导入。
 
 ## 职责划分
 
@@ -70,12 +74,16 @@ docs/engineering/  # 行为契约与架构规则
 | `config/runtime.cjs` | 安装/数据根及显式配置文件读取；不猜测命令行参数 |
 | `config/repository.cjs`、`git/` | 配置决定选择哪个仓库；git 负责验证、引用查询和 worktree 操作 |
 | `execution/runner.cjs` | 准备、初始化、执行、渠道同步顺序及记录；通过回调通知调用方，不写终端 |
+| `application/project-services.cjs`、`project-presenter.cjs` | 部门／仓库目录、项目／成员权限及个人开发空间生命周期；公开字段由 presenter 脱敏 |
+| `application/project-content-services.cjs`、`project-content-presenter.cjs` | 事项固定流转、TAPD 只读导入、评论／交付、项目附件、资产加密与独立敏感字段授权 |
+| `application/project-development-services.cjs`、`project-development-presenter.cjs` | 事项与任务多对多关联、内容快照、幂等启动意图及显式追加／发送，不推进业务状态、不读取资产 |
+| `storage/project-store.cjs`、`project-content-store.cjs`、`project-development-store.cjs` | 上述项目业务的 Prisma 持久化、修订号更新、同项目关联、加密和审计 |
 | `application/session-manager.cjs` | SessionManager 协调启动、继续、停止、操作互斥及生命周期 |
 | `application/workspace-manager.cjs` | WorkspaceManager 组合工作区默认配置、公开摘要与各工作区的会话生命周期 |
 | `application/account-services.cjs`、`account-presenter.cjs` | AccountServices 组合账号权限、偏好、登录会话和生命周期接口；presenter 负责账号公开结构，HTTP 不穿透读取存储对象 |
-| `application/git-account-services.cjs`、`git-account-presenter.cjs` | GitAccountServices 组合 SSH 生成、连接检测、重新授权与检测成功后的保存；presenter 仅返回账号公开字段 |
+| `application/git-account-services.cjs`、`git-account-presenter.cjs` | GitAccountServices 组合 SSH 生成、个人主机凭据保存、独立提交作者身份及显式项目仓库连接检测；presenter 仅返回账号公开字段 |
 | `storage/git-account-store.cjs`、`git/account-credentials.cjs` | 前者拥有个人 Git 账号、加密密钥草稿及修订号条件更新；后者为 Git 子进程隔离凭据，不负责数据库或公开响应 |
-| `application/session-events.cjs` | Codex 事件、审批与执行完成状态处理 |
+| `application/session-events.cjs` | 标准 Agent 事件、交互请求与执行完成状态处理 |
 | `application/session-settings.cjs` | 会话执行设置校验、当前轮与下一轮选择、变更事件 |
 | `application/session-requirements.cjs`、`storage/run-requirements-store.cjs` | 分别负责追加资料的空闲/归属门禁与显式发送用例，以及来源唯一性、追加快照和发送状态的原子持久化 |
 | `application/session-git.cjs`、`repository-services.cjs` | Git 状态及操作用例、运行与所有权门禁、删除进度和只读会话 |
@@ -133,3 +141,5 @@ app 中的 `use-workspace-selection` 管理工作区与 URL，`use-workspace-con
 - 目录调整不迁移运行数据，不改 API、渠道 ID、session ID、source、run key、记录中的 worktree 路径或历史素材文件名。
 - `node --test test/architecture/*.test.cjs test/unit/*.test.cjs test/integration/*.test.cjs` 显式运行 architecture、unit、integration 的 `*.test.cjs`；browser 和 fixtures 不参与自动单测发现，避免意外启动进程。
 - 完整验证由 Jenkinsfile 运行 eslint、上述 Node 测试、`npm run build` 和浏览器脚本。界面和样式迁移还运行 `node test/browser/visual.test.cjs`。所有验证使用模拟数据和临时仓库。
+
+CLI Agent 的配置、协议与生命周期边界见 [Agent 契约](./agents.md)。application/execution 不直接依赖 codex；原生协议只留在 codex 与 provider adapter 内，前端使用通用请求 DTO。

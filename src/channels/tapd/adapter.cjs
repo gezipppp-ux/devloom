@@ -13,7 +13,8 @@ const { validateFusion, fingerprint } = require("../../domain/requirement-fusion
 const { buildFusionTask } = require("./fusion-task.cjs");
 
 function createTapdChannel(configFile, dependencies = {}) {
-  function boundWorkspace(value, config = loadConfig(configFile)) {
+  async function boundWorkspace(value, config) {
+    config ??= await loadConfig(configFile);
     if (!config.workspace) return numericId(value, "TAPD 项目 ID");
     const bound = workspaceId(sessionFromConfig(config));
     if (value && String(value) !== bound)
@@ -33,10 +34,10 @@ function createTapdChannel(configFile, dependencies = {}) {
     id: "tapd",
     label: "TAPD",
     capabilities: { search: true, assignees: false, fusion: true },
-    describe() {
+    async describe() {
       let workspace = "";
       try {
-        workspace = workspaceId(loadSession(configFile));
+        workspace = workspaceId((await loadSession(configFile)));
       } catch {
         /* Configuration can be completed after startup. */
       }
@@ -46,12 +47,12 @@ function createTapdChannel(configFile, dependencies = {}) {
         capabilities: this.capabilities,
         workspace,
         scopeLabel: "TAPD 项目 ID",
-        scopeLocked: Boolean(readOptional(configFile).workspace),
+        scopeLocked: Boolean((await readOptional(configFile)).workspace),
       };
     },
     async search({ workspace, query }) {
-      const session = loadSession(configFile);
-      const scope = boundWorkspace(workspace);
+      const session = (await loadSession(configFile));
+      const scope = (await boundWorkspace(workspace));
       return (
         await todos({ ...session, request_body: todoRequest({
           workspaceId: scope,
@@ -70,8 +71,8 @@ function createTapdChannel(configFile, dependencies = {}) {
     },
     async searchUsers({ workspace, query }) {
       return (
-        await services.searchUsers(loadSession(configFile), {
-          workspace: boundWorkspace(workspace),
+        await services.searchUsers((await loadSession(configFile)), {
+          workspace: (await boundWorkspace(workspace)),
           query,
         })
       ).map((user) => ({
@@ -98,7 +99,7 @@ function createTapdChannel(configFile, dependencies = {}) {
       const supplement = supplementaryInstructions.trim();
       if (!["story", "bug", "board_card"].includes(type))
         throw new Error("无效的 TAPD 待办类型。");
-      const loaded = loadConfig(configFile);
+      const loaded = (await loadConfig(configFile));
       const config = {
         ...loaded,
         prompt_templates: getPromptTemplates(loaded),
@@ -106,7 +107,7 @@ function createTapdChannel(configFile, dependencies = {}) {
       const session = sessionFromConfig(config);
       if (items !== undefined) {
         const fusion = validateFusion({ items, requestId, title, fusionMode });
-        const scope = boundWorkspace(workspace, config);
+        const scope = (await boundWorkspace(workspace, config));
         const requirements = items.map(entry => {
           if (!entry || (entry.type !== undefined && !["story", "bug", "board_card"].includes(entry.type)))
             throw new Error("无效的 TAPD 待办类型。");
@@ -125,7 +126,7 @@ function createTapdChannel(configFile, dependencies = {}) {
       }
       const item = {
         id: numericId(id, "需求 ID"),
-        workspace_id: boundWorkspace(workspace, config),
+        workspace_id: (await boundWorkspace(workspace, config)),
         type,
         ...(supplement ? { supplementary_instructions: supplement } : {}),
       };
@@ -140,7 +141,7 @@ function createTapdChannel(configFile, dependencies = {}) {
     },
     async prepare({ session, item, directory, config }) {
       if (item.requirements)
-        return buildFusionTask({ session, item, directory, config, services });
+        return (await buildFusionTask({ session, item, directory, config, services }));
       const workitem = {
         ...(await services.detail(session, item)),
         ...(item.supplementary_instructions

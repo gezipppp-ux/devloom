@@ -3,7 +3,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
-const { childEnvironment } = require("./environment.cjs");
+const { childEnvironment } = require("../shared/child-environment.cjs");
 const execute = promisify(execFile);
 const cache = new Map();
 

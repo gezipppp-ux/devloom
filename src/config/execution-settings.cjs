@@ -3,6 +3,7 @@ const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { repositoryGit, resolveCommit } = require("../git/repository.cjs");
 const { validateInitCommands } = require("../domain/init-commands.cjs");
+const { agentConfig, executionOptions } = require("../domain/agent-config.cjs");
 const {
   memberDirectoryName,
   validateDirectoryName,
@@ -25,72 +26,78 @@ const { absolutePath, samePath } = require("../shared/paths.cjs");
 function settingsPath(configFile) {
   return path.join(path.dirname(configFile), "runner.local.json");
 }
-function executionConfig(config, configFile) {
+async function executionConfig(config, configFile) {
   const settings = config.workspace
     ? {}
-    : readOptional(settingsPath(configFile));
-  const codex = { ...config.codex };
-  if (settings.repository) codex.repository = settings.repository;
+    : (await readOptional(settingsPath(configFile)));
+  const execution = executionOptions(config);
+  if (settings.repository) execution.repository = settings.repository;
   if (config.workspace) {
-    codex.project_name = validateDirectoryName(codex.project_name);
+    execution.projectName = validateDirectoryName(execution.projectName);
     const dataDirectory = path.dirname(path.dirname(path.dirname(configFile)));
-    codex.member_storage_root =
-      readSystemSettings(dataDirectory).memberStorageRoot;
-    codex.member_root = config.workspace.owner_user_id
+    execution.memberStorageRoot =
+      (await readSystemSettings(dataDirectory)).memberStorageRoot;
+    execution.memberRoot = config.workspace.project_id && config.workspace.owner_user_id
+      ? path.join(execution.memberStorageRoot, "projects", validateDirectoryName(config.workspace.project_id),
+          "members", validateDirectoryName(config.workspace.owner_user_id))
+      : config.workspace.owner_user_id
       ? path.join(
-          codex.member_storage_root,
+          execution.memberStorageRoot,
           memberDirectoryName(config.workspace.owner_username),
         )
       : undefined;
-    const memberRoot = codex.member_root || codex.member_storage_root;
-    codex.worktree_root = resolveProjectDirectory(
-      path.join(memberRoot, "worktree"),
-      codex.project_name,
-    );
-    if (codex.member_root)
+    const memberRoot = execution.memberRoot || execution.memberStorageRoot;
+    // Project identity is already present in the stable member root. Repeating
+    // a full UUID below it can exceed Git for Windows' worktree path limit.
+    execution.worktreeRoot = config.workspace.project_id
+      ? resolveProjectDirectory(memberRoot, "worktree")
+      : resolveProjectDirectory(path.join(memberRoot, "worktree"), execution.projectName);
+    if (execution.memberRoot)
       assertMemberWorktreeLocation(
-        codex.member_storage_root,
+        execution.memberStorageRoot,
         memberRoot,
-        codex.worktree_root,
+        execution.worktreeRoot,
       );
-    else assertWorktreeLocation(codex.member_storage_root, codex.worktree_root);
+    else assertWorktreeLocation(execution.memberStorageRoot, execution.worktreeRoot);
   } else {
-    codex.worktree_root =
-      settings.worktreeRoot || codex.worktree_root || defaultWorktreeRoot();
+    execution.worktreeRoot =
+      settings.worktreeRoot || execution.worktreeRoot || defaultWorktreeRoot();
   }
-  if (settings.baseRef) codex.base_ref = settings.baseRef;
-  codex.init_commands = validateInitCommands(
-    settings.initCommands ?? codex.init_commands ?? [],
+  if (settings.baseRef) execution.baseRef = settings.baseRef;
+  execution.initCommands = validateInitCommands(
+    settings.initCommands ?? execution.initCommands ?? [],
   );
-  return { ...config, codex };
+  const agent = agentConfig(config);
+  return { ...config, execution, agent };
 }
-function readSettings(configFile) {
-  const config = executionConfig(readOptional(configFile), configFile);
-  const repository = config.codex.repository
-    ? path.resolve(path.dirname(configFile), config.codex.repository)
+async function readSettings(configFile) {
+  const config = (await executionConfig((await readOptional(configFile)), configFile));
+  const repository = config.execution.repository
+    ? path.resolve(path.dirname(configFile), config.execution.repository)
     : "";
   return {
     repository,
     worktreeRoot: path.resolve(
       path.dirname(configFile),
-      config.codex.worktree_root,
+      config.execution.worktreeRoot,
     ),
-    baseRef: config.codex.base_ref || "HEAD",
-    initCommands: config.codex.init_commands,
+    baseRef: config.execution.baseRef || "HEAD",
+    initCommands: config.execution.initCommands,
     platform: process.platform,
     ...(config.workspace
       ? {
-          projectName: config.codex.project_name,
-          memberStorageRoot: config.codex.member_storage_root,
+          projectName: config.execution.projectName,
+          memberStorageRoot: config.execution.memberStorageRoot,
           memberRoot:
-            config.codex.member_root || config.codex.member_storage_root,
+            config.execution.memberRoot || config.execution.memberStorageRoot,
           projectsRoot: repository ? path.dirname(repository) : "",
         }
       : {}),
   };
 }
-function saveSettings(input, configFile) {
-  const config = readOptional(configFile);
+async function saveSettings(input, configFile) {
+  const config = (await readOptional(configFile));
+  const execution = executionOptions(config);
   const allowedFields = config.workspace
     ? ["baseRef", "initCommands"]
     : ["repository", "baseRef", "initCommands", "worktreeRoot"];
@@ -104,26 +111,26 @@ function saveSettings(input, configFile) {
   const initCommands = validateInitCommands(
     input.initCommands ??
       (config.workspace
-        ? (config.codex?.init_commands ?? [])
-        : readSettings(configFile).initCommands),
+        ? (execution.initCommands ?? [])
+        : (await readSettings(configFile)).initCommands),
   );
   const repository = config.workspace
-    ? repositoryGit(config.codex?.repository).repository
-    : repositoryGit(input.repository ?? readSettings(configFile).repository)
+    ? repositoryGit(execution.repository).repository
+    : repositoryGit(input.repository ?? (await readSettings(configFile)).repository)
         .repository;
   const projectName = config.workspace
-    ? validateDirectoryName(config.codex?.project_name)
+    ? validateDirectoryName(execution.projectName)
     : undefined;
   const location = config.workspace
-    ? executionConfig(
-        { ...config, codex: { ...config.codex, project_name: projectName } },
+    ? (await executionConfig(
+        { ...config, execution: { ...execution, projectName } },
         configFile,
-      ).codex
+      )).execution
     : null;
   const worktreeRoot =
-    location?.worktree_root ??
+    location?.worktreeRoot ??
     absolutePath(
-      input.worktreeRoot ?? readSettings(configFile).worktreeRoot,
+      input.worktreeRoot ?? (await readSettings(configFile)).worktreeRoot,
       "worktree 根目录",
     );
   const baseRef = input.baseRef?.trim() || "HEAD";
@@ -132,14 +139,14 @@ function saveSettings(input, configFile) {
   resolveCommit(repository, baseRef);
   // Validate without creating a worktree or changing the selected Git branch.
   fs.mkdirSync(worktreeRoot, { recursive: true });
-  if (location?.member_root)
+  if (location?.memberRoot)
     assertMemberWorktreeLocation(
-      location.member_storage_root,
-      location.member_root,
+      location.memberStorageRoot,
+      location.memberRoot,
       worktreeRoot,
     );
   else if (location)
-    assertWorktreeLocation(location.member_storage_root, worktreeRoot);
+    assertWorktreeLocation(location.memberStorageRoot, worktreeRoot);
   const realRoot = fs.realpathSync.native(worktreeRoot);
   if (samePath(realRoot, repository))
     throw new Error("worktree 根目录不能等于代码仓库根目录。");
@@ -158,26 +165,22 @@ function saveSettings(input, configFile) {
     initCommands,
   };
   if (config.workspace) {
-    updateConfig(file, (current) => {
-      current.codex = {
-        ...current.codex,
-        base_ref: baseRef,
-        init_commands:
-          input.initCommands === undefined
-            ? validateInitCommands(current.codex?.init_commands ?? [])
-            : initCommands,
+    (await updateConfig(file, (current) => {
+      const nextInitCommands = input.initCommands === undefined
+        ? validateInitCommands(executionOptions(current).initCommands ?? [])
+        : initCommands;
+      current.execution = {
+        ...current.execution, baseRef, initCommands: nextInitCommands,
       };
-      delete current.codex.repositories;
-      delete current.codex.worktree_root;
-      delete current.codex.member_storage_root;
-      delete current.codex.member_root;
-      delete current.codex.model;
-      delete current.codex.reasoning_effort;
+      delete current.execution.repositories;
+      delete current.execution.worktreeRoot;
+      delete current.execution.memberStorageRoot;
+      delete current.execution.memberRoot;
       return current;
-    });
-    return readSettings(file);
+    }));
+    return (await readSettings(file));
   }
-  writeConfig(file, settings);
+  (await writeConfig(file, settings));
   return { ...settings, platform: process.platform };
 }
 module.exports = {

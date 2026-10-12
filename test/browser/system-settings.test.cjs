@@ -1,3 +1,4 @@
+const { navigateWorkspace } = require("../support/browser-navigation.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -24,7 +25,7 @@ async function verifySystemSettings(browser, { origin, output, errors, directory
     await baseField.waitFor();
   };
   const openWorkspace = async () => {
-    await page.getByRole("button", { name: `切换工作区：${workspace.name}`, exact: true }).click();
+    await navigateWorkspace(page, workspace);
     await page.getByRole("heading", { name: `${workspace.name} · 工作区设置`, exact: true }).waitFor();
     await preview.waitFor();
   };

@@ -1,11 +1,12 @@
 <script setup>
+import { watchEffect } from "vue";
 import FormSection from "../../shared/components/FormSection.vue";
-import CodexModelControls from "../../shared/components/CodexModelControls.vue";
+import AgentModelControls from "../../shared/components/AgentModelControls.vue";
 import PermissionSelect from "../../shared/components/PermissionSelect.vue";
 import { useModelCatalog } from "../../shared/api/use-model-catalog.js";
 import { usePermissionModes } from "../../shared/api/use-permission-modes.js";
 import { ReloadOutlined } from "@antdv-next/icons";
-defineProps({
+const props = defineProps({
   model: { type: String, default: "" },
   reasoningEffort: { type: String, default: "" },
   permissionMode: { type: String, default: "ask" },
@@ -15,9 +16,11 @@ const emit = defineEmits([
   "update:model",
   "update:reasoningEffort",
   "update:permissionMode",
+  "validity-change",
 ]);
 const { models, loading, error, refresh } = useModelCatalog();
 const permissions = usePermissionModes();
+watchEffect(() => emit("validity-change", permissions.isAvailable(props.permissionMode)));
 function changeModel(settings) {
   emit("update:model", settings.model);
   emit("update:reasoningEffort", settings.reasoningEffort);
@@ -36,7 +39,8 @@ function changeModel(settings) {
         <ReloadOutlined aria-hidden="true" /> 刷新模型列表
       </button>
     </template>
-    <CodexModelControls
+    <AgentModelControls
+      :agent-label="permissions.agent.value?.label || 'Agent'"
       :model="model"
       :reasoning-effort="reasoningEffort"
       :models="models"
@@ -61,7 +65,7 @@ function changeModel(settings) {
     <p v-if="permissions.error.value" role="alert" class="error">
       权限选项加载失败：{{
         permissions.error.value
-      }}。尚未确认“帮我批准”是否可用。
+      }}。确认权限可用后才能创建任务。
       {{ permissions.errorHint.value }}
       <button
         type="button"
@@ -72,9 +76,10 @@ function changeModel(settings) {
         刷新权限选项
       </button>
     </p>
+    <p v-if="!permissions.loading.value && !permissions.error.value && !permissions.isAvailable(permissionMode)" role="alert" class="error">当前权限模式不可用，请选择可用的权限模式。</p>
     <p v-if="loading" role="status" class="field-hint">正在读取可用模型…</p>
     <p v-if="!loading && !error && !models.length" class="field-hint">
-      Codex 未返回可选模型，可使用默认配置或稍后刷新。
+      {{ permissions.agent.value?.label || 'Agent' }} 未返回可选模型，可使用默认配置或稍后刷新。
     </p>
     <p v-if="error" role="alert" class="error">
       模型列表加载失败：{{ error }}。当前选择会保留。

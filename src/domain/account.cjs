@@ -58,22 +58,32 @@ function accountSettings(input, previous = DEFAULT_ACCOUNT_SETTINGS) {
 
 function validateAccountCreation(input, { initial = false } = {}) {
   if (!input || typeof input !== "object" || Array.isArray(input) ||
-      Object.keys(input).some((key) => !["username", "password", "role"].includes(key)))
+      Object.keys(input).some((key) => !["username", "password", "role", "departmentId", "canCreateProjects"].includes(key)))
     throw accountError("包含未知账号字段。");
   const role = initial ? "admin" : input.role || "member";
   if (!["admin", "member"].includes(role)) throw accountError("账号角色无效。");
-  return { username: username(input.username), password: password(input.password), role };
+  if (!initial || input.departmentId !== undefined) departmentId(input.departmentId);
+  if (input.canCreateProjects !== undefined && typeof input.canCreateProjects !== "boolean") throw accountError("创建项目资格必须为布尔值。");
+  return { username: username(input.username), password: password(input.password), role,
+    departmentId: input.departmentId || null, canCreateProjects: input.canCreateProjects || false };
+}
+
+function departmentId(value) {
+  if (typeof value !== "string" || !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(value)) throw accountError("请分配有效部门。");
+  return value;
 }
 
 function validateAccountUpdate(input) {
   if (!input || typeof input !== "object" || Array.isArray(input) ||
-      Object.keys(input).some((key) => !["role", "status", "password"].includes(key)))
+      Object.keys(input).some((key) => !["role", "status", "password", "departmentId", "canCreateProjects"].includes(key)))
     throw accountError("包含未知账号字段。");
   if (input.role !== undefined && !["admin", "member"].includes(input.role))
     throw accountError("账号角色无效。");
   if (input.status !== undefined && !["active", "disabled"].includes(input.status))
     throw accountError("账号状态无效。");
   if (input.password !== undefined) password(input.password);
+  if (input.departmentId !== undefined) departmentId(input.departmentId);
+  if (input.canCreateProjects !== undefined && typeof input.canCreateProjects !== "boolean") throw accountError("创建项目资格必须为布尔值。");
   return { ...input };
 }
 
