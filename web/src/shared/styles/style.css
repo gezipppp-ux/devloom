@@ -6,12 +6,33 @@
 .account-bar { min-height: var(--account-bar-height); display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 3px 20px 4px; border-bottom: 1px solid var(--line); background: var(--sidebar); }
 .account-identity { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account-bar nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; min-width: 0; }
-.account-bar button { background: transparent; border-color: transparent; padding: 4px 10px; }
-.account-bar button.active { background: var(--soft); border-color: var(--line); }
+.account-bar button {
+  background: transparent;
+  border-color: transparent;
+  padding: 4px 10px;
+  border-radius: var(--radius-control);
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+.account-bar button:hover:not(:disabled) {
+  background: var(--soft);
+  border-color: transparent;
+  box-shadow: none;
+}
+.account-bar button.active {
+  background: var(--soft);
+  border-color: var(--line);
+}
 .authenticated-app > .workspace { height: calc(100dvh - var(--account-bar-height)); }
 .authenticated-app > .system-settings-view { min-height: calc(100dvh - var(--account-bar-height)); }
 .authentication-page { min-height: 100dvh; display: grid; place-items: center; padding: 24px; }
-.authentication-card { width: min(100%, 440px); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 32px; }
+.authentication-card {
+  width: min(100%, 440px);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 32px;
+  box-shadow: var(--shadow-md);
+}
 .authentication-card h1 { font-size: 28px; margin: 16px 0 8px; }
 .authentication-card > .muted { margin-bottom: 24px; }
 .authentication-card form > button.primary { width: 100%; }
@@ -79,11 +100,17 @@ button {
   line-height: 1.5;
   transition:
     background 0.15s,
-    border-color 0.15s;
+    border-color 0.15s,
+    box-shadow 0.15s,
+    transform 0.1s;
 }
 button:hover:not(:disabled) {
   background: var(--soft);
   border-color: var(--field-border);
+  box-shadow: var(--shadow-xs);
+}
+button:active:not(:disabled) {
+  transform: translateY(1px);
 }
 button:disabled {
   opacity: 0.5;
@@ -105,6 +132,14 @@ select {
   background: var(--surface);
   color: var(--ink);
   line-height: 1.5;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+input:not([type="checkbox"]):not(.ant-select-input):hover,
+textarea:hover,
+select:hover {
+  border-color: var(--field-border-hover);
 }
 input::placeholder,
 textarea::placeholder {
@@ -186,11 +221,19 @@ pre {
   color: white;
   border-color: var(--accent);
   font-weight: 600;
+  box-shadow: var(--shadow-xs);
 }
 .primary:hover:not(:disabled),
 .new-task:hover:not(:disabled) {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
+  box-shadow: var(--shadow-sm);
+}
+.primary:active:not(:disabled),
+.new-task:active:not(:disabled) {
+  background: var(--accent-active);
+  border-color: var(--accent-active);
+  transform: translateY(1px);
 }
 .text-button {
   color: var(--accent);
@@ -281,6 +324,12 @@ pre {
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
   background: var(--surface);
+  box-shadow: var(--shadow-xs);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.system-setting-row:hover {
+  border-color: var(--field-border-hover);
+  box-shadow: var(--shadow-sm);
 }
 .system-setting-row > div {
   min-width: 0;
@@ -708,10 +757,20 @@ pre {
   text-align: left;
   background: transparent;
   border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.session-link:hover:not(.active) {
+  background: var(--soft);
+  border-color: var(--line);
 }
 .session-link.active {
   background: var(--selected);
   border-color: #d1dfce;
+  box-shadow: var(--shadow-xs);
 }
 .session-title-row {
   display: flex;
@@ -885,6 +944,7 @@ main {
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
   scroll-margin-top: 24px;
+  box-shadow: var(--shadow-xs);
 }
 .form-section-heading {
   display: flex;
@@ -927,7 +987,7 @@ main {
   padding-bottom: 16px;
   border-bottom: 1px solid var(--line);
 }
-.page-tabs a {
+.page-tabs :is(a, button) {
   display: inline-flex;
   align-items: center;
   min-height: 40px;
@@ -935,14 +995,21 @@ main {
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
   background: var(--surface);
+  color: var(--ink);
   text-decoration: none;
   font-size: 13px;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    color 0.15s,
+    box-shadow 0.15s;
 }
-.page-tabs a:hover {
+.page-tabs :is(a, button):hover:not(:disabled) {
   background: var(--soft);
   border-color: var(--field-border);
+  box-shadow: var(--shadow-xs);
 }
-.page-tabs .active {
+.page-tabs :is(a, button).active {
   color: var(--accent);
   background: var(--selected);
   border-color: var(--field-border);
@@ -1784,10 +1851,12 @@ main {
   border-radius: var(--radius-composer);
   padding: 12px 16px 10px;
   background: var(--surface);
-  box-shadow: 0 4px 20px #203e3408;
+  box-shadow: var(--shadow-composer);
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 .composer:focus-within {
   border-color: var(--focus);
+  box-shadow: 0 0 0 1px var(--focus), var(--shadow-composer);
 }
 .composer textarea {
   border: 0;
@@ -2337,7 +2406,7 @@ main {
   border-radius: var(--radius-dialog);
   color: var(--ink);
   background: var(--surface);
-  box-shadow: 0 24px 80px #203e3426;
+  box-shadow: var(--shadow-dialog);
 }
 .workspace-dialog::backdrop {
   background: #183b304d;

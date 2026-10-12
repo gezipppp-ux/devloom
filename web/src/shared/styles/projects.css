@@ -2,9 +2,9 @@
 .project-heading > div { min-width: 0; }
 .project-heading h2 { margin: 4px 0 12px; overflow-wrap: anywhere; }
 .project-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(270px, 100%), 1fr)); gap: 20px; margin: 20px 0; }
-.project-card { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 24px; border-radius: var(--radius-card); background: var(--surface); border: 1px solid var(--line); text-align: left; min-width: 0; height: auto; white-space: normal; overflow-wrap: anywhere; }
+.project-card { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 24px; border-radius: var(--radius-card); background: var(--surface); border: 1px solid var(--line); text-align: left; min-width: 0; height: auto; white-space: normal; overflow-wrap: anywhere; box-shadow: var(--shadow-xs); transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s; }
 .project-card strong { font-size: 18px; }
-.project-card:hover { background: var(--soft); border-color: var(--focus); }
+.project-card:hover { background: var(--soft); border-color: var(--focus); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
 .project-card > span { line-height: 1.8; }
 .project-empty { border: 1px dashed var(--line); border-radius: var(--radius-card); text-align: center; padding: 48px 20px; margin: 24px 0; color: var(--muted); }
 .project-form { display: flex; flex-direction: column; gap: 20px; }
@@ -20,7 +20,7 @@
 .project-permission-editor legend { padding: 0 8px; font-weight: 600; }
 .permission-choice, .project-form .permission-choice { display: inline-flex; flex-direction: row; align-items: center; gap: 8px; min-height: 32px; }
 .permission-choice input, .project-issue-list input[type=checkbox] { width: 16px; height: 16px; min-height: 0; accent-color: var(--accent); flex: 0 0 auto; }
-.project-detail { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 24px; min-width: 0; }
+.project-detail { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 24px; min-width: 0; box-shadow: var(--shadow-xs); }
 .project-detail > .actions { margin-bottom: 24px; }
 .project-section { margin: 28px 0; padding-top: 20px; border-top: 1px solid var(--line); }
 .issue-detail { min-width: 0; }
@@ -34,7 +34,7 @@
 .issue-heading-actions .issue-secondary-action { background: transparent; border-color: transparent; }
 .issue-detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; align-items: start; gap: 24px; }
 .issue-detail-main, .issue-detail-sidebar { min-width: 0; display: grid; gap: 24px; }
-.issue-panel { min-width: 0; padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); overflow-wrap: anywhere; }
+.issue-panel { min-width: 0; padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); overflow-wrap: anywhere; box-shadow: var(--shadow-xs); }
 .issue-panel.project-section { margin: 0; padding: 24px; border: 1px solid var(--line); }
 .issue-panel-heading { display: flex; align-items: center; gap: 8px; margin: 0 0 20px; font-size: 16px; }
 .issue-panel-heading .anticon { font-size: 16px; flex-shrink: 0; }
@@ -98,7 +98,8 @@
 .project-development-action { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 20px; }
 .project-issue-list, .project-file-list, .project-records { list-style: none; padding: 0; margin: 16px 0; }
 .project-issue-list > li { display: flex; gap: 12px; align-items: center; border-bottom: 1px solid var(--line); }
-.project-issue-link { display: grid; grid-template-columns: 60px 1fr auto; gap: 12px; width: 100%; border: 0; background: transparent; height: auto; padding: 16px 8px; text-align: left; white-space: normal; }
+.project-issue-link { display: grid; grid-template-columns: 60px 1fr auto; gap: 12px; width: 100%; border: 0; background: transparent; height: auto; padding: 16px 8px; text-align: left; white-space: normal; border-radius: var(--radius-control); transition: background-color 0.15s; }
+.project-issue-link:hover { background: var(--soft); }
 .project-issue-link strong { overflow-wrap: anywhere; min-width: 0; }
 .project-issue-link small { color: var(--muted); }
 .project-file-list li { display: flex; gap: 16px; padding: 8px 0; overflow-wrap: anywhere; }
@@ -117,12 +118,13 @@
 .release-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
 .release-toolbar .permission-choice { font-size: 13px; color: var(--muted); }
 .release-quiet-button { background: transparent; border-color: transparent; color: var(--muted); white-space: nowrap; }
-.release-workbench { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-width: 0; min-height: 260px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); }
+.release-workbench { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-width: 0; min-height: 260px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); box-shadow: var(--shadow-xs); }
 .release-sidebar { padding: 12px; background: var(--canvas); border-right: 1px solid var(--line); border-radius: var(--radius-card) 0 0 var(--radius-card); min-width: 0; }
 .release-list-label { margin: 4px 10px 12px; color: var(--muted); font-size: 12px; }
 .release-list { display: flex; flex-direction: column; gap: 8px; list-style: none; margin: 0; padding: 0; }
 .release-list > li { min-width: 0; }
-.release-list-button { display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: 100%; padding: 14px 12px; border-color: transparent; background: transparent; text-align: left; white-space: normal; }
+.release-list-button { display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: 100%; padding: 14px 12px; border-color: transparent; background: transparent; text-align: left; white-space: normal; border-radius: var(--radius-control); transition: background-color 0.15s, border-color 0.15s; }
+.release-list-button:hover:not([aria-pressed=true]) { background: var(--soft); }
 .release-list-button[aria-pressed=true] { background: var(--selected); border-color: var(--field-border); }
 .release-list-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .release-list-title strong { min-width: 0; overflow-wrap: anywhere; font-size: 15px; }

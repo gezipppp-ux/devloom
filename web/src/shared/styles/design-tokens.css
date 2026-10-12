@@ -1,14 +1,18 @@
 :root {
   --canvas: #f7f8f5;
   --surface: #ffffff;
+  --surface-hover: #fafbfa;
   --sidebar: #eff3ed;
   --rail: #e6ece4;
   --ink: #203e34;
   --muted: #68796f;
   --accent: #204b3c;
   --accent-hover: #30634d;
+  --accent-active: #183a2e;
+  --accent-subtle: #e9f0e8;
   --line: #dfe5de;
   --field-border: #cbd6cd;
+  --field-border-hover: #9bb0a0;
   --soft: #edf2eb;
   --selected: #e1ebdf;
   --danger: #a34638;
@@ -18,6 +22,12 @@
   --success: #38734a;
   --success-soft: #e9f2e7;
   --focus: #568165;
+  --focus-ring: rgba(86, 129, 101, 0.18);
+  --shadow-xs: 0 1px 2px rgba(32, 62, 52, 0.04);
+  --shadow-sm: 0 1px 3px rgba(32, 62, 52, 0.06), 0 1px 2px rgba(32, 62, 52, 0.04);
+  --shadow-md: 0 4px 12px -2px rgba(32, 62, 52, 0.08), 0 2px 6px -1px rgba(32, 62, 52, 0.04);
+  --shadow-dialog: 0 16px 36px -4px rgba(32, 62, 52, 0.16), 0 6px 16px -2px rgba(32, 62, 52, 0.08);
+  --shadow-composer: 0 8px 24px -4px rgba(32, 62, 52, 0.1), 0 2px 6px -1px rgba(32, 62, 52, 0.04);
   --code-keyword: #426784;
   --code-string: #80602b;
   --code-literal: #815471;

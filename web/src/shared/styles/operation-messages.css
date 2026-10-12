@@ -24,7 +24,7 @@
   padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
-  box-shadow: 0 4px 18px rgb(32 62 52 / 12%);
+  box-shadow: var(--shadow-md);
   background: var(--surface);
   font-size: 14px;
   line-height: 24px;
