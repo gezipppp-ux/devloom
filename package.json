@@ -7,13 +7,13 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "init:admin": "node src/cli/init-admin.cjs",
-    "dev": "node src/cli/dev.cjs",
-    "dev:watch": "node src/cli/dev-watch.cjs",
+    "init:admin": "node --env-file-if-exists=.env src/cli/init-admin.cjs",
+    "dev": "node --env-file-if-exists=.env src/cli/dev.cjs",
+    "dev:watch": "node --env-file-if-exists=.env src/cli/dev-watch.cjs",
     "db:generate": "prisma generate && tsc -p tsconfig.prisma.json",
     "db:deploy": "prisma migrate deploy",
     "build": "npm run db:generate && vite build --config web/vite.config.mjs",
-    "start": "node src/cli/web.cjs"
+    "start": "node --env-file-if-exists=.env src/cli/web.cjs"
   },
   "dependencies": {
     "@antdv-next/icons": "1.1.2",
