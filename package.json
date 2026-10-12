@@ -10,8 +10,8 @@
     "init:admin": "node --env-file-if-exists=.env src/cli/init-admin.cjs",
     "dev": "node --env-file-if-exists=.env src/cli/dev.cjs",
     "dev:watch": "node --env-file-if-exists=.env src/cli/dev-watch.cjs",
-    "db:generate": "prisma generate && tsc -p tsconfig.prisma.json",
-    "db:deploy": "prisma migrate deploy",
+    "db:generate": "node --env-file-if-exists=.env ./node_modules/prisma/build/index.js generate && tsc -p tsconfig.prisma.json",
+    "db:deploy": "node --env-file-if-exists=.env ./node_modules/prisma/build/index.js migrate deploy",
     "build": "npm run db:generate && vite build --config web/vite.config.mjs",
     "start": "node --env-file-if-exists=.env src/cli/web.cjs"
   },

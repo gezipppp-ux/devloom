@@ -45,6 +45,7 @@
 
 /* Shared foundations */
 :root {
+  scrollbar-gutter: stable;
   font-family: var(--font-ui);
   font-size: 14px;
   color: var(--ink);

@@ -187,6 +187,8 @@ async function main() {
         ? { channel: process.env.BROWSER_CHANNEL }
         : process.platform === "win32" ? { channel: "msedge" } : {}),
       headless: true,
+      // Keep classic scrollbar space visible so short/long page shifts are detectable.
+      ignoreDefaultArgs: ["--hide-scrollbars"],
     });
     const page = await browser.newPage({
       viewport: { width: 1440, height: 1200 },
@@ -500,11 +502,12 @@ async function main() {
       await input.fill("");
     }
     async function captureProjects() {
-      for (const width of [1440, 768, 390, 320]) {
+      for (const width of [1440, 1100, 768, 390, 320]) {
         scenario = "session";
         await page.setViewportSize({ width, height: 1000 });
         await page.goto(origin);
         await page.locator('.project-card').first().waitFor();
+        const directoryHeading = await page.locator('.page-heading').boundingBox();
         await capture('10-project-directory-' + width);
         await page.getByRole('button', { name: '创建项目', exact: true }).click();
         await page.getByLabel('项目名称', { exact: true }).fill('客户体验提升计划');
@@ -554,10 +557,20 @@ async function main() {
         await tabs.getByRole('button', { name: '设置', exact: true }).click();
         await page.getByRole('button', { name: '保存项目设置', exact: true }).waitFor();
         await capture('17-project-settings-' + width);
-        await page.goto(origin + '/departments');
+        await page.getByLabel('账号导航').getByRole('button', { name: '部门可用功能', exact: true }).click();
         await page.getByLabel('部门名称', { exact: true }).waitFor();
+        const departmentHeading = await page.locator('.page-heading').boundingBox();
+        assert.ok(Math.abs(directoryHeading.x - departmentHeading.x) < 1 &&
+          Math.abs(directoryHeading.width - departmentHeading.width) < 1,
+        `project directory and scrollable department page keep the same horizontal edges at ${width}px`);
         await capture('18-department-permissions-' + width);
         if (width === 1440) departmentContentWidth = (await page.locator('.page-heading').boundingBox()).width;
+        await page.getByLabel('账号导航').getByRole('button', { name: '全部项目', exact: true }).click();
+        await page.locator('.project-card').first().waitFor();
+        const returnedHeading = await page.locator('.page-heading').boundingBox();
+        assert.ok(Math.abs(returnedHeading.x - departmentHeading.x) < 1 &&
+          Math.abs(returnedHeading.width - departmentHeading.width) < 1,
+        `returning to the short project directory preserves horizontal edges at ${width}px`);
         await load('project-session');
         await page.getByRole('button', { name: '返回项目协作', exact: true }).waitFor();
         await capture('19-project-session-' + width);
