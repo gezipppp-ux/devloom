@@ -85,7 +85,7 @@ test("workspace prompt settings preserve credentials and execution configuration
   const retained = {
     version: 3,
     workspace: { id: randomUUID(), name: "独立工作区" },
-    execution: { repository: "example", baseRef: "HEAD" },
+    execution: { repository: "example", baseBranch: "" },
     workflow: { allow_write: true },
     future_setting: { enabled: true },
     tapd: { session: { cookie_header: "fixture secret" } },

@@ -15,6 +15,7 @@ datasource db {
 model User {
   id                 String           @id @default(uuid())
   username           String           @unique
+  displayName        String           @map("display_name")
   passwordHash       String           @map("password_hash")
   role               String           @default("member")
   status             String           @default("active")
@@ -26,6 +27,8 @@ model User {
   ownedProjects      Project[]        @relation("ProjectOwner")
   projectMemberships ProjectMember[]
   developmentSpaces DevelopmentSpace[]
+  developmentTasks DevelopmentTask[] @relation("TaskExecutor")
+  createdTasks DevelopmentTask[] @relation("TaskCreator")
   createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
   settings           UserSetting?
@@ -246,50 +249,33 @@ model Department {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
   users       User[]
-  projects    Project[]
 
   @@map("departments")
-}
-
-model Repository {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  remoteUrl   String   @map("remote_url")
-  description String   @default("")
-  status      String   @default("active")
-  revision    Int      @default(1)
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
-  projects    Project[]
-
-  @@map("repositories")
 }
 
 model Project {
   id            String   @id @default(uuid())
   name          String
   description   String   @default("")
-  departmentId  String   @map("department_id")
   ownerUserId   String   @map("owner_user_id")
-  repositoryId  String   @map("repository_id")
+  remoteUrl     String   @map("remote_url")
   status        String   @default("active")
   settings      Json     @default("{}")
   revision      Int      @default(1)
   issueSequence Int      @default(0) @map("issue_sequence")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
-  department    Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   owner         User       @relation("ProjectOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
-  repository    Repository @relation(fields: [repositoryId], references: [id], onDelete: Restrict)
   members       ProjectMember[]
   spaces        DevelopmentSpace[]
   issues        ProjectIssue[]
+  releases      ProjectRelease[]
   sources       IssueSource[]
   assets        ProjectAsset[]
   files         ProjectFile[]
   tasks         DevelopmentTask[]
+  developmentClaims IssueDevelopmentClaim[]
 
-  @@unique([departmentId, name])
   @@index([ownerUserId])
   @@map("projects")
 }
@@ -335,6 +321,11 @@ model DevelopmentSpace {
 }
 
 model ProjectIssue {
+  releaseId          String? @map("release_id")
+  workflowVersionId  String @map("workflow_version_id")
+  release            ProjectRelease? @relation(fields: [projectId, releaseId], references: [projectId, id], onDelete: Restrict)
+  workflowVersion    SystemWorkflowVersion @relation(fields: [workflowVersionId], references: [id], onDelete: Restrict)
+  baseBranch         String   @default("") @map("base_branch")
   id                 String   @id @default(uuid())
   projectId          String   @map("project_id")
   number             Int
@@ -363,6 +354,7 @@ model ProjectIssue {
   files              ProjectFile[]
   assetLinks         AssetIssueLink[]
   taskLinks          TaskIssueLink[]
+  developmentClaim IssueDevelopmentClaim?
 
   @@unique([projectId, id])
   @@unique([projectId, number])
@@ -511,24 +503,30 @@ model ProjectFile {
 model DevelopmentTask {
   id          String   @id @default(uuid())
   projectId   String   @map("project_id")
-  spaceId     String   @map("space_id")
+  spaceId     String?  @map("space_id")
   executorId  String   @map("executor_id")
+  creatorId   String   @map("creator_id")
+  releaseId   String?  @map("release_id")
   requestId   String   @map("request_id")
-  workspaceId String   @map("workspace_id")
+  workspaceId String?  @map("workspace_id")
   runKey      String?  @map("run_key")
-  status      String   @default("prepared")
+  status      String   @default("planned")
   snapshot    Json
   error       String?
   revision    Int      @default(1)
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
   project     Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  space       DevelopmentSpace @relation(fields: [projectId, executorId, spaceId], references: [projectId, userId, id], onDelete: Restrict)
+  space       DevelopmentSpace? @relation(fields: [projectId, executorId, spaceId], references: [projectId, userId, id], onDelete: Restrict)
+  executor    User @relation("TaskExecutor", fields: [executorId], references: [id], onDelete: Restrict)
+  creator     User @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  release     ProjectRelease? @relation(fields: [projectId, releaseId], references: [projectId, id], onDelete: Restrict)
+  claims      IssueDevelopmentClaim[]
   issueLinks  TaskIssueLink[]
   deliverables IssueDeliverable[]
 
   @@unique([projectId, id])
-  @@unique([projectId, executorId, requestId])
+  @@unique([projectId, creatorId, requestId])
   @@unique([workspaceId, runKey])
   @@map("development_tasks")
 }
@@ -543,6 +541,18 @@ model TaskIssueLink {
 
   @@id([taskId, issueId])
   @@map("task_issue_links")
+}
+
+model IssueDevelopmentClaim {
+  issueId String @id @map("issue_id")
+  projectId String @map("project_id")
+  taskId String @map("task_id")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  task DevelopmentTask @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
+  issue ProjectIssue @relation(fields: [projectId, issueId], references: [projectId, id], onDelete: Restrict)
+  @@index([taskId])
+  @@unique([projectId, issueId])
+  @@map("issue_development_claims")
 }
 
 model GitKeyDraft {
@@ -575,4 +585,41 @@ model WorkspaceClone {
   @@unique([ownerUserId, requestId])
   @@index([ownerUserId, dismissedAt])
   @@map("workspace_clones")
+}
+
+model ProjectRelease {
+  id String @id @default(uuid())
+  projectId String @map("project_id")
+  name String
+  description String @default("")
+  status String @default("active")
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  issues ProjectIssue[]
+  tasks DevelopmentTask[]
+  @@unique([projectId, id])
+  @@unique([projectId, name])
+  @@map("project_releases")
+}
+model SystemWorkflow {
+  id String @id @default(uuid())
+  type String @unique
+  revision Int @default(1)
+  draft Json
+  publishedVersion Int @default(1) @map("published_version")
+  versions SystemWorkflowVersion[]
+  @@map("system_workflows")
+}
+model SystemWorkflowVersion {
+  id String @id @default(uuid())
+  workflowId String @map("workflow_id")
+  version Int
+  definition Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  workflow SystemWorkflow @relation(fields: [workflowId], references: [id], onDelete: Restrict)
+  issues ProjectIssue[]
+  @@unique([workflowId, version])
+  @@map("system_workflow_versions")
 }

@@ -8,7 +8,7 @@
 | --- | --- |
 | `app/` | 导航壳层与应用 composable：工作区 URL 选择，以及跨功能的启动、刷新和 SSE 生命周期协调。 |
 | `features/accounts/` | 登录、首次改密、账号管理、个人设置和成员桌面通知偏好。 |
-| `features/projects/` | 部门／仓库目录、项目与权限、成员、需求／Bug、资产、开发空间及事项与执行任务关联。 |
+| `features/projects/` | 部门、项目及仓库地址、权限与成员、需求／Bug、资产、开发空间及事项与执行任务关联。 |
 | `features/workspaces/` | 工作区创建、编辑、切换入口和图标目录。 |
 | `features/tasks/` | 需求启动表单、执行偏好与人员选择、任务列表快照、类型及人工进度。 |
 | `features/session/` | 会话详情状态、历史分页、输入卡片和下一轮设置；消息、工具输出、审批与澄清、需求快照的安全渲染。 |
@@ -23,9 +23,15 @@
 
 `MarkdownEditor` 默认懒加载 `VisualMarkdownEditor`（Tiptap），提供可视图文编辑，另保留 Markdown 源码和预览模式。图片节点仅通过已验证映射显示，文档保留原始附件路径，blob URL 不得序列化入正文。剪贴板 HTML 只取纯文本，不作为可执行内容解析。源码到可视化的转换先检查语义等价，不支持无损转换时保留原文。初始化、外部合并、移除附件和上下文重置建立新的撤销基线，普通编辑保留撤销／重做；异步插图使用映射后的光标书签，源码模式在读取附件期间禁用输入，避免位置漂移。
 
-项目协作版本以「我的项目」为默认首页，`/projects/:projectId` 展示按权限开放的业务页面。`/?workspace=<id>&task=<runKey>` 进入本人已准备的执行空间，个人创建空间入口不再提供。系统入口为部门与权限、仓库目录、账号管理和系统设置。项目页面的请求和写入生命周期由 `shared/api/use-resource.js` 处理，项目组件按项目 ID 重建；定期重检项目权限，撤权时移除不可访问内容。项目内容按纯文本展示，附件下载经过项目和资源归属校验，不渲染外部未过滤 HTML。下列历史执行工作台组件说明只适用于被授权的开发空间。
+项目协作版本以「我的项目」为默认首页，`/projects/:projectId` 展示按权限开放的业务页面。创建项目直接填写 Git 仓库地址，项目设置管理地址，已分配开发空间时只读展示并说明原因；没有独立仓库目录页面或仓库选择接口。`/?workspace=<id>&task=<runKey>` 进入本人已准备的执行空间，个人创建空间入口不再提供。系统入口为部门与权限、账号管理和系统设置。项目页面的请求和写入生命周期由 `shared/api/use-resource.js` 处理，项目组件按项目 ID 重建；定期重检项目权限，撤权时移除不可访问内容。项目内容通过安全 Markdown 展示，附件下载经过项目和资源归属校验，不渲染外部未过滤 HTML。下列历史执行工作台组件说明只适用于被授权的开发空间。
+
+项目不设置归属部门，创建表单、列表和概览不展示或提交项目部门，也不请求创建用的部门目录。管理员首页显示「全部项目」，无需部门或成员关系即可创建项目及管理项目协作；概览通过 `permissionContext.administratorAccess` 解释权限来源。普通成员首页为「我的项目」。代码、Agent、敏感字段和个人开发空间继续检查原授权与归属。
+
+账号展示使用 `displayName`，登录仍使用 `username`；成员选择与账号管理显示双名。`AccountProfile.vue` 维护个人显示名称，`saveAccountProfile` 保存时保持账号代际、令牌、设置和当前页面，迟到响应只合并当前账号的显示名称，不覆盖重检后的角色或部门，不写入已切换的账号。
 
 仓库根目录的 `shared/task-metadata.json`、`shared/workspace-icons.json` 和 `shared/agent-permissions.json` 是前后端共用契约；功能模块只读取它们，不复制枚举或图标目录。这里的 `shared/` 仅存放前端共享实现。
+
+操作结果统一由 `shared/components/FeedbackMessage.vue` 连接响应式提示状态，`OperationMessages.vue` 在应用根部显示浮动消息；不在页面重复渲染成功或失败段落。消息支持自动关闭、手动关闭、悬停与焦点暂停及相同内容合并，账号代际变化清空。原生模态框打开时消息挂入当前模态框，再用手动 popover 保持可见和可操作；不改变焦点或遮挡整页操作。保存后马上导航或卸载的操作在确认请求仍有效后直接调用 `showMessage`，`useResource.perform` 已包含此处理。字段校验、危险操作确认、持续进度、历史错误和业务状态仍保留在所属界面。
 
 Vue 组件使用 PascalCase 文件名；JavaScript 辅助模块使用 kebab-case，例如 `workspace-icons.js`、`task-metadata.js`、`requirement-content.js`。入口 `main.js` 与请求模块 `api.js` 保持简短命名。
 
@@ -34,7 +40,7 @@ Vue 组件使用 PascalCase 文件名；JavaScript 辅助模块使用 kebab-case
 - `app/use-workspace-selection.js` 负责首次 bootstrap、工作区选择和 Vue Router query 更新；默认选择使用 replace 固定，页内切换使用 push，浏览器前进和后退同步恢复选择。`WorkbenchApp.vue` 按工作区 UUID 重建 console，隔离草稿及异步生命周期；重命名仅更新目录和标题，不重建 console。
 - `app/router.js` 使用 Vue Router 管理登录、首次改密、工作台、个人设置、系统设置和账号管理；工作区仍由 query 参数选择。`App.vue` 在账号身份变化时重建整个受保护页面，`WorkbenchApp.vue` 在工作区变化时重建 console。导航保留其他 query、hash 和用户 history state。
 - `shared/api/account-session.js` 保存当前账号和个人设置的内存投影，数据由数据库 API 持久化。401、SSE 身份失效以及跨标签退出清空投影；HTTP 请求带账号代际，迟到响应不能进入新账号。LocalStorage 只用作无业务内容的身份变化通知。
-- `app/SystemSettings.vue` 仅组合管理员的全局存储设置；账号业务页面属于 `features/accounts/`：`LoginPage.vue` 负责登录，`PasswordPage.vue` 组合首次改密入口，两类改密入口复用 `PasswordForm.vue`；`PersonalSettings.vue` 管理账号默认模型、强度、权限、分组、通知和改密；`AccountManagement.vue` 管理账号身份，不提供读取他人工作区的入口。工作区配置仍由所有者在 `features/settings` 管理。
+- `app/SystemSettings.vue` 组合管理员的目录设置、环境检测和系统流程编排；账号业务页面属于 `features/accounts/`：`LoginPage.vue` 负责登录，`PasswordPage.vue` 组合首次改密入口，两类改密入口复用 `PasswordForm.vue`；`PersonalSettings.vue` 管理账号默认模型、强度、权限、分组、通知和改密；`AccountManagement.vue` 管理账号身份，不提供读取他人工作区的入口。工作区配置仍由所有者在 `features/settings` 管理。
 - `features/accounts/use-desktop-notifications.js` 拥有浏览器通知授权、个人通知偏好保存与通知投递；应用壳层将其设置状态传给个人设置页，并把投递回调传给工作区。账号功能不反向依赖应用壳层或其他功能目录。
 - `features/settings/MemberStorageSettings.vue` 使用全局 `appApi` 独立加载和保存成员目录基础路径，并展示 Git 环境检测；`ServerDirectoryPicker.vue` 仅浏览服务器目录并返回选择，表单保存才生效。工作区设置只读展示服务端生成的项目与任务路径。
 - `features/settings/EnvironmentPage.vue` 由系统设置内的「环境检测」分类组合，展示工具、最新版本、目录检查和直接更新、安装器不可用原因与待重启状态。`use-environment.js` 拥有检测、版本查询、更新与轮询生命周期；卸载清理计时器并丢弃迟到响应。更新确认展示确切版本，失败和未知状态独立呈现，不将网络错误视为已经最新。
@@ -67,3 +73,5 @@ Codex 回复的流式内容和历史消息统一经 `features/session/message-co
 ProjectPermissionEditor 在部门模式显示功能上限，在成员模式显示工作内容组合；组合与依赖使用共享权限目录，前端预览不能替代后端校验。ProjectMembers 成功修改后通知项目壳层刷新有效权限。事项与设置的 EditConflict 以编辑基线、草稿、最新版本作三方合并；同会话刷新使用 refresh，不触发打开时的草稿重置。
 
 样式沿用浅绿工作台规范，统一修改 `shared/styles/design-tokens.css` 与 `shared/styles/style.css`。验证遵循仓库契约：lint、单元测试、构建、浏览器回归；视觉改动还需模拟数据截图验证。
+
+项目生命周期由 `ProjectReleases` 与 `PlanDevelopmentDialog` 组合；管理员在系统设置中的 `features/settings/SystemWorkflows` 维护全局需求和 Bug 两套流程，项目没有流程配置入口。`shared/components/WorkflowGraph` 由系统编辑器与项目事项详情共享，项目只读取发布版本。流程选项和可用流转来自服务端发布版本，不再在页面维护固定状态表。事项先认领／指派为待开发任务，由 `ProjectTasks` 单独执行开始、完成和取消；`RemoteBranchSelect` 只接受远端返回的分支选项，刷新立即清空旧选择，失败不得手填回退。流程图支持节点拖动、键盘选取及移动，窄屏在图内滚动；资产、图文事项和已有会话保持原安全渲染边界。

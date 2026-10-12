@@ -18,6 +18,7 @@ const { SessionRequirements } = require("./session-requirements.cjs");
 const { runExecution } = require("../execution/runner.cjs");
 const { defaultChannels } = require("../channels/channel-registry.cjs");
 const { executionConfig } = require("../config/execution-settings.cjs");
+const { validateBaseBranch } = require("../domain/development-baseline.cjs");
 
 const { sourceFor, runKey } = require("../domain/run-identity.cjs");
 const {
@@ -36,13 +37,17 @@ class SessionManager extends EventEmitter {
     channels,
     gitCredentialProvider,
     gitCredentialRevision,
+    gitOperationCredentials,
     authorize = async () => {},
+    authorizeRun = async () => {},
     worktreeReason = defaultWorktreeReason,
     apiPrefix = "/api",
   }) {
     super();
     this.configFile = configFile;
     this.authorize = authorize;
+    this.authorizeRun = authorizeRun;
+    this.gitOperationCredentials = gitOperationCredentials;
     /** @type {RunStore} */
     this.store = store || new RunStore(runsDirectory);
     this.agent = agent || createAgent({
@@ -114,10 +119,12 @@ class SessionManager extends EventEmitter {
   }
 
   async respond(key, requestId, response) {
-    this.assertOpen();
-    await this.authorize("session.approve");
-    assertAgentIdentity(this.agent, await this.store.read(key));
-    return (await this.events.respond(key, requestId, response));
+    return this.exclusive(key, async () => {
+      await this.authorize("session.approve");
+      await this.authorizeRun(key);
+      assertAgentIdentity(this.agent, await this.store.read(key));
+      return this.events.respond(key, requestId, response);
+    });
   }
 
   async history(key, cursor) {
@@ -231,6 +238,7 @@ class SessionManager extends EventEmitter {
   // Caller holds the session operation lock. A dispatch hook persists addition
   // intent immediately before RPC so unknown outcomes are never replayed.
   async sendInput(key, input, beforeDispatch) {
+    await this.authorizeRun(key);
     if (input.some(part => part.type === "image")) assertCapability(this.agent, "images");
     let dispatchedTurnId;
     const runtime = await this.attach(key);
@@ -384,6 +392,8 @@ class SessionManager extends EventEmitter {
     delete sourceInput.reasoningEffort;
     delete sourceInput.permissionMode;
     delete sourceInput.metadata;
+    delete sourceInput.baseBranch;
+    const baseBranch = input.baseBranch === undefined ? undefined : validateBaseBranch(input.baseBranch);
     const resolved = await channel.resolve(sourceInput);
     this.assertOpen();
     const source = sourceFor(channel.id, resolved.item);
@@ -396,7 +406,7 @@ class SessionManager extends EventEmitter {
         agent: { ...readAgentConfig(resolved.config), ...selection },
       },
       resolved.session,
-      {},
+      { baseBranch },
       channel,
       validateTaskMetadata(
         input.metadata || {},
@@ -419,13 +429,13 @@ class SessionManager extends EventEmitter {
     item,
     config,
     session,
-    _fields,
+    executionSelection = {},
     channel = this.channels.get("tapd"),
     metadata = defaultTaskMetadata(item),
   ) {
     this.assertOpen();
     metadata = validateTaskMetadata(metadata);
-    config = (await executionConfig(config, this.configFile));
+    config = (await executionConfig(config, this.configFile, executionSelection));
     assertAgentIdentity(this.agent, config);
     const source = sourceFor(channel.id, item);
     if (this.sessions.has(key) || (await this.store.hasRun(key))) {
@@ -435,6 +445,7 @@ class SessionManager extends EventEmitter {
     }
     // Resolve before creating run ownership, downloading images or creating a branch.
     await this.authorize("session.start");
+    await this.authorizeRun(key, "start");
     this.assertOpen();
     this.agent.validateCommand();
     this.store.claim(key);
@@ -459,9 +470,14 @@ class SessionManager extends EventEmitter {
       this.assertOpen();
       (await this.publish(runtime, { type: "state", title: "正在抓取需求并准备工作区" }));
       this.assertOpen();
+      const gitCredentials = await this.gitOperationCredentials?.(config);
+      await this.authorize("session.start");
+      await this.authorizeRun(key, "start");
+      this.assertOpen();
       runtime.operation = this.run(
         {
           config,
+          baseBranch: config.execution.baseBranch,
           channel,
           configFile: this.configFile,
           session,
@@ -470,6 +486,13 @@ class SessionManager extends EventEmitter {
         },
         {
           signal: runtime.prepareAbort.signal,
+          gitCredentials,
+          authorize: async () => {
+            this.assertOpen();
+            await this.authorize("session.start");
+            await this.authorizeRun(key, "start");
+            this.assertOpen();
+          },
           onInitialization: async (initialization, index) => {
             const previousStatus = runtime.status;
             runtime.status = "initializing";
@@ -485,6 +508,7 @@ class SessionManager extends EventEmitter {
           startSession: async ({ repository, task, onSession, onStarted }) => {
             this.assertOpen();
             await this.authorize("session.start");
+            await this.authorizeRun(key, "start");
             this.assertOpen();
             await this.agent.connect();
             this.assertOpen();
@@ -496,6 +520,7 @@ class SessionManager extends EventEmitter {
             const prepared = await this.agent.prepareTurn(selection, repository);
             this.assertOpen();
             await this.authorize("session.start");
+            await this.authorizeRun(key, "start");
             this.assertOpen();
             if (task.images.length) assertCapability(this.agent, "images");
             const result = await this.agent.createSession({ cwd: repository, selection: prepared });
@@ -505,8 +530,10 @@ class SessionManager extends EventEmitter {
             await onSession(runtime.sessionId);
             this.assertOpen();
             await this.authorize("session.start");
+            await this.authorizeRun(key, "start");
             (await this.events.persist(runtime));
             await this.authorize("session.start");
+            await this.authorizeRun(key, "start");
             this.assertOpen();
             return new Promise((resolve, reject) => {
               const initial = { resolve, reject, onStarted, started: false };

@@ -1,25 +1,24 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, onUnmounted, ref, useId, watch } from "vue";
 import { Select as ASelect } from "antdv-next";
 import { api } from "../../shared/api/api.js";
 
 const props = defineProps({
-  modelValue: { type: String, default: "HEAD" },
+  modelValue: { type: String, default: "" },
   repository: { type: String, default: "" },
   disabled: Boolean,
 });
 const emit = defineEmits(["update:modelValue"]);
-const inputId = `base-ref-${useId()}`;
-const refs = ref([]),
+const inputId = `base-branch-${useId()}`;
+const branches = ref([]),
   loading = ref(false),
   error = ref(""),
   query = ref("");
 let timer,
   revision = 0;
 const options = computed(() => {
-  const list = [...refs.value];
-  if (!list.some((item) => item.value === "HEAD"))
-    list.unshift({ value: "HEAD", label: "HEAD · 当前检出提交" });
+  const list = [...branches.value];
   if (props.modelValue && !list.some((item) => item.value === props.modelValue))
     list.push({
       value: props.modelValue,
@@ -27,10 +26,10 @@ const options = computed(() => {
     });
   const search = query.value.trim();
   if (
-    /^[a-f\d]{7,64}$/i.test(search) &&
+    search && !/^(?:HEAD$|refs\/|origin\/)/.test(search) && !/^[a-f\d]{7,64}$/i.test(search) &&
     !list.some((item) => item.value === search)
   )
-    list.push({ value: search, label: `使用 commit · ${search}` });
+    list.push({ value: search, label: `使用远端分支 · ${search}` });
   return list.filter((item) =>
     `${item.label} ${item.value}`.toLowerCase().includes(search.toLowerCase()),
   );
@@ -40,16 +39,16 @@ watch(
   (repository, previous) => {
     clearTimeout(timer);
     const current = ++revision;
-    refs.value = [];
+    branches.value = [];
     error.value = "";
     query.value = "";
-    if (previous && previous !== repository) emit("update:modelValue", "HEAD");
+    if (previous && previous !== repository) emit("update:modelValue", "");
     loading.value = Boolean(repository.trim());
     if (!loading.value) return;
     timer = setTimeout(async () => {
       try {
-        const result = await api("/settings/refs");
-        if (current === revision) refs.value = result.refs;
+        const result = await api("/settings/branches");
+        if (current === revision) branches.value = result.branches;
       } catch (e) {
         if (current === revision) error.value = e.message;
       } finally {
@@ -66,7 +65,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <label :for="inputId" class="sr-only">新任务基准引用</label>
+  <label :for="inputId" class="sr-only">新任务开发分支</label>
   <a-select
     :id="inputId"
     :value="modelValue"
@@ -74,29 +73,30 @@ onUnmounted(() => {
     :loading="loading"
     :disabled="disabled || !repository.trim()"
     :aria-describedby="!repository.trim() ? `${inputId}-hint` : undefined"
+    allow-clear
     show-search
     :filter-option="false"
     :not-found-content="
-      loading ? '正在读取仓库引用…' : '无匹配引用，可输入 commit SHA'
+      loading ? '正在读取远端分支…' : '无匹配分支，可输入远端短分支名'
     "
-    placeholder="选择分支、标签或输入 commit SHA"
+    placeholder="选择或输入远端短分支名"
     style="width: 100%"
     @search="(value) => (query = value)"
     @change="
       (value) => {
-        emit('update:modelValue', value);
+        emit('update:modelValue', value || '');
         query = '';
       }
     "
   />
-  <p v-if="!repository.trim()" :id="`${inputId}-hint`" class="base-ref-hint">
-    项目仓库由创建工作区时的 Git 地址生成；加载后会自动显示分支和标签。
+  <p v-if="!repository.trim()" :id="`${inputId}-hint`" class="base-branch-hint">
+    项目仓库由创建工作区时的 Git 地址生成；加载后会显示已获取的 origin 分支。
   </p>
-  <p v-if="error" role="alert" class="error">引用加载失败：{{ error }}</p>
+  <FeedbackMessage :message="error ? `分支加载失败：${error}` : ''" type="error" />
 </template>
 
 <style scoped>
-.base-ref-hint {
+.base-branch-hint {
   margin: 8px 0 0;
   color: var(--muted);
   font-size: 12px;

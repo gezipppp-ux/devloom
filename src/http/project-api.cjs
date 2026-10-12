@@ -1,21 +1,18 @@
 const { json } = require("./messages.cjs");
 
 async function serveProjectApi(request, response, url, { projects, actor, input }) {
-  const route = /^\/api\/admin\/(departments|repositories)(?:\/([^/]+))?$/.exec(url.pathname);
+  const route = /^\/api\/admin\/departments(?:\/([^/]+))?$/.exec(url.pathname);
   if (route) {
-    const [, collection, id] = route;
+    const [, id] = route;
     if (request.method === "GET" && !id) {
-      json(response, 200, await projects[collection](actor)); return true;
+      json(response, 200, await projects.departments(actor)); return true;
     }
     if (request.method === "POST") {
-      json(response, id ? 200 : 201, await projects[collection === "departments" ? "saveDepartment" : "saveRepository"](actor, input, id)); return true;
+      json(response, id ? 200 : 201, await projects.saveDepartment(actor, input, id)); return true;
     }
   }
   if (url.pathname === "/api/project-permissions" && request.method === "GET") {
     json(response, 200, projects.catalog()); return true;
-  }
-  if (url.pathname === "/api/project-repositories" && request.method === "GET") {
-    json(response, 200, await projects.repositories(actor, false)); return true;
   }
   if (url.pathname === "/api/projects") {
     if (request.method === "GET") { json(response, 200, await projects.list(actor)); return true; }

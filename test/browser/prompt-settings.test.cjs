@@ -10,7 +10,12 @@ async function verifyPromptSettings(browser, { origin, output, errors, workspace
   const pattern = `**/api/workspaces/${workspaceA.id}/settings/prompts`;
   const read = async (id = workspaceA.id) =>
     (await page.request.get(`${origin}/api/workspaces/${id}/settings/prompts`)).json();
-  const saved = () => page.getByRole("status").filter({ hasText: "提示词模板已保存" }).waitFor();
+  const saved = async () => {
+    await page.locator('#prompt-settings[aria-busy="false"]').waitFor();
+    const label = (await page.locator(".prompt-editor-label").innerText()).trim();
+    await page.locator('.operation-message[data-type="success"]')
+      .getByText(`${label}已保存，对新任务和新追加资料生效。`, { exact: true }).waitFor();
+  };
   const editor = page.getByRole("textbox", { name: "提示词模板内容", exact: true });
   const save = page.getByRole("button", { name: "保存提示词模板", exact: true });
   const reset = page.getByRole("button", { name: "恢复当前渠道默认模板", exact: true });

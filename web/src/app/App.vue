@@ -2,8 +2,11 @@
 import { computed, watch } from "vue";
 import { RouterView, useRoute, useRouter } from "vue-router";
 import { accountSession } from "../shared/api/account-session.js";
+import OperationMessages from "../shared/components/OperationMessages.vue";
+import { clearMessages } from "../shared/components/operation-messages.js";
 const route = useRoute();
 const router = useRouter();
+watch(() => accountSession.generation, clearMessages, { flush: "sync" });
 // Remove protected components before asynchronous navigation finishes. A fresh
 // instance must never issue requests using the next account's generation.
 const canRender = computed(() => route.name === "login" || Boolean(
@@ -20,6 +23,7 @@ watch(() => accountSession.user, (user) => {
 });
 </script>
 <template>
+  <OperationMessages />
   <RouterView v-slot="{ Component }">
     <component :is="Component" v-if="canRender" :key="accountSession.generation" />
   </RouterView>

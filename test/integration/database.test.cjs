@@ -13,7 +13,7 @@ const { readOptional, updateConfig, writeConfig } = require("../../src/storage/j
 const { temporary, png } = require("../support/helpers.cjs");
 
 async function addUser(database, name, role = "member") {
-  return database.client.user.create({ data: { username: name, passwordHash: "fixture-hash", role } });
+  return database.client.user.create({ data: { username: name, displayName: name, passwordHash: "fixture-hash", role } });
 }
 
 test("explicit nested data roots initialize independently from parent resource routing", async (t) => {

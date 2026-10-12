@@ -49,8 +49,13 @@ async function createSshPrivateKeyFile(privateKey) {
   try {
     const file = path.join(directory, "identity");
     fs.writeFileSync(file, privateKey, { mode: 0o600, flag: "wx" });
+    // An actual empty file works with both Windows OpenSSH and Git's bundled SSH.
+    // NUL and /dev/null are not interpreted consistently across those programs.
+    const configFile = path.join(directory, "config");
+    fs.writeFileSync(configFile, "", { mode: 0o600, flag: "wx" });
     return {
       file,
+      configFile,
       dispose: () => removeSshKeyDirectory(directory),
     };
   } catch (error) {
@@ -62,7 +67,7 @@ async function createSshPrivateKeyFile(privateKey) {
 async function withSshPrivateKey(privateKey, operation) {
   const key = await createSshPrivateKeyFile(privateKey);
   try {
-    return await operation(key.file);
+    return await operation(key.file, key.configFile);
   } finally {
     key.dispose();
   }

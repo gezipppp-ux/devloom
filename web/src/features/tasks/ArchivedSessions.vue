@@ -1,4 +1,6 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
+import { showMessage } from "../../shared/components/operation-messages.js";
 import { computed, nextTick, ref, watch } from "vue";
 import { InboxOutlined, UndoOutlined, ReloadOutlined, DeleteOutlined } from "@antdv-next/icons";
 import { useArchivedSessions } from "./use-archived-sessions.js";
@@ -7,7 +9,7 @@ const props = defineProps({ revision: { type: Number, default: 0 }, disabled: Bo
 const emit = defineEmits(["restored", "deleted"]);
 const { runs, loading, error, restoring, restoreError, refresh, restore, remove } = useArchivedSessions();
 const dialog = ref(), trigger = ref(), searchInput = ref();
-const opened = ref(false), query = ref(""), notice = ref("");
+const opened = ref(false), query = ref("");
 const deleteTarget = ref(null);
 const locked = computed(() => Boolean(restoring.value || deleteTarget.value));
 let deleteTrigger;
@@ -16,7 +18,6 @@ const filtered = computed(() => runs.value.filter((run) =>
 function open() {
   opened.value = true;
   query.value = "";
-  notice.value = "";
   restoreError.value = "";
   dialog.value.showModal();
   void refresh();
@@ -30,16 +31,14 @@ function close() {
 }
 async function recover(run) {
   if (locked.value) return;
-  notice.value = "";
   if (await restore(run.key)) {
-    notice.value = `已恢复「${run.title}」，可在左侧会话列表中打开。`;
+    showMessage(`已恢复「${run.title}」，可在左侧会话列表中打开。`, "success");
     emit("restored", run.key);
     void nextTick(() => searchInput.value?.focus());
   }
 }
 function requestDelete(run, event) {
   if (locked.value) return;
-  notice.value = "";
   restoreError.value = "";
   deleteTrigger = event.currentTarget;
   deleteTarget.value = run;
@@ -47,7 +46,7 @@ function requestDelete(run, event) {
 function deleted(key) {
   const title = deleteTarget.value?.title;
   remove(key);
-  notice.value = `已永久删除「${title}」。`;
+  showMessage(`已永久删除「${title}」。`, "success");
   emit("deleted", key);
 }
 function closeDeletion() {
@@ -77,11 +76,10 @@ watch(() => props.revision, () => { if (opened.value) void refresh(); });
       <p class="muted">恢复后会话重新显示在需求列表中，保留原有历史和代码状态。</p>
       <label for="archived-session-search">搜索会话名称</label>
       <input id="archived-session-search" ref="searchInput" v-model="query" type="search" placeholder="输入会话名称" />
-      <p v-if="notice" class="git-feedback" role="status">{{ notice }}</p>
-      <p v-if="restoreError" class="error" role="alert">恢复失败：{{ restoreError }}</p>
+      <FeedbackMessage :message="restoreError ? `恢复失败：${restoreError}` : ''" type="error" />
       <p v-if="loading" class="muted" role="status">正在加载已归档会话…</p>
-      <div v-else-if="error" role="alert">
-        <p class="error">加载失败：{{ error }}</p>
+      <div v-else-if="error">
+        <FeedbackMessage :message="`加载失败：${error}`" type="error" />
         <button type="button" @click="refresh"><ReloadOutlined aria-hidden="true" /> 重试</button>
       </div>
       <ul v-else-if="filtered.length" class="archived-session-list" aria-label="已归档会话列表">

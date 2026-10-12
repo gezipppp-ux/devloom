@@ -1432,11 +1432,6 @@ main {
   color: var(--muted);
   font-size: var(--font-size-session-meta);
 }
-.session-title-editor .error {
-  grid-column: 1 / -1;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
 .session-lifecycle-controls {
   display: flex;
   gap: 6px;
@@ -1850,12 +1845,6 @@ main {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.composer-image-error {
-  color: var(--danger);
-  font-size: 12px;
-  margin: 8px 0 0;
-  overflow-wrap: anywhere;
 }
 .composer-image-retry {
   min-height: 40px;

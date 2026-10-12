@@ -13,18 +13,18 @@ function localBranches(repository) {
   });
 }
 
-function readRepositoryStatus(value, baseRef = "HEAD") {
+function readRepositoryStatus(value, baseBranch = "") {
   const { repository } = repositoryGit(value);
   const remotes = git(repository, ["remote"]).split(/\r?\n/).filter(Boolean).map((name) => ({ name }));
   let current = null;
   try { current = git(repository, ["symbolic-ref", "--quiet", "HEAD"]); } catch { /* Detached HEAD. */ }
-  const requested = baseRef === "HEAD" ? current : baseRef;
+  const requested = baseBranch;
   const branch = localBranches(repository).find(({ ref, name }) => ref === requested || name === requested);
   const remote = remotes.some(({ name }) => name === branch?.remote)
     ? branch.remote
     : remotes.find(({ name }) => name === "origin")?.name || remotes[0]?.name || null;
   let updateReason = null;
-  if (!branch) updateReason = "基准引用必须是本地分支；远程引用、标签和提交不能直接更新。";
+  if (!branch) updateReason = "当前仓库未检出此开发基线分支。新任务会自动获取对应远端分支，无需手动更新本地分支。";
   else if (branch.ref !== current) updateReason = "请先在仓库目录检出该基准分支，再更新基准分支。";
   else if (!branch.upstream || !remotes.some(({ name }) => name === branch.remote))
     updateReason = "基准分支尚未配置远端上游，请先在本地设置跟踪分支。";
@@ -34,7 +34,7 @@ function readRepositoryStatus(value, baseRef = "HEAD") {
     updateReason = "仓库目录有未提交或未跟踪的文件，请先交由 Codex 或在本地处理。";
   else updateReason = operationReason(repository);
   return {
-    repository, baseRef, branch: branch?.name || null, remote, remotes,
+    repository, baseBranch, branch: branch?.name || null, remote, remotes,
     upstream: branch?.upstream?.replace(/^refs\/remotes\//, "") || null,
     canUpdate: !updateReason, updateReason,
   };
@@ -63,15 +63,15 @@ async function fetchRepository(value, remote, credentials) {
   return { remote: selected, fetchedAt: new Date().toISOString() };
 }
 
-async function updateBaseBranch(value, baseRef = "HEAD", remote, credentials, authorize = async () => {}) {
-  const before = readRepositoryStatus(value, baseRef);
+async function updateBaseBranch(value, baseBranch = "", remote, credentials, authorize = async () => {}) {
+  const before = readRepositoryStatus(value, baseBranch);
   if (!before.canUpdate) throw new Error(before.updateReason);
   const selected = selectedRemote(before.repository, remote || before.remote);
   if (selected !== before.remote) throw new Error("更新基准分支必须使用该分支已配置的远端上游。");
   const head = git(before.repository, ["rev-parse", "--verify", "HEAD"]);
   const fetched = await fetchRepository(before.repository, selected, credentials);
   await authorize();
-  const current = readRepositoryStatus(before.repository, baseRef);
+  const current = readRepositoryStatus(before.repository, baseBranch);
   if (!current.canUpdate) throw new Error(current.updateReason);
   if (current.branch !== before.branch || current.upstream !== before.upstream ||
       git(before.repository, ["rev-parse", "--verify", "HEAD"]) !== head)

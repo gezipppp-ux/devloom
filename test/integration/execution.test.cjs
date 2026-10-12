@@ -29,6 +29,8 @@ function setup(t) {
     directory,
   };
   const dependencies = {
+    repositoryCommonDirectory: (repository) => repository,
+    fetchDevelopmentBaseline: async () => ({ remote: "origin", branch: "main", commit: "a".repeat(40), fetchedAt: new Date().toISOString() }),
     repositoryFor: () => directory,
     detail: async () => item,
     buildTask: async () => ({
@@ -265,6 +267,9 @@ test('full pipeline uses one real Git worktree, image attachment and simulated C
     '-m',
     'test fixture',
   );
+  const remote = path.join(temporaryRoot, 'remote.git');
+  git('clone', '--bare', repository, remote);
+  git('remote', 'add', 'origin', remote);
   fs.writeFileSync(path.join(repository, 'tracked.txt'), 'root dirty');
   fs.writeFileSync(path.join(repository, 'untracked.txt'), 'root untracked');
   const withImage = {
@@ -281,6 +286,7 @@ test('full pipeline uses one real Git worktree, image attachment and simulated C
         workflow: { allow_write: true },
         execution: {
           repository,
+          baseBranch: 'main',
           worktreeRoot: path.join(temporaryRoot, 'external-worktrees'),
         },
         agent: {

@@ -1,3 +1,4 @@
+const { attachOrigin } = require("../support/baseline-origin.cjs");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -80,14 +81,15 @@ async function configureRepository(directory, configFile) {
     "-c", "core.hooksPath=/dev/null",
     "commit", "-m", "fixture",
   );
+  attachOrigin(repository);
   const settings = {
     repository,
     projectName: "project",
-    baseRef: "main",
+    baseBranch: "main",
     initCommands: [],
   };
   (await seedWorkspaceProject(configFile, repository, "project"));
-  (await saveSettings({ baseRef: settings.baseRef, initCommands: settings.initCommands }, configFile));
+  (await saveSettings({ baseBranch: settings.baseBranch, initCommands: settings.initCommands }, configFile));
   return settings;
 }
 
@@ -123,12 +125,12 @@ test("workspace prompt settings guard writes, isolate credentials and persist te
   assert.doesNotMatch(JSON.stringify(defaults), /private-template-secret|private-session|cookie_header|dsc_token/);
   assert.deepEqual((await (await get(b.id)).json()).templates, defaults.templates);
   assert.equal(fs.readFileSync(file, "utf8"), before);
-  assert.equal((await fetch(`${origin}/api/settings/prompts`)).status, 400);
+  assert.equal((await fetch(`${origin}/api/settings/prompts`)).status, 404);
   assert.equal((await fetch(`${origin}/api/settings/prompts`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-tapd-token": token },
     body: JSON.stringify({ manual: manualTemplate }),
-  })).status, 400);
+  })).status, 404);
   assert.equal((await get(randomUUID())).status, 404);
   assert.equal((await get("invalid-workspace")).status, 400);
   assert.equal((await fetch(`${origin}/api/workspaces/${a.id}/settings/prompts`, {
@@ -198,7 +200,7 @@ test("new fake sessions use saved prompts while existing snapshots and continuat
   const second = (await workspaces.get(b.id));
   const settings = (await configureRepository(directory, context.configFile));
   (await seedWorkspaceProject(second.configFile, settings.repository, "project"));
-  (await saveSettings({ baseRef: settings.baseRef, initCommands: settings.initCommands }, second.configFile));
+  (await saveSettings({ baseBranch: settings.baseBranch, initCommands: settings.initCommands }, second.configFile));
   const { get, post } = await httpFixture(t, workspaces);
   const secondTemplate = manualTemplate.replace("自定义手动模板", "项目 B 独立模板");
   assert.equal((await post(a.id, { manual: manualTemplate })).status, 200);

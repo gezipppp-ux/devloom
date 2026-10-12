@@ -58,7 +58,7 @@ async function verifyGit(browser, { origin, output, errors, directory, workspace
     const bootstrap = await (await page.request.get(`${origin}/api/bootstrap`)).json();
     const headers = { origin, "x-tapd-token": bootstrap.token };
     const settings = await page.request.post(`${api}/settings`, {
-      headers, data: { baseRef: "main", initCommands: [] },
+      headers, data: { baseBranch: "main", initCommands: [] },
     });
     assert.equal(settings.status(), 200);
     await page.goto(`${origin}/?workspace=${workspace.id}`);
@@ -202,7 +202,7 @@ async function verifyGit(browser, { origin, output, errors, directory, workspace
       && response.request().method() === "POST");
     await deleteButton().click();
     assert.equal((await rejected).status(), 400);
-    await dialog.getByRole("alert").filter({ hasText: /状态已变化/ }).waitFor();
+    await page.locator('.operation-message[data-type="error"]').filter({ hasText: /状态已变化/ }).waitFor();
     assert.ok(fs.existsSync(tree), "stale confirmation never removes files");
     await dialog.getByRole("button", { name: "重新检查删除条件", exact: true }).click();
     await dialog.getByRole("textbox").fill(branch);

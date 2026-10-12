@@ -5,6 +5,24 @@ const catalog = Object.freeze(definitions.map(entry => Object.freeze({
   ...entry, scope: entry.scope || "project", requires: Object.freeze([...entry.requires]),
 })));
 const byId = new Map(catalog.map(entry => [entry.id, entry]));
+const administratorPermissions = Object.freeze(["project.view", "project.configure", "project.members.manage", "project.archive", "issue.view", "issue.create", "issue.edit", "issue.assign", "issue.transition", "issue.accept", "release.manage", "collaboration.view", "comment.create", "deliverable.create", "asset.view", "asset.edit"]);
+
+function grantableProjectPermissions(user) {
+  if (user?.status !== "active") return [];
+  const ceiling = user.department?.status === "active" && user.department.id === user.departmentId ? user.department.permissions : [];
+  const selected = new Set([...effectivePermissions(ceiling, ceiling), ...(user.role === "admin" ? administratorPermissions : [])]);
+  return catalog.filter(entry => selected.has(entry.id)).map(entry => entry.id);
+}
+
+function projectContextPermissions({ user, department, membership, project }) {
+  if (user?.status !== "active" || !project) return [];
+  const memberPermissions = membership?.status === "active" && membership.userId === user.id && membership.projectId === project.id &&
+    department?.status === "active" && department.id === user.departmentId
+    ? effectivePermissions(department.permissions, membership.permissions) : [];
+  // Compute the membership dependency closure before adding the independent administrator baseline.
+  const selected = new Set([...memberPermissions, ...(user.role === "admin" ? administratorPermissions : [])]);
+  return catalog.filter(entry => selected.has(entry.id)).map(entry => entry.id);
+}
 
 function validatePermissions(input, { scope = "department", ceiling } = {}) {
   if (!Array.isArray(input) || input.length > catalog.length ||
@@ -47,6 +65,11 @@ function assertProjectPermission({ user, department, membership, project }, perm
   if (!byId.has(permission) || byId.get(permission).scope !== "project")
     throw accountError("未知的项目权限。", 403, "PERMISSION_DENIED");
   if (!user || user.status !== "active") throw accountError("请先登录。", 401, "AUTH_REQUIRED");
+  if (project && user.role === "admin" && administratorPermissions.includes(permission)) {
+    if (project.status === "archived" && !permission.endsWith(".view"))
+      throw accountError("项目已归档，不能继续写入或启动开发。", 409, "PROJECT_ARCHIVED");
+    return;
+  }
   if (!project || !membership || membership.userId !== user.id ||
       membership.projectId !== project.id || membership.status !== "active")
     throw accountError("项目不存在或未分配给当前账号。", 404, "PROJECT_NOT_FOUND");
@@ -61,6 +84,7 @@ function assertProjectPermission({ user, department, membership, project }, perm
 const ownerPermissions = Object.freeze(["project.view", "project.configure", "project.members.manage"]);
 function projectCreationReadiness(user, department) {
   const reasons = [];
+  if (user?.status === "active" && user.role === "admin") return { eligible: true, reasons };
   if (user?.status !== "active") reasons.push("账号未启用。");
   if (!department || department.id !== user?.departmentId || department.status !== "active") reasons.push("请先在账号管理中为本人分配有效部门。");
   else {
@@ -74,12 +98,12 @@ function projectCreationReadiness(user, department) {
 function canCreateProject(user, department) { return projectCreationReadiness(user, department).eligible; }
 
 const productTemplate = Object.freeze(catalog.filter(entry =>
-  ["需求与 Bug", "协作"].includes(entry.group) || ["project.view", "asset.view"].includes(entry.id),
+  ["需求与 Bug", "协作", "发布版本"].includes(entry.group) || ["project.view", "asset.view"].includes(entry.id),
 ).map(entry => entry.id));
 const developerTemplate = Object.freeze(catalog.filter(entry =>
   entry.id.startsWith("code.") || entry.id.startsWith("session.") || ["project.view", "issue.view", "issue.transition",
     "collaboration.view", "comment.create", "deliverable.create"].includes(entry.id),
 ).map(entry => entry.id));
 
-module.exports = { projectPermissionCatalog: catalog, validatePermissions, effectivePermissions,
+module.exports = { projectPermissionCatalog: catalog, validatePermissions, effectivePermissions, projectContextPermissions, administratorPermissions, grantableProjectPermissions,
   assertProjectPermission, canCreateProject, projectCreationReadiness, ownerPermissions, productTemplate, developerTemplate };

@@ -64,6 +64,34 @@ function remoteHost(remote) {
   const url = new URL(remote);
   return remoteAuthType(remote) === "http" ? url.origin.toLowerCase() : gitHost(`${url.hostname}${url.port ? `:${url.port}` : ""}`, "ssh");
 }
+function giteeRepositoryPath(remote) {
+  let repository;
+  if (!remote.includes("://")) {
+    const match = /^([^@]+)@([^:]+):(.+)$/.exec(remote);
+    if (match?.[1] === "git" && match[2].toLowerCase() === "gitee.com") repository = match[3];
+  }
+  else {
+    const url = new URL(remote);
+    if (url.hostname.toLowerCase() !== "gitee.com") return null;
+    if (url.protocol === "https:" && !url.port) repository = url.pathname.slice(1);
+    if (url.protocol === "ssh:" && url.username === "git" && (!url.port || url.port === "22")) repository = url.pathname.slice(1);
+  }
+  // Only the public service's two-part clone paths have a known transport mapping.
+  // Do not reinterpret encoded separators, custom ports, usernames or enterprise hosts.
+  return repository && /^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-][a-zA-Z0-9._-]*\/?$/.test(repository)
+    ? repository.replace(/\/$/, "") : null;
+}
+function resolveAccountRemote(account, remote) {
+  remote = remoteUrl(remote);
+  if (!account || !["ssh", "http"].includes(account.authType)) throw accountError("Git 认证方式无效。");
+  const host = gitHost(account.host, account.authType);
+  const expectedHost = remoteHost(remote), expectedType = remoteAuthType(remote);
+  if (host === expectedHost && account.authType === expectedType) return remote;
+  const repository = giteeRepositoryPath(remote);
+  if (repository && account.authType === "ssh" && host === "gitee.com") return `git@gitee.com:${repository}`;
+  if (repository && account.authType === "http" && host === "https://gitee.com") return `https://gitee.com/${repository}`;
+  throw accountError(`所选 Git 账号使用 ${account.authType === "ssh" ? "SSH" : "HTTP(S)"}（${host}），项目仓库使用 ${expectedType === "ssh" ? "SSH" : "HTTP(S)"}（${expectedHost}）。请选择匹配的账号；Gitee 官方仓库支持 HTTPS 与 SSH 等价地址。`, 400, "GIT_ACCOUNT_REMOTE_MISMATCH");
+}
 function projectName(remote) {
   const name = remoteUrl(remote)
     .replace(/\/$/, "")
@@ -141,6 +169,7 @@ module.exports = {
   remoteUrl,
   remoteAuthType,
   remoteHost,
+  resolveAccountRemote,
   gitHost,
   projectName,
 };

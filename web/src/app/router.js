@@ -17,7 +17,6 @@ export const router = createRouter({
     { path: "/", name: "workspace", component: WorkbenchApp },
     { path: "/projects/:projectId", name: "project", component: WorkbenchApp },
     { path: "/departments", name: "departments", component: WorkbenchApp, meta: { admin: true } },
-    { path: "/repositories", name: "repositories", component: WorkbenchApp, meta: { admin: true } },
     { path: "/personal", name: "personal", component: WorkbenchApp },
     { path: "/system", name: "system", component: WorkbenchApp, meta: { admin: true } },
     { path: "/environment", redirect: to => ({ name: "system", query: { ...to.query, tab: "environment" }, hash: to.hash }) },

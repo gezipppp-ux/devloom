@@ -55,7 +55,7 @@ async function main(
   const password = await readPassword(input, output);
   const accounts = await initializeAccountServices(directory, { url: databaseUrl });
   try {
-    const user = await accounts.create({ username: "admin", password }, null, true);
+    const user = await accounts.create({ username: "admin", displayName: "系统管理员", password }, null, true);
     (await accounts.audit(null, "account.local.init", null, {
       actorType: "local_operator",
       targetUserId: user.id,

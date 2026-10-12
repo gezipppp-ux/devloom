@@ -35,15 +35,13 @@ function resolveCommit(repository, ref) {
     throw new Error("Git did not return a valid base commit.");
   return commit;
 }
-function listBaseRefs(value) {
+function listBaseBranches(value) {
   const { git } = repositoryGit(value);
   const output = git([
     "for-each-ref",
     "--sort=refname",
     "--format=%(refname)%00%(objecttype)%00%(*objecttype)%00%(symref)",
-    "refs/heads",
-    "refs/remotes",
-    "refs/tags",
+    "refs/remotes/origin",
   ]);
   const refs = output
     .split("\n")
@@ -51,24 +49,15 @@ function listBaseRefs(value) {
     .flatMap((line) => {
       const [ref, type, targetType, symbolic] = line.trim().split("\0");
       if (symbolic || (type !== "commit" && targetType !== "commit")) return [];
-      const kind = ref.startsWith("refs/heads/")
-        ? "local"
-        : ref.startsWith("refs/remotes/")
-          ? "remote"
-          : "tag";
-      const name = ref.replace(/^refs\/(heads|remotes|tags)\//, "");
+      const name = ref.replace(/^refs\/remotes\/origin\//, "");
       return [
         {
-          value: ref,
-          label: `${{ local: "本地分支", remote: "远程分支", tag: "标签" }[kind]} · ${name}`,
-          kind,
+          value: name,
+          label: `origin/${name}`,
           name,
         },
       ];
     });
-  return [
-    { value: "HEAD", label: "HEAD · 当前检出提交", kind: "head", name: "HEAD" },
-    ...refs,
-  ];
+  return refs;
 }
-module.exports = { repositoryGit, repositoryCommonDirectory, repositoryRoot, resolveCommit, listBaseRefs };
+module.exports = { repositoryGit, repositoryCommonDirectory, repositoryRoot, resolveCommit, listBaseBranches };

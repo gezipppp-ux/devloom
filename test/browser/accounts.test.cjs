@@ -7,6 +7,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { createServer } = require("node:http");
 const { chromium } = require("playwright");
+const { verifyAccountProfileRaces } = require("./account-profile.test.cjs");
 const { verifyAccountPreferenceRaces } = require("./account-preferences.test.cjs");
 const { verifyGitAccounts } = require("./git-accounts.test.cjs");
 const { verifyEnvironment } = require("./environment.test.cjs");
@@ -24,7 +25,7 @@ async function main() {
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
   const settings = () => ({ model: null, reasoningEffort: null, permissionMode: "ask", notificationsEnabled: true, grouping: "type" });
-  const users = [{ id: "admin", username: "admin", role: "admin", status: "active", mustChangePassword: false }, { id: "member", username: "member", role: "member", status: "active", mustChangePassword: true }];
+  const users = [{ id: "admin", username: "admin", displayName: "admin", role: "admin", status: "active", mustChangePassword: false }, { id: "member", username: "member", displayName: "member", role: "member", status: "active", mustChangePassword: true }];
   const savedSettings = new Map(users.map((user) => [user.id, settings()]));
   const workspaceFor = (user) => ({ id: user.id === "admin" ? "11111111-1111-4111-8111-111111111111" : "22222222-2222-4222-8222-222222222222", name: `${user.username} 的私有项目` });
   const departments = [{ id: "33333333-3333-4333-8333-333333333333", name: "研发", status: "active" }];
@@ -53,6 +54,7 @@ async function main() {
       if (endpoint === "/api/auth/logout") { activeUser = null; return send({ ok: true }); }
       if (endpoint === "/api/auth/password") { activeUser.mustChangePassword = false; return send(describe()); }
       if (activeUser.mustChangePassword) return send({ error: "请先修改初始密码。", code: "PASSWORD_CHANGE_REQUIRED" }, 403);
+      if (endpoint === "/api/account/profile") { activeUser.displayName = body.displayName.trim(); return send({ user: activeUser }); }
       if (endpoint === "/api/account/settings") {
         if (request.method() === "POST") savedSettings.set(activeUser.id, { ...savedSettings.get(activeUser.id), ...body });
         return send({ settings: savedSettings.get(activeUser.id) });
@@ -104,7 +106,8 @@ async function main() {
     await page.getByRole("alert").filter({ hasText: "账号或密码错误" }).waitFor();
     await page.getByLabel("密码", { exact: true }).fill("fixture-password-123");
     await page.getByRole("button", { name: "登录", exact: true }).click();
-    await page.getByRole("heading", { name: "我的项目", exact: true }).waitFor();
+    await page.getByRole("heading", { name: "全部项目", exact: true }).waitFor();
+    assert.equal(await page.locator(".operation-message").count(), 0, "sign-in clears messages from the previous account generation");
     await openWorkspace(page, users[0]);
     await page.getByText("admin 的私有回复", { exact: true }).waitFor();
     await page.route("**/api/account/execution-options", route => route.fulfill({ status: 503, json: { error: "模拟权限暂不可用" } }), { times: 1 });
@@ -117,6 +120,13 @@ async function main() {
     await page.getByRole("button", { name: "刷新权限选项", exact: true }).click();
     await page.getByRole("alert").filter({ hasText: "模拟权限暂不可用" }).waitFor({ state: "hidden" });
     await page.keyboard.press("Escape");
+    await page.getByLabel("显示名称", { exact: true }).fill("  管理员显示名  ");
+    await page.getByRole("button", { name: "保存显示名称", exact: true }).click();
+    await page.getByText("显示名称已保存。", { exact: true }).waitFor();
+    assert.equal(await page.locator(".account-identity").innerText(), "管理员显示名");
+    assert.equal(await page.locator(".account-identity").getAttribute("title"), "admin");
+    assert.equal(await page.getByLabel("登录账号", { exact: true }).inputValue(), "admin");
+    assert.deepEqual(writesTo("/api/account/profile").at(-1).body, { displayName: "管理员显示名" });
     await page.getByLabel("Codex 模型", { exact: true }).selectOption("fixture-model");
     await page.getByLabel("思考强度", { exact: true }).selectOption("high");
     await page.getByLabel("默认任务分组").selectOption("none");
@@ -134,6 +144,7 @@ async function main() {
     await page.getByRole("button", { name: "账号管理", exact: true }).click();
     await page.getByRole("heading", { name: "账号管理", exact: true }).waitFor();
     await page.getByLabel("新账号", { exact: true }).fill("created-user");
+    await page.getByLabel("显示名称", { exact: true }).fill("新建成员");
     await page.getByLabel("所属部门", { exact: true }).selectOption(departments[0].id);
     const temporaryPassword = page.getByLabel("临时密码", { exact: true });
     await temporaryPassword.fill("short");
@@ -154,9 +165,25 @@ async function main() {
     await page.getByRole("button", { name: "确认重置密码", exact: true }).click();
     await page.getByRole("button", { name: "确认重置密码", exact: true }).waitFor({ state: "hidden" });
     assert.equal(writesTo("/api/admin/accounts/created").at(-1).body.password, "rst123");
+    await page.getByRole("button", { name: "created-user：编辑显示名称" }).click();
+    await page.getByLabel("created-user 的显示名称", { exact: true }).fill("更新后的成员");
+    await page.getByRole("button", { name: "保存显示名称", exact: true }).click();
+    await page.getByRole("button", { name: "保存显示名称", exact: true }).waitFor({ state: "hidden" });
+    assert.equal(users.find(entry => entry.id === "created").displayName, "更新后的成员");
+    assert.equal(users.find(entry => entry.id === "created").username, "created-user");
+    const accountHeading = page.getByRole("heading", { name: "账号管理", exact: true });
+    await page.getByRole("button", { name: "created-user：停用账号" }).scrollIntoViewIfNeeded();
+    const beforeFeedback = await accountHeading.boundingBox();
+    await page.route("**/api/admin/accounts/created", route => route.fulfill({ status: 409, json: { error: "该账号仍为项目负责人，请先指定接任人。" } }), { times: 1 });
+    await page.getByRole("button", { name: "created-user：停用账号" }).click();
+    const operationError = page.locator('.operation-message[data-type="error"]').filter({ hasText: "该账号仍为项目负责人" });
+    await operationError.waitFor();
+    assert.deepEqual(await accountHeading.boundingBox(), beforeFeedback, "operation feedback must not change the page layout");
+    assert.equal(await page.locator(".account-page-view .error").count(), 0);
     await page.getByRole("button", { name: "created-user：停用账号" }).click();
     await page.getByText("账号已更新。", { exact: true }).waitFor();
     assert.equal(users.find((entry) => entry.id === "created").status, "disabled");
+    while (await page.getByRole("button", { name: "关闭提示", exact: true }).count()) await page.getByRole("button", { name: "关闭提示", exact: true }).first().click();
     for (const width of [1440, 768, 390, 320]) {
       await page.setViewportSize({ width, height: 1000 });
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `account page overflow at ${width}`);
@@ -220,12 +247,14 @@ async function main() {
     assert.equal(await page.getByText("不应展示的旧账号响应", { exact: true }).count(), 0);
     assert.equal(await page.getByRole("button", { name: "系统设置", exact: true }).count(), 0);
     assert.equal(await page.getByRole("button", { name: "环境检测", exact: true }).count(), 0);
+    assert.equal(await page.getByRole("button", { name: "流程编排", exact: true }).count(), 0);
     assert.equal(await page.getByRole("button", { name: "账号管理", exact: true }).count(), 0);
     await page.goto(`${origin}/accounts`);
     await page.getByRole("heading", { name: "个人设置", exact: true }).waitFor();
     assert.equal(await page.getByLabel("Codex 模型", { exact: true }).inputValue(), "");
     assert.equal(await page.getByLabel("默认任务分组").inputValue(), "type");
     await verifyAccountPreferenceRaces(browser, origin);
+    await verifyAccountProfileRaces(browser, origin);
     assert.deepEqual(errors, []);
     process.stdout.write("Account browser checks passed: login, password, settings, administration, private state, late responses and cross-tab logout.\n");
   } finally { await browser?.close(); await new Promise((resolve) => server.close(resolve)); }

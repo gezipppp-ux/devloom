@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -62,7 +63,8 @@ onBeforeUnmount(() => dialog.value?.close());
             <input v-if="question.isSecret" v-model="answers[question.id]" :aria-label="question.question" type="password" autocomplete="off" maxlength="20000" required />
             <textarea v-else v-model="answers[question.id]" :aria-label="question.question" rows="2" maxlength="20000" required placeholder="选择选项，或输入自己的回答" />
           </fieldset>
-          <p v-if="validation || error" class="error" role="alert">{{ validation || error }}</p>
+          <p v-if="validation" class="error" role="alert">{{ validation }}</p>
+          <FeedbackMessage :message="error" type="error" />
           <div class="actions">
             <button type="button" @click="close">稍后回答</button>
             <button type="submit" class="primary" :disabled="disabled">提交回答</button>

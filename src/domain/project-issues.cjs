@@ -1,13 +1,10 @@
+const { validateBaseBranch } = require("./development-baseline.cjs");
 const { accountError } = require("./account.cjs");
 
 const ISSUE_TYPES = ["requirement", "bug"];
 const PRIORITIES = ["low", "normal", "high", "urgent"];
 const SEVERITIES = ["minor", "normal", "major", "critical"];
-const flows = {
-  requirement: { review: ["ready", "rejected", "cancelled"], ready: ["developing", "cancelled"], developing: ["acceptance", "cancelled"], acceptance: ["done", "developing", "cancelled"], done: ["ready"], rejected: ["review"], cancelled: ["review"] },
-  bug: { confirmation: ["ready", "rejected", "cancelled"], ready: ["fixing", "cancelled"], fixing: ["verification", "cancelled"], verification: ["closed", "fixing", "cancelled"], closed: ["ready"], rejected: ["confirmation"], cancelled: ["confirmation"] },
-};
-const contentFields = ["title", "description", "priority", "acceptanceCriteria", "reproductionSteps", "expectedResult", "actualResult", "severity"];
+const contentFields = ["releaseId", "baseBranch", "title", "description", "priority", "acceptanceCriteria", "reproductionSteps", "expectedResult", "actualResult", "severity"];
 const assignmentFields = ["assigneeId", "participantIds"];
 
 function text(value, label, limit, { required = false } = {}) {
@@ -46,9 +43,10 @@ function issueInput(input, current) {
   object(input, ["attachments", ...contentFields, ...assignmentFields, ...(current ? ["revision"] : ["type", "requestId"])]);
   if (current) revision(input.revision);
   const type = current?.type || choice(input.type, ISSUE_TYPES, "事项类型");
-  const value = current ? {} : { type, status: type === "bug" ? "confirmation" : "review", title: "", description: "", priority: "normal", severity: "normal", assigneeId: null, participantIds: [], acceptanceCriteria: "", reproductionSteps: "", expectedResult: "", actualResult: "" };
+  const value = current ? {} : { type, baseBranch: "", title: "", description: "", priority: "normal", severity: "normal", assigneeId: null, participantIds: [], acceptanceCriteria: "", reproductionSteps: "", expectedResult: "", actualResult: "" };
   for (const field of contentFields) if (Object.hasOwn(input, field)) {
-    value[field] = field === "priority" ? choice(input[field], PRIORITIES, "优先级")
+    value[field] = field === "releaseId" ? (input[field] === null ? null : identifier(input[field], "发布版本")) : field === "baseBranch" ? validateBaseBranch(input[field], { allowEmpty: true })
+      : field === "priority" ? choice(input[field], PRIORITIES, "优先级")
       : field === "severity" ? choice(input[field], SEVERITIES, "严重程度")
         : text(input[field], field === "title" ? "标题" : "内容", field === "title" ? 200 : 60000, { required: field === "title" });
   }
@@ -58,22 +56,17 @@ function issueInput(input, current) {
   return value;
 }
 function issueTransition(issue, input) {
-  object(input, ["status", "revision", "reason"]);
+  object(input, ["transitionId", "status", "revision", "reason"]);
   revision(input.revision);
-  const allowed = issueTransitions(issue).find(entry => entry.status === input.status);
+  const allowed = issueTransitions(issue).find(entry => input.transitionId ? entry.id === input.transitionId : entry.status === input.status);
   if (!allowed) throw accountError("不允许此事项状态流转。", 409);
   const reason = input.reason === undefined ? "" : text(input.reason, "流转原因", 4000);
   if (allowed.requiresReason && !reason)
     throw accountError("重新打开、驳回、取消或退回事项必须填写原因。", 400);
-  return { status: input.status, reason, permission: allowed.permission };
+  return { status: allowed.status, reason, permission: allowed.permission };
 }
 function issueTransitions(issue) {
-  return (flows[issue.type]?.[issue.status] || []).map(status => {
-    const reopening = ["done", "closed", "rejected", "cancelled"].includes(issue.status);
-    const acceptance = ["acceptance", "verification"].includes(issue.status) && ["done", "closed", "developing", "fixing"].includes(status);
-    return { status, permission: acceptance ? "issue.accept" : "issue.transition",
-      requiresReason: reopening || ["rejected", "cancelled"].includes(status) || (acceptance && ["developing", "fixing"].includes(status)) };
-  });
+  return (issue.workflowVersion?.definition?.transitions || []).filter(edge => edge.from === issue.status).map(edge => ({ id: edge.id, name: edge.name, status: edge.to, permission: edge.permission, requiresReason: edge.requiresReason }));
 }
 function pageInput(input = {}) {
   const limit = input.limit === undefined || input.limit === null ? 30 : Number(input.limit);

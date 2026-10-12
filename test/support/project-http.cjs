@@ -8,15 +8,14 @@ async function seedProjectDepartment(database, username = "admin") {
   return department;
 }
 
-async function prepareHttpProject(request, { name, remoteUrl, gitAccountId, departmentId }) {
+async function prepareHttpProject(request, { name, remoteUrl, gitAccountId }) {
   const call = async (url, body) => {
     const result = await request(url, body);
     assert.ok(result.status >= 200 && result.status < 300, `${url}: ${JSON.stringify(result)}`);
     return result.data;
   };
   const session = await call("/api/auth/session");
-  const { repository } = await call("/api/admin/repositories", { name, remoteUrl });
-  const project = await call("/api/projects", { name, departmentId, repositoryId: repository.id });
+  const project = await call("/api/projects", { name, remoteUrl, settings: { baseBranch: "main" } });
   await call(`/api/projects/${project.project.id}/members/${session.user.id}`, {
     permissions: permissions.filter(item => item.scope !== "department").map(item => item.id), revision: project.membership.revision,
   });

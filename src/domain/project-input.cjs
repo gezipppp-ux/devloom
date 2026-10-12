@@ -1,3 +1,4 @@
+const { validateBaseBranch } = require("./development-baseline.cjs");
 const { accountError } = require("./account.cjs");
 const { remoteUrl } = require("./git-account.cjs");
 const { validatePermissions } = require("./project-permissions.cjs");
@@ -36,23 +37,10 @@ function departmentInput(input, updating = false) {
   if (updating) value.revision = revision(input.revision);
   return value;
 }
-function repositoryInput(input, updating = false) {
-  object(input, ["name", "remoteUrl", "description", "status", "revision"]);
-  const value = {};
-  if (!updating || input.name !== undefined) value.name = text(input.name, "仓库名称", 80);
-  if (!updating || input.remoteUrl !== undefined) value.remoteUrl = remoteUrl(input.remoteUrl);
-  if (input.description !== undefined) value.description = text(input.description, "仓库说明", 4000, true);
-  if (input.status !== undefined) value.status = status(input.status);
-  if (updating) value.revision = revision(input.revision);
-  return value;
-}
 function projectSettings(input) {
-  object(input, ["baseRef", "initCommands", "prompts", "tapd"]);
+  object(input, ["baseBranch", "initCommands", "prompts", "tapd"]);
   const value = {};
-  if (input.baseRef !== undefined) {
-    value.baseRef = text(input.baseRef, "基准引用", 200);
-    if (/[\r\n]/.test(value.baseRef)) throw accountError("基准引用无效。");
-  }
+  if (input.baseBranch !== undefined) value.baseBranch = validateBaseBranch(input.baseBranch, { allowEmpty: true });
   if (input.initCommands !== undefined) value.initCommands = validateInitCommands(input.initCommands);
   if (input.prompts !== undefined) {
     object(input.prompts, Object.keys(promptTemplateCatalog));
@@ -70,12 +58,11 @@ function projectSettings(input) {
   return value;
 }
 function projectInput(input, updating = false) {
-  object(input, ["name", "description", "departmentId", "repositoryId", "ownerUserId", "settings", "revision"]);
+  object(input, ["name", "description", "remoteUrl", "ownerUserId", "settings", "revision"]);
   const value = {};
   if (!updating || input.name !== undefined) value.name = text(input.name, "项目名称", 80);
   if (input.description !== undefined) value.description = text(input.description, "项目说明", 8000, true);
-  if (!updating || input.departmentId !== undefined) value.departmentId = id(input.departmentId);
-  if (!updating || input.repositoryId !== undefined) value.repositoryId = id(input.repositoryId);
+  if (!updating || input.remoteUrl !== undefined) value.remoteUrl = remoteUrl(input.remoteUrl);
   if (input.ownerUserId !== undefined) {
     if (!updating) throw accountError("项目创建者为初始负责人。");
     value.ownerUserId = id(input.ownerUserId);
@@ -97,4 +84,4 @@ function prepareSpaceInput(input) {
   object(input, ["gitAccountId", "requestId"]);
   return { gitAccountId: id(input.gitAccountId), requestId: id(input.requestId) };
 }
-module.exports = { projectId: id, projectRevision: revision, departmentInput, repositoryInput, projectInput, memberInput, prepareSpaceInput };
+module.exports = { projectId: id, projectRevision: revision, departmentInput, projectInput, memberInput, prepareSpaceInput };

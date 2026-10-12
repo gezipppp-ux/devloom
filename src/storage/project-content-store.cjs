@@ -1,3 +1,6 @@
+const { SystemWorkflowStore } = require("./system-workflow-store.cjs");
+const { ProjectLifecycleStore } = require("./project-lifecycle-store.cjs");
+const { assertIssueWritable } = require("../domain/issue-workflows.cjs");
 const { previewMimeType } = require("../domain/project-files.cjs");
 const { createHash } = require("node:crypto");
 const { accountError } = require("../domain/account.cjs");
@@ -21,17 +24,17 @@ class ProjectContentStore {
     if (count !== unique.length) throw accountError("负责人和参与人必须是有效项目成员。", 400);
   }
   async people(ids) {
-    return this.database.client.user.findMany({ where: { id: { in: [...new Set(ids.filter(Boolean))] } }, select: { id: true, username: true } });
+    return this.database.client.user.findMany({ where: { id: { in: [...new Set(ids.filter(Boolean))] } }, select: { id: true, username: true, displayName: true } });
   }
   async issue(projectId, id) {
-    const value = await this.database.client.projectIssue.findFirst({ where: { projectId, id }, include: { source: true } });
+    const value = await this.database.client.projectIssue.findFirst({ where: { projectId, id }, include: { source: true, release: true, workflowVersion: true } });
     if (!value) throw missing();
     return value;
   }
-  async issues(projectId, { type, status, query, limit, offset }) {
-    const where = { projectId, ...(type ? { type } : {}), ...(status ? { status } : {}),
-      ...(query ? { OR: [{ title: { contains: query, mode: "insensitive" } }, { description: { contains: query, mode: "insensitive" } }] } : {}) };
-    const rows = await this.database.client.projectIssue.findMany({ where, orderBy: [{ number: "desc" }], skip: offset, take: limit + 1, include: { source: true } });
+  async issues(projectId, { type, status, releaseId, includeArchived, query, limit, offset }) {
+    const where = { projectId, ...(releaseId !== undefined ? { releaseId } : {}), ...(!includeArchived ? { OR: [{ releaseId: null }, { release: { status: "active" } }] } : {}), ...(type ? { type } : {}), ...(status ? { status } : {}),
+      ...(query ? { AND: [{ OR: [{ title: { contains: query, mode: "insensitive" } }, { description: { contains: query, mode: "insensitive" } }] }] } : {}) };
+    const rows = await this.database.client.projectIssue.findMany({ where, orderBy: [{ number: "desc" }], skip: offset, take: limit + 1, include: { source: true, release: true, workflowVersion: true } });
     return { items: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
   }
   async createIssue(projectId, actorId, data, source, { requestId, attachments = [] } = {}) {
@@ -48,6 +51,11 @@ class ProjectContentStore {
         return this.issue(projectId, requestId);
       }
     }
+    const lifecycle = new ProjectLifecycleStore(this.database);
+    await lifecycle.writableRelease(projectId, data.releaseId);
+    const workflow = await new SystemWorkflowStore(this.database).workflow(data.type);
+    const version = workflow.versions.find(row => row.version === workflow.publishedVersion);
+    data = { ...data, workflowVersionId: version.id, status: version.definition.nodes.find(node => node.kind === "initial").id };
     const project = await this.database.client.project.update({ where: { id: projectId }, data: { issueSequence: { increment: 1 } }, select: { issueSequence: true } });
     const issue = await this.database.client.projectIssue.create({ data: { ...data, ...(requestId ? { id: requestId } : {}), projectId, number: project.issueSequence, createdById: actorId, updatedById: actorId } });
     if (source) await this.database.client.issueSource.create({ data: { ...source, projectId, issueId: issue.id } });
@@ -56,6 +64,11 @@ class ProjectContentStore {
   }
   async updateIssue(projectId, id, actorId, revision, data, action = "updated", extra = {}) {
     const before = await this.issue(projectId, id);
+    assertIssueWritable(before);
+    if (Object.hasOwn(data, "releaseId")) {
+      await new ProjectLifecycleStore(this.database).writableRelease(projectId, data.releaseId);
+      if (data.releaseId !== before.releaseId && await this.database.client.issueDevelopmentClaim.count({ where: { projectId, issueId: id } })) throw accountError("事项有未结束开发任务，不能变更版本。", 409);
+    }
     const updated = await this.database.client.projectIssue.updateMany({ where: { id, projectId, revision }, data: { ...data, updatedById: actorId, revision: { increment: 1 } } });
     if (!updated.count) throw conflict();
     const after = await this.issue(projectId, id);
@@ -66,7 +79,7 @@ class ProjectContentStore {
     return this.database.client.issueHistory.create({ data: { projectId, issueId, actorId, action, data: serializable(data) } });
   }
   async source(projectId, scope, type, externalId) {
-    return this.database.client.issueSource.findUnique({ where: { projectId_channel_scope_type_externalId: { projectId, channel: "tapd", scope, type, externalId } }, include: { issue: { include: { source: true } } } });
+    return this.database.client.issueSource.findUnique({ where: { projectId_channel_scope_type_externalId: { projectId, channel: "tapd", scope, type, externalId } }, include: { issue: { include: { source: true, release: true, workflowVersion: true } } } });
   }
   async childList(kind, projectId, issueId, { limit, offset }) {
     await this.issue(projectId, issueId);
@@ -76,11 +89,11 @@ class ProjectContentStore {
     return { items: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
   }
   async comment(projectId, issueId, authorId, body) {
-    await this.issue(projectId, issueId);
+    assertIssueWritable(await this.issue(projectId, issueId));
     return this.database.client.issueComment.create({ data: { projectId, issueId, authorId, body } });
   }
   async deliverable(projectId, issueId, authorId, data) {
-    await this.issue(projectId, issueId);
+    assertIssueWritable(await this.issue(projectId, issueId));
     if (data.taskId && !await this.database.client.developmentTask.findFirst({ where: { projectId, id: data.taskId } }))
       throw accountError("开发任务不属于当前项目。", 400);
     return this.database.client.issueDeliverable.create({ data: { projectId, issueId, authorId, ...data } });
@@ -99,8 +112,14 @@ class ProjectContentStore {
   async linkIssues(projectId, assetId, issueIds) {
     if (await this.database.client.projectIssue.count({ where: { projectId, id: { in: issueIds } } }) !== issueIds.length)
       throw accountError("关联事项不属于当前项目。", 400);
-    await this.database.client.assetIssueLink.deleteMany({ where: { projectId, assetId } });
-    if (issueIds.length) await this.database.client.assetIssueLink.createMany({ data: issueIds.map(issueId => ({ projectId, assetId, issueId })) });
+    const existing = await this.database.client.assetIssueLink.findMany({ where: { projectId, assetId } });
+    const before = new Set(existing.map(link => link.issueId));
+    const after = new Set(issueIds);
+    const changed = [...new Set([...before, ...after])].filter(id => before.has(id) !== after.has(id));
+    for (const issueId of changed) assertIssueWritable(await this.issue(projectId, issueId));
+    await this.database.client.assetIssueLink.deleteMany({ where: { projectId, assetId, issueId: { notIn: issueIds } } });
+    const added = issueIds.filter(issueId => !before.has(issueId));
+    if (added.length) await this.database.client.assetIssueLink.createMany({ data: added.map(issueId => ({ projectId, assetId, issueId })) });
   }
   async saveAsset(projectId, actorId, input, current) {
     const { secret, issueIds, ...fields } = input;
@@ -157,6 +176,7 @@ class ProjectContentStore {
     return (await this.filePreviews(projectId, rows)).filter(row => row.previewMimeType);
   }
   async addFile(projectId, resource, id, authorId, { id: fileId, name, mimeType, data }) {
+    if (resource === "issues") assertIssueWritable(await this.issue(projectId, id));
     const sha256 = createHash("sha256").update(data).digest("hex");
     if (fileId) {
       const existing = await this.database.client.projectFile.findUnique({ where: { id: fileId }, select: fileMetadata });

@@ -11,7 +11,7 @@ const {
   promptTemplateCatalog,
   MAX_PROMPT_TEMPLATE_LENGTH,
 } = require("../domain/prompt-templates.cjs");
-const { listBaseRefs } = require("../git/repository.cjs");
+const { listBaseBranches } = require("../git/repository.cjs");
 const { describeAgent } = require("./agent-presenter.cjs");
 const { readRepository, mutateRepository } = require("./repository-services.cjs");
 const { presentRequirements } = require("./requirement-presenter.cjs");
@@ -66,8 +66,8 @@ class WorkspaceServices {
   async savePromptSettings(input) {
     return presentPromptSettings((await savePromptSettings(this.configFile, input)));
   }
-  async listBaseRefs() {
-    return listBaseRefs((await readSettings(this.configFile)).repository);
+  async listBaseBranches() {
+    return listBaseBranches((await readSettings(this.configFile)).repository);
   }
   async listModels() {
     return (await this.sessions.agent.listModels());

@@ -1,9 +1,11 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
+import { showMessage } from "../../shared/components/operation-messages.js";
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from "vue";
 import { api } from "../../shared/api/api.js";
 import TapdSettings from "./TapdSettings.vue";
 import PromptSettings from "./PromptSettings.vue";
-import BaseRefSelect from "./BaseRefSelect.vue";
+import BaseBranchSelect from "./BaseBranchSelect.vue";
 import FormSection from "../../shared/components/FormSection.vue";
 const props = defineProps({
   workspaceName: { type: String, default: "" },
@@ -13,13 +15,13 @@ const emit = defineEmits(["saved", "rename-workspace", "system-settings"]);
 const form = reactive({
   repository: "",
   worktreeRoot: "",
-  baseRef: "HEAD",
+  baseBranch: "",
 });
 const initCommandsText = ref("");
 let disposed = false;
 const savedSettings = ref(null);
 const settings = computed(() => ({
-  baseRef: form.baseRef,
+  baseBranch: form.baseBranch,
   initCommands: initCommandsText.value
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -32,16 +34,7 @@ const dirty = computed(
 );
 const platform = ref(""),
   busy = ref(true),
-  error = ref(""),
-  saved = ref(false);
-const rules = computed(() =>
-  Object.fromEntries(
-    ["baseRef"].map((key) => [
-      key,
-      [{ required: true, whitespace: true, message: "请填写此项" }],
-    ]),
-  ),
-);
+  error = ref("");
 onMounted(async () => {
   try {
     const result = await api("/settings");
@@ -63,7 +56,7 @@ async function save() {
   if (busy.value || !dirty.value) return;
   busy.value = true;
   error.value = "";
-  saved.value = false;
+
   try {
     const result = await api("/settings", settings.value);
     if (disposed) return;
@@ -71,9 +64,9 @@ async function save() {
     for (const key of Object.keys(form)) form[key] = result[key] ?? "";
     await nextTick();
     if (disposed) return;
-    form.baseRef = result.baseRef;
+    form.baseBranch = result.baseBranch;
     savedSettings.value = JSON.stringify(settings.value);
-    saved.value = true;
+    showMessage("设置已保存，新任务将使用此配置。", "success");
     emit("saved");
   } catch (e) {
     if (!disposed) error.value = e.message;
@@ -130,7 +123,7 @@ async function save() {
       title="项目环境"
       description="项目仓库和任务目录由创建工作区时的 Git 地址自动生成，不能在这里修改。"
     >
-      <a-form :model="form" :rules="rules" layout="vertical" @finish="save">
+      <a-form :model="form"  layout="vertical" @finish="save">
         <dl class="workspace-profile">
           <dt>项目代码仓库</dt>
           <dd>
@@ -149,16 +142,16 @@ async function save() {
           新任务会在上方 Worktree 目录下创建一层任务目录；路径由 Git
           项目自动确定。
         </p>
-        <a-form-item label="新任务基准引用" name="baseRef">
-          <BaseRefSelect
-            v-model="form.baseRef"
+        <a-form-item label="新任务开发分支" name="baseBranch">
+          <BaseBranchSelect
+            v-model="form.baseBranch"
             :repository="form.repository"
             :disabled="busy"
           />
         </a-form-item>
         <p class="field-hint">
-          可搜索本地分支、已获取的远程分支和标签，也可输入 commit
-          SHA。列表只读取当前工作区的仓库，不会执行远端获取。
+          可搜索已获取的 origin 分支，也可输入尚未获取的远端短分支名。
+          留空表示尚未配置；新建工作树前会获取并验证所选分支的最新代码。
         </p>
         <a-form-item label="Worktree 初始化命令（可选）">
           <textarea
@@ -175,10 +168,8 @@ async function save() {
           Codex，失败或单条超过 15 分钟即停止。
           留空跳过初始化，保存仅影响新任务。
         </p>
-        <p v-if="error" role="alert" class="error">{{ error }}</p>
-        <p v-if="saved && !dirty" role="status" class="notice">
-          设置已保存，新任务将使用此配置。
-        </p>
+        <FeedbackMessage :message="error" type="error" />
+
         <div class="actions">
           <button class="primary" type="submit" :disabled="busy || !dirty">
             {{ busy ? "正在处理…" : "保存执行设置" }}

@@ -2,6 +2,7 @@
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref, useId, watch } from "vue";
 import { PaperClipOutlined, FileTextOutlined, CloseOutlined } from "@antdv-next/icons";
 import MarkdownContent from "./MarkdownContent.vue";
+import FeedbackMessage from "./FeedbackMessage.vue";
 const VisualMarkdownEditor = defineAsyncComponent(() => import("./VisualMarkdownEditor.vue"));
 const props = defineProps({
   modelValue: { type: String, default: "" }, label: { type: String, default: "正文" },
@@ -78,6 +79,6 @@ onBeforeUnmount(() => { generation++; });
       </ul>
     </div>
     <span class="markdown-editor-help markdown-upload-limit">单个附件最多 10 MiB，每次合计 20 MiB。</span>
-    <p v-if="error" role="alert" class="markdown-editor-error">{{ error }}</p>
+    <FeedbackMessage :message="error" type="error" />
   </div>
 </template>

@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { ref } from "vue";
 import { CloudDownloadOutlined } from "@antdv-next/icons";
 const props = defineProps({ clones: { type: Array, default: () => [] }, error: { type: String, default: "" }, dismiss: { type: Function, required: true } });
@@ -23,7 +24,7 @@ defineExpose({ open });
       <div class="workspace-dialog-heading"><h2>工作区克隆进度</h2><button type="button" aria-label="关闭克隆进度" @click="close">×</button></div>
       <p class="field-hint">任务受理后在服务器后台执行。关闭此窗口、刷新或关闭浏览器不会中止克隆；再次登录可从「克隆任务」查看进度。</p>
       <p class="field-hint">大仓库可能需要较长时间，各阶段进度单独计算。服务停止或重启会中断克隆，不会自动重试。</p>
-      <p v-if="error || failure" class="error" role="alert">{{ error || failure }}</p>
+      <FeedbackMessage :message="error || failure" type="error" />
       <p v-if="!clones.length" class="muted">暂无克隆任务。</p>
       <section v-for="clone in clones" :key="clone.id" class="clone-progress-item" :aria-label="`克隆任务：${clone.name}`">
         <h3>{{ clone.name }}</h3>

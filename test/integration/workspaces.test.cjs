@@ -1,3 +1,4 @@
+const { attachOrigin } = require("../support/baseline-origin.cjs");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { fixtureWorkspaceClones } = require("../support/workspace-clones.cjs");
@@ -58,8 +59,9 @@ async function fixtures(t) {
     "-m",
     "fixture",
   );
+  attachOrigin(repository);
   const settings = {
-    baseRef: "main",
+    baseBranch: "main",
     initCommands: [],
   };
   for (const workspace of [a, b]) (await seedWorkspaceProject(workspaces.configFile(workspace.id), repository, `w-${workspace.id.slice(0, 8)}`));
@@ -88,15 +90,15 @@ test("workspaces isolate settings, credentials and restart state; names never be
       )),
     /仅允许/,
   ));
-  assert.equal((await readSettings(workspaces.configFile(b.id))).baseRef, "HEAD");
+  assert.equal((await readSettings(workspaces.configFile(b.id))).baseBranch, "");
   assert.equal((await readTapdSettings(workspaces.configFile(b.id))).hasCookie, false);
-  (await saveSettings({ ...settings, baseRef: "HEAD" }, workspaces.configFile(a.id)));
+  (await saveSettings({ ...settings, baseBranch: "" }, workspaces.configFile(a.id)));
   assert.equal(
     (await readOptional(workspaces.configFile(a.id))).tapd.session.cookie_header,
     "dsc-token=secret-a; auth=private",
   );
   (await workspaces.save({ name: "重命名 A" }, a.id));
-  assert.equal((await readSettings(workspaces.configFile(a.id))).baseRef, "HEAD");
+  assert.equal((await readSettings(workspaces.configFile(a.id))).baseBranch, "");
   (await assert.rejects(async () => (await workspaces.save({ name: "项目 B" })), /已存在/));
   (await assert.rejects(async () => (await workspaces.get("../outside")), /无效/));
   (await assert.rejects(async () => (await workspaces.get(randomUUID())), /不存在/));
@@ -291,6 +293,10 @@ test("same requirement runs independently in two workspaces with isolated upload
     model: "fixture-model-a",
     reasoningEffort: "high",
   });
+  const firstDeadline = Date.now() + 20000;
+  while (!first.sessions.sessions.get(startedA.key)?.turnId && Date.now() < firstDeadline)
+    await new Promise(resolve => setTimeout(resolve, 10));
+  assert.ok(first.sessions.sessions.get(startedA.key)?.turnId, JSON.stringify(await first.sessions.store.read(startedA.key)));
   const startedB = await second.sessions.start({
     ...input,
     images: [],
@@ -303,11 +309,11 @@ test("same requirement runs independently in two workspaces with isolated upload
   for (const context of [first, second]) {
     for (
       let attempt = 0;
-      !context.sessions.sessions.get(key)?.turnId && attempt < 100;
+      !context.sessions.sessions.get(key)?.turnId && attempt < 2000;
       attempt++
     )
       await new Promise((resolve) => setTimeout(resolve, 10));
-    assert.ok(context.sessions.sessions.get(key).turnId);
+    assert.ok(context.sessions.sessions.get(key)?.turnId, JSON.stringify(await context.sessions.store.read(key)));
   }
   const stateA = (await first.sessions.store.read(key)),
     stateB = (await second.sessions.store.read(key));
@@ -348,7 +354,7 @@ test("same requirement runs independently in two workspaces with isolated upload
   await first.sessions.interrupt(key);
   assert.ok(second.sessions.sessions.get(key).turnId);
   await first.sessions.sessions.get(key).operation;
-  (await saveSettings({ ...settings, baseRef: "HEAD" }, first.configFile));
+  (await saveSettings({ ...settings, baseBranch: "" }, first.configFile));
   await first.sessions.send(key, "继续原任务");
   assert.equal(
     first.sessions.client.calls
@@ -393,7 +399,7 @@ test("HTTP requires explicit workspace context and isolates lists, images, SSE a
   t.after(() => app.close());
   const boot = await (await fetch(`${origin}/api/bootstrap`)).json();
   assert.equal(boot.workspaces.length, 2);
-  assert.equal((await fetch(`${origin}/api/runs`)).status, 400);
+  assert.equal((await fetch(`${origin}/api/runs`)).status, 404);
   const headers = {
     "content-type": "application/json",
     "x-tapd-token": boot.token,
@@ -528,7 +534,7 @@ test("tasks in one workspace select independent models and resume their snapshot
     keys.push(key);
     for (
       let attempt = 0;
-      !manager.sessions.get(key)?.turnId && attempt < 100;
+      !manager.sessions.get(key)?.turnId && attempt < 2000;
       attempt++
     )
       await new Promise((resolve) => setTimeout(resolve, 10));

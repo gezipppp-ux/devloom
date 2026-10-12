@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, ref } from "vue";
 import {
   ArrowUpOutlined,
@@ -90,8 +91,8 @@ function send() {
 
 <template>
   <section class="composer-wrap session-composer" aria-label="会话输入区">
-    <p v-if="error" role="alert" class="error">{{ error }}</p>
-    <p v-if="notice" role="status" class="notice">{{ notice }}</p>
+    <FeedbackMessage :message="error" type="error" />
+    <FeedbackMessage :message="notice" type="success" />
     <a-form
       ref="formRef"
       class="composer"
@@ -149,7 +150,7 @@ function send() {
             >待发送</span
           >
           <template v-else>
-            <p class="composer-image-error" role="alert">{{ image.error }}</p>
+            <FeedbackMessage :message="image.error" type="error" />
             <button
               type="button"
               class="text-button composer-image-retry"
@@ -162,9 +163,7 @@ function send() {
           </template>
         </li>
       </ul>
-      <p v-if="imagesError" class="error composer-image-feedback" role="alert">
-        {{ imagesError }}
-      </p>
+      <FeedbackMessage :message="imagesError" type="error" />
       <p
         v-if="imagesUploading"
         class="composer-image-feedback muted"
@@ -243,42 +242,25 @@ function send() {
         </div>
       </div>
     </a-form>
-    <p v-if="settingsError" role="alert" class="error execution-settings-error">
-      执行偏好保存失败：{{ settingsError }}
-    </p>
-    <p
-      v-if="catalog.error.value"
-      class="error composer-catalog-error"
-      role="alert"
-    >
-      模型列表加载失败：{{ catalog.error.value }}。当前选择会保留。
-      <button
+    <FeedbackMessage :message="settingsError ? `执行偏好保存失败：${settingsError}` : ''" type="error" />
+    <FeedbackMessage :message="catalog.error.value ? `模型列表加载失败：${catalog.error.value}。当前选择会保留。` : ''" type="error" />
+    <div v-if="catalog.error.value"><button
         type="button"
         class="text-button"
         :disabled="catalog.loading.value"
         @click="catalog.refresh"
       >
         刷新模型列表
-      </button>
-    </p>
-    <p
-      v-if="permissions.error.value"
-      class="error composer-catalog-error"
-      role="alert"
-    >
-      权限选项加载失败：{{
-        permissions.error.value
-      }}。{{ running ? '当前轮仍可补充指令，启动下一轮前需要确认权限。' : '确认权限可用后才能发送。' }}
-      {{ permissions.errorHint.value }}
-      <button
+      </button></div>
+    <FeedbackMessage :message="permissions.error.value ? `权限选项加载失败：${permissions.error.value}。${running ? '当前轮仍可补充指令，启动下一轮前需要确认权限。' : '确认权限可用后才能发送。'} ${permissions.errorHint.value}` : ''" type="error" />
+    <div v-if="permissions.error.value"><button
         type="button"
         class="text-button"
         :disabled="permissions.loading.value"
         @click="permissions.refresh"
       >
         刷新权限选项
-      </button>
-    </p>
+      </button></div>
     <p v-if="permissionUnavailable" role="alert" class="error composer-catalog-error">{{ running ? '下一轮权限模式不可用；当前轮仍可补充指令，请在启动下一轮前重新选择。' : '当前权限模式不可用，请选择可用的权限模式后发送。' }}</p>
     <div class="composer-hints">
       <p v-if="!settingsError" class="execution-settings-hint" role="status">

@@ -10,6 +10,9 @@ const { defaultProjectName } = require("../domain/member-project-paths.cjs");
 const { memberDirectoryName } = require("../domain/member-project-paths.cjs");
 const { readSystemSettings } = require("../config/system-settings.cjs");
 const { GitAccountStore } = require("../storage/git-account-store.cjs");
+const { ProjectDevelopmentStore } = require("../storage/project-development-store.cjs");
+const { accountError } = require("../domain/account.cjs");
+const { issueDevelopmentAllowed } = require("../domain/issue-workflows.cjs");
 const {
   gitAccountId,
   remoteUrl,
@@ -140,7 +143,7 @@ class WorkspaceManager {
               projectName: directory,
               gitAccountId: account.id,
               remoteUrl: remote,
-              baseRef: "HEAD",
+              baseBranch: "",
               initCommands: [],
             },
             agent: { provider: "codex", model: "", reasoningEffort: "", permissionMode: "ask", options: {} },
@@ -188,7 +191,26 @@ class WorkspaceManager {
         apiPrefix: `/api/workspaces/${id}`,
         gitCredentialProvider,
         gitCredentialRevision,
+        gitOperationCredentials: this.store.database ? async current => {
+          if (!current.execution?.gitAccountId) return undefined;
+          return {
+            account: await new GitAccountStore(this.store.database).read(
+              current.execution.gitAccountId, current.workspace.owner_user_id,
+            ),
+            remoteUrl: current.execution.remoteUrl,
+          };
+        } : undefined,
         authorize: permission => this.authorizeProject?.(id, { id: config.workspace.owner_user_id }, permission),
+        authorizeRun: this.store.database ? async (key, operation) => {
+          const development = new ProjectDevelopmentStore(this.store.database);
+          const task = await development.taskForRun(id, key);
+          if (task && ["completed", "cancelled"].includes(task.status)) throw accountError("开发任务已结束，不能继续执行或处理审批。", 409);
+          if (task?.release?.status === "archived") throw accountError("任务发布版本已归档，不能继续执行。", 409);
+          if (task && operation === "start") {
+            const issues = await development.issues(task.projectId, task.snapshot.issues.map(issue => issue.id));
+            if (issues.some(issue => !issueDevelopmentAllowed(issue))) throw accountError("事项当前流程节点不允许开发，请核对事项后处理已记录任务。", 409);
+          }
+        } : undefined,
       });
       this.contexts.set(id, {
         configFile,

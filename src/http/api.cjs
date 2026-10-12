@@ -67,9 +67,9 @@ async function serveApi(
     return json(response, 200, await services.checkTapdSettings(input));
   if (request.method === "GET" && url.pathname === "/api/settings")
     return json(response, 200, (await services.readSettings()));
-  if (request.method === "GET" && url.pathname === "/api/settings/refs")
+  if (request.method === "GET" && url.pathname === "/api/settings/branches")
     return json(response, 200, {
-      refs: (await services.listBaseRefs()),
+      branches: (await services.listBaseBranches()),
     });
   if (request.method === "GET" && url.pathname === "/api/models")
     return json(response, 200, {

@@ -77,7 +77,7 @@ async function verifyEnvironment(page, output) {
   await page.getByRole("status").filter({ hasText: "Git → 2.0.0 · 更新成功" }).waitFor();
   await page.getByRole("button", { name: "更新 Node.js", exact: true }).click();
   await page.getByRole("button", { name: "确认更新", exact: true }).click();
-  await page.getByRole("status").filter({ hasText: "Node.js → 2.0.0 · 已安装，待重启生效" }).waitFor();
+  await page.locator('.operation-message[data-type="warning"]').filter({ hasText: "Node.js → 2.0.0 · 已安装，待重启生效" }).waitFor();
   assert.equal(installs, 3);
   await page.goto(new URL("/environment", page.url()).href);
   await page.getByRole("heading", { name: "环境概况", exact: true }).waitFor();

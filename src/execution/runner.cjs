@@ -1,4 +1,7 @@
 const path = require("node:path");
+const { fetchDevelopmentBaseline } = require("../git/development-baseline.cjs");
+const { repositoryCommonDirectory } = require("../git/repository.cjs");
+const { withRepositoryOperation } = require("../storage/git-operations.cjs");
 const { createWorktree, worktreePlan } = require("../git/worktrees.cjs");
 const { repositoryFor } = require("../config/repository.cjs");
 const { getAgentProvider } = require("../agents/registry.cjs");
@@ -10,11 +13,14 @@ const { initializeWorktree } = require("./worktree-init.cjs");
 const { ExecutionStore } = require("../storage/execution-store.cjs");
 
 async function runExecution(
-  { config, configFile, session, item, directory, channel, retry = false },
+  { config, configFile, session, item, directory, channel, retry = false, baseBranch },
   dependencies = {},
 ) {
   const services = {
     repositoryFor,
+    repositoryCommonDirectory,
+    withRepositoryOperation,
+    fetchDevelopmentBaseline,
     worktreePlan,
     createWorktree,
     initializeWorktree,
@@ -65,7 +71,7 @@ async function runExecution(
     (await store.claimSources(runKey(source), item.sources || [source], {
       fingerprint: item.request_fingerprint,
     }));
-    config = (await executionConfig(config, configFile));
+    config = (await executionConfig(config, configFile, { baseBranch }));
     await channel.validate?.(config);
     const repository = await services.repositoryFor(
       config,
@@ -85,28 +91,13 @@ async function runExecution(
     if (runKey(sourceFor(channel.id, workitem)) !== runKey(source))
       throw new Error("Channel returned a different requirement identity.");
     (await store.writeTask(task));
-    const worktree = await services.worktreePlan(
-      repository,
-      workitem,
-      config.execution.baseRef,
-      {
-        root: path.resolve(
-          path.dirname(configFile),
-          config.execution.worktreeRoot,
-        ),
-        source,
-        workspaceId: config.workspace?.id,
-        slug: worktreeSlug,
-        name: worktreeName,
-      },
-    );
     state = {
       version: 3,
       workspace_id: config.workspace?.id,
       source,
       created_at: new Date().toISOString(),
       workitem,
-      worktree,
+      worktree: { repository, baseline: { remote: "origin", branch: config.execution.baseBranch || null, commit: null, fetchedAt: null } },
       target_status: target,
       session_id: null,
       agent: {
@@ -119,15 +110,46 @@ async function runExecution(
       transition: { status: "not_started" },
       image_count: task.images.length,
     };
-    // Persist intent before any external side effect; an uncertain run is never redispatched.
-    (await store.save(state));
-    if (dependencies.signal?.aborted) throw new Error("任务准备已停止。");
-    if (config.workspace) {
-      if (config.execution.memberRoot)
-        assertMemberWorktreeLocation(config.execution.memberStorageRoot, config.execution.memberRoot, worktree.path);
-      else assertWorktreeLocation(config.execution.memberStorageRoot, worktree.path);
-    }
-    await services.createWorktree(worktree);
+    // Keep preparation failures readable even when no worktree could be created.
+    await store.save(state);
+    const worktree = await services.withRepositoryOperation(services.repositoryCommonDirectory(repository), async () => {
+      const baseline = await services.fetchDevelopmentBaseline(repository, config.execution.baseBranch, {
+        credentials: dependencies.gitCredentials,
+        signal: dependencies.signal,
+        authorize: dependencies.authorize,
+      });
+      const worktree = await services.worktreePlan(
+        repository,
+        workitem,
+        baseline.commit,
+        {
+          root: path.resolve(
+            path.dirname(configFile),
+            config.execution.worktreeRoot,
+          ),
+          source,
+          workspaceId: config.workspace?.id,
+          slug: worktreeSlug,
+          name: worktreeName,
+        },
+      );
+      worktree.baseline = baseline;
+      await dependencies.authorize?.();
+      if (dependencies.signal?.aborted) throw new Error("任务准备已停止。");
+      state.worktree = worktree;
+      // Persist the fetched commit before worktree creation; uncertain runs are never redispatched.
+      (await store.save(state));
+      if (dependencies.signal?.aborted) throw new Error("任务准备已停止。");
+      if (config.workspace) {
+        if (config.execution.memberRoot)
+          assertMemberWorktreeLocation(config.execution.memberStorageRoot, config.execution.memberRoot, worktree.path);
+        else assertWorktreeLocation(config.execution.memberStorageRoot, worktree.path);
+      }
+      await dependencies.authorize?.();
+      if (dependencies.signal?.aborted) throw new Error("任务准备已停止。");
+      await services.createWorktree(worktree);
+      return worktree;
+    });
     if (config.execution.initCommands.length) {
       state.execution = { status: "initializing" };
       (await store.save(state));
@@ -143,6 +165,8 @@ async function runExecution(
         },
       });
     }
+    if (dependencies.signal?.aborted) throw new Error("任务准备已停止。");
+    await dependencies.authorize?.();
     if (dependencies.signal?.aborted) throw new Error("任务准备已停止。");
     state.execution = { status: "starting" };
     (await store.save(state));

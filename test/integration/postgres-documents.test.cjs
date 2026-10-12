@@ -16,8 +16,8 @@ test("PostgreSQL workspace documents preserve ownership and encrypt TAPD credent
   const database = new ApplicationDatabase({ directory, url: fixture.url, encryptionKey: randomBytes(32) });
   t.after(async () => (await database.close()));
   await database.connect();
-  const alice = await database.client.user.create({ data: { username: "alice", passwordHash: "fixture" } });
-  const bob = await database.client.user.create({ data: { username: "bob", passwordHash: "fixture" } });
+  const alice = await database.client.user.create({ data: { username: "alice", displayName: "alice", passwordHash: "fixture" } });
+  const bob = await database.client.user.create({ data: { username: "bob", displayName: "bob", passwordHash: "fixture" } });
   const id = randomUUID();
   const config = { workspace: { id, name: "应用", owner_user_id: alice.id, owner_username: "forged" },
     tapd: { session: { cookie_header: "private-tapd-cookie" } }, agent: { provider: "codex" }, execution: {} };

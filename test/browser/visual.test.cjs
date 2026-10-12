@@ -206,7 +206,7 @@ async function main() {
       if (projectResponse) return send(projectResponse);
       if (endpoint === "/events") return route.continue();
       if (endpoint === "/auth/session")
-        return send({ user: { id: "visual-admin", username: "演示管理员", role: "admin", status: "active", mustChangePassword: false }, token: "visual-fixture", settings: { model: null, reasoningEffort: null, permissionMode: "ask", notificationsEnabled: true, grouping: "type" } });
+        return send({ user: { id: "visual-admin", username: "visual-admin", displayName: "演示管理员", role: "admin", status: "active", mustChangePassword: false }, token: "visual-fixture", settings: { model: null, reasoningEffort: null, permissionMode: "ask", notificationsEnabled: true, grouping: "type" } });
       if (endpoint === "/account/preferences") return send({ preferences: { unreadRunKeys: [] } });
       if (endpoint === "/workspace-clones") return send({ clones: [] });
       if (url.pathname === "/api/bootstrap")
@@ -244,7 +244,7 @@ async function main() {
       if (endpoint === "/repository/git")
         return send({
           repository: "/srv/repos/customer-management-system",
-          baseRef: "main", branch: "main", upstream: "origin/main",
+          baseBranch: "main", branch: "main", upstream: "origin/main",
           remote: "origin", remotes: [{ name: "origin" }, { name: "upstream" }],
           canUpdate: true, updateReason: null,
           lastFetchedAt: "2026-09-18T02:35:00Z",
@@ -278,12 +278,12 @@ async function main() {
           worktreeRoot: "/srv/wt/admin/worktree/customer-system",
           memberStorageRoot: "/srv/wt",
           projectName: "customer-system",
-          baseRef: "main",
+          baseBranch: "main",
           platform: "linux",
           initCommands: ["pnpm install", "pnpm build"],
         });
-      if (endpoint === "/settings/refs")
-        return send({ refs: [{ value: "main", label: "main · 本地分支" }] });
+      if (endpoint === "/settings/branches")
+        return send({ branches: [{ value: "main", label: "origin/main" }] });
       if (endpoint === "/settings/prompts")
         return send({
           templates: Object.fromEntries(Object.entries(promptTemplateCatalog).map(([name, entry]) => [name, entry.defaultTemplate])),
@@ -539,8 +539,16 @@ async function main() {
         await page.getByRole('button', { name: /客户搜索与空结果提示/ }).click();
         await page.getByRole('button', { name: '发送追加资料并继续会话', exact: true }).waitFor();
         await capture('15-project-development-' + width);
+        await tabs.getByRole('button', { name: '版本', exact: true }).click();
+        await page.getByRole('heading', { name: '发布版本', exact: true }).waitFor();
+        await capture('15-project-releases-' + width);
+        await page.goto(origin + '/system?tab=workflows');
+        await page.getByRole('heading', { name: '流程编排', exact: true }).waitFor();
+        await page.getByRole('button', { name: '添加状态', exact: true }).waitFor();
+        await capture('15-system-workflows-' + width);
+        await page.goto(origin + '/projects/00000000-0000-4000-8000-000000000001');
         await tabs.getByRole('button', { name: '成员', exact: true }).click();
-        await page.getByRole('button', { name: '调整张明权限', exact: true }).click();
+        await page.getByRole('button', { name: '调整张明（member-1）权限', exact: true }).click();
         await capture('16-project-members-' + width);
         await tabs.getByRole('button', { name: '设置', exact: true }).click();
         await page.getByRole('button', { name: '保存项目设置', exact: true }).waitFor();

@@ -188,9 +188,8 @@ async function fixture(t, options = {}) {
     ...options,
   });
   const origin = await app.listen(0);
-  const repository = (await app.projects.saveRepository(admin, { name: "fixture", remoteUrl: remote.remoteUrl })).repository;
   async function space(actor, input) {
-    const created = await app.projects.create(admin, { name: input.name, departmentId: department.id, repositoryId: repository.id });
+    const created = await app.projects.create(admin, { name: input.name, remoteUrl: remote.remoteUrl });
     if (actor.id === admin.id) await app.projects.saveMember(created.project.id, admin, { permissions: permissions.filter(id => id !== "project.create"), revision: created.membership.revision }, admin.id);
     else await app.projects.saveMember(created.project.id, admin, { userId: actor.id, permissions: permissions.filter(id => id !== "project.create") });
     const prepared = await app.projects.prepare(created.project.id, actor, { gitAccountId: gitIds.get(actor.username), requestId: randomUUID() });
@@ -407,6 +406,58 @@ test("PostgreSQL accounts require login and session CSRF, isolate workspaces inc
         !JSON.stringify(row.data).includes("encryptedSessionId"),
     ),
   );
+});
+
+test("administrator owners may change departments but cannot lose owner permissions through role changes", async t => {
+  const { accounts, app, admin, member, department } = await fixture(t);
+  const owner = await accounts.create({ username: "owner-admin", password, role: "admin", departmentId: department.id }, admin);
+  const project = await app.projects.create(owner, { name: "administrator owner", remoteUrl: "https://example.invalid/project.git" });
+  const weak = (await app.projects.saveDepartment(admin, { name: "weak department", permissions: ["project.view"] })).department;
+  await accounts.update(owner.id, { departmentId: weak.id }, admin);
+  await assert.rejects(accounts.update(owner.id, { role: "member" }, admin), /先指定接任人/);
+  assert.equal((await accounts.store.byId(owner.id)).role, "admin");
+  await assert.rejects(accounts.update(owner.id, { status: "disabled" }, admin), /先指定接任人/);
+  await app.projects.saveMember(project.project.id, admin, { userId: member.id, permissions: ["project.view", "project.configure", "project.members.manage"] });
+  await app.projects.update(project.project.id, admin, { ownerUserId: member.id, revision: project.project.revision });
+  assert.equal((await accounts.update(owner.id, { role: "member" }, admin)).role, "member");
+});
+
+test("profile display names preserve login, sessions and identity while rejecting privilege changes", async t => {
+  const { accounts, client, admin, member, database } = await fixture(t);
+  const browser = client(), peer = client(), guest = client();
+  await guest.request("/api/auth/session");
+  assert.equal((await guest.request("/api/account/profile", { displayName: "名字" })).status, 401);
+  await browser.login("admin");
+  const login = await peer.login("member");
+  assert.equal(login.data.user.displayName, "member");
+  const before = await accounts.store.byId(member.id);
+  const gitBefore = await database.client.gitAccount.findMany({ where: { userId: member.id } });
+  const changed = await peer.request("/api/account/profile", { displayName: "  同名成员  " });
+  assert.equal(changed.status, 200, JSON.stringify(changed.data));
+  assert.equal(changed.data.user.displayName, "同名成员");
+  assert.equal(changed.data.user.username, "member");
+  assert.equal(changed.data.user.id, member.id);
+  assert.equal((await accounts.store.byId(member.id)).auth_version, before.auth_version);
+  assert.equal((await peer.request("/api/account/settings")).status, 200);
+  assert.equal((await peer.request("/api/auth/session")).data.user.displayName, "同名成员");
+  for (const input of [{}, { displayName: "" }, { displayName: 42 }, { displayName: "x\ny" }, { displayName: "x".repeat(81) },
+    { displayName: "名字", role: "admin" }, { displayName: "名字", id: admin.id }, { displayName: "名字", userId: admin.id },
+    { displayName: "名字", username: "admin" }])
+    assert.equal((await peer.request("/api/account/profile", input)).status, 400);
+  assert.equal((await peer.request(`/api/admin/accounts/${admin.id}`, { displayName: "越权" })).status, 403);
+  assert.equal((await accounts.store.byId(admin.id)).displayName, "admin");
+  const created = await browser.request("/api/admin/accounts", { username: "same-name", displayName: "同名成员", password });
+  assert.equal(created.status, 201, JSON.stringify(created.data));
+  assert.notEqual(created.data.user.id, member.id);
+  assert.equal(created.data.user.displayName, "同名成员");
+  const edited = await browser.request(`/api/admin/accounts/${member.id}`, { displayName: " 管理员改名 " });
+  assert.equal(edited.status, 200, JSON.stringify(edited.data));
+  assert.equal(edited.data.user.displayName, "管理员改名");
+  assert.equal((await peer.request("/api/account/settings")).status, 200);
+  assert.equal((await accounts.store.byId(member.id)).auth_version, before.auth_version);
+  assert.equal((await accounts.login({ username: "member", password })).id, member.id);
+  await assert.rejects(accounts.login({ username: "管理员改名", password }), { statusCode: 401 });
+  assert.deepEqual(await database.client.gitAccount.findMany({ where: { userId: member.id } }), gitBefore);
 });
 
 test("initial admin is unique, password resets invalidate sessions, last active admin is protected", async (t) => {

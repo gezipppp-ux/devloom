@@ -2,7 +2,7 @@
 import { computed, ref } from "vue";
 import catalog from "../../../../shared/project-permissions.json";
 import presets from "../../../../shared/project-permission-presets.json";
-const props = defineProps({ modelValue: { type: Array, default: () => [] }, ceiling: { type: Array, default: () => catalog.map(p => p.id) }, department: Boolean, disabled: Boolean });
+const props = defineProps({ modelValue: { type: Array, default: () => [] }, ceiling: { type: Array, default: () => catalog.map(p => p.id) }, department: Boolean, administratorAccess: Boolean, disabled: Boolean });
 const emit = defineEmits(["update:modelValue"]);
 const preview = ref(presets[0].id);
 const groups = computed(() => [...new Set(catalog.map(p => p.group))]);
@@ -46,7 +46,7 @@ function toggleMany(ids, checked) {
 </script>
 <template>
   <div class="project-permission-editor">
-    <p class="field-hint">{{ department ? '启用可用功能仅扩大部门上限，不会自动授予任何项目权限。项目负责人仍需在具体项目分配成员工作。' : '实际可用权限由部门上限与项目授权共同决定。添加组合会保留已选权限，包括项目管理权限。' }}</p>
+    <p class="field-hint">{{ department ? '启用可用功能仅扩大部门上限，不会自动授予任何项目权限。项目负责人仍需在具体项目分配成员工作。' : administratorAccess ? '管理员已有全局协作管理权限。这里维护额外的项目授权，开发和敏感资产仍需部门许可及完整的项目依赖授权。' : '实际可用权限由部门上限与项目授权共同决定。添加组合会保留已选权限，包括项目管理权限。' }}</p>
     <p v-if="department" class="field-hint">开启功能会补齐必要依赖；关闭功能会同步关闭依赖它的操作。高级设置可只开放查看等细项。</p>
     <div v-if="department" class="permission-capabilities">
       <label v-for="capability in capabilities" :key="capability.id" class="permission-capability">
@@ -61,8 +61,8 @@ function toggleMany(ids, checked) {
       <p v-if="coreBlocked.length" class="field-hint">组合核心功能未开放：{{ labels(coreBlocked) }}。请联系系统管理员调整部门可用功能后再添加此组合。</p>
       <button type="button" :disabled="disabled || !available.length || Boolean(coreBlocked.length)" @click="apply">添加{{ preset.label }}组合</button>
     </div>
-    <p class="field-hint" aria-live="polite">{{ department ? '部门开放功能' : '保存后实际可用功能' }}：{{ effective.map(p => p.label).join('、') || '尚未授权' }}</p>
-    <p v-if="!department && !modelValue.includes('project.view')" class="field-hint">参与中的成员必须有“查看项目”权限，否则无法进入项目。</p>
+    <p class="field-hint" aria-live="polite">{{ department ? '部门开放功能' : administratorAccess ? '本次项目授权可用功能' : '保存后实际可用功能' }}：{{ effective.map(p => p.label).join('、') || '尚未授权' }}</p>
+    <p v-if="!department && !administratorAccess && !modelValue.includes('project.view')" class="field-hint">参与中的成员必须有“查看项目”权限，否则无法进入项目。</p>
     <details><summary>高级权限细项（{{ modelValue.length }} 项已选）</summary>
       <p class="field-hint">选中操作会补齐必要查看权限；取消依赖会同时取消相关操作。启动、续聊、审批会允许执行命令及修改代码。</p>
       <fieldset v-for="group in groups" :key="group" :disabled="disabled"><legend>{{ group }}</legend>

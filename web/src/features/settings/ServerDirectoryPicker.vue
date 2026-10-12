@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { nextTick, onUnmounted, ref } from "vue";
 import { ArrowUpOutlined, FolderOutlined } from "@antdv-next/icons";
 import { appApi } from "../../shared/api/api.js";
@@ -125,7 +126,7 @@ defineExpose({ open });
         </button>
       </div>
       <p v-if="loading" class="muted" role="status">正在读取目录…</p>
-      <p v-if="error" class="error" role="alert">{{ error }}</p>
+      <FeedbackMessage :message="error" type="error" />
       <ul v-if="listing" class="directory-list" aria-label="子目录">
         <li v-for="entry in listing.directories" :key="entry.path">
           <button

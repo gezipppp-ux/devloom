@@ -1,3 +1,4 @@
+const { attachOrigin } = require("../support/baseline-origin.cjs");
 const { worktreeReason } = require("../../src/git/worktree-access.cjs");
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -6,7 +7,7 @@ const { execFileSync } = require('node:child_process');
 const { EventEmitter } = require('node:events');
 const { test } = require('node:test');
 const { temporary } = require('../support/helpers.cjs');
-const { listBaseRefs } = require('../../src/git/repository.cjs');
+const { listBaseBranches } = require('../../src/git/repository.cjs');
 const { readSettings, saveSettings, executionConfig } = require('../../src/config/execution-settings.cjs');
 const { samePath, absolutePath } = require('../../src/shared/paths.cjs');
 const { worktreePlan, createWorktree } = require('../../src/git/worktrees.cjs');
@@ -41,6 +42,7 @@ function repository(directory) {
     '-m',
     'fixture',
   );
+  attachOrigin(directory);
   return git;
 }
 
@@ -60,7 +62,7 @@ test('Web settings persist outside credentials, validate Git and place future wo
     {
       repository: repo,
       worktreeRoot: root,
-      baseRef: 'main',
+      baseBranch: 'main',
       initCommands: ['pnpm install', 'pnpm build'],
     },
     configFile,
@@ -71,14 +73,14 @@ test('Web settings persist outside credentials, validate Git and place future wo
   (await assert.rejects(
     async () =>
       (await saveSettings(
-        { repository: repo, worktreeRoot: 'relative', baseRef: 'main' },
+        { repository: repo, worktreeRoot: 'relative', baseBranch: 'main' },
         configFile,
       )),
     /绝对路径/,
   ));
   (await assert.rejects(async () =>
     (await saveSettings(
-      { repository: repo, worktreeRoot: root, baseRef: 'does-not-exist' },
+      { repository: repo, worktreeRoot: root, baseBranch: 'refs/heads/main' },
       configFile,
     )),
   ));
@@ -94,7 +96,7 @@ test('Web settings persist outside credentials, validate Git and place future wo
     async () => (await saveSettings({ repository: repo, worktreeRoot: repo }, configFile)),
     /不能等于/,
   ));
-  assert.equal((await readSettings(configFile)).baseRef, 'main');
+  assert.equal((await readSettings(configFile)).baseBranch, 'main');
   assert.deepEqual((await readSettings(configFile)).initCommands, [
     'pnpm install',
     'pnpm build',
@@ -102,7 +104,7 @@ test('Web settings persist outside credentials, validate Git and place future wo
   const config = (await executionConfig({ agent: { provider: "codex" } }, configFile));
   assert.deepEqual(config.execution.initCommands, ['pnpm install', 'pnpm build']);
   (await saveSettings(
-    { repository: repo, worktreeRoot: root, baseRef: 'main' },
+    { repository: repo, worktreeRoot: root, baseBranch: 'main' },
     configFile,
   ));
   assert.deepEqual((await readSettings(configFile)).initCommands, [
@@ -110,7 +112,7 @@ test('Web settings persist outside credentials, validate Git and place future wo
     'pnpm build',
   ]);
   (await saveSettings(
-    { repository: repo, worktreeRoot: root, baseRef: 'main', initCommands: [] },
+    { repository: repo, worktreeRoot: root, baseBranch: 'main', initCommands: [] },
     configFile,
   ));
   assert.deepEqual((await readSettings(configFile)).initCommands, []);
@@ -190,7 +192,7 @@ test('a non-TAPD channel runs through real Git, session controller and history w
     {
       repository: repo,
       worktreeRoot: path.join(directory, 'trees'),
-      baseRef: 'main',
+      baseBranch: 'main',
     },
     configFile,
   ));
@@ -260,7 +262,7 @@ test('a non-TAPD channel runs through real Git, session controller and history w
     {
       repository: repo,
       worktreeRoot: path.join(directory, 'new-root'),
-      baseRef: 'main',
+      baseBranch: 'main',
     },
     configFile,
   ));
@@ -349,7 +351,7 @@ test('HTTP dispatches source searches and protects persisted settings with same-
   const payload = JSON.stringify({
     repository: repo,
     worktreeRoot: path.join(directory, 'worktrees'),
-    baseRef: 'main',
+    baseBranch: 'main',
   });
   assert.equal(
     (
@@ -375,7 +377,7 @@ test('HTTP dispatches source searches and protects persisted settings with same-
   assert.ok(!settings.includes('secret-cookie'));
 });
 
-test('base reference options distinguish branches and tags, omit symbolic remotes and never switch branches', (t) => {
+test('baseline options only list origin branches and never switch the checkout', (t) => {
   const directory = temporary(t),
     repo = path.join(directory, 'repo');
   const git = repository(repo);
@@ -383,21 +385,9 @@ test('base reference options distinguish branches and tags, omit symbolic remote
   git('tag', 'main');
   git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main');
-  const refs = listBaseRefs(repo);
-  assert.ok(refs.some((ref) => ref.value === 'HEAD'));
-  assert.ok(
-    refs.some((ref) => ref.value === 'refs/heads/main' && ref.kind === 'local'),
-  );
-  assert.ok(
-    refs.some((ref) => ref.value === 'refs/tags/main' && ref.kind === 'tag'),
-  );
-  assert.ok(
-    refs.some(
-      (ref) =>
-        ref.value === 'refs/remotes/origin/main' && ref.kind === 'remote',
-    ),
-  );
-  assert.ok(!refs.some((ref) => ref.value === 'refs/remotes/origin/HEAD'));
+  git('update-ref', 'refs/remotes/other/private', 'HEAD');
+  const branches = listBaseBranches(repo);
+  assert.deepEqual(branches, [{ value: 'main', label: 'origin/main', name: 'main' }]);
   assert.equal(git('branch', '--show-current'), 'main');
-  assert.throws(() => listBaseRefs('relative-path'), /绝对路径/);
+  assert.throws(() => listBaseBranches('relative-path'), /绝对路径/);
 });

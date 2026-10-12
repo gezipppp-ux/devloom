@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { onUnmounted, ref, watch } from "vue";
 import { api } from "../../shared/api/api.js";
 import { taskTypes, taskProgresses } from "./task-metadata.js";
@@ -80,6 +81,6 @@ async function update(field, event) {
         busy ? "正在保存…" : "进度由你维护"
       }}</span>
     </div>
-    <p v-if="error" class="error" role="alert">{{ error }}</p>
+    <FeedbackMessage :message="error" type="error" />
   </div>
 </template>

@@ -1,3 +1,4 @@
+const { attachOrigin } = require("../support/baseline-origin.cjs");
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -54,6 +55,7 @@ function repository(directory) {
     '-m',
     'fixture',
   );
+  attachOrigin(directory);
   return git;
 }
 
@@ -266,7 +268,7 @@ test(
       {
         repository: repo,
         worktreeRoot: path.join(directory, 'worktrees'),
-        baseRef: 'main',
+        baseBranch: 'main',
         initCommands: [],
       },
       configFile,
@@ -312,3 +314,38 @@ test(
     await assert.rejects(manager.start(input), /已有运行记录/);
   },
 );
+
+test('explicit session baseline overrides file defaults through both configuration merges without changing saved settings', { timeout: 20000 }, async t => {
+  const { channel, directory, configFile } = fixture(t);
+  const repo = path.join(directory, 'repo');
+  const git = repository(repo);
+  const mainCommit = git('rev-parse', 'main');
+  git('switch', '-c', 'release/1');
+  fs.writeFileSync(path.join(repo, 'release.txt'), 'remote release baseline');
+  git('add', 'release.txt');
+  git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'core.hooksPath=/dev/null', 'commit', '-m', 'release');
+  const releaseCommit = git('rev-parse', 'HEAD');
+  git('push', 'origin', 'release/1');
+  git('switch', 'main');
+  git('branch', '-D', 'release/1');
+  await saveSettings({ repository: repo, worktreeRoot: path.join(directory, 'trees'), baseBranch: 'main', initCommands: [] }, configFile);
+  const client = new FakeClient();
+  const manager = new SessionManager({ configFile, runsDirectory: path.join(directory, 'runs'), client, channels: new ChannelRegistry([channel]) });
+  t.after(() => manager.close());
+  const started = await manager.start({ channel: 'manual', requestId: randomUUID(), title: '指定发布基线', content: '模拟开发', baseBranch: 'release/1' });
+  const runtime = manager.sessions.get(started.key);
+  const deadline = Date.now() + 15000;
+  while (!runtime.turnId && runtime.status !== 'failed' && Date.now() < deadline)
+    await new Promise(resolve => setTimeout(resolve, 5));
+  assert.ok(runtime.turnId, runtime.error || 'fake Agent did not start');
+  const state = await manager.store.read(started.key);
+  assert.equal(state.worktree.baseline.branch, 'release/1');
+  assert.equal(state.worktree.baseline.commit, releaseCommit);
+  assert.notEqual(releaseCommit, mainCommit);
+  assert.equal(execFileSync('git', ['-C', state.worktree.path, 'rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }).trim(), releaseCommit);
+  assert.equal(fs.readFileSync(path.join(state.worktree.path, 'release.txt'), 'utf8'), 'remote release baseline');
+  assert.equal(git('branch', '--show-current'), 'main');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(directory, 'runner.local.json'), 'utf8')).baseBranch, 'main');
+  client.notify('turn/completed', { turn: { id: runtime.turnId, status: 'completed' } });
+  await runtime.operation;
+});

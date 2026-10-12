@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, nextTick, onUnmounted, ref } from "vue";
 import { api } from "../../shared/api/api.js";
 
@@ -204,7 +205,7 @@ defineExpose({ open });
           </div>
         </form>
       </template>
-      <p v-if="error" class="error" role="alert">{{ error }}</p>
+      <FeedbackMessage :message="error" type="error" />
       <div v-if="!snapshot && !loading" class="actions">
         <button type="button" @click="close">取消</button>
         <button type="button" :disabled="busy" @click="refresh">

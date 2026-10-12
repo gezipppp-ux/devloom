@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { nextTick, onUnmounted, ref, watch } from "vue";
 import { EditOutlined } from "@antdv-next/icons";
 import { api } from "../../shared/api/api.js";
@@ -90,7 +91,7 @@ async function save() {
           {{ busy ? "保存中…" : "保存" }}
         </button>
       </div>
-      <p v-if="error" class="error" role="alert">{{ error }}</p>
+      <FeedbackMessage :message="error" type="error" />
     </form>
     <div v-else class="session-title-display">
       <h1 class="session-heading">{{ title }}</h1>

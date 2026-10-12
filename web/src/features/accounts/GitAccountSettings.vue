@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { ReloadOutlined } from "@antdv-next/icons";
 import FormSection from "../../shared/components/FormSection.vue";
 import { useGitAccounts } from "./use-git-accounts.js";
@@ -118,10 +119,11 @@ const {
           v-model="form.host"
           required
           :disabled="busy"
-          placeholder="例如：git.example.com"
+          :placeholder="form.authType === 'ssh' ? '例如：gitee.com' : '例如：https://gitee.com'"
+          aria-describedby="git-account-host-hint"
         />
-        <p class="field-hint">
-          填写 Git 服务的主机名；项目仓库由管理员单独维护。
+        <p id="git-account-host-hint" class="field-hint">
+          {{ form.authType === 'ssh' ? '填写主机名和可选端口，例如 gitee.com，不要填写 git@gitee.com 或仓库路径。' : '填写完整主机地址，例如 https://gitee.com，不包含仓库路径。' }}项目仓库由管理员单独维护。
         </p>
         </a-form-item
       >
@@ -179,8 +181,8 @@ const {
       </a-form-item>
       <div class="form-columns"><a-form-item label="提交作者姓名" html-for="git-author-name"><input id="git-author-name" v-model="form.authorName" :disabled="busy" /></a-form-item><a-form-item label="提交作者邮箱" html-for="git-author-email"><input id="git-author-email" v-model="form.authorEmail" type="email" :disabled="busy" /></a-form-item></div>
       <p class="field-hint">提交作者身份与 Git 登录凭据独立；不填写时沿用服务端已配置的 Git 作者身份。</p>
-      <p v-if="error" class="error" role="alert">{{ error }}</p>
-      <p v-if="notice" class="success" role="status">{{ notice }}</p>
+      <FeedbackMessage :message="error" type="error" />
+      <FeedbackMessage :message="notice" type="success" />
       <div class="actions">
         <button type="button" :disabled="busy" @click="edit()">新建账号</button
         ><button type="submit" class="primary" :disabled="busy || !ready">

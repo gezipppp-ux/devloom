@@ -35,7 +35,9 @@ class ProjectContentServices {
   async listIssues(projectId, actor, input) {
     const page = pageInput(input);
     if (input.type) page.type = choice(input.type, ISSUE_TYPES, "事项类型");
-    if (input.status) page.status = text(input.status, "状态", 30);
+    if (input.releaseId !== undefined) page.releaseId = ["none", "unassigned"].includes(input.releaseId) ? null : identifier(input.releaseId, "发布版本");
+    page.includeArchived = input.includeArchived === "true" || input.includeArchived === "1";
+    if (input.status) page.status = text(input.status, "状态", 100);
     return this.read(projectId, actor, ["issue.view"], async () => presentPage(await this.store.issues(projectId, page), presentIssue));
   }
   async readIssue(projectId, id, actor) {

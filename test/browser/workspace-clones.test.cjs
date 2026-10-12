@@ -30,7 +30,7 @@ async function verifyWorkspaceClones(page, origin, output) {
     await page.screenshot({ path: path.join(output, `workspace-clone-progress-${width}.png`) });
   }
   disconnected = true;
-  await dialog.getByRole("alert").filter({ hasText: "进度暂时无法更新" }).waitFor();
+  await page.locator('.operation-message[data-type="error"]').filter({ hasText: "进度暂时无法更新" }).waitFor();
   assert.equal(await dialog.getByRole("progressbar").getAttribute("value"), "63");
   disconnected = false;
   status = "failed";

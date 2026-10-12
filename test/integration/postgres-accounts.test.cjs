@@ -14,8 +14,8 @@ test("PostgreSQL account changes invalidate sessions without storing their beare
   const database = await fixture.open();
   const accounts = new AccountStore(database);
   const sessions = new AuthSessionStore(database);
-  const admin = await accounts.create({ username: "admin", password_hash: "fixture-hash", role: "admin" }, { initial: true });
-  const user = await accounts.create({ username: "member", password_hash: "fixture-hash", role: "member", must_change_password: true });
+  const admin = await accounts.create({ username: "admin", displayName: "admin", password_hash: "fixture-hash", role: "admin" }, { initial: true });
+  const user = await accounts.create({ username: "member", displayName: "member", password_hash: "fixture-hash", role: "member", must_change_password: true });
   assert.equal(user.must_change_password, true);
   const set = promisify(sessions.set.bind(sessions));
   const get = promisify(sessions.get.bind(sessions));
@@ -39,11 +39,12 @@ test("concurrent PostgreSQL administrator changes cannot remove every active adm
   await fixture.deploy();
   const database = await fixture.open();
   const accounts = new AccountStore(database);
-  const first = await accounts.create({ username: "first", password_hash: "fixture-hash", role: "admin" });
-  const second = await accounts.create({ username: "second", password_hash: "fixture-hash", role: "admin" });
+  const first = await accounts.create({ username: "first", displayName: "first", password_hash: "fixture-hash", role: "admin" });
+  const second = await accounts.create({ username: "second", displayName: "second", password_hash: "fixture-hash", role: "admin" });
   const results = await Promise.allSettled([(accounts.update(first.id, { role: "member" })), (accounts.update(second.id, { role: "member" }))]);
   assert.equal(results.filter(({ status }) => status === "fulfilled").length, 1);
-  assert.equal(results.find(({ status }) => status === "rejected").reason.statusCode, 409);
+  const rejected = results.find(({ status }) => status === "rejected").reason;
+  assert.equal(rejected.statusCode, 409, `${rejected.code}: ${rejected.message}`);
   assert.equal(await database.client.user.count({ where: { role: "admin", status: "active" } }), 1);
 });
 

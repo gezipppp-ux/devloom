@@ -9,7 +9,7 @@
 ```js
 {
   execution: {
-    repository: "/projects/repository", baseRef: "main",
+    repository: "/projects/repository", baseBranch: "main",
     worktreeRoot: "/projects/worktree", initCommands: [],
     projectName: "example", gitAccountId: "...", remoteUrl: "..."
   },

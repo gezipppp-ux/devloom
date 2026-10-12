@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { FolderOpenOutlined } from "@antdv-next/icons";
 import { appApi } from "../../shared/api/api.js";
@@ -127,10 +128,8 @@ onUnmounted(() => {
         修改后对所有工作区的新任务生效；已有任务继续使用记录的路径，不会移动目录。
       </p>
       <p v-if="loading" class="muted" role="status">正在加载基础目录…</p>
-      <p v-if="error" class="error" role="alert">{{ error }}</p>
-      <p v-if="saved && !dirty" class="notice" role="status">
-        基础目录已保存，后续新任务将使用新的路径配置。
-      </p>
+      <FeedbackMessage :message="error" type="error" />
+      <FeedbackMessage :message="saved ? '基础目录已保存，后续新任务将使用新的路径配置。' : ''" type="success" />
       <div class="actions">
         <button
           v-if="savedStorageRoot === null && !loading"

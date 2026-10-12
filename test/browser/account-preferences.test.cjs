@@ -5,7 +5,7 @@ const { navigateWorkspace } = require("../support/browser-navigation.cjs");
 
 async function verifyAccountPreferenceRaces(browser, origin) {
   const context = await browser.newContext();
-  const users = ["alice", "bob"].map((id) => ({ id, username: id, role: "member", status: "active", mustChangePassword: false }));
+  const users = ["alice", "bob"].map((id) => ({ id, username: id, displayName: id, role: "member", status: "active", mustChangePassword: false }));
   const settings = new Map(users.map((user) => [user.id, { model: null, reasoningEffort: null, permissionMode: "ask", grouping: "type", notificationsEnabled: false }]));
   const workspaces = ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"].map((id, index) => ({ id, name: `项目 ${index ? "B" : "A"}` }));
   const preferences = new Map();

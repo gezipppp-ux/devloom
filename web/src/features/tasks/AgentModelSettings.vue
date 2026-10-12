@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { watchEffect } from "vue";
 import FormSection from "../../shared/components/FormSection.vue";
 import AgentModelControls from "../../shared/components/AgentModelControls.vue";
@@ -62,27 +63,20 @@ function changeModel(settings) {
         @update:model-value="emit('update:permissionMode', $event)"
       />
     </a-form-item>
-    <p v-if="permissions.error.value" role="alert" class="error">
-      权限选项加载失败：{{
-        permissions.error.value
-      }}。确认权限可用后才能创建任务。
-      {{ permissions.errorHint.value }}
-      <button
+    <FeedbackMessage :message="permissions.error.value ? `权限选项加载失败：${permissions.error.value}。确认权限可用后才能创建任务。 ${permissions.errorHint.value}` : ''" type="error" />
+    <div v-if="permissions.error.value"><button
         type="button"
         class="text-button"
         :disabled="permissions.loading.value"
         @click="permissions.refresh"
       >
         刷新权限选项
-      </button>
-    </p>
+      </button></div>
     <p v-if="!permissions.loading.value && !permissions.error.value && !permissions.isAvailable(permissionMode)" role="alert" class="error">当前权限模式不可用，请选择可用的权限模式。</p>
     <p v-if="loading" role="status" class="field-hint">正在读取可用模型…</p>
     <p v-if="!loading && !error && !models.length" class="field-hint">
       {{ permissions.agent.value?.label || 'Agent' }} 未返回可选模型，可使用默认配置或稍后刷新。
     </p>
-    <p v-if="error" role="alert" class="error">
-      模型列表加载失败：{{ error }}。当前选择会保留。
-    </p>
+    <FeedbackMessage :message="error ? `模型列表加载失败：${error}。当前选择会保留。` : ''" type="error" />
   </FormSection>
 </template>

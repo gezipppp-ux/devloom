@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, onUnmounted, reactive, ref, watch } from "vue";
 import UserSearchSelect from "./UserSearchSelect.vue";
 import ManualRequirementFields from "./ManualRequirementFields.vue";
@@ -353,7 +354,7 @@ async function start() {
         v-model:permission-mode="form.permissionMode"
         :disabled="busy || uploading"
       />
-      <p v-if="error" role="alert" class="error">{{ error }}</p>
+      <FeedbackMessage :message="error" type="error" />
       <div class="actions page-actions">
         <button
           type="button"

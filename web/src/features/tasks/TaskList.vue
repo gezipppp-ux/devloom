@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, ref } from "vue";
 import { statusLabel } from "../../shared/api/api.js";
 import { accountSession, saveAccountSettings } from "../../shared/api/account-session.js";
@@ -55,7 +56,7 @@ const groups = computed(() => {
       <option value="none">不分组</option>
     </select>
   </div>
-  <p v-if="preferenceError" class="error" role="alert">分组保存失败：{{ preferenceError }}</p>
+  <FeedbackMessage :message="preferenceError ? `分组保存失败：${preferenceError}` : ''" type="error" />
   <nav class="task-list" aria-label="会话列表">
     <details
       v-for="group in groups"

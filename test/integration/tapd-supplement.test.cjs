@@ -1,3 +1,4 @@
+const { attachOrigin } = require("../support/baseline-origin.cjs");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -136,6 +137,7 @@ test("HTTP TAPD supplements reach the first Codex prompt and persist in task and
     "-m",
     "fixture",
   );
+  attachOrigin(repository);
   fs.writeFileSync(
     configFile,
     JSON.stringify({
@@ -144,7 +146,7 @@ test("HTTP TAPD supplements reach the first Codex prompt and persist in task and
       execution: {
         repository,
         worktreeRoot: path.join(directory, "trees"),
-        baseRef: "main",
+        baseBranch: "main",
       },
     }),
   );

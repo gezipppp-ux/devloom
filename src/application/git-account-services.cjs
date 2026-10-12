@@ -2,8 +2,7 @@ const { GitAccountStore } = require("../storage/git-account-store.cjs");
 const {
   validateGitAccount,
   gitAccountId,
-  remoteHost,
-  remoteAuthType,
+  resolveAccountRemote,
 } = require("../domain/git-account.cjs");
 const { accountError } = require("../domain/account.cjs");
 const { testGitConnection } = require("../git/account-credentials.cjs");
@@ -57,11 +56,10 @@ class GitAccountServices {
     const { projectId, ...draft } = input;
     const context = await this.projects.authorize(projectId, actor, "code.operate");
     const value = id && !Object.keys(draft).length ? await this.store.read(gitAccountId(id), actor.id) : (await this.candidate(actor, draft, id)).value;
-    const remote = context.project.repository.remoteUrl;
-    if (value.host !== remoteHost(remote) || value.authType !== remoteAuthType(remote)) throw accountError("Git 账号主机或认证方式与项目仓库不匹配。");
+    const remote = resolveAccountRemote(value, context.project.remoteUrl);
     await this.checkConnection(value, remote);
     const current = await this.projects.authorize(projectId, actor, "code.operate");
-    if (current.project.revision !== context.project.revision || current.project.repository.revision !== context.project.repository.revision)
+    if (current.project.revision !== context.project.revision)
       throw accountError("项目或仓库在检测期间已变更，请重试。", 409);
     return { ok: true };
   }

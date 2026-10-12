@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { ref, useId } from "vue";
 import { useTapdSelection } from "./use-tapd-selection.js";
 
@@ -61,7 +62,7 @@ function move(index, offset) {
         </div>
       </li>
     </ol>
-    <p v-if="error || selectionError" role="alert" class="error">{{ error || selectionError }}</p>
+    <FeedbackMessage :message="error || selectionError" type="error" />
   </section>
 </template>
 

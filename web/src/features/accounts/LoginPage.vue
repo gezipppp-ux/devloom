@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { onUnmounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { accountSession, loginAccount } from "../../shared/api/account-session.js";
@@ -27,7 +28,7 @@ async function submit() {
       <a-form :model="form" layout="vertical" @finish="submit">
         <a-form-item label="账号"><input v-model="form.username" aria-label="账号" autocomplete="username" required maxlength="80" :disabled="busy" /></a-form-item>
         <a-form-item label="密码"><input v-model="form.password" aria-label="密码" type="password" autocomplete="current-password" required :disabled="busy" /></a-form-item>
-        <p v-if="error || accountSession.error" class="error" role="alert">{{ error || accountSession.error }}</p>
+        <FeedbackMessage :message="error || accountSession.error" type="error" />
         <button class="primary" type="submit" :disabled="busy || !form.username.trim() || !form.password">{{ busy ? "正在登录…" : "登录" }}</button>
       </a-form>
     </section>

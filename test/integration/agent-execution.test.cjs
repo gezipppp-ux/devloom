@@ -22,6 +22,8 @@ function fixture(t, config) {
     },
   };
   const dependencies = {
+    repositoryCommonDirectory: (repository) => repository,
+    fetchDevelopmentBaseline: async () => ({ remote: "origin", branch: "main", commit: "a".repeat(40), fetchedAt: new Date().toISOString() }),
     repositoryFor: () => { calls.push("repository"); return root; },
     worktreePlan: () => ({ path: path.join(root, "worktree"), branch: "existing-prefix/fixture" }),
     createWorktree: () => calls.push("worktree"),

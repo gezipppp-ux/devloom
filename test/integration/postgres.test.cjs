@@ -11,7 +11,7 @@ test("PostgreSQL deploy is repeatable and Prisma preserves JSON, bytes and times
   await fixture.deploy();
   const database = await fixture.open();
   assert.equal(await database.connect(), database);
-  const user = await database.client.user.create({ data: { username: "alice", passwordHash: "fixture-hash" } });
+  const user = await database.client.user.create({ data: { username: "alice", displayName: "alice", passwordHash: "fixture-hash" } });
   const workspace = await database.client.workspace.create({ data: { ownerUserId: user.id, name: "开发空间" } });
   assert.equal(user.mustChangePassword, false);
   assert.ok(user.createdAt instanceof Date);
@@ -74,7 +74,7 @@ test("PostgreSQL enforces concurrent uniqueness and ownership foreign keys", opt
   await fixture.deploy();
   const database = await fixture.open();
   const results = await Promise.allSettled([1, 2].map(() => database.client.user.create({
-    data: { username: "same-name", passwordHash: "fixture-hash" },
+    data: { username: "same-name", displayName: "same-name", passwordHash: "fixture-hash" },
   })));
   assert.equal(results.filter(({ status }) => status === "fulfilled").length, 1);
   assert.equal(results.find(({ status }) => status === "rejected").reason.code, "P2002");

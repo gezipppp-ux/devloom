@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 /* global document, navigator */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { CloseOutlined, ExpandOutlined, CompressOutlined, ReloadOutlined, CopyOutlined, FileTextOutlined } from "@antdv-next/icons";
@@ -27,6 +28,7 @@ const choices = computed(() => {
 function choose(path, line = null) { selected.value = path; targetLine.value = line; copied.value = ""; }
 function reload() { void refresh(); void list.refresh(); }
 async function copy() {
+  copied.value = "";
   try { await navigator.clipboard.writeText(source.value); copied.value = "已复制"; }
   catch { copied.value = "复制不可用，可选中源码复制。"; }
 }
@@ -58,7 +60,7 @@ onUnmounted(() => document.removeEventListener("keydown", escape));
       <select aria-label="预览文件" :value="selected" @change="choose($event.target.value)"><option v-for="entry in choices" :key="entry.path" :value="entry.path">{{ entry.status }} {{ entry.path }}</option></select>
       <button type="button" :disabled="loading || list.loading.value" aria-label="刷新文件与差异" @click="reload"><ReloadOutlined /></button>
     </div>
-    <p v-if="list.error.value" class="file-list-warning" role="status">变更列表：{{ list.error.value }}</p>
+    <FeedbackMessage :message="list.error.value ? `变更列表：${list.error.value}` : ''" type="error" />
     <nav class="file-mode-tabs" aria-label="文件查看方式">
       <button type="button" :aria-pressed="mode === 'source'" @click="mode = 'source'">源码</button>
       <button type="button" :aria-pressed="mode === 'diff'" @click="mode = 'diff'">变更对比</button>
@@ -69,10 +71,10 @@ onUnmounted(() => document.removeEventListener("keydown", escape));
       <label v-if="mode === 'diff'" class="file-layout-choice">显示方式<select v-model="layout" aria-label="差异显示方式"><option value="unified">统一差异</option><option value="split">左右对照</option></select></label>
       <button v-else type="button" :disabled="!file?.current?.exists || file?.current?.text == null" @click="copy"><CopyOutlined /> 复制源码</button>
     </div>
-    <p v-if="copied" class="file-feedback" role="status">{{ copied }}</p>
+    <FeedbackMessage :message="copied" :type="copied === '已复制' ? 'success' : 'error'" />
     <div ref="codeArea" class="file-code-area">
       <p v-if="loading" class="file-feedback" role="status">正在读取文件…</p>
-      <div v-else-if="error" class="file-feedback"><p class="error" role="alert">{{ error }}</p><button type="button" @click="reload">重试</button></div>
+      <div v-else-if="error" class="file-feedback"><FeedbackMessage :message="error" type="error" /><button type="button" @click="reload">重试</button></div>
       <div v-else-if="file?.candidates" class="file-candidates"><p>找到多个同名文件，请选择完整路径：</p><button v-for="path in file.candidates" :key="path" type="button" @click="choose(path)">{{ path }}</button></div>
       <template v-else-if="file?.path">
         <template v-if="mode === 'source'">

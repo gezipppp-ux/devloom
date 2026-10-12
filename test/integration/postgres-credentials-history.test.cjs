@@ -17,7 +17,7 @@ test("PostgreSQL credentials stay encrypted, owner-scoped and protected against 
   const database = await fixture.open();
   database.encryptionKey = randomBytes(32);
   const store = new GitAccountStore(database);
-  const user = await database.client.user.create({ data: { username: "owner", passwordHash: "fixture" } });
+  const user = await database.client.user.create({ data: { username: "owner", displayName: "owner", passwordHash: "fixture" } });
   const input = { name: "primary", authType: "http", host: "https://example.test", username: "owner", password: "private-access-token" };
   const saved = await store.save(user.id, input);
   assert.equal(saved.password, input.password);

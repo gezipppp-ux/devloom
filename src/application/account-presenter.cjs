@@ -3,6 +3,7 @@ function publicAccount(row) {
     ? {
         id: row.id,
         username: row.username,
+        displayName: row.displayName,
         role: row.role,
         status: row.status,
         departmentId: row.departmentId || null,

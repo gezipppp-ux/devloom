@@ -1,3 +1,4 @@
+const { attachOrigin } = require("./baseline-origin.cjs");
 const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
@@ -24,8 +25,9 @@ async function fusionFixture(t, { database = true } = {}) {
   fs.writeFileSync(path.join(repository, "README.md"), "fixture");
   git("add", ".");
   git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "core.hooksPath=/dev/null", "commit", "-m", "fixture");
+  attachOrigin(repository);
   const configFile = path.join(root, "config.json");
-  (await writeConfig(configFile, { tapd: { session }, agent: { provider: "codex" }, execution: { repository, worktreeRoot: path.join(root, "trees"), baseRef: "main" } }));
+  (await writeConfig(configFile, { tapd: { session }, agent: { provider: "codex" }, execution: { repository, worktreeRoot: path.join(root, "trees"), baseBranch: "main" } }));
   const context = { root, database: db, configFile, repository, git, detailCalls: [], failId: null, detailGate: null };
   const channel = createTapdChannel(configFile, {
     detail: async (_session, selected) => {

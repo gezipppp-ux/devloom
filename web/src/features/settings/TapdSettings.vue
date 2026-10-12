@@ -1,5 +1,7 @@
 <script setup>
-import { onMounted, reactive, ref } from "vue";
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
+import { showMessage } from "../../shared/components/operation-messages.js";
+import { onMounted, onUnmounted, reactive, ref } from "vue";
 import { api } from "../../shared/api/api.js";
 import FormSection from "../../shared/components/FormSection.vue";
 const emit = defineEmits(["saved"]);
@@ -11,34 +13,37 @@ const form = reactive({
 const hosts = ref(""),
   hasCookie = ref(false),
   busy = ref(true),
-  message = ref(""),
   error = ref("");
+let disposed = false;
+onUnmounted(() => { disposed = true; });
 onMounted(async () => {
   try {
     const result = await api("/settings/tapd");
+    if (disposed) return;
     form.workspaceId = result.workspaceId;
     hosts.value = result.imageHosts.join("\n");
     hasCookie.value = result.hasCookie;
   } catch (e) {
-    error.value = e.message;
+    if (!disposed) error.value = e.message;
   } finally {
-    busy.value = false;
+    if (!disposed) busy.value = false;
   }
 });
 async function submit(check) {
   busy.value = true;
-  message.value = error.value = "";
+  error.value = "";
   try {
     const result = await api(`/settings/tapd${check ? "/check" : ""}`, {
       ...form,
       imageHosts: hosts.value.split(/\s+/).filter(Boolean),
     });
-    if (check) message.value = result.message;
+    if (disposed) return;
+    if (check) showMessage(result.message, "success");
     else {
       hasCookie.value = result.hasCookie;
       form.cookie = "";
       form.clearCookie = false;
-      message.value = "TAPD 配置已保存。";
+      showMessage("TAPD 配置已保存。", "success");
       emit("saved");
     }
   } catch (e) {
@@ -110,8 +115,8 @@ async function submit(check) {
       <p class="field-hint">
         允许下载需求中的外部图片；填写完整域名，无需填写协议和路径。
       </p>
-      <p v-if="error" class="error" role="alert">{{ error }}</p>
-      <p v-if="message" class="notice" role="status">{{ message }}</p>
+      <FeedbackMessage :message="error" type="error" />
+
       <div class="actions">
         <button
           type="button"

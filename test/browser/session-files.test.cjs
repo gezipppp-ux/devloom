@@ -62,7 +62,7 @@ async function verifySessionFiles(browser, origin, key, errors, output) {
     await panel.getByText(/当前文件已删除/).waitFor();
     await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "无法定位", exact: true }).click();
-    await panel.getByRole("alert").filter({ hasText: "未找到此文件" }).waitFor();
+    await page.locator('.operation-message[data-type="error"]').filter({ hasText: "未找到此文件" }).waitFor();
     await page.keyboard.press("Escape");
     assert.equal(await page.locator('.message-markdown button[data-file-path="outside.ts"]').count(), 0);
     assert.equal(await page.locator('.message-markdown button button').count(), 0);
@@ -94,7 +94,7 @@ async function verifySessionFiles(browser, origin, key, errors, output) {
     assert.equal(await panel.locator(".file-panel-heading small").innerText(), "migration.sql");
     fail = true;
     await panel.getByRole("button", { name: "刷新文件与差异" }).click();
-    await panel.getByRole("alert").waitFor();
+    await page.locator('.operation-message[data-type="error"]').filter({ hasText: "未找到此文件" }).waitFor();
     fail = false;
     await panel.getByRole("button", { name: "重试", exact: true }).click();
     await panel.locator(".file-diff-line.removed").waitFor();

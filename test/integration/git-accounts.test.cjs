@@ -16,6 +16,7 @@ const { readSettings, saveSettings } = require("../../src/config/execution-setti
 const {
   testGitConnection,
   createGitCredentialEnvironment,
+  withGitAccount,
 } = require("../../src/git/account-credentials.cjs");
 const { cloneProject } = require("../../src/git/project-clone.cjs");
 const { withSshPrivateKey } = require("../../src/git/ssh-key-files.cjs");
@@ -36,7 +37,7 @@ async function fixture(t, options) {
   const actor = await accounts.create({ username: "admin", password: "fixture-password" }, null, true);
   const department = await database.client.department.create({ data: { name: "Fixture department", permissions: [] } });
   const other = await accounts.create({ departmentId: department.id, username: "member", password: "fixture-password" }, actor);
-  const services = new GitAccountServices(database, { projects: { authorize: async () => ({ project: { repository: { remoteUrl: remote.remoteUrl } } }) } });
+  const services = new GitAccountServices(database, { projects: { authorize: async () => ({ project: { remoteUrl: remote.remoteUrl } }) } });
   const input = { name: "开发 HTTP Git", authType: "http", host: new URL(remote.remoteUrl).origin, username: remote.username, password: remote.password };
   return { directory, database, remote, storageRoot, actor, other, services, input };
 }
@@ -72,6 +73,34 @@ test("empty Git repositories are a successful connectivity test", async t => {
   assert.equal((await services.check(actor, { ...input, projectId: "fixture-project" })).ok, true);
   assert.equal((await services.list(actor)).length, 0);
   assert.ok((await services.save(actor, input)).id);
+});
+
+test("Gitee project checks use the selected account transport and retain credential ownership and host boundaries", async t => {
+  const { database, actor, other } = await fixture(t);
+  const calls = [];
+  const project = { remoteUrl: "https://gitee.com/team/repo.git", revision: 1 };
+  const services = new GitAccountServices(database, {
+    projects: { authorize: async () => ({ project: { ...project } }) },
+    checkConnection: async (account, remote) => { calls.push({ id: account.id, authType: account.authType, remote }); },
+  });
+  const draft = await services.store.createKeyDraft(actor.id, { sshPrivateKey: "fixture-private", publicKey: "fixture-public" });
+  const ssh = await services.save(actor, { name: "Gitee SSH", authType: "ssh", host: "gitee.com", keyDraftId: draft.id });
+  const http = await services.save(actor, { name: "Gitee HTTPS", authType: "http", host: "https://gitee.com", username: "login", password: "fixture-secret" });
+  assert.deepEqual(await services.check(actor, { projectId: "fixture-project" }, ssh.id), { ok: true });
+  assert.deepEqual(calls.pop(), { id: ssh.id, authType: "ssh", remote: "git@gitee.com:team/repo.git" });
+  assert.equal(project.remoteUrl, "https://gitee.com/team/repo.git");
+  for (const remote of ["git@gitee.com:team/repo.git", "ssh://git@gitee.com:22/team/repo.git"]) {
+    project.remoteUrl = remote;
+    assert.deepEqual(await services.check(actor, { projectId: "fixture-project" }, http.id), { ok: true });
+    assert.deepEqual(calls.pop(), { id: http.id, authType: "http", remote: "https://gitee.com/team/repo.git" });
+  }
+  project.remoteUrl = "https://gitee.com/team/repo.git";
+  await assert.rejects(services.check(other, { projectId: "fixture-project" }, ssh.id), /不存在/);
+  for (const remote of ["https://other.example/team/repo.git", "https://gitee.com:8443/team/repo.git"]) {
+    project.remoteUrl = remote;
+    await assert.rejects(services.check(actor, { projectId: "fixture-project" }, ssh.id), { code: "GIT_ACCOUNT_REMOTE_MISMATCH" });
+  }
+  assert.deepEqual(calls, [], "rejected credentials and remotes never reach the network adapter");
 });
 
 test("generated SSH keys expose only public material, stay owner-scoped and are consumed only after successful save", async t => {
@@ -198,16 +227,54 @@ test("a workspace provides its saved HTTP Git account to Codex worktree processe
   } finally { rotated.dispose(); }
 });
 
-test("Codex SSH credential environments clean their private key when the client closes", async () => {
+test("Codex SSH credential environments keep an empty config beside the private key and clean both when the client closes", async t => {
   const credentials = await createGitCredentialEnvironment(
     { authType: "ssh", sshPrivateKey: "fixture private key" },
     "git@git.example.test:team/project.git",
   );
+  t.after(() => credentials.dispose());
   const file = /-i '([^']+)'/.exec(credentials.env.GIT_SSH_COMMAND)?.[1];
+  const configFile = /-F '([^']+)'/.exec(credentials.env.GIT_SSH_COMMAND)?.[1];
   assert.ok(file);
+  assert.ok(configFile);
+  assert.equal(path.dirname(configFile), path.dirname(file));
+  assert.equal(fs.readFileSync(configFile, "utf8"), "");
   assert.equal(fs.existsSync(file), true);
   credentials.dispose();
   assert.equal(fs.existsSync(file), false);
+  assert.equal(fs.existsSync(configFile), false);
+  assert.equal(fs.existsSync(path.dirname(file)), false);
+});
+
+test("SSH Git operations keep their isolated config alive until completion and clean it on success or failure", async () => {
+  for (const fail of [false, true]) {
+    let file, configFile;
+    const operation = withGitAccount(
+      { authType: "ssh", sshPrivateKey: "fixture private key" },
+      "git@git.example.test:team/project.git",
+      run => run(["ls-remote", "--", "git@git.example.test:team/project.git"]),
+      async (args, env) => {
+        assert.equal(args[0], "ls-remote");
+        file = /-i '([^']+)'/.exec(env.GIT_SSH_COMMAND)?.[1];
+        configFile = /-F '([^']+)'/.exec(env.GIT_SSH_COMMAND)?.[1];
+        assert.ok(file);
+        assert.ok(configFile);
+        assert.equal(path.dirname(configFile), path.dirname(file));
+        assert.equal(fs.readFileSync(configFile, "utf8"), "");
+        assert.equal(fs.readFileSync(file, "utf8"), "fixture private key");
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(fs.existsSync(configFile), true);
+        assert.equal(env.GIT_SSH_VARIANT, "ssh");
+        if (fail) throw new Error("fixture SSH failure");
+        return "fixture refs";
+      },
+    );
+    if (fail) await assert.rejects(operation, /fixture SSH failure/);
+    else assert.equal(await operation, "fixture refs");
+    assert.equal(fs.existsSync(file), false);
+    assert.equal(fs.existsSync(configFile), false);
+    assert.equal(fs.existsSync(path.dirname(file)), false);
+  }
 });
 
 test("failed or competing clones clean only their own directory; symlinks and existing code are preserved", async t => {

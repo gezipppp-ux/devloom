@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, nextTick, ref } from "vue";
 import { ReloadOutlined, DownloadOutlined } from "@antdv-next/icons";
 import FormSection from "../../shared/components/FormSection.vue";
@@ -10,6 +11,13 @@ const disabled = computed(() => loading.value || checking.value || submitting.va
 const labels = { pass: "满足要求", fail: "需要处理", unknown: "检测异常", warning: "需确认" };
 const latestLabels = { unchecked: "尚未检查", error: "检查失败", unknown: "无法比较", available: "有新版本", current: "当前版本不低于更新目标" };
 const toolNames = { codex: "Codex CLI", npm: "npm", git: "Git", node: "Node.js" };
+const jobMessage = computed(() => {
+  if (!job.value) return "";
+  const current = job.value;
+  const status = { running: "更新中", completed: "更新成功", "restart-required": "已安装，待重启生效", failed: "更新失败" }[current.status] || current.status;
+  return `${toolNames[current.id]} → ${current.version} · ${status}。${current.message || ""}`;
+});
+const jobMessageType = computed(() => ({ running: "info", completed: "success", "restart-required": "warning", failed: "error" }[job.value?.status] || "info"));
 async function open(tool) {
   selected.value = tool;
   await nextTick();
@@ -30,12 +38,10 @@ async function confirm() {
       <button :disabled="disabled" @click="load()"><ReloadOutlined aria-hidden="true" />{{ loading ? '检测中…' : '重新检测' }}</button>
       <button class="primary" :disabled="disabled || !report" @click="load(true)">{{ checking ? '检查版本中…' : '检查最新版本' }}</button>
     </div>
-    <p v-if="error" class="error" role="alert">{{ error }}</p>
+    <FeedbackMessage :message="error" type="error" />
     <p v-if="submitting" class="muted" role="status">正在核对目标版本与安装方式…</p>
     <p v-if="loading && !report" class="muted" role="status">正在检测工具版本、登录状态与目录权限…</p>
-    <p v-if="job" :class="job.status === 'failed' ? 'error' : 'notice'" role="status">
-      {{ toolNames[job.id] }} → {{ job.version }} · {{ { running: '更新中', completed: '更新成功', 'restart-required': '已安装，待重启生效', failed: '更新失败' }[job.status] }}<br />{{ job.message }}
-    </p>
+    <FeedbackMessage :message="jobMessage" :type="jobMessageType" />
     <template v-if="report">
       <FormSection title="环境概况" :description="report.ready ? '基础环境检测通过' : '部分检测项需要处理或进一步确认'">
         <ul class="environment-checks">

@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { onMounted, onUnmounted, ref } from "vue";
 import { ReloadOutlined, CloudDownloadOutlined } from "@antdv-next/icons";
 import { api } from "../../shared/api/api.js";
@@ -78,7 +79,7 @@ onUnmounted(() => {
     </header>
     <FormSection
       title="仓库状态"
-      description="显示服务器上的项目仓库与配置的基准引用。"
+      description="显示服务器上的项目仓库与配置的开发分支。"
     >
       <template #action>
         <button
@@ -99,7 +100,7 @@ onUnmounted(() => {
         </dd>
         <dt>新任务基准</dt>
         <dd>
-          <code>{{ repository.baseRef }}</code>
+          <code>{{ repository.baseBranch }}</code>
         </dd>
         <dt>本地基准分支</dt>
         <dd>{{ repository.branch || "当前引用不是可更新的本地分支" }}</dd>
@@ -108,9 +109,7 @@ onUnmounted(() => {
         <dt>最近获取</dt>
         <dd>{{ fetchedLabel(repository.lastFetchedAt) }}</dd>
       </dl>
-      <p v-if="error" class="error" role="alert">
-        {{ repository ? "仓库状态可能已过期。" : "" }}{{ error }}
-      </p>
+      <FeedbackMessage :message="error ? `${repository ? '仓库状态可能已过期。' : ''}${error}` : ''" type="error" />
     </FormSection>
     <FormSection
       v-if="repository && canOperate"
@@ -174,7 +173,7 @@ onUnmounted(() => {
       >
         {{ repository.updateReason }}
       </p>
-      <p v-if="notice" class="notice" role="status">{{ notice }}</p>
+      <FeedbackMessage :message="notice" type="success" />
     </FormSection>
   </section>
 </template>

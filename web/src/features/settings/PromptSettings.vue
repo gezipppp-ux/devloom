@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from "vue";
 import { api } from "../../shared/api/api.js";
 import FormSection from "../../shared/components/FormSection.vue";
@@ -135,7 +136,7 @@ async function save() {
       对当前工作区的新任务和新追加资料生效；已有资料快照与会话保持原样。各模板独立保存。
     </p>
     <p v-if="loading" role="status">正在加载提示词模板…</p>
-    <p v-if="error" role="alert" class="error">{{ error }}</p>
+    <FeedbackMessage :message="error" type="error" />
     <button v-if="!loaded && !loading" type="button" @click="load">
       重新加载提示词模板
     </button>
@@ -202,7 +203,7 @@ async function save() {
         <p class="field-hint">使用示例资料预览填充结果，实际任务会使用自己的需求资料。</p>
         <pre aria-label="提示词示例预览">{{ preview }}</pre>
       </details>
-      <p v-if="message" class="notice" role="status">{{ message }}</p>
+      <FeedbackMessage :message="message" type="success" />
       <div class="actions">
         <button type="button" :disabled="busy" @click="reset">
           恢复当前渠道默认模板
@@ -219,9 +220,6 @@ async function save() {
 .prompt-settings form,
 .prompt-settings textarea {
   min-width: 0;
-}
-.prompt-settings .error {
-  overflow-wrap: anywhere;
 }
 .prompt-scope {
   margin: 0 0 24px;

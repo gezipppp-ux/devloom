@@ -6,6 +6,8 @@ Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install
 
 ## Before development
 
+- 发布版本、可编排事项流程和先认领后启动的开发任务以[生命周期 PRD](../prd/project-lifecycle.md)为准，取代历史固定状态和从事项直接执行的交互。流程归属系统设置，管理员统一发布，项目只使用已发布版本；最新验收见[系统流程记录](../reviews/system-workflows-2026-10-12.md)。
+
 - 项目协作目标与分项进度见 [PRD](../prd/project-collaboration.md) 和[实施清单](../prd/project-collaboration-implementation.md)。已确认 PostgreSQL + Prisma、平铺部门和项目权限；各阶段完成前不得把目标需求当作已上线能力。Prisma 基础约定见 [PostgreSQL 接入](./postgresql.md)。
 
 - 项目级 Skills 位于 [工程规范](../../.agents/skills/web-coding-engineering/SKILL.md) 和 [界面规范](../../.agents/skills/web-coding-ui/SKILL.md)，由根目录 AGENTS.md 引用。Skill 提供实施与审查流程，本文所列契约维护详细业务约定；两者随实现同步更新。

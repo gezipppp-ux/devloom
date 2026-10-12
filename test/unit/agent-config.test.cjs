@@ -23,7 +23,7 @@ test("normalized configuration preserves explicit clearing and creates no vendor
   const root = temporary(t);
   const input = {
     agent: { provider: "codex", model: "", reasoningEffort: "", options: { command: process.execPath } },
-    execution: { repository: "new-repo", initCommands: [], baseRef: "main", worktreeRoot: root },
+    execution: { repository: "new-repo", initCommands: [], baseBranch: "main", worktreeRoot: root },
   };
   const config = await executionConfig(input, path.join(root, "config.json"));
   assert.equal(config.agent.model, "");

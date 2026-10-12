@@ -26,7 +26,15 @@
 
 新部署使用独立 PostgreSQL 数据库和运行数据目录。该模块不读取旧 SQLite，不创建 SQLite 备份，不搬移旧 worktree。凭据主密钥和业务工作目录仍按现有约定单独保存。
 
+`20261012000000_project_repository` 将仓库地址收归 `projects.remote_url`，删除 `projects.repository_id` 及独立 `repositories` 表。应用只使用新模型、字段和接口；版本化 SQL 在同一事务中保留已有项目关联的地址，随后删除旧结构，不保留双写或兼容读取。该升级不改变项目、开发空间、任务及其记录路径。
+
+`20261012010000_project_department_removal` 删除项目的 `department_id`、相关外键及部门内名称唯一索引，账号的部门关联保持不变。项目使用稳定 ID 区分，不改为全局名称唯一约束；已有项目、成员和空间身份保留，不增加旧字段兼容读取。
+
+`20261012020000_account_display_name` 增加必填 `users.display_name`，已有账号一次性以用户名初始化显示名称，不改变登录名、用户 ID、会话版本或工作目录。新客户端与应用只读写新结构，不提供运行时缺字段回退；迁移后可在账号管理或个人设置中修改显示名称。
+
 ## 事务与生命周期
+
+`20261012030000_development_baseline` 为事项增加 `base_branch`，空字符串表示继承项目默认分支。项目默认值仍保存于 settings JSON，任务受理分支保存于不可变 snapshot，实际 commit 保存于运行 worktree.baseline。不会为已有任务补造基线或改动其身份、路径。
 
 通过 `PostgresDatabase.transaction()` 运行短事务，默认 Serializable，等待和执行各最多 5 秒。回调只包含数据库操作，不等待网络、Git 或 Codex。冲突由上层按业务幂等性处理，不自动重放任意回调。
 

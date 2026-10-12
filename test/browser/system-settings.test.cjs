@@ -39,7 +39,7 @@ async function verifySystemSettings(browser, { origin, output, errors, directory
     const response = page.waitForResponse((entry) => entry.url() === settingsEndpoint && entry.request().method() === "POST");
     await page.getByRole("button", { name: "保存执行设置", exact: true }).click();
     const held = await pending;
-    for (const label of ["新任务基准引用", "Worktree 初始化命令"])
+    for (const label of ["新任务开发分支", "Worktree 初始化命令"])
       assert.equal(await page.getByLabel(label, { exact: true }).isDisabled(), true,
         `${label} must not accept draft changes while the save response is pending`);
     await held.continue();
@@ -94,10 +94,13 @@ async function verifySystemSettings(browser, { origin, output, errors, directory
       document.querySelector('input[aria-label="浏览目录路径"]')?.value === value, base);
     await browsePath.fill(path.join(base, "missing"));
     await picker.getByRole("button", { name: "打开目录", exact: true }).click();
-    await picker.getByRole("alert").waitFor();
+    const directoryError = page.locator('.operation-message[data-type="error"]')
+      .filter({ hasText: "目录不存在，请输入已有的服务端目录。" });
+    await directoryError.waitFor();
     await browsePath.fill(selected);
     await picker.getByRole("button", { name: "打开目录", exact: true }).click();
-    await picker.getByRole("alert").waitFor({ state: "hidden" });
+    await directoryError.getByRole("button", { name: "关闭提示", exact: true }).click();
+    await directoryError.waitFor({ state: "hidden" });
     await picker.getByRole("button", { name: "选择此目录", exact: true }).click();
     await picker.waitFor({ state: "hidden" });
     assert.equal(await baseField.inputValue(), selected);

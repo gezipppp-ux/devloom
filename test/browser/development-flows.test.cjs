@@ -1,4 +1,4 @@
-/* global window */
+/* global window, document */
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
@@ -31,7 +31,7 @@ async function main() {
       if (endpoint.startsWith('/api/')) {
         requests.push({ endpoint, method: request.method(), input: request.postDataJSON() });
         const send = (json, status = 200) => route.fulfill({ status, json });
-        if (endpoint === '/api/auth/session') return send({ user: { id:'visual-admin', username:'交互审查夹具', role:'admin', status:'active', mustChangePassword:false }, token:'fixture', settings:{ permissionMode:'ask', grouping:'type', notificationsEnabled:false } });
+        if (endpoint === '/api/auth/session') return send({ user: { id:'visual-admin', username:'visual-admin', displayName: '交互审查夹具', role:'admin', status:'active', mustChangePassword:false }, token:'fixture', settings:{ permissionMode:'ask', grouping:'type', notificationsEnabled:false } });
         if (endpoint === '/api/bootstrap') return send({token:'fixture',workspaces:[{id:'ux-workspace',name:'交互审查空间',projectId:fixture.projectId,permissions:fixture.permissions}]});
         if (endpoint.endsWith('/events')) return route.fulfill({ status:204, body:'' });
         if (endpoint.endsWith('/account/preferences')) return send({preferences:{unreadRunKeys:[]}});
@@ -53,8 +53,8 @@ async function main() {
         if(scoped==='/runs/archived-task-b')return send({key:'archived-task-b',title:'指定的归档任务 B',status:'completed',archivedAt:'2026-10-10T00:00:00Z',readOnlyReason:'会话已归档，只能查看历史。',source:{channel:'manual'},agent:agentDescriptor,sessionId:'archived-session',items:[],requests:[],metadata:{type:'requirement',progress:'in_progress'},executionSettings:{model:'',reasoningEffort:'',permissionMode:'ask'},nextCursor:null});
         if(scoped==='/runs/1-1')return send({key:'1-1',title:'不应被替代打开的任务 A',status:'completed',source:{channel:'manual',scope:'fixture',id:'one'},agent:agentDescriptor,sessionId:'fixture-session',items:[],requests:[],pendingRequests:[],execution:{status:'completed'},metadata:{type:'requirement',progress:'in_progress'},executionSettings:{model:'',reasoningEffort:'',permissionMode:'ask'},nextCursor:null});
         if(scoped==='/runs/2-2')return send({key:'2-2',title:'侧栏切换任务 B',status:'completed',source:{channel:'manual'},agent:agentDescriptor,sessionId:'fixture-session-b',items:[],requests:[],metadata:{type:'requirement',progress:'in_progress'},executionSettings:{model:'',reasoningEffort:'',permissionMode:'ask'},nextCursor:null});
-        if(scoped==='/settings')return send({repository:'C:/fixture/repository',worktreeRoot:'C:/fixture/worktree',baseRef:'main',initCommands:[],platform:'win32'});
-        if(scoped==='/settings/refs')return send({refs:[{value:'main',label:'main'}]});
+        if(scoped==='/settings')return send({repository:'C:/fixture/repository',worktreeRoot:'C:/fixture/worktree',baseBranch:'main',initCommands:[],platform:'win32'});
+        if(scoped==='/settings/branches')return send({branches:[{value:'main',label:'main'}]});
         if(scoped==='/models')return send({models:[]});
         if(scoped==='/execution-options')return send({agent:agentDescriptor,permissionModes:require('../../shared/agent-permissions.json').map(mode=>({...mode,available:true}))});
         if(scoped==='/settings/tapd'||scoped==='/settings/prompts')return send({error:'当前账号没有此项目操作权限。'},403);
@@ -67,6 +67,36 @@ async function main() {
       return route.fulfill({body:fs.readFileSync(path.join(dist,'index.html')),contentType:'text/html'});
     });
 
+    const pendingProject = async route => {
+      const result = fixture.response(new URL(route.request().url()));
+      return route.fulfill({ json: { ...result, project: { ...result.project, remoteUrl: 'https://gitee.com/fixture/customer.git' }, space: { status: 'awaiting_credentials' } } });
+    };
+    const fixtureAccounts = async route => route.fulfill({ json: { accounts: [
+      { id: 'fixture-ssh', name: '演示 Gitee SSH', host: 'gitee.com', authType: 'ssh' },
+      { id: 'fixture-http', name: '演示 Gitee HTTPS', host: 'https://gitee.com', authType: 'http' },
+    ] } });
+    await page.route(`**/api${projectPath}`, pendingProject);
+    await page.route('**/api/account/git-accounts', fixtureAccounts);
+    await page.goto(origin+projectPath+'?tab=development');
+    const gitAccounts = page.getByRole('combobox', { name: '个人 Git 账号', exact: true });
+    await gitAccounts.locator('option[value="fixture-ssh"]').waitFor({ state: 'attached' });
+    assert.deepEqual(await gitAccounts.locator('option').allTextContents(), [
+      '选择 Git 账号', '演示 Gitee SSH · gitee.com · SSH 密钥', '演示 Gitee HTTPS · https://gitee.com · HTTP/HTTPS 凭据',
+    ]);
+    await page.getByText('Gitee（gitee.com）默认端口的 HTTPS 与 SSH 仓库地址会按所选账号的认证方式匹配。其他 Git 服务需与项目地址的主机和认证方式一致。', { exact: true }).waitFor();
+    const prepare = page.getByRole('button', { name: '验证访问并准备空间', exact: true });
+    assert.equal(await prepare.isDisabled(), true);
+    await gitAccounts.selectOption('fixture-ssh');
+    assert.equal(await prepare.isEnabled(), true);
+    for (const width of [1440,768,390,320]) {
+      await page.setViewportSize({width,height:1000});
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+      await page.screenshot({path:path.join(output,`git-account-choice-${width}.png`),fullPage:true});
+    }
+    assert.equal(requests.some(request => request.endpoint.endsWith('/space/prepare')), false, 'selecting a Git account cannot prepare a repository');
+    await page.unroute(`**/api${projectPath}`, pendingProject);
+    await page.unroute('**/api/account/git-accounts', fixtureAccounts);
+    await page.setViewportSize({width:1440,height:1000});
     await page.goto(origin+projectPath+'?tab=tasks');
     await page.getByRole('button',{name:'下一页',exact:true}).click();
     assert.equal(new URL(page.url()).searchParams.get('taskOffset'),'30');

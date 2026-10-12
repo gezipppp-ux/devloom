@@ -27,7 +27,7 @@
   "execution": {
     "repository": "",
     "repositories": {},
-    "baseRef": "HEAD",
+    "baseBranch": "main",
     "initCommands": [],
     "worktreeRoot": ""
   },

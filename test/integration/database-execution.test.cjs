@@ -1,3 +1,4 @@
+const { attachOrigin } = require("../support/baseline-origin.cjs");
 const { startFixtureSession } = require("../support/cli-execution.cjs");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -31,8 +32,8 @@ async function fixture(t) {
   const root = temporary(t);
   database = await initializeTestDatabase(t, root);
   const accounts = new AccountStore(database);
-  const alice = (await accounts.create({ username: "alice", role: "member", password_hash: "unused-fixture-hash" }));
-  const bob = (await accounts.create({ username: "bob", role: "member", password_hash: "unused-fixture-hash" }));
+  const alice = (await accounts.create({ username: "alice", displayName: "alice", role: "member", password_hash: "unused-fixture-hash" }));
+  const bob = (await accounts.create({ username: "bob", displayName: "bob", role: "member", password_hash: "unused-fixture-hash" }));
   const workspaces = new WorkspaceManager({ directory: path.join(root, "workspaces") });
   const a = (await workspaces.save({ name: "私有项目" }, undefined, alice));
   const b = (await workspaces.save({ name: "私有项目" }, undefined, bob));
@@ -45,11 +46,12 @@ async function fixture(t) {
   fs.writeFileSync(path.join(repository, "tracked.txt"), "committed");
   git("add", ".");
   git("-c", "user.name=Fixture", "-c", "user.email=test@example.invalid", "-c", "core.hooksPath=/dev/null", "commit", "-m", "fixture");
+  attachOrigin(repository);
   fs.writeFileSync(path.join(repository, "tracked.txt"), "root-dirty");
   (await writeConfig(path.join(root, "system-settings.json"), { memberStorageRoot: path.join(root, "trees") }));
   for (const workspace of [a, b]) {
     (await seedWorkspaceProject(workspaces.configFile(workspace.id), repository, "p"));
-    (await saveSettings({ baseRef: "main", initCommands: [] }, workspaces.configFile(workspace.id)));
+    (await saveSettings({ baseBranch: "main", initCommands: [] }, workspaces.configFile(workspace.id)));
   }
   return { root, database, managers, alice, bob, a, b, workspaces, repository, git,
     async reopen() { await database.close(); database = await initializeTestDatabase(t, root); return database; } };
@@ -253,7 +255,7 @@ test("member roots and workspace subdirectories cannot redirect settings into an
     (await updateConfig(file, (config) => ({ ...config, execution: { ...config.execution, projectName } })));
     const before = (await readOptional(file));
     (await assert.rejects(async () => (await readSettings(file)), /符号链接/, scenario));
-    (await assert.rejects(async () => (await saveSettings({ baseRef: "main", initCommands: [] }, file)), /符号链接/, scenario));
+    (await assert.rejects(async () => (await saveSettings({ baseBranch: "main", initCommands: [] }, file)), /符号链接/, scenario));
     assert.deepEqual((await readOptional(file)), before);
     assert.deepEqual(fs.readdirSync(peer), []);
   }

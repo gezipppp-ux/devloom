@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { SettingOutlined } from "@antdv-next/icons";
 import { appApi } from "../../shared/api/api.js";
@@ -269,7 +270,7 @@ onMounted(() => {
         </template>
         <WorkspaceIconEditor v-model="icon" :name="name" :disabled="busy" />
         <p v-if="!renaming" class="field-hint">任务受理后可关闭窗口或浏览器，再次进入可从顶部「克隆任务」查看进度。</p>
-        <p v-if="error" class="error" role="alert">{{ error }}</p>
+        <FeedbackMessage :message="error" type="error" />
         <div class="actions">
           <button type="button" :disabled="busy" @click="close">取消</button>
           <button

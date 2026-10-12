@@ -1,0 +1,25 @@
+<script setup>
+import { computed, ref, watch } from "vue";
+import { createRequestId } from "../../shared/api/request-id.js";
+import { appApi } from "../../shared/api/api.js";
+import { useResource } from "../../shared/api/use-resource.js";
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
+import WorkflowGraph from "../../shared/components/WorkflowGraph.vue";
+const type = ref("requirement"), definition = ref({ nodes: [], transitions: [] }), selected = ref("");
+const endpoint = () => `/system/workflows/${type.value}`;
+const { data, loading, saving, error, notice, reload, save } = useResource(() => appApi(endpoint()));
+watch(data, value => { if (value) { definition.value = JSON.parse(JSON.stringify(value.workflow.draft)); selected.value = ""; } });
+watch(type, () => { data.value = null; definition.value = { nodes: [], transitions: [] }; void reload(); });
+const node = computed(() => definition.value.nodes.find(n => n.id === selected.value));
+const id = prefix => `${prefix}_${createRequestId().replaceAll('-', '').slice(0, 12)}`;
+function addNode() { const value = { id: id('node'), name: "新状态", kind: "normal", allowDevelopment: false }; definition.value.nodes.push(value); selected.value = value.id; }
+function removeNode() { definition.value.nodes = definition.value.nodes.filter(n => n.id !== selected.value); selected.value = ""; }
+function addEdge() { const nodes = definition.value.nodes; definition.value.transitions.push({ id: id('edge'), from: nodes[0].id, to: nodes[1].id, name: "流转", permission: "issue.transition", requiresReason: false }); }
+async function persist(publish = false) {
+  const path = endpoint();
+  const result = await save(path, { revision: data.value.workflow.revision, definition: definition.value }, result => { data.value = result; }, "流程草稿已保存。");
+  if (result && publish) await save(`${path}/publish`, { revision: result.workflow.revision }, result => { data.value = result; }, "流程已发布，新事项将使用此版本。");
+}
+</script>
+<template><section class="project-detail"><header class="project-heading"><h2>流程编排</h2><select v-model="type" aria-label="流程类型" :disabled="saving"><option value="requirement">需求流程</option><option value="bug">Bug 流程</option></select></header><FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="notice" type="success" /><p v-if="loading" role="status">正在读取流程…</p><button v-if="error" :disabled="loading || saving" @click="reload">重新读取流程</button><template v-if="data"><p class="field-hint">系统统一维护需求和 Bug 两套流程，发布后用于所有项目的新事项。</p><p class="field-hint">已发布版本：{{ data.workflow.publishedVersion }}。修改先保留为草稿；发布不会改变已有事项绑定的流程。可拖动节点，键盘方向键可调整所选节点位置。</p><WorkflowGraph :definition="definition" :selected="selected" :editable="!saving" @select="selected = $event" @move="Object.assign(definition.nodes.find(n => n.id === $event.id), $event)" /><fieldset :disabled="saving"><div class="actions"><button @click="addNode">添加状态</button><button :disabled="definition.nodes.length < 2" @click="addEdge">添加连线</button></div><section v-if="node" class="project-form project-section"><h3>状态属性</h3><label>状态名称<input v-model="node.name" maxlength="80" /></label><label>状态类型<select v-model="node.kind"><option value="initial">初始</option><option value="normal">普通</option><option value="completed">完成</option><option value="cancelled">取消</option></select></label><label class="permission-choice"><input v-model="node.allowDevelopment" type="checkbox" />允许开始开发</label><button :disabled="definition.transitions.some(e => e.from === node.id || e.to === node.id)" @click="removeNode">删除状态</button><p class="field-hint">删除前请先删除引用该状态的连线。</p></section><section class="project-section"><h3>连线与操作权限</h3><details v-for="(edge, index) in definition.transitions" :key="edge.id" class="workflow-edge"><summary>{{ edge.name }} · {{ definition.nodes.find(n => n.id === edge.from)?.name }} → {{ definition.nodes.find(n => n.id === edge.to)?.name }}</summary><div class="project-form"><label>操作名称<input v-model="edge.name" maxlength="80" /></label><label>来源状态<select v-model="edge.from"><option v-for="n in definition.nodes" :key="n.id" :value="n.id">{{ n.name }}</option></select></label><label>目标状态<select v-model="edge.to"><option v-for="n in definition.nodes" :key="n.id" :value="n.id">{{ n.name }}</option></select></label><label>所需权限<select v-model="edge.permission"><option value="issue.transition">事项流转</option><option value="issue.accept">事项验收</option></select></label><label class="permission-choice"><input v-model="edge.requiresReason" type="checkbox" />必须填写原因</label><button @click="definition.transitions.splice(index, 1)">删除连线</button></div></details></section><div class="actions"><button :disabled="loading" @click="persist()">保存流程草稿</button><button class="primary" :disabled="loading" @click="persist(true)">{{ saving ? '正在保存…' : '校验并发布流程' }}</button></div></fieldset></template></section></template>
+<style scoped>.project-heading h2 { flex: 1; white-space: nowrap; } .project-heading select { width: min(100%, 240px); } .workflow-edge { border-bottom: 1px solid var(--line); padding: 16px 0; } fieldset { min-width: 0; } .project-detail { min-width: 0; }</style>

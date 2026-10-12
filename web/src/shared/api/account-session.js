@@ -6,6 +6,7 @@ export const accountSession = reactive({ ready: false, user: null, settings: {},
 let initialization;
 let settingsQueue = Promise.resolve();
 let settingsRevision = 0;
+let profileRevision = 0;
 let signoutRequest = Promise.resolve();
 const logoutKey = "web-coding-account-signout";
 function broadcastIdentityChange() {
@@ -49,9 +50,12 @@ export async function loadAccountSession() {
 
 export async function revalidateAccountSession() {
   const revision = settingsRevision;
+  const userRevision = profileRevision;
   const result = await appApi("/auth/session");
   if (accountSession.user?.id === result.user?.id && revision !== settingsRevision)
     result.settings = accountSession.settings;
+  if (accountSession.user?.id === result.user?.id && userRevision !== profileRevision)
+    result.user = { ...result.user, displayName: accountSession.user.displayName };
   applySession(result);
 }
 
@@ -78,6 +82,18 @@ export async function logoutAccount() {
 
 export async function changeAccountPassword(input) {
   applySession(await appApi("/auth/password", input));
+}
+
+export async function saveAccountProfile(patch) {
+  const generation = accountSession.generation;
+  const userId = accountSession.user?.id;
+  profileRevision++;
+  const result = await appApi("/account/profile", patch);
+  if (generation !== accountSession.generation || userId !== accountSession.user?.id)
+    throw Object.assign(new Error("账号已切换。"), { name: "AbortError" });
+  profileRevision++;
+  accountSession.user = { ...accountSession.user, displayName: result.user.displayName };
+  return accountSession.user;
 }
 
 export function saveAccountSettings(patch) {

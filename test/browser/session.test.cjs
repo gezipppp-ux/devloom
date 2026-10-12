@@ -133,7 +133,8 @@ async function verifyPermissionDiscoveryFailures(browser, origin, client, errors
           ? { permissionModes: { auto: true } }
           : { permissionModes: ['ask', 'auto', 'full'].map((id) => ({ id, available: true })) },
     }));
-    const alert = page.getByRole('alert').filter({ hasText: '权限选项加载失败' });
+    const alert = page.locator('.operation-message[data-type="error"]').filter({ hasText: '权限选项加载失败' })
+      .filter({ hasText: surface === 'create' ? '确认权限可用后才能创建任务。' : '确认权限可用后才能发送。' });
     async function verifyOptions(available) {
       await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
       const automatic = page.locator('.permission-option[data-value="auto"]');
@@ -163,7 +164,7 @@ async function verifyPermissionDiscoveryFailures(browser, origin, client, errors
       }
 
       responseMode = 'supported';
-      await alert.getByRole('button', { name: '刷新权限选项', exact: true }).click();
+      await page.getByRole('button', { name: '刷新权限选项', exact: true }).click();
       await alert.waitFor({ state: 'hidden' });
       await verifyOptions(true);
 
@@ -205,7 +206,8 @@ async function verifySteeringPermissionDiscoveryFailures(browser, origin, manage
   });
   try {
     await page.goto(origin);
-    const alert = page.getByRole('alert').filter({ hasText: '权限选项加载失败' });
+    const alert = page.locator('.operation-message[data-type="error"]').filter({ hasText: '权限选项加载失败' })
+      .filter({ hasText: '当前轮仍可补充指令，启动下一轮前需要确认权限。' });
     await alert.waitFor();
     const input = page.getByRole('textbox', { name: '发送给 Codex 的指令', exact: true });
     async function steer(text) {
@@ -218,7 +220,7 @@ async function verifySteeringPermissionDiscoveryFailures(browser, origin, manage
     }
     await steer('权限接口503时继续当前轮');
     loading = true;
-    await alert.getByRole('button', { name: '刷新权限选项', exact: true }).click();
+    await page.getByRole('button', { name: '刷新权限选项', exact: true }).click();
     await requested;
     await steer('权限接口仍加载时继续当前轮');
     assert.equal(client.calls.slice(before).filter(call => call.method === 'turn/steer').length, 2);
@@ -280,7 +282,10 @@ async function verifyAgentRequests(browser, origin, key, errors) {
       }
     }
     assert.deepEqual(writes, [], 'rendering generic requests must never grant approval or execute a task');
-  } finally { await page.close(); }
+  } finally {
+    await page.unrouteAll({ behavior: 'wait' });
+    await page.close();
+  }
 }
 
 async function verifyExecutionSettings(browser, origin, manager, client, key, errors) {
@@ -1050,7 +1055,7 @@ async function main() {
     assert.equal(await secret.inputValue(), 'fixture-only');
     await page.route('**/api/runs/1-2/responses', (route) => route.fulfill({ status: 503, json: { error: '模拟提交失败，请重试' } }), { times: 1 });
     await questions.getByRole('button', { name: '提交回答', exact: true }).click();
-    await questions.getByRole('alert').getByText('模拟提交失败，请重试', { exact: true }).waitFor();
+    await page.locator('.operation-message[data-type="error"]').filter({ hasText: '模拟提交失败，请重试' }).waitFor();
     assert.equal(await secret.inputValue(), 'fixture-only');
     await questions.getByRole('button', { name: '提交回答', exact: true }).click();
     await questions.waitFor({ state: 'hidden' });
@@ -1280,14 +1285,14 @@ async function main() {
       '-m',
       'fixture',
     );
-    (await require('../../src/config/execution-settings.cjs').saveSettings({ repository, worktreeRoot: path.join(directory, 'custom trees'), baseRef: 'HEAD' }, path.join(directory, 'missing.json')));
+    (await require('../../src/config/execution-settings.cjs').saveSettings({ repository, worktreeRoot: path.join(directory, 'custom trees'), baseBranch: '' }, path.join(directory, 'missing.json')));
     await page.getByRole('button', { name: '执行设置', exact: true }).click();
     await page.waitForFunction(expected => document.querySelector('[aria-label="项目代码仓库路径"]')?.textContent === expected, repository);
     assert.equal(await page.getByLabel('项目代码仓库路径', { exact: true }).innerText(), repository);
     await page
-      .getByRole('combobox', { name: '新任务基准引用', exact: true })
+      .getByRole('combobox', { name: '新任务开发分支', exact: true })
       .fill('main');
-    await page.getByTitle('本地分支 · main', { exact: true }).click();
+    await page.getByTitle('使用远端分支 · main', { exact: true }).click();
     await page
       .getByRole('textbox', { name: 'Worktree 初始化命令', exact: true })
       .fill('pnpm install\npnpm build');
@@ -1311,7 +1316,7 @@ async function main() {
         value,
       path.join(directory, 'custom trees'),
     );
-    await page.getByTitle('本地分支 · main', { exact: true }).waitFor();
+    await page.getByTitle('当前值 · main', { exact: true }).waitFor();
     await page.waitForFunction(
       () =>
         document.querySelector('textarea[aria-label="Worktree 初始化命令"]')

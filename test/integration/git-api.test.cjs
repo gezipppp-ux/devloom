@@ -55,7 +55,7 @@ async function fixture(t) {
   const b = (await workspaces.save({ name: "Other workspace" }));
   (await seedWorkspaceProject(workspaces.configFile(a.id), repository));
   (await saveSettings(
-    { baseRef: "main" },
+    { baseBranch: "main" },
     workspaces.configFile(a.id),
   ));
   const manager = (await workspaces.get(a.id)).sessions;

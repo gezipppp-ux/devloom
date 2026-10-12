@@ -10,11 +10,10 @@ async function fixture(t) {
   const database = await initializeTestDatabase(t, temporary(t));
   const permissions = projectPermissionCatalog.filter(entry => entry.scope === "project").map(entry => entry.id);
   const department = await database.client.department.create({ data: { name: "协作测试", permissions } });
-  const actor = await database.client.user.create({ data: { username: "content-owner", passwordHash: "not-used", role: "admin", departmentId: department.id } });
-  const outsider = await database.client.user.create({ data: { username: "content-outsider", passwordHash: "not-used", role: "admin", departmentId: department.id } });
-  const repository = await database.client.repository.create({ data: { name: "测试仓库", remoteUrl: "https://example.test/team/repo.git" } });
-  const project = await database.client.project.create({ data: { name: "项目甲", departmentId: department.id, ownerUserId: actor.id, repositoryId: repository.id } });
-  const other = await database.client.project.create({ data: { name: "项目乙", departmentId: department.id, ownerUserId: actor.id, repositoryId: repository.id } });
+  const actor = await database.client.user.create({ data: { username: "content-owner", displayName: "content-owner", passwordHash: "not-used", role: "member", departmentId: department.id } });
+  const outsider = await database.client.user.create({ data: { username: "content-outsider", displayName: "content-outsider", passwordHash: "not-used", role: "member", departmentId: department.id } });
+  const project = await database.client.project.create({ data: { name: "项目甲", ownerUserId: actor.id, remoteUrl: "https://example.test/team/repo.git" } });
+  const other = await database.client.project.create({ data: { name: "项目乙", ownerUserId: actor.id, remoteUrl: "https://example.test/team/repo.git" } });
   for (const selected of [project, other]) await database.client.projectMember.create({ data: { projectId: selected.id, userId: actor.id, permissions } });
   const projects = new ProjectServices(database);
   const services = new ProjectContentServices(database, projects);
@@ -22,11 +21,11 @@ async function fixture(t) {
   return { database, permissions, actor, outsider, project, other, projects, services, setPermissions };
 }
 
-test("project issues enforce membership, assignment, fixed acceptance and revision history without starting execution", async t => {
+test("project issues enforce membership, assignment, versioned acceptance and revision history without starting execution", async t => {
   const { database, permissions, actor, outsider, project, services, setPermissions } = await fixture(t);
   const issue = await services.createIssue(project.id, actor, { type: "requirement", title: "可验收需求", assigneeId: actor.id, acceptanceCriteria: "可验证" });
   assert.equal(issue.number, 1);
-  assert.equal(issue.status, "review");
+  assert.equal(issue.status, "planned");
   assert.equal(await database.client.developmentTask.count(), 0);
   await assert.rejects(services.readIssue(project.id, issue.id, outsider), { statusCode: 404 });
   await assert.rejects(services.createIssue(project.id, actor, { type: "bug", title: "缺陷", assigneeId: outsider.id }), /有效项目成员/);
@@ -34,13 +33,13 @@ test("project issues enforce membership, assignment, fixed acceptance and revisi
   assert.equal(outcomes.filter(result => result.status === "fulfilled").length, 1);
   assert.equal(outcomes.find(result => result.status === "rejected").reason.statusCode, 409);
   let current = await services.readIssue(project.id, issue.id, actor);
-  for (const status of ["ready", "developing", "acceptance"]) current = await services.transitionIssue(project.id, issue.id, actor, { status, revision: current.revision });
+  for (const status of ["developing", "pending_verification", "verifying"]) current = await services.transitionIssue(project.id, issue.id, actor, { status, revision: current.revision });
   await setPermissions(permissions.filter(permission => permission !== "issue.accept"));
-  await assert.rejects(services.transitionIssue(project.id, issue.id, actor, { status: "done", revision: current.revision }), { statusCode: 403 });
+  await assert.rejects(services.transitionIssue(project.id, issue.id, actor, { status: "implemented", revision: current.revision }), { statusCode: 403 });
   await setPermissions(permissions);
-  current = await services.transitionIssue(project.id, issue.id, actor, { status: "done", revision: current.revision });
-  await assert.rejects(services.transitionIssue(project.id, issue.id, actor, { status: "ready", revision: current.revision }), /原因/);
-  current = await services.transitionIssue(project.id, issue.id, actor, { status: "ready", revision: current.revision, reason: "再次打开" });
+  current = await services.transitionIssue(project.id, issue.id, actor, { status: "implemented", revision: current.revision });
+  await assert.rejects(services.transitionIssue(project.id, issue.id, actor, { status: "planned", revision: current.revision }), /原因/);
+  current = await services.transitionIssue(project.id, issue.id, actor, { status: "planned", revision: current.revision, reason: "再次打开" });
   await services.addComment(project.id, issue.id, actor, { body: "评审说明" });
   await services.addDeliverable(project.id, issue.id, actor, { body: "完成交付", commit: "abc123" });
   await assert.rejects(services.addDeliverable(project.id, issue.id, actor, { body: "非法任务", taskId: "foreign-task" }), /不属于/);
@@ -49,7 +48,7 @@ test("project issues enforce membership, assignment, fixed acceptance and revisi
   assert.equal(history.items.length, 2);
   assert.equal(history.nextOffset, 2);
   assert.equal(history.items[0].data.reason, "再次打开");
-  assert.equal((await services.listIssues(project.id, actor, { status: "ready", query: current.title })).items.length, 1);
+  assert.equal((await services.listIssues(project.id, actor, { status: "planned", query: current.title })).items.length, 1);
   assert.equal(await database.client.developmentTask.count(), 0);
 });
 

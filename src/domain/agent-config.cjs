@@ -1,4 +1,4 @@
-const executionFields = ["repository", "repositories", "baseRef", "worktreeRoot",
+const executionFields = ["repository", "repositories", "baseBranch", "worktreeRoot",
   "initCommands", "projectName", "memberStorageRoot", "memberRoot", "gitAccountId", "remoteUrl"];
 
 function agentConfig(configOrState = {}) {

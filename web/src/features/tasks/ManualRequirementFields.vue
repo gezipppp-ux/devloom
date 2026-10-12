@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 /* global FileReader */
 import { onUnmounted, ref } from "vue";
 import { uploadManualImage } from "../../shared/api/api.js";
@@ -92,7 +93,7 @@ function remove(index) {
       />
       <p class="field-hint">PNG、JPEG、WebP，每张最多 10 MiB，最多 20 张。</p>
       <p v-if="uploading" role="status">正在上传图片…</p>
-      <p v-if="error" role="alert" class="error">{{ error }}</p>
+      <FeedbackMessage :message="error" type="error" />
       <div class="manual-images">
         <figure v-for="(item, index) in previews" :key="item.id">
           <img :src="item.preview" :alt="item.name" />

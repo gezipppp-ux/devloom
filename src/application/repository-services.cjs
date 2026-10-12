@@ -15,15 +15,15 @@ const {
 } = require("../storage/git-operations.cjs");
 
 async function repositoryContext(configFile) {
-  const { repository, baseRef } = (await readSettings(configFile));
+  const { repository, baseBranch } = (await readSettings(configFile));
   if (!repository) throw new Error("工作区尚无项目仓库，请从 Git 远程地址创建工作区。");
   const commonDirectory = repositoryCommonDirectory(repository);
-  return { repository, baseRef, commonDirectory };
+  return { repository, baseBranch, commonDirectory };
 }
 
 async function readRepository(configFile) {
   const context = (await repositoryContext(configFile));
-  const status = readRepositoryStatus(context.repository, context.baseRef);
+  const status = readRepositoryStatus(context.repository, context.baseBranch);
   const fetched = (await readFetchState(context.commonDirectory, configFile));
   return {
     ...status,
@@ -58,7 +58,7 @@ async function mutateRepository(configFile, action, input, authorize = async () 
     else if (action === "update")
       result = await updateBaseBranch(
         context.repository,
-        context.baseRef,
+        context.baseBranch,
         input.remote,
         credentials,
         authorize,
@@ -66,7 +66,7 @@ async function mutateRepository(configFile, action, input, authorize = async () 
     else throw new Error("不支持的 Git 操作。");
     await authorize();
     (await writeFetchState(context.commonDirectory, result.remote, configFile));
-    const status = readRepositoryStatus(context.repository, context.baseRef);
+    const status = readRepositoryStatus(context.repository, context.baseBranch);
     const fetched = (await readFetchState(context.commonDirectory, configFile));
     await authorize();
     return {

@@ -183,6 +183,6 @@ test("global system endpoints work before workspace creation and enforce origin 
     ).status,
     400,
   );
-  assert.equal((await fetch(`${origin}/api/settings`)).status, 400);
+  assert.equal((await fetch(`${origin}/api/settings`)).status, 404);
   assert.deepEqual((await workspaces.list()), []);
 });

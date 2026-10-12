@@ -25,6 +25,7 @@ async function verifyGitAccounts(page, output) {
   });
   const section = page.locator(".git-account-settings");
   const save = section.getByRole("button", { name: "保存 Git 账号", exact: true });
+  await section.getByText("填写完整主机地址，例如 https://gitee.com，不包含仓库路径。项目仓库由管理员单独维护。", { exact: true }).waitFor();
   await section.getByLabel("账号名称", { exact: true }).fill("开发 HTTP Git");
   await section.getByLabel("Git 主机", { exact: true }).fill("http://git.example.test:3000");
   await section.getByLabel("用户名", { exact: true }).fill("developer");
@@ -37,12 +38,12 @@ async function verifyGitAccounts(page, output) {
   assert.equal(await section.getByLabel("用户名", { exact: true }).isDisabled(), true);
   assert.equal(await section.getByRole("button", { name: "测试连接", exact: true }).count(), 0);
   gate();
-  await section.getByRole("alert").filter({ hasText: "模拟保存失败" }).waitFor();
+  await page.locator('.operation-message[data-type="error"]').filter({ hasText: "模拟保存失败" }).waitFor();
   assert.equal(accounts.length, 0);
   assert.equal(await section.getByLabel("密码或访问令牌", { exact: true }).inputValue(), 'fixture&password|%!"');
   fail = false;
   await save.click();
-  await section.getByText("Git 账号已保存。准备项目开发空间时会验证实际仓库的访问权限。", { exact: true }).waitFor();
+  await page.locator('.operation-message[data-type="success"]').filter({ hasText: "Git 账号已保存。准备项目开发空间时会验证实际仓库的访问权限。" }).waitFor();
   assert.equal(accounts.length, 1);
   assert.equal(await section.getByLabel("密码或访问令牌", { exact: true }).inputValue(), "");
   await section.getByLabel("账号名称", { exact: true }).fill("已修改 HTTP Git");
@@ -55,6 +56,8 @@ async function verifyGitAccounts(page, output) {
   await section.getByRole("button", { name: "新建账号", exact: true }).click();
   await section.getByLabel("账号名称", { exact: true }).fill("开发 SSH Git");
   await section.getByLabel("认证方式", { exact: true }).selectOption("ssh");
+  await section.getByText("填写主机名和可选端口，例如 gitee.com，不要填写 git@gitee.com 或仓库路径。项目仓库由管理员单独维护。", { exact: true }).waitFor();
+  assert.equal(await section.getByLabel("Git 主机", { exact: true }).getAttribute("placeholder"), "例如：gitee.com");
   await section.getByLabel("Git 主机", { exact: true }).fill("git.example.test");
   assert.equal(await save.isDisabled(), true);
   await section.getByRole("button", { name: "生成 SSH 密钥", exact: true }).click();

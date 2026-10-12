@@ -140,7 +140,7 @@ async function main() {
       stdio: ["pipe", "pipe", "pipe"],
     });
     const seeding = await database.open();
-    const department = await seedProjectDepartment(seeding);
+    await seedProjectDepartment(seeding);
     await seeding.close();
     const port = await availablePort();
     const origin = `http://127.0.0.1:${port}`;
@@ -251,7 +251,7 @@ async function main() {
     assert.equal((await request("/api/system/settings", { memberStorageRoot: path.join(directory, "members") })).status, 200);
     const account = await request("/api/account/git-accounts", { name: "fixture", authType: "http", host: new URL(remote.remoteUrl).origin, username: remote.username, password: remote.password });
     assert.equal(account.status, 201);
-    const workspace = await prepareHttpProject(request, { name: "Temporary development workspace", departmentId: department.id, gitAccountId: account.data.account.id, remoteUrl: remote.remoteUrl });
+    const workspace = await prepareHttpProject(request, { name: "Temporary development workspace", gitAccountId: account.data.account.id, remoteUrl: remote.remoteUrl });
     const created = { workspace };
     assert.equal(fs.existsSync(path.join(directory, "data", "db", "web-coding.sqlite")), false);
     const storedWorkspaces = await (await page.request.get(`${origin}/api/workspaces`)).json();

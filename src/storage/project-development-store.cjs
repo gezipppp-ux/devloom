@@ -24,6 +24,7 @@ class ProjectDevelopmentStore {
   }
   async issues(projectId, ids) {
     const rows = await this.database.client.projectIssue.findMany({ where: { projectId, id: { in: ids } }, include: {
+      release: true, workflowVersion: true,
       source: { select: { channel: true, scope: true, type: true, externalId: true, url: true } },
       files: { select: { id: true, name: true, mimeType: true, size: true, sha256: true } },
     } });
@@ -31,24 +32,48 @@ class ProjectDevelopmentStore {
     return ids.map(id => json(rows.find(row => row.id === id)));
   }
   async task(projectId, id) {
-    const task = await this.database.client.developmentTask.findFirst({ where: { projectId, id } });
+    const task = await this.database.client.developmentTask.findFirst({ where: { projectId, id }, include: { executor: { select: { id: true, displayName: true } }, release: true } });
     if (!task) throw missing();
     return task;
   }
-  async existing(projectId, executorId, requestId) {
-    return this.database.client.developmentTask.findUnique({ where: { projectId_executorId_requestId: { projectId, executorId, requestId } } });
+  async existing(projectId, creatorId, requestId) {
+    return this.database.client.developmentTask.findUnique({ where: { projectId_creatorId_requestId: { projectId, creatorId, requestId } }, include: { executor: { select: { id: true, displayName: true } }, release: true } });
   }
   sameRequest(task, input) {
     if (!isDeepStrictEqual(task.snapshot.request, input)) throw accountError("相同请求标识不能提交不同事项或执行选项。", 409);
   }
-  async create(projectId, actorId, space, request, issues, prompt, selection) {
+  async create(projectId, actorId, request, issues) {
     const id = randomUUID();
-    const task = await this.database.client.developmentTask.create({ data: { id, projectId, executorId: actorId, spaceId: space.id, workspaceId: space.workspaceId,
-      requestId: request.requestId, runKey: runKey({ channel: "manual", scope: "local", id }), status: "dispatching",
-      snapshot: json({ request, title: request.title || issues[0].title, issues, prompt, selection, additions: [] }) } });
+    const task = await this.database.client.developmentTask.create({ data: { id, projectId, creatorId: actorId, executorId: request.executorId, releaseId: issues[0].releaseId,
+      requestId: request.requestId, status: "planned",
+      snapshot: json({ request, title: request.title || issues[0].title, issues, additions: [] }) } });
     await this.database.client.taskIssueLink.createMany({ data: issues.map(issue => ({ projectId, taskId: id, issueId: issue.id, snapshot: issue })) });
-    await this.audit(actorId, "development.accepted", projectId, id);
-    return task;
+    await this.claim(task, issues);
+    await this.audit(actorId, "development.planned", projectId, id);
+    return this.task(projectId, id);
+  }
+  async claim(task, issues) {
+    await this.database.client.issueDevelopmentClaim.createMany({ data: issues.map(issue => ({ projectId: task.projectId, taskId: task.id, issueId: issue.id })) });
+  }
+  async replacePlan(task, request, issues) {
+    const updated = await this.update(task, { executorId: request.executorId ?? task.executorId, releaseId: issues[0].releaseId,
+      snapshot: json({ ...task.snapshot, title: request.title ?? task.snapshot.title, issues }) });
+    await this.database.client.issueDevelopmentClaim.deleteMany({ where: { taskId: task.id } });
+    await this.database.client.taskIssueLink.deleteMany({ where: { taskId: task.id } });
+    await this.database.client.taskIssueLink.createMany({ data: issues.map(issue => ({ projectId: task.projectId, taskId: task.id, issueId: issue.id, snapshot: issue })) });
+    await this.claim(updated, issues);
+    return updated;
+  }
+  async acceptStart(task, space, request, issues, prompt, selection) {
+    for (const issue of issues) await this.database.client.taskIssueLink.update({ where: { taskId_issueId: { taskId: task.id, issueId: issue.id } }, data: { snapshot: issue } });
+    return this.update(task, { spaceId: space.id, workspaceId: space.workspaceId, runKey: runKey({ channel: "manual", scope: "local", id: task.id }), status: "unknown",
+      snapshot: json({ ...task.snapshot, issues, prompt, selection, baseBranch: request.baseBranch, startRequest: request }) });
+  }
+  async finish(task, status, actorId) {
+    const updated = await this.update(task, { status });
+    await this.database.client.issueDevelopmentClaim.deleteMany({ where: { taskId: task.id } });
+    await this.audit(actorId, `development.${status}`, task.projectId, task.id);
+    return updated;
   }
   async update(task, data) {
     if (!(await this.database.client.developmentTask.updateMany({ where: { id: task.id, projectId: task.projectId, revision: task.revision }, data: { ...data, revision: { increment: 1 } } })).count) throw conflict();
@@ -57,7 +82,7 @@ class ProjectDevelopmentStore {
   async list(projectId, { limit, offset, issueId }) {
     if (issueId && !await this.database.client.projectIssue.findFirst({ where: { projectId, id: issueId }, select: { id: true } }))
       throw accountError("事项不存在或不属于当前项目。", 404);
-    const rows = await this.database.client.developmentTask.findMany({ where: { projectId, ...(issueId ? { issueLinks: { some: { projectId, issueId } } } : {}) }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: offset, take: limit + 1 });
+    const rows = await this.database.client.developmentTask.findMany({ where: { projectId, ...(issueId ? { issueLinks: { some: { projectId, issueId } } } : {}) }, include: { executor: { select: { id: true, displayName: true } }, release: true }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: offset, take: limit + 1 });
     return { tasks: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
   }
   async addIssues(task, input, issues, prompt) {
@@ -73,6 +98,7 @@ class ProjectDevelopmentStore {
     const batch = { requestId: input.requestId, issueIds: input.issueIds, issues, prompt, status: "ready", createdAt: new Date().toISOString() };
     const updated = await this.update(task, { snapshot: json({ ...task.snapshot, additions: [...batches, batch] }) });
     await this.database.client.taskIssueLink.createMany({ data: issues.map(issue => ({ projectId: task.projectId, taskId: task.id, issueId: issue.id, snapshot: issue })) });
+    await this.claim(task, issues);
     await this.audit(task.executorId, "development.issues.added", task.projectId, task.id);
     return { task: updated, batch, reused: false };
   }
@@ -91,7 +117,10 @@ class ProjectDevelopmentStore {
   async execution(task) {
     if (!task.runKey) return null;
     const run = await this.database.readDocument(path.join(this.database.dataRoot, "workspaces", task.workspaceId, "runs", task.runKey, "run.json"));
-    return run ? { status: run.execution?.status || "unknown", sessionId: run.session_id || null } : null;
+    return run ? { status: run.execution?.status || "unknown", error: run.execution?.error || null, sessionId: run.session_id || null, baseline: run.worktree?.baseline || null } : null;
+  }
+  async taskForRun(workspaceId, runKey) {
+    return this.database.client.developmentTask.findUnique({ where: { workspaceId_runKey: { workspaceId, runKey } }, include: { release: true } });
   }
   async audit(actorId, event, projectId, taskId) {
     return this.database.client.auditEvent.create({ data: { actorUserId: actorId, event, details: { projectId, taskId } } });

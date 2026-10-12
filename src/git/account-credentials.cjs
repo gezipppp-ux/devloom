@@ -38,6 +38,9 @@ function execute(args, env, timeout = 60000) {
 function shellPath(file) {
   return "'" + file.replaceAll("\\", "/").replaceAll("'", "'\\''") + "'";
 }
+function sshCommand(keyFile, configFile) {
+  return `ssh -F ${shellPath(configFile)} -i ${shellPath(keyFile)} -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o StrictHostKeyChecking=accept-new`;
+}
 
 function gitAccountEnvironment(account, remote) {
   remoteUrl(remote);
@@ -98,7 +101,7 @@ async function createGitCredentialEnvironment(account, remote) {
     env.GIT_CONFIG_GLOBAL = identity.file;
     if (account.authType === "ssh") {
       key = await createSshPrivateKeyFile(account.sshPrivateKey);
-      env.GIT_SSH_COMMAND = `ssh -F ${process.platform === "win32" ? "NUL" : "/dev/null"} -i ${shellPath(key.file)} -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o StrictHostKeyChecking=accept-new`;
+      env.GIT_SSH_COMMAND = sshCommand(key.file, key.configFile);
       env.GIT_SSH_VARIANT = "ssh";
     }
     return { env, revision: account.revision, dispose: () => {
@@ -118,8 +121,8 @@ async function withGitAccount(account, remote, operation, executeCommand = execu
   const run = () =>
     operation((args, options = {}) => executeCommand(args, env, options.timeout));
   if (account.authType !== "ssh") return run();
-  return withSshPrivateKey(account.sshPrivateKey, (key) => {
-    env.GIT_SSH_COMMAND = `ssh -F ${process.platform === "win32" ? "NUL" : "/dev/null"} -i ${shellPath(key)} -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o StrictHostKeyChecking=accept-new`;
+  return withSshPrivateKey(account.sshPrivateKey, (key, configFile) => {
+    env.GIT_SSH_COMMAND = sshCommand(key, configFile);
     env.GIT_SSH_VARIANT = "ssh";
     return run();
   });

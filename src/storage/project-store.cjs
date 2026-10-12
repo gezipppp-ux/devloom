@@ -5,16 +5,13 @@ class ProjectStore {
   constructor(database) { this.database = database; }
   transaction(operation) { return this.database.transaction(operation); }
   async user(id) { return this.database.client.user.findUnique({ where: { id }, include: { department: true } }); }
-  async department(id) { return this.database.client.department.findUnique({ where: { id } }); }
   async departments() { return this.database.client.department.findMany({ orderBy: { name: "asc" } }); }
-  async repositories() { return this.database.client.repository.findMany({ orderBy: { name: "asc" } }); }
-  async repository(id) { return this.database.client.repository.findUnique({ where: { id } }); }
   decodeProject(row) { return row ? { ...row, settings: decodeSettings(JSON.stringify(row.settings), this.database.encryptionKey) } : null; }
-  async project(id) { return this.decodeProject(await this.database.client.project.findUnique({ where: { id }, include: { repository: true, department: true } })); }
+  async project(id) { return this.decodeProject(await this.database.client.project.findUnique({ where: { id }, include: { _count: { select: { spaces: true } } } })); }
   async membership(projectId, userId) { return this.database.client.projectMember.findUnique({ where: { projectId_userId: { projectId, userId } } }); }
   async members(projectId) { return this.database.client.projectMember.findMany({ where: { projectId }, include: { user: { include: { department: true } } }, orderBy: { createdAt: "asc" } }); }
   async users() { return this.database.client.user.findMany({ where: { status: "active" }, include: { department: true }, orderBy: { username: "asc" } }); }
-  async projects(userId) { return (await this.database.client.project.findMany({ where: { members: { some: { userId, status: "active" } } }, include: { repository: true, department: true }, orderBy: { updatedAt: "desc" } })).map(row => this.decodeProject(row)); }
+  async projects(userId, { includeAll = false } = {}) { return (await this.database.client.project.findMany({ where: includeAll ? {} : { members: { some: { userId, status: "active" } } }, include: { _count: { select: { spaces: true } } }, orderBy: { updatedAt: "desc" } })).map(row => this.decodeProject(row)); }
   async saveCatalog(model, value, id) {
     const { revision, ...data } = value;
     try {
@@ -27,7 +24,6 @@ class ProjectStore {
       throw error;
     }
   }
-  async repositoryUsed(id) { return this.database.client.developmentSpace.count({ where: { project: { repositoryId: id } } }); }
   async spaceCount(projectId) { return this.database.client.developmentSpace.count({ where: { projectId } }); }
   async saveProject(value, id) {
     const data = { ...value };

@@ -16,8 +16,14 @@ const { presentError } = require("../application/error-presenter.cjs");
 const { ProjectServices } = require("../application/project-services.cjs");
 const { ProjectContentServices } = require("../application/project-content-services.cjs");
 const { ProjectDevelopmentServices } = require("../application/project-development-services.cjs");
+const { ProjectLifecycleServices } = require("../application/project-lifecycle-services.cjs");
+const { SystemWorkflowServices } = require("../application/system-workflow-services.cjs");
+const { ProjectBranchServices } = require("../application/project-branch-services.cjs");
 const { serveProjectContent } = require("./project-content-api.cjs");
 const { serveProjectDevelopment } = require("./project-development-api.cjs");
+const { serveProjectLifecycle } = require("./project-lifecycle-api.cjs");
+const { serveSystemWorkflows } = require("./system-workflow-api.cjs");
+const { serveProjectBranches } = require("./project-branch-api.cjs");
 const { serveProjectApi } = require("./project-api.cjs");
 const {
   AccountServices,
@@ -57,7 +63,7 @@ function responseStream(reply) {
 }
 
 function workspacePermission(route, method) {
-  if (route.startsWith("/settings")) return route === "/settings/refs" ? "code.view" : "project.configure";
+  if (route.startsWith("/settings")) return route === "/settings/branches" ? "code.view" : "project.configure";
   if (route.startsWith("/repository/git")) return method === "GET" ? "code.view" : "code.operate";
   if (/\/files?$|\/git$/.test(route)) return "code.view";
   if (method === "GET") return "session.view";
@@ -97,6 +103,7 @@ function createWebServer({
   const fixtureUser = {
     id: "fixture-user",
     username: "fixture",
+    displayName: "测试管理员",
     role: "admin",
     status: "active",
     mustChangePassword: false,
@@ -117,6 +124,9 @@ function createWebServer({
   let projects;
   let projectContent;
   let projectDevelopment;
+  let projectLifecycle;
+  let systemWorkflows;
+  let projectBranches;
   let closing = false, closePromise;
   const ownedDatabase = !testIdentity && !database;
 
@@ -134,6 +144,9 @@ function createWebServer({
       projects = new ProjectServices(accounts.database, { workspaces, onRevoke: value => events.revoke(value) });
       projectContent = new ProjectContentServices(accounts.database, projects);
       projectDevelopment = new ProjectDevelopmentServices(accounts.database, projects, workspaces);
+      projectLifecycle = new ProjectLifecycleServices(accounts.database, projects);
+      systemWorkflows = new SystemWorkflowServices(accounts.database, accounts, projects);
+      projectBranches = new ProjectBranchServices(accounts.database, projects);
       await projects.initialize();
       workspaces.authorizeProject = (id, actor, permission) => projects.workspaceAuthorization(id, actor, permission);
       gitAccounts = new GitAccountServices(accounts.database, { projects });
@@ -339,6 +352,9 @@ function createWebServer({
       if (request.method === "POST" && environment.status().busy && !url.pathname.startsWith("/api/auth/"))
         throw accountError("环境工具正在更新，请完成后再提交操作。", 409);
       if (projects && await serveProjectApi(request, response, url, { projects, actor, input })) return;
+      if (systemWorkflows && await serveSystemWorkflows(request.raw, response, url, { services: systemWorkflows, actor, input })) return;
+      if (projectLifecycle && await serveProjectLifecycle(request.raw, response, url, { services: projectLifecycle, actor, input })) return;
+      if (projectBranches && await serveProjectBranches(request.raw, response, url, { services: projectBranches, actor })) return;
       if (projectContent && await serveProjectContent(request.raw, response, url, { services: projectContent, actor, input })) return;
       if (projectDevelopment && await serveProjectDevelopment(request.raw, response, url, { services: projectDevelopment, actor, input })) return;
       if (url.pathname === "/api/account/settings") {
@@ -353,6 +369,8 @@ function createWebServer({
           settings: testIdentity ? fixtureSettings : (await accounts.settings(actor)),
         });
       }
+      if (request.method === "POST" && url.pathname === "/api/account/profile" && !testIdentity)
+        return json(response, 200, { user: await accounts.updateProfile(actor, input, authorize) });
       if (request.method === "GET" && url.pathname === "/api/account/models")
         return json(response, 200, {
           models: testIdentity ? [] : await accounts.listModels(),
@@ -428,8 +446,10 @@ function createWebServer({
           actor,
           authorize,
         );
-        events.revoke({ userId: user.id });
-        await projects.enforce();
+        if (Object.keys(input).some(key => key !== "displayName")) {
+          events.revoke({ userId: user.id });
+          await projects.enforce();
+        }
         return json(response, 200, { user });
       }
       const contextActor = testIdentity ? undefined : actor;
@@ -519,7 +539,7 @@ function createWebServer({
         url.pathname = `/api${scoped[2] || "/bootstrap"}`;
       } else if (manager && testIdentity)
         context = { configFile, channels, sessions: manager };
-      else throw accountError("请先选择工作区。", 400);
+      else throw accountError("接口不存在。", 404);
       const sid = request.session?.sessionId;
       const authorization = testIdentity
         ? undefined

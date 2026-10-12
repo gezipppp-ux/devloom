@@ -183,7 +183,7 @@ test("development CLI serves Vite and workspace APIs on one guarded origin", asy
     },
   );
   const seeding = await fixture.open();
-  const department = await seedProjectDepartment(seeding);
+  await seedProjectDepartment(seeding);
   await seeding.close();
   const privateFile = path.join(directory, "private-fixture.json");
   const secret = "development-test-private-data-must-not-be-served";
@@ -271,7 +271,7 @@ test("development CLI serves Vite and workspace APIs on one guarded origin", asy
     const workspace = await prepareHttpProject(async (route, body) => {
       const response = await send(origin + route, { headers, ...(body === undefined ? {} : { method: "POST", body: JSON.stringify(body) }) });
       return { status: response.status, data: JSON.parse(response.text) };
-    }, { name: "开发服务隔离测试", departmentId: department.id, gitAccountId: JSON.parse(account.text).account.id, remoteUrl: remote.remoteUrl });
+    }, { name: "开发服务隔离测试", gitAccountId: JSON.parse(account.text).account.id, remoteUrl: remote.remoteUrl });
     const database = await fixture.open();
     assert.equal((await database.client.workspace.findUniqueOrThrow({ where: { id: workspace.id } })).id, workspace.id);
     await database.close();

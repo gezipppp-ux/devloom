@@ -1,7 +1,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
-const { repositoryGit, resolveCommit } = require("../git/repository.cjs");
+const { repositoryGit } = require("../git/repository.cjs");
+const { validateBaseBranch } = require("../domain/development-baseline.cjs");
 const { validateInitCommands } = require("../domain/init-commands.cjs");
 const { agentConfig, executionOptions } = require("../domain/agent-config.cjs");
 const {
@@ -26,7 +27,7 @@ const { absolutePath, samePath } = require("../shared/paths.cjs");
 function settingsPath(configFile) {
   return path.join(path.dirname(configFile), "runner.local.json");
 }
-async function executionConfig(config, configFile) {
+async function executionConfig(config, configFile, { baseBranch } = {}) {
   const settings = config.workspace
     ? {}
     : (await readOptional(settingsPath(configFile)));
@@ -63,7 +64,8 @@ async function executionConfig(config, configFile) {
     execution.worktreeRoot =
       settings.worktreeRoot || execution.worktreeRoot || defaultWorktreeRoot();
   }
-  if (settings.baseRef) execution.baseRef = settings.baseRef;
+  if (settings.baseBranch !== undefined) execution.baseBranch = settings.baseBranch;
+  if (baseBranch !== undefined) execution.baseBranch = validateBaseBranch(baseBranch, { allowEmpty: true });
   execution.initCommands = validateInitCommands(
     settings.initCommands ?? execution.initCommands ?? [],
   );
@@ -81,7 +83,7 @@ async function readSettings(configFile) {
       path.dirname(configFile),
       config.execution.worktreeRoot,
     ),
-    baseRef: config.execution.baseRef || "HEAD",
+    baseBranch: config.execution.baseBranch || "",
     initCommands: config.execution.initCommands,
     platform: process.platform,
     ...(config.workspace
@@ -99,15 +101,15 @@ async function saveSettings(input, configFile) {
   const config = (await readOptional(configFile));
   const execution = executionOptions(config);
   const allowedFields = config.workspace
-    ? ["baseRef", "initCommands"]
-    : ["repository", "baseRef", "initCommands", "worktreeRoot"];
+    ? ["baseBranch", "initCommands"]
+    : ["repository", "baseBranch", "initCommands", "worktreeRoot"];
   if (
     !input ||
     typeof input !== "object" ||
     Array.isArray(input) ||
     Object.keys(input).some((key) => !allowedFields.includes(key))
   )
-    throw new Error("仅允许修改基准引用和初始化命令。");
+    throw new Error("仅允许修改开发基线分支和初始化命令。");
   const initCommands = validateInitCommands(
     input.initCommands ??
       (config.workspace
@@ -133,10 +135,7 @@ async function saveSettings(input, configFile) {
       input.worktreeRoot ?? (await readSettings(configFile)).worktreeRoot,
       "worktree 根目录",
     );
-  const baseRef = input.baseRef?.trim() || "HEAD";
-  if (baseRef.length > 200 || /[\r\n\0]/.test(baseRef))
-    throw new Error("无效的基准引用。");
-  resolveCommit(repository, baseRef);
+  const baseBranch = validateBaseBranch(input.baseBranch ?? (await readSettings(configFile)).baseBranch, { allowEmpty: true });
   // Validate without creating a worktree or changing the selected Git branch.
   fs.mkdirSync(worktreeRoot, { recursive: true });
   if (location?.memberRoot)
@@ -161,7 +160,7 @@ async function saveSettings(input, configFile) {
   const settings = {
     repository,
     worktreeRoot: realRoot,
-    baseRef,
+    baseBranch,
     initCommands,
   };
   if (config.workspace) {
@@ -170,7 +169,7 @@ async function saveSettings(input, configFile) {
         ? validateInitCommands(executionOptions(current).initCommands ?? [])
         : initCommands;
       current.execution = {
-        ...current.execution, baseRef, initCommands: nextInitCommands,
+        ...current.execution, baseBranch, initCommands: nextInitCommands,
       };
       delete current.execution.repositories;
       delete current.execution.worktreeRoot;

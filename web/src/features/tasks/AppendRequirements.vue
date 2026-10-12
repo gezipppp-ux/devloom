@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { ref } from "vue";
 import TapdRequirementPicker from "./TapdRequirementPicker.vue";
 import { useRequirementAdditions } from "./use-requirement-additions.js";
@@ -16,7 +17,7 @@ const { form, busy, error, append, reset } = useRequirementAdditions(() => props
       <p class="field-hint">保存后先核对资料，再点击“继续处理新增需求”；沿用当前会话和代码。</p>
       <TapdRequirementPicker v-model="form.items" :workspace="workspace" :disabled="disabled || busy" @open-task="emit('open-task', $event)" />
       <label>融合说明（可选）<textarea v-model="form.supplementaryInstructions" rows="3" maxlength="60000" :disabled="disabled || busy" /></label>
-      <p v-if="error" role="alert" class="error">{{ error }}</p>
+      <FeedbackMessage :message="error" type="error" />
       <div class="actions">
         <button type="button" :disabled="busy" @click="expanded = false; reset()">取消</button>
         <button class="primary" type="button" :disabled="disabled || busy || !form.items.length" @click="append(workspace)">{{ busy ? '正在准备资料…' : '保存追加资料' }}</button>

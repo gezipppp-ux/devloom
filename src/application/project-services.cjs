@@ -3,15 +3,15 @@ const { randomUUID } = require("node:crypto");
 const { ProjectStore } = require("../storage/project-store.cjs");
 const { GitAccountStore } = require("../storage/git-account-store.cjs");
 const { accountError } = require("../domain/account.cjs");
-const { departmentInput, repositoryInput, projectInput, memberInput, prepareSpaceInput, projectId, projectRevision } = require("../domain/project-input.cjs");
-const { assertProjectPermission, effectivePermissions, validatePermissions, canCreateProject, projectCreationReadiness, projectPermissionCatalog, productTemplate, developerTemplate } = require("../domain/project-permissions.cjs");
-const { remoteHost, remoteAuthType } = require("../domain/git-account.cjs");
+const { departmentInput, projectInput, memberInput, prepareSpaceInput, projectId, projectRevision } = require("../domain/project-input.cjs");
+const { assertProjectPermission, effectivePermissions, administratorPermissions, grantableProjectPermissions, projectContextPermissions, validatePermissions, canCreateProject, projectCreationReadiness, projectPermissionCatalog, productTemplate, developerTemplate } = require("../domain/project-permissions.cjs");
+const { resolveAccountRemote } = require("../domain/git-account.cjs");
 const { readSystemSettings } = require("../config/system-settings.cjs");
 const { cloneProject } = require("../git/project-clone.cjs");
 const { testGitConnection } = require("../git/account-credentials.cjs");
 const { buildSession, parseCookieHeader, todoRequest } = require("../channels/tapd/auth-utils.cjs");
 const { defaultChannelConfig } = require("../channels/channel-registry.cjs");
-const { presentDepartment, presentRepository, presentProject, presentMember, presentSpace } = require("./project-presenter.cjs");
+const { presentDepartment, presentProject, presentMember, presentSpace } = require("./project-presenter.cjs");
 const { presentError } = require("./error-presenter.cjs");
 
 class ProjectServices {
@@ -49,7 +49,7 @@ class ProjectServices {
     const membership = await this.store.membership(id, user.id);
     const context = { user, department: user.department, project, membership };
     assertProjectPermission(context, permission);
-    return { ...context, permissions: effectivePermissions(user.department.permissions, membership.permissions) };
+    return { ...context, permissions: projectContextPermissions(context) };
   }
   async departments(actor) { await this.admin(actor); return { departments: (await this.store.departments()).map(presentDepartment) }; }
   async saveDepartment(actor, input, id) {
@@ -64,47 +64,26 @@ class ProjectServices {
     await this.enforce();
     return { department: presentDepartment(saved) };
   }
-  async repositories(actor, adminOnly = true) {
-    if (adminOnly) await this.admin(actor);
-    else {
-      const user = await this.currentUser(actor);
-      if (!canCreateProject(user, user.department)) throw accountError("未获得创建项目资格。", 403);
-    }
-    return { repositories: (await this.store.repositories()).filter(row => adminOnly || row.status === "active").map(presentRepository) };
-  }
-  async saveRepository(actor, input, id) {
-    const value = repositoryInput(input, Boolean(id));
-    if (id) projectId(id);
-    return this.store.transaction(async () => {
-      await this.admin(actor);
-      const previous = id && await this.store.repository(id);
-      if (previous && value.remoteUrl && value.remoteUrl !== previous.remoteUrl && await this.store.repositoryUsed(id))
-        throw accountError("仓库已关联开发空间，不能更改远程地址。", 409);
-      const row = await this.store.saveCatalog("repository", value, id);
-      await this.store.audit(actor, "repository.saved", { repositoryId: row.id, revision: row.revision });
-      return { repository: presentRepository(row) };
-    });
-  }
   async list(actor) {
     const user = await this.currentUser(actor);
     const projects = [];
-    for (const project of await this.store.projects(user.id)) {
+    for (const project of await this.store.projects(user.id, { includeAll: user.role === "admin" })) {
       const membership = await this.store.membership(project.id, user.id);
-      const permissions = user.department?.status === "active" ? effectivePermissions(user.department.permissions, membership.permissions) : [];
+      const permissions = projectContextPermissions({ user, department: user.department, membership, project });
       if (!permissions.includes("project.view")) continue;
-      projects.push({ ...presentProject(project, permissions), permissions, membership: presentMember(membership), space: presentSpace(await this.store.space(project.id, user.id)) });
+      projects.push({ ...presentProject(project, permissions), permissions, membership: presentMember(membership && { ...membership, user }), space: presentSpace(await this.store.space(project.id, user.id)) });
     }
-    const canCreateProjects = Boolean(canCreateProject(user, user.department) && user.department?.status === "active");
-    const departments = canCreateProjects ? (await this.store.departments()).filter(row => row.status === "active" && (user.role === "admin" || row.id === user.departmentId)).map(row => ({ id: row.id, name: row.name })) : [];
-    const setup = user.role === "admin" ? { hasDepartments: (await this.store.departments()).some(row => row.status === "active"), departmentAssigned: user.department?.status === "active", hasRepositories: (await this.store.repositories()).some(row => row.status === "active") } : undefined;
-    return { projects, setup, canCreateProjects, creationReadiness: projectCreationReadiness(user, user.department), isAdmin: user.role === "admin", departmentId: user.departmentId, departments };
+    const canCreateProjects = canCreateProject(user, user.department);
+    const setup = user.role === "admin" ? { hasDepartments: (await this.store.departments()).some(row => row.status === "active"), departmentAssigned: user.department?.status === "active" } : undefined;
+    return { projects, setup, canCreateProjects, creationReadiness: projectCreationReadiness(user, user.department), isAdmin: user.role === "admin" };
   }
   async read(id, actor) {
-    const { project, membership, permissions, department } = await this.authorize(id, actor, "project.view");
-    return { permissionContext: { departmentName: department.name, ceiling: department.permissions, grants: membership.permissions }, project: presentProject(project, permissions), membership: presentMember(membership), permissions, space: presentSpace(await this.store.space(id, actor.id)) };
+    const { project, membership, permissions, department, user } = await this.authorize(id, actor, "project.view");
+    return { permissionContext: { administratorAccess: user.role === "admin", departmentName: department?.name || "", ceiling: department?.permissions || [], grants: membership?.permissions || [] }, project: presentProject(project, permissions), membership: presentMember(membership && { ...membership, user }), permissions, space: presentSpace(await this.store.space(id, actor.id)) };
   }
   settings(input = {}, previous = {}) {
     const value = { ...previous, ...input };
+    delete value.baseRef;
     if (input.prompts) {
       value.prompts = { ...previous.prompts };
       for (const [channel, template] of Object.entries(input.prompts)) {
@@ -126,11 +105,8 @@ class ProjectServices {
     const value = projectInput(input);
     const row = await this.store.transaction(async () => {
       const user = await this.currentUser(actor);
-      if (!canCreateProject(user, user.department) || user.department?.status !== "active") throw accountError("未获得创建项目资格或尚未分配有效部门。", 403);
-      if (user.role !== "admin" && value.departmentId !== user.departmentId) throw accountError("只能在本人所属部门创建项目。", 403);
-      if ((await this.store.department(value.departmentId))?.status !== "active") throw accountError("请选择有效部门。");
-      if ((await this.store.repository(value.repositoryId))?.status !== "active") throw accountError("请选择启用的仓库。");
-      const permissions = validatePermissions(["project.view", "project.configure", "project.members.manage"], { scope: "project", ceiling: user.department.permissions });
+      if (!canCreateProject(user, user.department)) throw accountError("未获得创建项目资格或尚未分配有效部门。", 403);
+      const permissions = validatePermissions(["project.view", "project.configure", "project.members.manage"], { scope: "project", ceiling: user.role === "admin" ? undefined : user.department.permissions });
       const project = await this.store.saveProject({ ...value, settings: this.settings(value.settings), ownerUserId: user.id });
       await this.store.saveMember(project.id, user.id, { permissions, status: "active" }, false);
       await this.store.audit(actor, "project.created", { projectId: project.id });
@@ -142,17 +118,15 @@ class ProjectServices {
     const value = projectInput(input, true);
     await this.store.transaction(async () => {
       const { project } = await this.authorize(id, actor, "project.configure");
-      if (value.departmentId && value.departmentId !== project.departmentId) throw accountError("项目归属部门不能更改。");
-      if (value.repositoryId && value.repositoryId !== project.repositoryId) {
+      if (value.remoteUrl && value.remoteUrl !== project.remoteUrl) {
         if (await this.store.spaceCount(id)) throw accountError("项目已分配开发空间，不能更换仓库。", 409);
-        if ((await this.store.repository(value.repositoryId))?.status !== "active") throw accountError("请选择启用的仓库。");
       }
       if (value.ownerUserId && value.ownerUserId !== project.ownerUserId) {
         await this.authorize(id, actor, "project.members.manage");
         const owner = await this.store.user(value.ownerUserId);
         const member = await this.store.membership(id, value.ownerUserId);
-        const effective = effectivePermissions(owner?.department?.permissions, member?.permissions);
-        if (owner?.status !== "active" || owner.department?.status !== "active" || member?.status !== "active" || !["project.view", "project.configure", "project.members.manage"].every(permission => effective.includes(permission)))
+        const effective = projectContextPermissions({ user: owner, department: owner?.department, membership: member, project });
+        if (owner?.status !== "active" || member?.status !== "active" || !["project.view", "project.configure", "project.members.manage"].every(permission => effective.includes(permission)))
           throw accountError("接任负责人须为有效成员并拥有项目配置和成员管理权限。");
       }
       if (value.settings) value.settings = this.settings(value.settings, project.settings);
@@ -165,7 +139,7 @@ class ProjectServices {
   async members(id, actor) {
     const context = await this.authorize(id, actor, "project.view");
     const result = { members: (await this.store.members(id)).map(presentMember) };
-    if (context.permissions.includes("project.members.manage")) result.candidates = (await this.store.users()).map(user => ({ id: user.id, username: user.username, departmentId: user.departmentId, departmentName: user.department?.name || "", permissions: user.department?.status === "active" ? user.department.permissions : [] }));
+    if (context.permissions.includes("project.members.manage")) result.candidates = (await this.store.users()).map(user => ({ id: user.id, username: user.username, displayName: user.displayName, departmentId: user.departmentId, departmentName: user.department?.name || "", administratorAccess: user.role === "admin", grantablePermissions: grantableProjectPermissions(user), permissions: user.department?.status === "active" ? user.department.permissions : [] }));
     return result;
   }
   async saveMember(id, actor, input, userId) {
@@ -175,11 +149,16 @@ class ProjectServices {
     const row = await this.store.transaction(async () => {
       const { project } = await this.authorize(id, actor, "project.members.manage");
       const user = await this.store.user(userId);
-      if (!user || user.status !== "active" || user.department?.status !== "active") throw accountError("请选择已分配有效部门的账号。");
-      value.permissions = validatePermissions(value.permissions, { scope: "project", ceiling: user.department.permissions });
+      if (!user || user.status !== "active" || (user.role !== "admin" && user.department?.status !== "active")) throw accountError("请选择已分配有效部门的账号。");
+      const ceiling = user.department?.status === "active" ? user.department.permissions : [];
+      value.permissions = validatePermissions(value.permissions, { scope: "project", ceiling: user.role === "admin" ? [...new Set([...ceiling, ...administratorPermissions])] : ceiling });
       const memberStatus = value.status || (updating ? (await this.store.membership(id, userId))?.status : "active");
-      if (memberStatus !== "disabled" && !value.permissions.includes("project.view")) throw accountError("参与中的成员必须拥有查看项目权限；请先检查部门上限并授予查看项目权限。", 400, "PROJECT_VIEW_REQUIRED");
-      if (project.ownerUserId === userId && (value.status === "disabled" || !["project.view", "project.configure", "project.members.manage"].every(permission => value.permissions.includes(permission))))
+      const granted = effectivePermissions(ceiling, value.permissions);
+      if (user.role === "admin" && value.permissions.some(permission => !administratorPermissions.includes(permission) && !granted.includes(permission)))
+        throw accountError("开发与敏感字段权限及其依赖必须满足部门授权上限。", 400, "DEPARTMENT_PERMISSION_LIMIT");
+      const effective = projectContextPermissions({ user, department: user.department, membership: { projectId: id, userId, status: memberStatus, permissions: value.permissions }, project });
+      if (memberStatus !== "disabled" && !effective.includes("project.view")) throw accountError("参与中的成员必须拥有查看项目权限；请先检查部门上限并授予查看项目权限。", 400, "PROJECT_VIEW_REQUIRED");
+      if (project.ownerUserId === userId && (memberStatus === "disabled" || !["project.view", "project.configure", "project.members.manage"].every(permission => effective.includes(permission))))
         throw accountError("请先指定接任负责人，再移除或减少原负责人权限。", 409);
       const membership = await this.store.saveMember(id, userId, value, updating);
       if (membership.status === "active" && value.permissions.includes("code.operate")) await this.store.allocateSpace(id, userId);
@@ -187,7 +166,7 @@ class ProjectServices {
       return membership;
     });
     await this.enforce();
-    return { membership: presentMember(row), space: presentSpace(await this.store.space(id, userId)) };
+    return { membership: presentMember({ ...row, user: await this.store.user(userId) }), space: presentSpace(await this.store.space(id, userId)) };
   }
   async archive(id, actor, input, restore = false) {
     const revision = projectRevision(input?.revision);
@@ -214,8 +193,7 @@ class ProjectServices {
     const value = prepareSpaceInput(input);
     const context = await this.authorize(id, actor, "code.operate");
     const account = await this.gitAccounts.read(value.gitAccountId, actor.id);
-    const remote = context.project.repository.remoteUrl;
-    if (context.project.repository.status !== "active" || account.host !== remoteHost(remote) || account.authType !== remoteAuthType(remote)) throw accountError("Git 账号主机或认证方式与项目仓库不匹配。");
+    const remote = resolveAccountRemote(account, context.project.remoteUrl);
     const accepted = await this.store.transaction(async () => {
       const current = await this.authorize(id, actor, "code.operate");
       const space = await this.store.allocateSpace(id, actor.id);
@@ -235,37 +213,37 @@ class ProjectServices {
     if (accepted.start) {
       const operation = { controller: new AbortController(), projectId: id, userId: actor.id };
       this.active.set(accepted.space.id, operation);
-      operation.promise = this.prepareOperation(accepted.space, context, account, operation.controller.signal)
+      operation.promise = this.prepareOperation(accepted.space, context, account, remote, operation.controller.signal)
         .catch(error => { operation.error = presentError(error); })
         .finally(() => this.active.delete(accepted.space.id));
     }
     return { space: presentSpace(accepted.space) };
   }
-  async prepareOperation(space, context, account, signal) {
+  async prepareOperation(space, context, account, remote, signal) {
     const actor = { id: space.userId };
     const authorize = async () => {
       if (signal.aborted || this.closed) throw accountError("开发空间准备已停止。", 409);
       const current = await this.authorize(space.projectId, actor, "code.operate");
       const latest = await this.gitAccounts.read(account.id, actor.id);
-      if (current.project.revision !== context.project.revision || current.project.repository.revision !== context.project.repository.revision || latest.revision !== account.revision)
+      if (current.project.revision !== context.project.revision || latest.revision !== account.revision)
         throw accountError("项目或 Git 凭据在准备期间已变更，请检查后重试。", 409);
       return current;
     };
     try {
       await authorize();
-      await this.checkConnection(account, context.project.repository.remoteUrl, { signal });
+      await this.checkConnection(account, remote, { signal });
       await authorize();
       const { memberStorageRoot } = await readSystemSettings(this.store.database.dataRoot);
       // The persisted preparation revision gives each accepted attempt its own
       // short path while failed checkouts remain available for inspection.
       const target = path.join(memberStorageRoot, "projects", space.projectId, "members", space.userId, `repository-${space.revision}`);
-      await this.clone({ account, remote: context.project.repository.remoteUrl, target, memberStorageRoot, signal, preserveOnFailure: true,
+      await this.clone({ account, remote, target, memberStorageRoot, signal, preserveOnFailure: true,
         publish: () => this.store.transaction(async () => {
           const latest = await authorize();
           const saved = await this.store.space(space.projectId, space.userId);
           if (saved.status !== "preparing" || saved.requestId !== space.requestId || saved.revision !== space.revision) throw accountError("空间准备请求已失效。", 409);
           const workspaceId = saved.workspaceId || randomUUID();
-          await this.store.writeWorkspace(workspaceId, this.workspaceConfig(workspaceId, latest.project, space, account, target));
+          await this.store.writeWorkspace(workspaceId, this.workspaceConfig(workspaceId, latest.project, space, account.id, remote, target));
           await this.store.updateSpace(saved.id, saved.revision, { workspaceId, status: "ready", error: null, workerPid: null });
           await this.store.audit(actor, "project.space.ready", { projectId: space.projectId, spaceId: space.id });
           return workspaceId;
@@ -276,11 +254,13 @@ class ProjectServices {
         await this.store.updateSpace(saved.id, saved.revision, { status: "failed", error: presentError(error).message, workerPid: null });
     }
   }
-  workspaceConfig(workspaceId, project, space, account, target, previous = {}) {
+  workspaceConfig(workspaceId, project, space, accountId, remote, target, previous = {}) {
+    const execution = { ...previous.execution };
+    delete execution.baseRef;
     return { ...defaultChannelConfig(), ...previous, version: 5,
       workspace: { ...previous.workspace, id: workspaceId, name: `project-${project.id}`, owner_user_id: space.userId, project_id: project.id },
-      execution: { ...previous.execution, repository: target, projectName: project.id, gitAccountId: account.id, remoteUrl: project.repository?.remoteUrl || previous.execution?.remoteUrl,
-        baseRef: project.settings.baseRef || "HEAD", initCommands: project.settings.initCommands || [] },
+      execution: { ...execution, repository: target, projectName: project.id, gitAccountId: accountId, remoteUrl: remote,
+        baseBranch: project.settings.baseBranch || "", initCommands: project.settings.initCommands || [] },
       agent: previous.agent || { provider: "codex", model: "", reasoningEffort: "", permissionMode: "ask", options: {} },
       ...(project.settings.tapd ? { tapd: project.settings.tapd } : {}),
       prompt_templates: project.settings.prompts || {} };
@@ -289,7 +269,8 @@ class ProjectServices {
     for (const space of await this.store.projectSpaces(project.id)) {
       if (!space.workspaceId) continue;
       const previous = await this.store.readWorkspace(space.workspaceId, space.userId);
-      await this.store.writeWorkspace(space.workspaceId, this.workspaceConfig(space.workspaceId, project, space, { id: space.gitAccountId }, previous.execution.repository, previous));
+      // Project settings updates preserve the transport address of the prepared checkout.
+      await this.store.writeWorkspace(space.workspaceId, this.workspaceConfig(space.workspaceId, project, space, space.gitAccountId, previous.execution.remoteUrl, previous.execution.repository, previous));
     }
   }
   async enforce() {

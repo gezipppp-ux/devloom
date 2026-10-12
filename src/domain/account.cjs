@@ -25,6 +25,20 @@ function password(value) {
   return value;
 }
 
+function displayName(value) {
+  if (typeof value !== "string" || /[\p{Cc}\p{Cf}]/u.test(value) ||
+      !value.trim() || [...value.trim()].length > 80)
+    throw accountError("显示名需为 1–80 个字符，且不能包含控制字符。");
+  return value.trim();
+}
+
+function validateAccountProfile(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input) ||
+      Object.keys(input).some(key => key !== "displayName"))
+    throw accountError("个人资料仅支持修改显示名。");
+  return { displayName: displayName(input.displayName) };
+}
+
 function accountSettings(input, previous = DEFAULT_ACCOUNT_SETTINGS) {
   if (!input || typeof input !== "object" || Array.isArray(input))
     throw accountError("个人设置格式无效。");
@@ -58,13 +72,14 @@ function accountSettings(input, previous = DEFAULT_ACCOUNT_SETTINGS) {
 
 function validateAccountCreation(input, { initial = false } = {}) {
   if (!input || typeof input !== "object" || Array.isArray(input) ||
-      Object.keys(input).some((key) => !["username", "password", "role", "departmentId", "canCreateProjects"].includes(key)))
+      Object.keys(input).some((key) => !["username", "displayName", "password", "role", "departmentId", "canCreateProjects"].includes(key)))
     throw accountError("包含未知账号字段。");
   const role = initial ? "admin" : input.role || "member";
   if (!["admin", "member"].includes(role)) throw accountError("账号角色无效。");
   if (!initial || input.departmentId !== undefined) departmentId(input.departmentId);
   if (input.canCreateProjects !== undefined && typeof input.canCreateProjects !== "boolean") throw accountError("创建项目资格必须为布尔值。");
-  return { username: username(input.username), password: password(input.password), role,
+  const login = username(input.username);
+  return { username: login, displayName: Object.hasOwn(input, "displayName") ? displayName(input.displayName) : login, password: password(input.password), role,
     departmentId: input.departmentId || null, canCreateProjects: input.canCreateProjects || false };
 }
 
@@ -75,7 +90,7 @@ function departmentId(value) {
 
 function validateAccountUpdate(input) {
   if (!input || typeof input !== "object" || Array.isArray(input) ||
-      Object.keys(input).some((key) => !["role", "status", "password", "departmentId", "canCreateProjects"].includes(key)))
+      Object.keys(input).some((key) => !["displayName", "role", "status", "password", "departmentId", "canCreateProjects"].includes(key)))
     throw accountError("包含未知账号字段。");
   if (input.role !== undefined && !["admin", "member"].includes(input.role))
     throw accountError("账号角色无效。");
@@ -84,7 +99,7 @@ function validateAccountUpdate(input) {
   if (input.password !== undefined) password(input.password);
   if (input.departmentId !== undefined) departmentId(input.departmentId);
   if (input.canCreateProjects !== undefined && typeof input.canCreateProjects !== "boolean") throw accountError("创建项目资格必须为布尔值。");
-  return { ...input };
+  return { ...input, ...(Object.hasOwn(input, "displayName") ? { displayName: displayName(input.displayName) } : {}) };
 }
 
 function validateAccountPreferences(input) {
@@ -99,6 +114,8 @@ module.exports = {
   accountError,
   username,
   password,
+  displayName,
+  validateAccountProfile,
   accountSettings,
   validateAccountCreation,
   validateAccountUpdate,

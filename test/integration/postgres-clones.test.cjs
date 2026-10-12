@@ -11,7 +11,7 @@ test("PostgreSQL clone requests are idempotent and terminal records reject late 
   const fixture = await postgresFixture(t);
   await fixture.deploy();
   const database = await fixture.open();
-  const user = await database.client.user.create({ data: { username: "owner", passwordHash: "fixture" } });
+  const user = await database.client.user.create({ data: { username: "owner", displayName: "owner", passwordHash: "fixture" } });
   const clones = new WorkspaceCloneStore(database);
   const input = { requestId: randomUUID(), name: "repository", remoteUrl: "https://example.test/repo.git", gitAccountId: randomUUID() };
   const first = await clones.create(user.id, input);

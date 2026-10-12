@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, onUnmounted, ref, watch } from "vue";
 import {
   BranchesOutlined,
@@ -123,7 +124,7 @@ onUnmounted(() => {
       <p v-else-if="partial" class="git-feedback warning">
         目录已删除，本地分支尚未删除。可重新打开删除确认，继续清理本地分支。
       </p>
-      <p v-if="error" class="error" role="alert">{{ error }}</p>
+      <FeedbackMessage :message="error" type="error" />
       <p
         v-if="git?.warning && !deleted"
         class="git-feedback warning"

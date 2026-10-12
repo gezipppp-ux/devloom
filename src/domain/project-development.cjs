@@ -1,9 +1,10 @@
+const { validateBaseBranch } = require("./development-baseline.cjs");
 const { accountError } = require("./account.cjs");
-const { object, text, identifiers } = require("./project-issues.cjs");
+const { object, text, identifiers, identifier, revision } = require("./project-issues.cjs");
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
 function developmentInput(input, addition = false) {
-  object(input, addition ? ["requestId", "issueIds", "send"] : ["requestId", "issueIds", "title", "model", "reasoningEffort", "permissionMode"]);
+  object(input, addition ? ["requestId", "issueIds", "send"] : ["requestId", "issueIds", "title", "executorId"]);
   if (!UUID.test(input.requestId || "")) throw accountError("开发请求标识无效，请重新打开表单。", 400);
   const issueIds = identifiers(input.issueIds, "事项", 20);
   if (!issueIds.length) throw accountError("请选择至少一条事项。", 400);
@@ -12,7 +13,25 @@ function developmentInput(input, addition = false) {
   if (addition) result.send = input.send === true;
   else {
     if (Object.hasOwn(input, "title")) result.title = text(input.title, "任务标题", 200, { required: true });
-    for (const field of ["model", "reasoningEffort", "permissionMode"]) if (Object.hasOwn(input, field)) result[field] = text(input[field], "执行设置", 200);
+    if (Object.hasOwn(input, "executorId")) result.executorId = identifier(input.executorId, "执行人");
+  }
+  return result;
+}
+function developmentStartInput(input) {
+  object(input, ["requestId", "revision", "baseBranch", "model", "reasoningEffort", "permissionMode"]);
+  if (!UUID.test(input.requestId || "")) throw accountError("开发请求标识无效。", 400);
+  const result = { requestId: input.requestId, revision: revision(input.revision), baseBranch: validateBaseBranch(input.baseBranch) };
+  for (const field of ["model", "reasoningEffort", "permissionMode"]) if (Object.hasOwn(input, field)) result[field] = text(input[field], "执行设置", 200);
+  return result;
+}
+function developmentEditInput(input) {
+  object(input, ["revision", "title", "executorId", "issueIds"]);
+  const result = { revision: revision(input.revision) };
+  if (Object.hasOwn(input, "title")) result.title = text(input.title, "任务标题", 200, { required: true });
+  if (Object.hasOwn(input, "executorId")) result.executorId = identifier(input.executorId, "执行人");
+  if (Object.hasOwn(input, "issueIds")) {
+    result.issueIds = identifiers(input.issueIds, "事项", 20);
+    if (!result.issueIds.length) throw accountError("请选择至少一条事项。", 400);
   }
   return result;
 }
@@ -33,4 +52,4 @@ function developmentPrompt(issues, addition = false) {
   return content;
 }
 
-module.exports = { developmentInput, developmentPrompt };
+module.exports = { developmentInput, developmentStartInput, developmentEditInput, developmentPrompt };

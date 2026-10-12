@@ -9,6 +9,7 @@ const {
   accountSettings,
   validateAccountCreation,
   validateAccountUpdate,
+  validateAccountProfile,
   validateAccountPreferences,
 } = require("../domain/account.cjs");
 const {
@@ -73,6 +74,7 @@ class AccountServices {
     const row = (await this.store.create(
       {
         username: validated.username,
+        displayName: validated.displayName,
         password_hash: encoded,
         role: validated.role,
         must_change_password: !initial,
@@ -87,6 +89,7 @@ class AccountServices {
     (await this.requireAdmin(actor));
     input = validateAccountUpdate(input);
     const patch = {};
+    if (input.displayName !== undefined) patch.displayName = input.displayName;
     if (input.departmentId !== undefined) patch.departmentId = input.departmentId;
     if (input.canCreateProjects !== undefined) patch.canCreateProjects = input.canCreateProjects;
     if (input.role !== undefined) {
@@ -115,6 +118,11 @@ class AccountServices {
       password_hash: passwordHash,
       must_change_password: 0,
     }));
+  }
+  async updateProfile(actor, input, authorize) {
+    const patch = validateAccountProfile(input);
+    await authorize?.();
+    return publicAccount(await this.store.update(actor.id, patch));
   }
   describe(row) {
     return publicAccount(row);

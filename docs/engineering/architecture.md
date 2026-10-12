@@ -74,9 +74,12 @@ docs/engineering/  # 行为契约与架构规则
 | `config/runtime.cjs` | 安装/数据根及显式配置文件读取；不猜测命令行参数 |
 | `config/repository.cjs`、`git/` | 配置决定选择哪个仓库；git 负责验证、引用查询和 worktree 操作 |
 | `execution/runner.cjs` | 准备、初始化、执行、渠道同步顺序及记录；通过回调通知调用方，不写终端 |
-| `application/project-services.cjs`、`project-presenter.cjs` | 部门／仓库目录、项目／成员权限及个人开发空间生命周期；公开字段由 presenter 脱敏 |
-| `application/project-content-services.cjs`、`project-content-presenter.cjs` | 事项固定流转、TAPD 只读导入、评论／交付、项目附件、资产加密与独立敏感字段授权 |
-| `application/project-development-services.cjs`、`project-development-presenter.cjs` | 事项与任务多对多关联、内容快照、幂等启动意图及显式追加／发送，不推进业务状态、不读取资产 |
+| `application/project-services.cjs`、`project-presenter.cjs` | 部门、项目及其仓库地址、成员权限和个人开发空间生命周期；公开字段由 presenter 脱敏 |
+| `application/project-content-services.cjs`、`project-content-presenter.cjs` | 按不可变流程版本流转事项、TAPD 只读导入、评论／交付、项目附件、资产加密与独立敏感字段授权 |
+| `application/project-lifecycle-services.cjs`、`project-lifecycle-presenter.cjs` | 项目发布版本与归档门禁；storage 拥有事务与修订号 |
+| `application/system-workflow-services.cjs`、`system-workflow-presenter.cjs` | 系统管理员维护需求／Bug 全局流程与不可变发布版本，项目授权读取已发布版本；`domain/issue-workflows.cjs` 拥有图规则，`storage/system-workflow-store.cjs` 拥有无项目归属的流程持久化 |
+| `application/project-development-services.cjs`、`project-development-presenter.cjs` | 认领／指派规划、唯一活跃认领、内容快照、显式幂等启动、完成／取消及追加／发送；不推进业务状态、不读取资产 |
+| `application/project-branch-services.cjs`、`git/remote-branches.cjs` | 前者复核个人空间、凭据归属与权限；后者实时查询 origin 的分支，不以本地缓存回退 |
 | `storage/project-store.cjs`、`project-content-store.cjs`、`project-development-store.cjs` | 上述项目业务的 Prisma 持久化、修订号更新、同项目关联、加密和审计 |
 | `application/session-manager.cjs` | SessionManager 协调启动、继续、停止、操作互斥及生命周期 |
 | `application/workspace-manager.cjs` | WorkspaceManager 组合工作区默认配置、公开摘要与各工作区的会话生命周期 |

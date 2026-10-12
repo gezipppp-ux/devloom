@@ -43,6 +43,7 @@ async function main() {
     "-m",
     "fixture",
   );
+  require("../support/baseline-origin.cjs").attachOrigin(repository);
   const workspaces = new WorkspaceManager({
     directory: path.join(directory, "workspaces"),
     createManager: (options) =>
@@ -51,7 +52,10 @@ async function main() {
   const saveWorkspace = workspaces.save.bind(workspaces);
   workspaces.save = async (input, id) => {
     const workspace = await saveWorkspace(input, id);
-    if (!id) (await seedWorkspaceProject(workspaces.configFile(workspace.id), repository));
+    if (!id) {
+      await seedWorkspaceProject(workspaces.configFile(workspace.id), repository);
+      await require("../../src/config/execution-settings.cjs").saveSettings({ baseBranch: "main" }, workspaces.configFile(workspace.id));
+    }
     return workspace;
   };
   const application = createWebServer({ workspaces, workspaceClones: fixtureWorkspaceClones(workspaces), testIdentity: true });
@@ -98,11 +102,11 @@ async function main() {
     for (const width of [390, 1440]) {
       await page.setViewportSize({ width, height: 1100 });
       const bottom = await page
-        .getByRole("combobox", { name: "新任务基准引用", exact: true })
+        .getByRole("combobox", { name: "新任务开发分支", exact: true })
         .evaluate(
           (el) => el.closest(".ant-select").getBoundingClientRect().bottom,
         );
-      const hint = await page.getByText(/可搜索本地分支、已获取的远程分支和标签/).boundingBox();
+      const hint = await page.getByText(/可搜索已获取的 origin 分支/).boundingBox();
       assert.ok(
         hint.y >= bottom + 7,
         "base ref hint must sit below the selector",
@@ -110,7 +114,7 @@ async function main() {
     }
     await page
       .locator(".ant-form-item")
-      .filter({ has: page.getByRole("combobox", { name: "新任务基准引用", exact: true }) })
+      .filter({ has: page.getByRole("combobox", { name: "新任务开发分支", exact: true }) })
       .screenshot({ path: path.join(output, "base-ref-spacing.png") });
     assert.equal(await page.getByRole("button", { name: "＋ 新建工作区", exact: true }).count(), 0);
     assert.equal(await page.getByLabel("项目代码仓库路径", { exact: true }).innerText(), repository);
@@ -271,7 +275,7 @@ async function main() {
     await page
       .getByRole("button", { name: "刷新模型列表", exact: true })
       .click();
-    await page.getByText(/模型列表加载失败：模拟模型列表离线/).waitFor();
+    await page.locator('.operation-message[data-type="error"]').filter({ hasText: '模型列表加载失败：模拟模型列表离线' }).waitFor();
     assert.equal(
       await page.getByLabel("Codex 模型", { exact: true }).inputValue(),
       "fixture-model-a",

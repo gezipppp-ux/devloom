@@ -10,6 +10,7 @@ import {
   watch,
 } from "vue";
 import { statusLabel } from "../shared/api/api.js";
+import FeedbackMessage from "../shared/components/FeedbackMessage.vue";
 import { useWorkspaceConsole } from "./use-workspace-console.js";
 import StartTask from "../features/tasks/StartTask.vue";
 import AppendRequirements from "../features/tasks/AppendRequirements.vue";
@@ -290,7 +291,7 @@ async function refreshCurrentSession() {
         </template>
       </ArchivedSessions>
       <div class="sidebar-footer">
-        <p v-if="preferenceError" class="error" role="alert">未读状态同步失败：{{ preferenceError }}</p>
+        <FeedbackMessage :message="preferenceError ? `未读状态同步失败：${preferenceError}` : ''" type="error" />
         <span :class="['connection', { online }]"></span
         >{{ online ? "服务已连接" : "正在重连服务" }}
       </div>
@@ -492,7 +493,7 @@ async function refreshCurrentSession() {
           }}
         </h1>
         <p>{{ active ? '该会话可能尚未启动、已归档或不存在。请返回项目任务查看启动状态，或重试读取。' : '查看执行过程、与 Agent 对话，随时调整下一步。' }}</p>
-        <p v-if="error" role="alert" class="error">{{ error }}</p>
+        <FeedbackMessage :message="error" type="error" />
         <button v-if="active && !loading" @click="refreshCurrentSession">重试读取指定会话</button>
         <button v-if="props.projectId && active" @click="emit('open-project', 'tasks')">返回项目任务</button>
         <button

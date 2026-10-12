@@ -1,4 +1,5 @@
 <script setup>
+import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, onUnmounted, ref, useId, watch } from 'vue';
 import { Select as ASelect } from 'antdv-next';
 import { api } from '../../shared/api/api.js';
@@ -96,6 +97,6 @@ onUnmounted(() => {
       @search="search"
       @change="(value) => emit('update:modelValue', value || '')"
     />
-    <p v-if="error" role="alert" class="error">{{ error }}</p>
+    <FeedbackMessage :message="error" type="error" />
   </div>
 </template>
