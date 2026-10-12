@@ -197,7 +197,7 @@ const preview = computed(() => workflowConnection(nodes.value, connection.value?
 </template>
 
 <style scoped>
-.workflow-canvas { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--canvas); }
+.workflow-canvas { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--canvas); box-shadow: var(--shadow-xs); }
 .workflow-toolbar { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
 .workflow-toolbar button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .workflow-zoom { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
