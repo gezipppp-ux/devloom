@@ -23,7 +23,7 @@ const { saveSystemSettings } = require("../../src/config/system-settings.cjs");
 
 const password = "fixture-password-123";
 
-test("legacy requirement searches require current issue and session access before and after TAPD", async t => {
+test("requirement searches require current issue and session access before and after source queries", async t => {
   const f = await fixture(t);
   const browser = f.client(), other = f.client();
   await browser.login("member");
@@ -35,14 +35,14 @@ test("legacy requirement searches require current issue and session access befor
   context.channels.get = () => ({ capabilities: { search: true }, search: async () => {
     searches++;
     await onSearch();
-    return [{ id: "123", workspace: "456", title: "private fake TAPD requirement" }];
+    return [{ id: "123", workspace: "456", title: "private fake requirement" }];
   } });
   const sessionPermissions = ["project.view", "code.view", "session.view"];
   async function grant(permissions) {
     const membership = await f.app.projects.store.membership(prepared.projectId, f.member.id);
     await f.app.projects.saveMember(prepared.projectId, f.admin, { permissions, revision: membership.revision }, f.member.id);
   }
-  for (const route of ["requirements?channel=tapd", "stories"]) {
+  for (const route of ["requirements?channel=tracker"]) {
     const url = `/api/workspaces/${workspaceId}/${route}`;
     await grant([...sessionPermissions, "issue.view"]);
     assert.equal((await browser.request(url)).status, 200);
@@ -76,7 +76,7 @@ test("environment endpoints require administrator and CSRF, and maintenance bloc
   for (const [url, input] of [["/api/system/environment", undefined], ["/api/system/environment/check", {}], ["/api/system/environment/update", undefined], ["/api/system/environment/update", { id: "npm", version: "2.0.0" }]])
     assert.equal((await member.request(url, input)).status, 403);
   assert.equal((await admin.request("/api/system/environment")).status, 200);
-  assert.equal((await admin.request("/api/system/environment/update", {}, { headers: { "x-tapd-token": "invalid" } })).status, 403);
+  assert.equal((await admin.request("/api/system/environment/update", {}, { headers: { "x-csrf-token": "invalid" } })).status, 403);
   assert.equal((await admin.request("/api/system/environment/update", { id: "npm", version: "2.0.0" })).status, 202);
   assert.equal((await admin.request("/api/account/settings", {})).status, 409);
   assert.equal((await admin.request("/api/system/environment/update")).status, 200);
@@ -203,7 +203,7 @@ async function fixture(t, options = {}) {
       token = "", username = "";
     return {
       get headers() {
-        return { cookie, "x-tapd-token": token };
+        return { cookie, "x-csrf-token": token };
       },
       async request(url, input, extra = {}) {
         if (url === "/api/admin/accounts" && input) input = { departmentId: department.id, ...input };
@@ -212,7 +212,7 @@ async function fixture(t, options = {}) {
           method: input === undefined ? "GET" : "POST",
           headers: {
             cookie,
-            "x-tapd-token": token,
+            "x-csrf-token": token,
             ...(input === undefined
               ? {}
               : { "content-type": "application/json" }),
@@ -356,7 +356,7 @@ test("PostgreSQL accounts require login and session CSRF, isolate workspaces inc
       await anonymous.request(
         "/api/auth/login",
         { username: "admin", password },
-        { headers: { "x-tapd-token": "bad" } },
+        { headers: { "x-csrf-token": "bad" } },
       )
     ).status,
     403,

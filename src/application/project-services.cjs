@@ -1,3 +1,4 @@
+const { storedPromptOverrides } = require("../domain/prompt-templates.cjs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { ProjectStore } = require("../storage/project-store.cjs");
@@ -9,7 +10,6 @@ const { resolveAccountRemote } = require("../domain/git-account.cjs");
 const { readSystemSettings } = require("../config/system-settings.cjs");
 const { cloneProject } = require("../git/project-clone.cjs");
 const { testGitConnection } = require("../git/account-credentials.cjs");
-const { buildSession, parseCookieHeader, todoRequest } = require("../channels/tapd/auth-utils.cjs");
 const { defaultChannelConfig } = require("../channels/channel-registry.cjs");
 const { presentDepartment, presentProject, presentMember, presentSpace } = require("./project-presenter.cjs");
 const { presentError } = require("./error-presenter.cjs");
@@ -82,23 +82,15 @@ class ProjectServices {
     return { permissionContext: { administratorAccess: user.role === "admin", departmentName: department?.name || "", ceiling: department?.permissions || [], grants: membership?.permissions || [] }, project: presentProject(project, permissions), membership: presentMember(membership && { ...membership, user }), permissions, space: presentSpace(await this.store.space(id, actor.id)) };
   }
   settings(input = {}, previous = {}) {
-    const value = { ...previous, ...input };
+    const value = { initCommands: previous.initCommands || [], prompts: storedPromptOverrides(previous.prompts), ...input };
     delete value.baseRef;
     delete value.baseBranch;
     if (input.prompts) {
-      value.prompts = { ...previous.prompts };
+      value.prompts = storedPromptOverrides(previous.prompts);
       for (const [channel, template] of Object.entries(input.prompts)) {
         if (template === null) delete value.prompts[channel];
         else value.prompts[channel] = template;
       }
-    }
-    if (input.tapd) {
-      const draft = input.tapd;
-      const cookie = draft.clearCookie ? "" : draft.cookie?.trim() || previous.tapd?.session?.cookie_header || "";
-      const dscToken = cookie ? parseCookieHeader(cookie)["dsc-token"] : "";
-      if (cookie && !dscToken) throw accountError("Cookie 必须包含 dsc-token。");
-      value.tapd = { image_hosts: draft.imageHosts ?? previous.tapd?.image_hosts ?? [],
-        session: buildSession({ cookieHeader: cookie, requestBody: todoRequest({ workspaceId: draft.workspaceId, dscToken }), referer: "https://www.tapd.cn/tapd_fe/my/work?left_tree=1" }) };
     }
     return value;
   }
@@ -256,15 +248,16 @@ class ProjectServices {
     }
   }
   workspaceConfig(workspaceId, project, space, accountId, remote, target, previous = {}) {
+    const retained = { ...previous };
+    delete retained.tapd;
     const execution = { ...previous.execution };
     delete execution.baseRef;
-    return { ...defaultChannelConfig(), ...previous, version: 5,
+    return { ...defaultChannelConfig(), ...retained, version: 5,
       workspace: { ...previous.workspace, id: workspaceId, name: `project-${project.id}`, owner_user_id: space.userId, project_id: project.id },
       execution: { ...execution, repository: target, projectName: project.id, gitAccountId: accountId, remoteUrl: remote,
         baseBranch: "", initCommands: project.settings.initCommands || [] },
       agent: previous.agent || { provider: "codex", model: "", reasoningEffort: "", permissionMode: "ask", options: {} },
-      ...(project.settings.tapd ? { tapd: project.settings.tapd } : {}),
-      prompt_templates: project.settings.prompts || {} };
+      prompt_templates: storedPromptOverrides(project.settings.prompts) };
   }
   async syncSpaces(project) {
     for (const space of await this.store.projectSpaces(project.id)) {

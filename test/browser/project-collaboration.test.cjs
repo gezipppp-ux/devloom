@@ -105,6 +105,7 @@ async function main() {
         await setMarkdown(page, "实际结果", "实际出现错误");
         await page.getByLabel("严重程度", { exact: true }).selectOption("major");
       }
+      assert.equal(await page.getByRole("button", { name: "从 TAPD 导入", exact: true }).count(), 0);
       const fileCount = await database.client.projectFile.count();
       await pasteImage(page); await verifyVisualWriting(page);
       await editor(page).locator('input[type="file"]').setInputFiles({ name: "verification.txt", mimeType: "text/plain", buffer: Buffer.from("fixture attachment") });
@@ -276,19 +277,18 @@ async function main() {
     const repositoryAddress = page.getByRole("textbox", { name: "Git 仓库地址", exact: true });
     assert.equal(await repositoryAddress.inputValue(), remote.remoteUrl);
     assert.equal(await repositoryAddress.getAttribute("readonly"), "");
-    for (const endpoint of ["/api/admin/repositories", "/api/project-repositories", "/api/unknown-fixture-endpoint"]) {
+    for (const endpoint of [`/api/projects/${project.id}/issues/import/tapd`, "/api/admin/repositories", "/api/project-repositories", "/api/unknown-fixture-endpoint"]) {
       for (const method of ["GET", "POST"]) {
         const status = await page.evaluate(async ({ url, method }) => {
           const session = await (await fetch("/api/auth/session")).json();
-          return (await fetch(url, { method, ...(method === "POST" ? { headers: { "content-type": "application/json", "x-tapd-token": session.token }, body: JSON.stringify({ name: "Removed API must reject", remoteUrl: "https://git.example.test/removed.git" }) } : {}) })).status;
+          return (await fetch(url, { method, ...(method === "POST" ? { headers: { "content-type": "application/json", "x-csrf-token": session.token }, body: JSON.stringify({ name: "Removed API must reject", remoteUrl: "https://git.example.test/removed.git" }) } : {}) })).status;
         }, { url: endpoint, method });
         assert.equal(status, 404, `${method} ${endpoint}`);
       }
     }
     const manualPrompt = page.getByLabel("手动任务提示词", { exact: true });
-    const tapdPrompt = page.getByLabel("TAPD 任务提示词", { exact: true });
+    assert.equal(await page.getByText(/TAPD/).count(), 0);
     assert.equal(await manualPrompt.inputValue(), "");
-    assert.equal(await tapdPrompt.inputValue(), "");
     async function saveProjectSettings() {
       const response = page.waitForResponse(response => response.url() === `${origin}/api/projects/${project.id}` && response.request().method() === "POST");
       await page.getByRole("button", { name: "保存项目设置", exact: true }).click();
@@ -301,19 +301,15 @@ async function main() {
     assert.equal("baseBranch" in savedSettings, false);
     assert.deepEqual(savedSettings.prompts, {});
     const customManual = `  手动任务自定义模板\n${promptTemplateCatalog.manual.defaultTemplate}  `;
-    const customTapd = `  TAPD 自定义模板\n${promptTemplateCatalog.tapd.defaultTemplate}  `;
     await manualPrompt.fill(customManual);
-    await tapdPrompt.fill(customTapd);
     savedSettings = await saveProjectSettings();
-    assert.deepEqual(savedSettings.prompts, { manual: customManual, tapd: customTapd });
+    assert.deepEqual(savedSettings.prompts, { manual: customManual });
     await manualPrompt.fill("");
-    await tapdPrompt.fill("  \n  ");
     savedSettings = await saveProjectSettings();
     assert.deepEqual(savedSettings.prompts, {}, "clearing prompt overrides restores channel defaults");
     await tab("概览");
     await tab("设置");
     assert.equal(await manualPrompt.inputValue(), "");
-    assert.equal(await tapdPrompt.inputValue(), "");
     await tab("资产");
     await page.getByRole("button", { name: /测试登录凭据/ }).click();
     await page.getByRole("button", { name: "显示敏感值", exact: true }).click();

@@ -476,7 +476,7 @@ test('HTTP validates origin/token/body, preserves Chinese chunking and streams e
     ).status,
     403,
   );
-  const headers = { 'content-type': 'application/json', 'x-tapd-token': token };
+  const headers = { 'content-type': 'application/json', 'x-csrf-token': token };
   assert.equal(
     (
       await fetch(`${origin}/api/runs/1-2/messages`, {

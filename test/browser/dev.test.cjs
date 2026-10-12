@@ -184,7 +184,7 @@ async function main() {
     const page = await browser.newPage();
     const preAuth = await (await page.request.get(`${origin}/api/auth/session`)).json();
     const login = await page.request.post(`${origin}/api/auth/login`, {
-      headers: { origin, "x-tapd-token": preAuth.token },
+      headers: { origin, "x-csrf-token": preAuth.token },
       data: { username: "admin", password: "development-fixture-password" },
     });
     assert.equal(login.status(), 200);
@@ -244,7 +244,7 @@ async function main() {
     );
     await page.getByRole("heading", { name: "After hot update" }).waitFor();
     const request = async (route, input) => {
-      const headers = { "x-tapd-token": await page.locator("#token").textContent() };
+      const headers = { "x-csrf-token": await page.locator("#token").textContent() };
       const response = input === undefined ? await page.request.get(origin + route) : await page.request.post(origin + route, { headers, data: input });
       return { status: response.status(), data: await response.json() };
     };

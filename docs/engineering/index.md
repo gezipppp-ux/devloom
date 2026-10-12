@@ -1,6 +1,6 @@
-# TAPD Runner Contracts
+# Web Coding Contracts
 
-Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install from its own package-lock.json using npm ci. NestJS and Vben modules are not dependencies. Playwright is used for capturing an already-authenticated CDP session and browser verification; daily TAPD operations use HTTP.
+Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install from its own package-lock.json using npm ci. NestJS and Vben modules are not dependencies. Playwright is used for isolated browser verification.
 
 工作区模型以 [workspaces.md](./workspaces.md) 为准；它取代下述历史全局 Web 配置和运行目录约定。
 
@@ -21,27 +21,25 @@ Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install
 - Read `README.md` and the task PRD/design for CLI and configuration contracts.
 - For Web CLI changes, read [web-cli.md](./web-cli.md) for session identity, streaming, approval and HTTP contracts.
 - For source integration, settings or portability changes, read [channels-and-settings.md](./channels-and-settings.md).
-- Preserve `tapd.session` and `workflow` settings during authentication refresh. Never commit local credentials, browser state, requirement snapshots or execution logs.
 - 日常 npm 命令为 `init:admin`、`dev`、`dev:watch`、`build` 和 `start`；Prisma 基础接入新增 `db:generate`（生成客户端）和 `db:deploy`（部署版本化迁移）。生产环境先构建再启动。运行参数由对应入口解析。
 - `npm run dev` serves Vite HMR and the API on one development port; `npm run dev:watch` also restarts the backend after source changes. The watch supervisor must shut down its child over IPC and wait for exit before replacement, including on Windows. Neither command automatically resumes interrupted requirements.
 
 ## Behavioral invariants
 
-1. TAPD may return either numeric or string zero as its success code, and its `data` may be JSON-encoded. Check nested aggregation responses as well as the outer result. Reject login HTML rather than treating it as empty data.
-2. Todo totals can be zero despite nonempty pages. Traverse pages, deduplicate workspace/item identities, and fail on repeated pages or a reached limit. Direct-ID detail must not require todo membership. TAPD searches rebuild an unfiltered todo request for the bound project, including stories, bugs and board cards.
-3. Download all HTML/Markdown description images before dispatch. Send local PNG/JPEG/WebP files using individual Codex `--image` arguments. Fail on inaccessible/unsupported images, never silently omit them. `file.tapd.cn` requires the saved Cookie; allow credentials only for `www.tapd.cn` and `file.tapd.cn`, including redirect hops. External attachment hosts require explicit configuration and never receive TAPD cookies.
+1. Only the manual source adapter is registered. Removed TAPD routes and settings must not return or fetch external source data.
+2. Preserve historical source identities, snapshots and session directories. Do not replay uncertain work or contact retired sources.
+3. Validate all uploaded images before dispatch and send them as local PNG/JPEG/WebP attachments. Never silently omit failed or unsupported images.
 4. One requirement run owns one persistent CLI session, one identity-scoped `codex/<12-hex-id>` branch and one checkout directly under its configured worktree root as `<prefix-up-to-16>-<12-hex-id>`. The identity includes repository, full application workspace ID and source channel/scope/ID. Resolve the base commit and record it; preflight Windows checkout path lengths before creating the branch or directory. Do not switch, stash or commit the root checkout, or copy its uncommitted changes/secrets into the worktree.
-   A TAPD fusion task has a stable local grouping identity and an ordered list of numeric TAPD sources, sharing that same session/branch/worktree. Appending sources never changes the task identity. Each source belongs to at most one task within the application workspace, including archived tasks; preparation and source reservation must precede execution.
 5. Persist dispatch intent before creating the worktree/process. Lock by workspace/item, and never automatically redispatch an existing or uncertain run. Preserve historical channel-transition records separately from execution.
-6. Record `thread.started` first and confirm execution only on `turn.started` for that session. TAPD is read-only: no workflow preflight, personnel validation or status mutation, including with legacy `workflow.allow_write:true`. Its transition hook returns skipped.
-7. A transition-only retry requires a recorded session and execution-start timestamp, uses the persisted work-item identity, and does not rerun Codex. A successful or skipped transition is not replayed; legacy TAPD retries skip without network writes.
+6. Record `thread.started` first and confirm execution only on `turn.started` for that session. Manual tasks skip external transitions.
+7. A transition-only retry requires a recorded session and execution-start timestamp, uses the persisted work-item identity, and does not rerun Codex. A successful or skipped transition is not replayed.
 8. Spawn with an argument array, no shell, and stdin for the prompt. Remove TAPD credential environment variables. Default model selection comes from the user's Codex configuration. Web defaults to workspace-write with user approval; explicit per-task permission choices follow the Web CLI contract and take effect only on the next turn.
 
 ## Verification
 
 Windows / Linux 环境和 Jenkins 节点配置见 [platform-verification.md](./platform-verification.md)。
 
-Run the direct eslint and Node test commands from Jenkinsfile. Tests use Node's test runner, mocked TAPD responses, a fixture Codex process and temporary real Git worktrees. Include coverage for authenticated files/redirects, image-only requirements, failed startup, duplicate suppression, workspace-scoped local progress markers and skipped TAPD transition retries. Read-only live search/detail/task-preview is appropriate for smoke tests; selecting and executing a real requirement is a separate operation from integrating the runner.
+Run the direct eslint and Node test commands from Jenkinsfile. Tests use Node's test runner, a fixture Codex process, isolated PostgreSQL and temporary real Git worktrees. Cover removed routes, manual tasks, image validation, failed startup, duplicate suppression and historical identity preservation. Never execute a real requirement for validation.
 
 Web changes also require `npm run build` and the browser scripts in Jenkinsfile (Windows Edge or Linux/macOS Playwright Chromium). Do not start real turns in an already merged requirement to validate the UI.
 

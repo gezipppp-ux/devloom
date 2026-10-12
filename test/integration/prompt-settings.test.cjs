@@ -15,13 +15,10 @@ const {
   readPromptSettings,
   savePromptSettings,
 } = require("../../src/config/prompt-settings.cjs");
-const { saveTapdSettings } = require("../../src/channels/tapd/settings.cjs");
 const { readOptional, writeConfig } = require("../../src/storage/json-files.cjs");
 const { seedWorkspaceProject } = require("../support/workspace-project.cjs");
 
 const manualTemplate = "自定义手动模板\n{{title}}\n{{content}}\n{{images}}";
-const tapdTemplate = "自定义 TAPD 模板\n{{title}}\n{{content}}\n{{supplement}}\n{{images}}";
-const fusionTemplate = "自定义融合模板\n{{title}}\n{{requirements}}\n{{supplement}}\n{{images}}";
 
 function workspaceCatalog(directory) {
   return new WorkspaceManager({
@@ -55,7 +52,7 @@ async function httpFixture(t, workspaces) {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-tapd-token": boot.token,
+        "x-csrf-token": boot.token,
         ...extraHeaders,
       },
       body: JSON.stringify(input),
@@ -106,21 +103,13 @@ async function awaitTurn(manager, key) {
 test("workspace prompt settings guard writes, isolate credentials and persist templates atomically", async (t) => {
   const { workspaces, a, b } = (await fixture(t));
   const file = workspaces.configFile(a.id);
-  (await saveTapdSettings(file, {
-    workspaceId: "42",
-    cookie: "dsc-token=private-template-secret; auth=private-session",
-  }));
-  (await saveTapdSettings(workspaces.configFile(b.id), {
-    workspaceId: "84",
-    cookie: "dsc-token=other-workspace-secret; auth=other-session",
-  }));
   const originalConfig = (await readOptional(file));
   const otherConfig = fs.readFileSync(workspaces.configFile(b.id), "utf8");
   const before = fs.readFileSync(file, "utf8");
   const { app, origin, get, post, token } = await httpFixture(t, workspaces);
   const defaults = await (await get(a.id)).json();
   assert.deepEqual(Object.keys(defaults).sort(), ["catalog", "maxLength", "templates"]);
-  assert.deepEqual(Object.keys(defaults.templates).sort(), ["manual", "tapd", "tapd_fusion"]);
+  assert.deepEqual(Object.keys(defaults.templates).sort(), ["manual"]);
   assert.equal(defaults.maxLength, 20000);
   assert.doesNotMatch(JSON.stringify(defaults), /private-template-secret|private-session|cookie_header|dsc_token/);
   assert.deepEqual((await (await get(b.id)).json()).templates, defaults.templates);
@@ -128,7 +117,7 @@ test("workspace prompt settings guard writes, isolate credentials and persist te
   assert.equal((await fetch(`${origin}/api/settings/prompts`)).status, 404);
   assert.equal((await fetch(`${origin}/api/settings/prompts`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-tapd-token": token },
+    headers: { "content-type": "application/json", "x-csrf-token": token },
     body: JSON.stringify({ manual: manualTemplate }),
   })).status, 404);
   assert.equal((await get(randomUUID())).status, 404);
@@ -138,16 +127,16 @@ test("workspace prompt settings guard writes, isolate credentials and persist te
   })).status, 403);
 
   for (const headers of [
-    { "x-tapd-token": "invalid" },
+    { "x-csrf-token": "invalid" },
     { origin: "https://other.invalid" },
   ]) {
     assert.equal((await post(a.id, { manual: manualTemplate }, headers)).status, 403);
     assert.equal(fs.readFileSync(file, "utf8"), before);
   }
-  const saved = await post(a.id, { manual: manualTemplate, tapd: tapdTemplate, tapd_fusion: fusionTemplate });
+  const saved = await post(a.id, { manual: manualTemplate });
   assert.equal(saved.status, 200);
   const response = await saved.json();
-  assert.deepEqual(response.templates, { manual: manualTemplate, tapd: tapdTemplate, tapd_fusion: fusionTemplate });
+  assert.deepEqual(response.templates, { manual: manualTemplate });
   assert.doesNotMatch(JSON.stringify(response), /private-template-secret|private-session|cookie_header|dsc_token/);
   assert.deepEqual((await (await get(a.id)).json()).templates, response.templates);
   assert.deepEqual((await (await get(b.id)).json()).templates, defaults.templates);
@@ -183,11 +172,7 @@ test("workspace prompt settings guard writes, isolate credentials and persist te
   assert.equal(resetManual.status, 200);
   assert.deepEqual((await resetManual.json()).templates, {
     manual: defaults.templates.manual,
-    tapd: tapdTemplate,
-    tapd_fusion: fusionTemplate,
   });
-  assert.equal((await restarted.post(a.id, { tapd: null })).status, 200);
-  assert.equal((await restarted.post(a.id, { tapd_fusion: null })).status, 200);
   assert.deepEqual((await readPromptSettings(file)), defaults.templates);
   assert.deepEqual((await readOptional(file)).tapd, originalConfig.tapd);
   assert.equal(fs.readFileSync(file, "utf8"), before);

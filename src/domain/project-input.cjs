@@ -37,21 +37,13 @@ function departmentInput(input, updating = false) {
   return value;
 }
 function projectSettings(input) {
-  object(input, ["initCommands", "prompts", "tapd"]);
+  object(input, ["initCommands", "prompts"]);
   const value = {};
   if (input.initCommands !== undefined) value.initCommands = validateInitCommands(input.initCommands);
   if (input.prompts !== undefined) {
     object(input.prompts, Object.keys(promptTemplateCatalog));
     value.prompts = {};
     for (const [key, prompt] of Object.entries(input.prompts)) value.prompts[key] = prompt === null ? null : validatePromptTemplate(key, prompt);
-  }
-  if (input.tapd !== undefined) {
-    object(input.tapd, ["workspaceId", "cookie", "clearCookie", "imageHosts"]);
-    if (!/^\d+$/.test(input.tapd.workspaceId || "")) throw accountError("TAPD 项目 ID 无效。");
-    if (input.tapd.cookie !== undefined && (typeof input.tapd.cookie !== "string" || input.tapd.cookie.length > 32000 || /[\r\n\0]/.test(input.tapd.cookie))) throw accountError("TAPD Cookie 无效。");
-    if (input.tapd.clearCookie !== undefined && typeof input.tapd.clearCookie !== "boolean") throw accountError("清除 Cookie 参数无效。");
-    if (input.tapd.imageHosts !== undefined && (!Array.isArray(input.tapd.imageHosts) || input.tapd.imageHosts.length > 30 || input.tapd.imageHosts.some(host => typeof host !== "string" || host.length > 253 || !/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/i.test(host)))) throw accountError("图片域名无效。");
-    value.tapd = { ...input.tapd };
   }
   return value;
 }

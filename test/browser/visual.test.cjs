@@ -1,5 +1,5 @@
 /* global document, window */
-// Visual fixtures only: intercepted APIs cannot run Codex or contact TAPD.
+// Visual fixtures only: intercepted APIs cannot run real tasks.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -62,14 +62,6 @@ async function main() {
     execution: { status: "completed" },
   }));
   const channels = [
-    {
-      id: "tapd",
-      label: "TAPD",
-      workspace: "123456",
-      scopeLabel: "TAPD 项目 ID",
-      scopeLocked: true,
-      capabilities: { search: true, assignees: false },
-    },
     { id: "manual", label: "手动输入", capabilities: { manualInput: true } },
   ];
   const detail = (key) => ({
@@ -293,12 +285,6 @@ async function main() {
           templates: Object.fromEntries(Object.entries(promptTemplateCatalog).map(([name, entry]) => [name, entry.defaultTemplate])),
           catalog: promptTemplateCatalog,
           maxLength: MAX_PROMPT_TEMPLATE_LENGTH,
-        });
-      if (endpoint === "/settings/tapd")
-        return send({
-          workspaceId: "123456",
-          hasCookie: true,
-          imageHosts: [],
         });
       if (endpoint === "/models")
         return scenario === "error"

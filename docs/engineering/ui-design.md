@@ -24,8 +24,8 @@ Operation feedback uses `FeedbackMessage` and one `OperationMessages` host in `A
 1. Workspace welcome, loading/error, workspace creation and editing, searchable icon picker.
    Icon choices open in a separate keyboard-accessible modal from the compact preview. Background clone progress is available from the account bar across pages and restored from the server on reload; show stage-specific percentages, indeterminate waiting, and explicit failure/interruption states without claiming browser closure cancels a job.
 2. New manual task: type, title/content/images, optional directory, model/effort/permissions.
-3. New TAPD task: type, bound project, search results with local progress markers, ID, model/effort/permissions; no TAPD status code or assignees.
-4. Workspace settings with independently saved project environment, TAPD connection settings and prompt templates; placeholder insertion, plain-text preview and reset/save feedback. Templates remain isolated across workspaces.
+3. Requirement and Bug lists provide local creation, filtering and planning without external import actions.
+4. Workspace settings with independently saved project environment, prompt templates; placeholder insertion, plain-text preview and reset/save feedback. Templates remain isolated across workspaces.
 5. Conversation: human progress, Codex state, message/tool timeline, composer.
 6. Expanded session context, requirement body/table/attachments, original prompt.
 7. Approval and clarification requests, empty, disconnected, read-only and error states.
@@ -45,7 +45,7 @@ Requirement and Bug details share a two-column layout: content and discussion oc
 
 Use fixture data only. Browser regression suites verify behavior; the visual fixture captures all pages and checks viewport overflow, control containment and dialog reachability. Review the resulting screenshots against the prototype set. Generated prototypes and fixture screenshots must never contain live credentials or customer content.
 
-Run `node test/browser/visual.test.cjs` after building. The screenshot index is `state/browser/unified/index.html`; generated AI references are separate in `output/imagegen/unified-pages-20260917/index.html`. The fixture intercepts APIs, uses a fake Codex client, and never calls real task execution or TAPD.
+Run `node test/browser/visual.test.cjs` after building. The screenshot index is `state/browser/unified/index.html`; generated AI references are separate in `output/imagegen/unified-pages-20260917/index.html`. The fixture intercepts APIs, uses a fake Codex client, and never calls real task execution or external business systems.
 
 The account browser fixtures in Jenkinsfile also produce login, password, personal settings and account management screenshots under `state/browser/accounts/`. Review those screenshots for account-page changes in addition to the workspace visual fixture.
 

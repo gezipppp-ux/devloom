@@ -1,6 +1,11 @@
 const promptTemplateCatalog = require("../../shared/prompt-templates.json");
 
 const MAX_PROMPT_TEMPLATE_LENGTH = 20000;
+
+// Retired templates in saved settings do not become public options or block new tasks.
+function storedPromptOverrides(value = {}) {
+  return Object.fromEntries(Object.entries(value || {}).filter(([channel]) => Object.hasOwn(promptTemplateCatalog, channel)));
+}
 const PLACEHOLDER = /\{\{([\s\S]*?)\}\}/g;
 
 function validatePromptTemplate(channel, template) {
@@ -44,10 +49,10 @@ function getPromptTemplates(config = {}) {
     typeof overrides !== "object" ||
     Array.isArray(overrides) ||
     Object.keys(overrides).some(
-      (channel) => !Object.hasOwn(promptTemplateCatalog, channel),
+      (channel) => !Object.hasOwn(promptTemplateCatalog, channel) && !["tapd", "tapd_fusion"].includes(channel),
     )
   )
-    throw new Error("提示词配置仅支持手动需求、TAPD 需求和 TAPD 需求融合模板。");
+    throw new Error("提示词配置仅支持手动需求模板。");
   return Object.fromEntries(
     Object.entries(promptTemplateCatalog).map(([channel, definition]) => [
       channel,
@@ -74,6 +79,7 @@ function renderPromptTemplate(channel, template, values) {
 
 module.exports = {
   promptTemplateCatalog,
+  storedPromptOverrides,
   MAX_PROMPT_TEMPLATE_LENGTH,
   validatePromptTemplate,
   getPromptTemplates,

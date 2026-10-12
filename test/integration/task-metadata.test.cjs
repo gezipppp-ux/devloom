@@ -222,13 +222,13 @@ test("metadata HTTP writes require token/origin, remain workspace scoped and emi
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-tapd-token": boot.token,
+        "x-csrf-token": boot.token,
         ...extra,
       },
       body: JSON.stringify(data),
     });
   assert.equal(
-    (await post({ progress: "done" }, { "x-tapd-token": "bad" })).status,
+    (await post({ progress: "done" }, { "x-csrf-token": "bad" })).status,
     403,
   );
   assert.equal(
@@ -281,7 +281,7 @@ test("session title HTTP writes are scoped, validated and broadcast", async (t) 
   const route = `${origin}/api/workspaces/${workspace.id}/runs/1-2/title`;
   const post = (title) => fetch(route, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-tapd-token": boot.token },
+    headers: { "content-type": "application/json", "x-csrf-token": boot.token },
     body: JSON.stringify({ title }),
   });
   assert.equal((await post("")).status, 400);
@@ -318,7 +318,7 @@ test("session archive and deletion HTTP actions remain scoped and require explic
   const boot = await (await fetch(`${origin}/api/bootstrap`)).json();
   const post = (workspace, action, input) => fetch(
     `${origin}/api/workspaces/${workspace}/runs/1-2/${action}`,
-    { method: "POST", headers: { "content-type": "application/json", "x-tapd-token": boot.token }, body: JSON.stringify(input) },
+    { method: "POST", headers: { "content-type": "application/json", "x-csrf-token": boot.token }, body: JSON.stringify(input) },
   );
   assert.equal((await post(a.id, "delete", {})).status, 400);
   const archived = await (await post(a.id, "archive", {})).json();

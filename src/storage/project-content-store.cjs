@@ -45,7 +45,7 @@ class ProjectContentStore {
     const rows = await this.database.client.projectIssue.findMany({ where, orderBy: [{ number: "desc" }], skip: offset, take: limit + 1, include: issueRelations });
     return { items: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
   }
-  async createIssue(projectId, actorId, data, source, { requestId, attachments = [] } = {}) {
+  async createIssue(projectId, actorId, data, { requestId, attachments = [] } = {}) {
     const creationRequestHash = requestId ? hashCreationRequest(data, attachments) : null;
     if (requestId) {
       const existing = await this.database.client.projectIssue.findUnique({ where: { id: requestId } });
@@ -64,7 +64,6 @@ class ProjectContentStore {
     data = { ...data, workflowVersionId: version.id, status: version.definition.nodes.find(node => node.kind === "initial").id };
     const project = await this.database.client.project.update({ where: { id: projectId }, data: { issueSequence: { increment: 1 } }, select: { issueSequence: true } });
     const issue = await this.database.client.projectIssue.create({ data: { ...data, ...(requestId ? { id: requestId } : {}), projectId, number: project.issueSequence, createdById: actorId, updatedById: actorId } });
-    if (source) await this.database.client.issueSource.create({ data: { ...source, projectId, issueId: issue.id } });
     await this.issueHistory(projectId, issue.id, actorId, "created", { after: issue, ...(creationRequestHash ? { creationRequestHash } : {}) });
     return this.issue(projectId, issue.id);
   }
@@ -83,9 +82,6 @@ class ProjectContentStore {
   }
   async issueHistory(projectId, issueId, actorId, action, data) {
     return this.database.client.issueHistory.create({ data: { projectId, issueId, actorId, action, data: serializable(data) } });
-  }
-  async source(projectId, scope, type, externalId) {
-    return this.database.client.issueSource.findUnique({ where: { projectId_channel_scope_type_externalId: { projectId, channel: "tapd", scope, type, externalId } }, include: { issue: { include: issueRelations } } });
   }
   async childList(kind, projectId, issueId, { limit, offset }) {
     await this.issue(projectId, issueId);

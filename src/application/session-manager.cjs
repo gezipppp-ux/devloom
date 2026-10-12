@@ -382,7 +382,7 @@ class SessionManager extends EventEmitter {
   async resolveAndLaunch(input) {
     this.assertOpen();
     validateTaskMetadata(input.metadata === undefined ? {} : input.metadata);
-    const channel = this.channels.get(input.channel || "tapd");
+    const channel = this.channels.get(input.channel || "manual");
     const selection = await this.agent.validateSelection(input);
     this.assertOpen();
     await this.agent.assertPermissionAvailable(selection.permissionMode);
@@ -430,7 +430,7 @@ class SessionManager extends EventEmitter {
     config,
     session,
     executionSelection = {},
-    channel = this.channels.get("tapd"),
+    channel = this.channels.get("manual"),
     metadata = defaultTaskMetadata(item),
   ) {
     this.assertOpen();

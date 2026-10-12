@@ -19,7 +19,6 @@ const { verifySessionArchiveTitle } = require('./session-archive-title.test.cjs'
 const { verifyStartTaskLock } = require('./start-task.test.cjs');
 const { verifySessionMarkdown } = require('./session-markdown.test.cjs');
 const { verifySessionScroll } = require('./session-scroll.test.cjs');
-const { verifyTapdFusion } = require('./tapd-fusion.test.cjs');
 
 async function choosePermission(page, mode) {
   await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
@@ -743,13 +742,13 @@ async function main() {
   );
   manager.channels = new ChannelRegistry([
     {
-      id: 'tapd',
+      id: 'tracker',
       capabilities: { search: true, assignees: false },
       describe: () => ({
-        id: 'tapd',
-        label: 'TAPD',
+        id: 'tracker',
+        label: '测试渠道',
         workspace: '1',
-        scopeLabel: 'TAPD 工作区 ID',
+        scopeLabel: '测试渠道项目 ID',
         capabilities: { search: true, assignees: false },
       }),
       resolve: async () => {},
@@ -775,13 +774,13 @@ async function main() {
     manualChannel,
   ]);
   let submitted;
-  let tapdFailure = true;
+  let trackerFailure = true;
   let manualFailure = true;
   manager.start = async (input) => {
     submitted = input;
-    if (input.channel === 'tapd' && tapdFailure) {
-      tapdFailure = false;
-      throw new Error('模拟 TAPD 启动失败，请重试');
+    if (input.channel === 'tracker' && trackerFailure) {
+      trackerFailure = false;
+      throw new Error('模拟 测试渠道 启动失败，请重试');
     }
     if (input.channel === 'manual') {
       await manualChannel.resolve(input);
@@ -1118,82 +1117,39 @@ async function main() {
     assert.equal(await page.getByRole('combobox', { name: '开发人员', exact: true }).count(), 0);
     assert.equal(await page.getByRole('combobox', { name: '测试人员', exact: true }).count(), 0);
     await page.getByRole('button', { name: '检索', exact: true }).click();
-    await page.locator('.search-results').getByText('本系统已有任务', { exact: true }).waitFor();
-    assert.equal(await page.locator('.search-results').getByText('本系统进行中', { exact: true }).count(), 0);
-    (await manager.updateTaskMetadata(key, { progress: 'in_progress' }));
-    await page.getByRole('button', { name: '检索', exact: true }).click();
-    await page.locator('.search-results').getByText('本系统进行中', { exact: true }).waitFor();
     await page.getByRole('button', { name: /模拟缺陷/ }).click();
     await page.getByRole('button', { name: '检索', exact: true }).click();
     await page.setViewportSize({ width: 1440, height: 1000 });
-    const supplement = page.getByRole('textbox', { name: '补充说明', exact: true });
-    const supplementaryInstructions = '  补充说明：保留现有支付流程。\n指导意见：覆盖空数据和网络错误。  ';
-    assert.equal(await supplement.getAttribute('maxlength'), '60000');
-    assert.equal(await supplement.getAttribute('id'), 'tapd-supplementary-instructions');
-    assert.equal(await supplement.getAttribute('required'), null);
-    await page.getByText('补充说明（可选）', { exact: true }).waitFor();
-    await supplement.fill(supplementaryInstructions);
     await page.getByLabel('Codex 模型', { exact: true }).selectOption('fixture-model-a');
     await page.getByLabel('思考强度', { exact: true }).selectOption('high');
     await choosePermission(page, 'auto');
 
     await verifyStartTaskLock(page);
-    await page.getByText('模拟 TAPD 启动失败，请重试', { exact: true }).waitFor();
-    assert.equal(submitted.supplementaryInstructions, supplementaryInstructions);
-    assert.equal(await supplement.inputValue(), supplementaryInstructions, 'failed creation preserves the supplement draft');
+    await page.getByText('模拟 测试渠道 启动失败，请重试', { exact: true }).waitFor();
     await page
       .getByRole('button', { name: '创建 session 并开始开发 →', exact: true })
       .click();
     await page.getByRole('textbox', { name: '发送给 Codex 的指令' }).waitFor();
     assert.equal(submitted.developer, undefined);
     assert.equal(submitted.tester, undefined);
-    assert.equal(submitted.type, 'bug');
-    assert.equal(submitted.channel, 'tapd');
+    assert.equal(submitted.channel, 'tracker');
     assert.equal(submitted.metadata.type, 'requirement');
     assert.equal(submitted.model, 'fixture-model-a');
     assert.equal(submitted.reasoningEffort, 'high');
     assert.equal(submitted.permissionMode, 'auto');
-    assert.equal(submitted.supplementaryInstructions, supplementaryInstructions);
     assert.deepEqual(searches, []);
     await page
       .getByRole('button', { name: '＋ 从需求启动', exact: true })
       .click();
-    assert.equal(await supplement.inputValue(), '', 'a new task starts without the previous supplement');
     await page.getByRole('textbox', { name: '需求 ID', exact: true }).fill('2');
     await page
       .getByRole('button', { name: '创建 session 并开始开发 →', exact: true })
       .click();
     await page.getByRole('textbox', { name: '发送给 Codex 的指令' }).waitFor();
-    assert.equal(submitted.channel, 'tapd');
-    assert.equal(submitted.supplementaryInstructions, '', 'the TAPD supplement is optional');
+    assert.equal(submitted.channel, 'tracker');
     await page
       .getByRole('button', { name: '＋ 从需求启动', exact: true })
       .click();
-    await supplement.fill('这个补充仅属于当前项目。');
-    await page
-      .getByRole('textbox', { name: 'TAPD 工作区 ID', exact: true })
-      .fill('9');
-    assert.equal(await supplement.inputValue(), '', 'changing TAPD project clears the supplement');
-    await supplement.fill('这个补充仅属于当前需求。');
-    await page.getByRole('textbox', { name: '需求 ID', exact: true }).fill('3');
-    assert.equal(await supplement.inputValue(), '', 'changing requirement ID clears the supplement');
-    assert.equal(
-      await page
-        .locator('.user-search')
-        .first()
-        .getByText('魏文斌1（开发）', { exact: true })
-        .count(),
-      0,
-    );
-    await page.keyboard.press('Escape');
-    await supplement.fill('切换渠道后不应保留这段补充。');
-    await page
-      .getByRole('combobox', { name: '需求渠道', exact: true })
-      .selectOption('manual');
-    assert.equal(await supplement.isVisible(), false);
-    await page.getByLabel('需求渠道', { exact: true }).selectOption('tapd');
-    assert.equal(await supplement.inputValue(), '', 'switching channels clears the TAPD supplement');
-    await supplement.fill('手动需求不应提交这个 TAPD 补充。');
     await page.getByLabel('需求渠道', { exact: true }).selectOption('manual');
     await page
       .getByRole('textbox', { name: '需求标题', exact: true })
@@ -1338,7 +1294,6 @@ async function main() {
     await verifySessionDeletion(browser, origin, manager, directory, errors, output);
     await verifySessionDeletion(browser, origin, manager, directory, errors, output, true);
     await verifySessionArchiveTitle(browser, origin, manager, errors, output);
-    await verifyTapdFusion(browser, errors, output);
     assert.deepEqual(errors, []);
     process.stdout.write(
       'Browser smoke passed: send, stream, steer, approval, question, interrupt, continue, reload, mobile and start form.\n',

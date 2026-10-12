@@ -167,7 +167,7 @@ function createWebServer({
       });
       await instance.register(csrf, {
         sessionPlugin: "@fastify/session",
-        getToken: (request) => request.headers["x-tapd-token"],
+        getToken: (request) => request.headers["x-csrf-token"],
       });
       await instance.register(rateLimit, { global: false });
     }
@@ -208,7 +208,7 @@ function createWebServer({
       request.applicationUrl = url;
       if (request.method === "POST") {
         if (testIdentity) {
-          if (request.headers["x-tapd-token"] !== token)
+          if (request.headers["x-csrf-token"] !== token)
             return reply
               .code(403)
               .send({ error: "页面令牌失效，请刷新页面。" });

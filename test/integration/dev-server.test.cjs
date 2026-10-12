@@ -238,7 +238,7 @@ test("development CLI serves Vite and workspace APIs on one guarded origin", asy
         cookie: initialCookie,
         origin,
         "content-type": "application/json",
-        "x-tapd-token": JSON.parse(initial.text).token,
+        "x-csrf-token": JSON.parse(initial.text).token,
       },
       body: JSON.stringify({ username: "admin", password: accountPassword }),
     });
@@ -259,7 +259,7 @@ test("development CLI serves Vite and workspace APIs on one guarded origin", asy
       cookie,
       origin,
       "content-type": "application/json",
-      "x-tapd-token": token,
+      "x-csrf-token": token,
     };
     const system = await send(`${origin}/api/system/settings`, { method: "POST", headers, body: JSON.stringify({ memberStorageRoot: path.join(directory, "members") }) });
     assert.equal(system.status, 200);
@@ -300,7 +300,7 @@ test("development CLI serves Vite and workspace APIs on one guarded origin", asy
             headers: {
               origin,
               "content-type": "application/json",
-              ...(value ? { "x-tapd-token": value } : {}),
+              ...(value ? { "x-csrf-token": value } : {}),
             },
             body: payload,
           })

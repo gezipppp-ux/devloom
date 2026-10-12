@@ -23,7 +23,7 @@
 | --- | --- | --- |
 | 个人设置 | Git 账号、通知开关、任务分组、默认模型、思考强度、执行权限 | 本人，适用本人全部工作区 |
 | 系统设置 | 成员目录基础地址、环境检测、部门权限上限、账号资格 | 仅管理员修改 |
-| 项目设置 | 名称、负责人、Git 仓库地址、初始化命令、TAPD 配置与凭据、提示词模板 | 对应项目配置权限 |
+| 项目设置 | 名称、负责人、Git 仓库地址、初始化命令、提示词模板 | 对应项目配置权限 |
 
 新任务可覆盖个人执行默认值。已启动任务保存实际选择，后续全局设置修改不回写已有任务。通知授权仍属于浏览器设备权限。未读记录按账号和工作区保存于数据库，不混入系统设置。
 
@@ -59,8 +59,8 @@ Git 使用 `--progress` 和英文机器环境输出阶段百分比，服务只�
 
 - 账号、登录会话、三类设置、工作区、任务身份、来源、状态、需求快照、提示词、工具和会话历史、操作记录、日志、图片及偏好入库。
 - 工作区和运行记录包含有约束的身份、归属和查询字段；渠道快照等异构内容保留 JSON 字段。`storage` 拥有 SQL 和格式，其他模块调用存储接口。
-- 登录使用 Fastify Cookie/Session/CSRF/限流插件，Session ID 的摘要保存在 PostgreSQL。业务 POST 保留 `x-tapd-token` 请求头作为与当前会话绑定的 CSRF token。
-- TAPD session、Git 凭据与 SSH 草稿使用 AES-256-GCM 加密；主密钥来自 `RUNNER_ENCRYPTION_KEY` 或自动生成的 `<RUNNER_DATA_DIR>/secrets/database.key`。主密钥不会与数据库备份打包；已有数据缺失密钥时拒绝启动。应用密钥不传给 Codex／初始化子进程。
+- 登录使用 Fastify Cookie/Session/CSRF/限流插件，Session ID 的摘要保存在 PostgreSQL。业务 POST 保留 `x-csrf-token` 请求头作为与当前会话绑定的 CSRF token。
+- Git 凭据与 SSH 草稿使用 AES-256-GCM 加密；主密钥来自 `RUNNER_ENCRYPTION_KEY` 或自动生成的 `<RUNNER_DATA_DIR>/secrets/database.key`。主密钥不会与数据库备份打包；已有数据缺失密钥时拒绝启动。应用密钥不传给 Codex／初始化子进程。
 - 标准 Agent 通知和执行诊断日志按块保存；会话展示条目幂等保存，并在继续会话和轮次结束时补齐。分页读取数据库，Codex 离线仍可查看已保存历史。历史补齐保留实时更新，独立维护展示顺序。
 - 图片 BLOB 是权威数据，本地图片仅是 Codex 所需的缓存，可校验并重建。缓存不能通过符号链接越界；读取图片必须先经过工作区授权。暂存图片 24 小时过期。
 - 任务的 `requirements.json` 是 PostgreSQL `run_documents` 中的资源标识，保存来源归属、创建请求指纹及追加批次快照/发送状态，不是生产磁盘 JSON。RunRequirementsStore 在短事务内同时检查当前工作区所有原始运行记录和新归属记录，再原子写入成员与追加快照，覆盖历史单需求和归档任务；无需重写已有来源、会话或路径。素材抓取、Git 和 Codex 等待在事务外。显式文件测试适配使用工作区级短文件锁，旧任务无需预先迁移；永久删除任务同时删除归属文档。
@@ -117,7 +117,7 @@ npm start -- --host 127.0.0.1 --port 4317
 - 事项创建／编辑可随 JSON 提交 `attachments: [{id, name, mimeType, data}]`；`id` 为客户端生成的 UUIDv4，`data` 为严格 base64，正文引用 `/api/projects/:projectId/files/:id`。每个附件 10 MiB、每批最多 20 个且合计 20 MiB；只有这两类 JSON 路由允许 30 MiB 正文。附件与事项事务保存，创建随 `issue.create` 授权，编辑随 `issue.edit` 授权；修订冲突不留下附件。附件 ID 重试只复用同项目、事项、作者和完全相同内容的文件。
 - 事项创建可带稳定的 UUIDv4 `requestId`，同作者、项目与原始输入的重复提交复用事项，不重复编号或历史；重复标识改变输入返回 409。正文、附件列表和开发快照继续归事项，资产文件不能混入。
 - 图片 DTO 的 `images`／`previewUrl` 由附件魔数验证生成，PNG／JPEG／WebP／GIF 可以通过 `?inline=1` 预览；普通文件及伪图始终作为附件下载。文件读取再次校验资源权限，返回 `nosniff` 和私有无缓存；不信任上传 MIME，不允许内联 SVG／HTML。
-- 新 TAPD 事项导入在事务外按渠道白名单下载并验证 PNG／JPEG／WebP，单图最多 10 MiB、每事项最多 20 张、整批图片合计最多 20 MiB；任一图片失败则不保存该批事项。来源快照的 `projectImages` 保存原引用与附件 ID 映射，保留原文；事项、来源和附件在同一事务保存。详情仅映射本事项已验证的文件，开发快照读取同一附件。重复导入保留既有事项、本地修改与历史快照，不自动回填此前漏图的数据。
+- 历史导入事项的来源快照和附件继续保留；详情只映射本事项已验证的文件，开发快照读取同一附件。不提供新的外部来源导入接口，也不自动抓取或补全旧资料。
 - 生产 `POST /api/workspaces`、旧个人克隆入口、工作区配置写入和直接 `POST .../runs` 已关闭；项目配置和显式开发任务使用项目 API。
 - 仍可用的工作区需求检索 `/requirements`、`/stories` 必须同时满足工作区所有者、会话查看与需求查看权限；渠道查询返回后再次授权。
 - `/api/system/settings`：系统级设置；工作区接口保持 `/api/workspaces/:id/...`。
@@ -131,7 +131,7 @@ Vue 页面路径 `/login`、`/password`、`/personal`、`/system`、`/accounts`�
 
 ## 验证
 
-Jenkinsfile 运行 eslint、Node 测试、`npm run build` 和浏览器脚本。数据库测试使用独立 PostgreSQL 的随机 schema，执行测试使用假 Codex/TAPD 和临时 Git。覆盖成员越权、登录撤销、SSE/图片隔离、完整执行、离线历史、图片缓存重建、迁移版本校验、事务回滚及连接失败，以及开发种子隔离。
+Jenkinsfile 运行 eslint、Node 测试、`npm run build` 和浏览器脚本。数据库测试使用独立 PostgreSQL 的随机 schema，执行测试使用假 Codex 和临时 Git。覆盖成员越权、登录撤销、SSE/图片隔离、完整执行、离线历史、图片缓存重建、迁移版本校验、事务回滚及连接失败，以及开发种子隔离。
 
 执行配置与任务记录采用 [Agent 契约](./agents.md) 的新格式，不提供旧 `codex` 字段回退。Git 账号引用查询使用 `execution.gitAccountId`，会话固定使用记录中的 `agent.provider`。
 

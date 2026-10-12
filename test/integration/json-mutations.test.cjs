@@ -6,7 +6,6 @@ const { test } = require('node:test');
 const { temporary } = require('../support/helpers.cjs');
 const { RunStore } = require('../../src/storage/run-store.cjs');
 const { writeConfig, updateConfig, readOptional } = require('../../src/storage/json-files.cjs');
-const { saveSession } = require('../../src/channels/tapd/auth-utils.cjs');
 
 test('concurrent task metadata updates preserve the other process field', { timeout: 15000 }, async (t) => {
   const directory = temporary(t);
@@ -75,7 +74,7 @@ test('concurrent task metadata updates preserve the other process field', { time
   assert.deepEqual(fs.readdirSync(store.dir('1-2')), ['task-metadata.json']);
 });
 
-test('authentication refresh keeps workspace version and atomically preserves the previous config on write failure', async (t) => {
+test('configuration updates keep workspace version and atomically preserves the previous config on write failure', async (t) => {
   const directory = temporary(t);
   const file = path.join(directory, 'config.json');
   const previous = {
@@ -86,15 +85,15 @@ test('authentication refresh keeps workspace version and atomically preserves th
   };
   (await writeConfig(file, previous));
   const session = { cookie_header: 'new-fixture', request_body: {} };
-  (await saveSession(session, file));
-  const expected = { ...previous, tapd: { ...previous.tapd, session } };
+  (await updateConfig(file, current => ({ ...current, credential: session })));
+  const expected = { ...previous, credential: session };
   assert.deepEqual((await readOptional(file)), expected);
   const rename = fs.renameSync;
   t.mock.method(fs, 'renameSync', function (source, target) {
     if (target === file) throw new Error('fixture rename failed');
     return rename.call(this, source, target);
   });
-  (await assert.rejects(async () => (await saveSession({ cookie_header: 'failed-fixture' }, file)), /fixture rename failed/));
+  (await assert.rejects(async () => (await updateConfig(file, current => ({ ...current, credential: 'failed-fixture' }))), /fixture rename failed/));
   assert.deepEqual((await readOptional(file)), expected);
   assert.deepEqual(fs.readdirSync(directory), ['config.json']);
 });

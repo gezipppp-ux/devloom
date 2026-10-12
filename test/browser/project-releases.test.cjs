@@ -61,7 +61,7 @@ async function verifyProjectReleases({ page, origin, projectId, output }) {
 
     const session = await (await page.request.get(`${origin}/api/auth/session`)).json();
     for (const url of [endpoint, `${endpoint}/${release.id}`]) {
-      const rejected = await page.request.post(url, { headers: { "x-tapd-token": session.token }, data: { name: "任意名称", ...(url !== endpoint ? { revision: release.revision } : {}) } });
+      const rejected = await page.request.post(url, { headers: { "x-csrf-token": session.token }, data: { name: "任意名称", ...(url !== endpoint ? { revision: release.revision } : {}) } });
       assert.equal(rejected.status(), 400, "direct HTTP writes cannot bypass validation");
       assert.match((await rejected.json()).error, /版本号格式无效/);
     }

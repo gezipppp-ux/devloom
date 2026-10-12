@@ -138,14 +138,14 @@ test("global system endpoints work before workspace creation and enforce origin 
   assert.equal(
     (
       await write({
-        "x-tapd-token": bootstrap.token,
+        "x-csrf-token": bootstrap.token,
         origin: "https://elsewhere.invalid",
       })
     ).status,
     403,
   );
   assert.equal(fs.existsSync(base), false);
-  const response = await write({ "x-tapd-token": bootstrap.token });
+  const response = await write({ "x-csrf-token": bootstrap.token });
   assert.equal(response.status, 200);
   const settings = await response.json();
   assert.equal(settings.memberStorageRoot, fs.realpathSync.native(base));
@@ -177,7 +177,7 @@ test("global system endpoints work before workspace creation and enforce origin 
   assert.equal(
     (
       await write(
-        { "x-tapd-token": bootstrap.token },
+        { "x-csrf-token": bootstrap.token },
         { memberStorageRoot: "relative" },
       )
     ).status,

@@ -2,14 +2,11 @@ const path = require("node:path");
 const { repositoryRoot } = require("../git/repository.cjs");
 const { executionOptions } = require("../domain/agent-config.cjs");
 
-function repositoryFor(config, configFile, workspace, channel = "tapd") {
+function repositoryFor(config, configFile, workspace, channel = "manual") {
   const execution = executionOptions(config);
   const selected =
     (!config.workspace &&
       execution.repositories?.[`${channel}:${workspace}`]) ||
-    (!config.workspace && channel === "tapd"
-      ? execution.repositories?.[workspace]
-      : null) ||
     execution.repository;
   if (!selected)
     throw new Error(

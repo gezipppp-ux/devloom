@@ -135,7 +135,7 @@ test("project tasks and image additions use the real session manager with tempor
   const origin = await app.listen(0);
   let cookie = "", token = "";
   const http = async (url, input) => {
-    const response = await fetch(origin + url, { method: input ? "POST" : "GET", headers: { cookie, "x-tapd-token": token, "content-type": "application/json" }, ...(input ? { body: JSON.stringify(input) } : {}) });
+    const response = await fetch(origin + url, { method: input ? "POST" : "GET", headers: { cookie, "x-csrf-token": token, "content-type": "application/json" }, ...(input ? { body: JSON.stringify(input) } : {}) });
     if (response.headers.get("set-cookie")) cookie = response.headers.get("set-cookie").split(";", 1)[0];
     const data = await response.json();
     if (data.token) token = data.token;

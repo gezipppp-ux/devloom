@@ -171,9 +171,13 @@ test("project settings propagate to prepared spaces without exposing secrets or 
   const space = (await f.projects.space(f.project.id, f.member)).space;
   const before = await f.projects.store.readWorkspace(space.workspaceId, f.member.id);
   const template = "Project instructions: {{title}}\n{{content}}\n{{images}}";
-  const cookie = "dsc-token=fixture-project-secret; session=fixture-project-cookie";
-  const changed = await f.projects.update(f.project.id, f.admin, { revision: 1, settings: { initCommands: ["npm ci"], prompts: { manual: template }, tapd: { workspaceId: "12345", cookie } } });
-  assert.equal(changed.project.settings.tapd.hasCookie, true);
+  const retired = { tapd: { session: { cookie_header: "fixture-project-secret" } }, prompts: { tapd: "old prompt", tapd_fusion: "old fusion" } };
+  await f.projects.store.saveProject({ settings: retired, revision: 1 }, f.project.id);
+  await f.projects.store.writeWorkspace(space.workspaceId, { ...before, tapd: retired.tapd, prompt_templates: retired.prompts });
+  for (const settings of [{ tapd: {} }, { prompts: { tapd: "old prompt" } }])
+    await assert.rejects(f.projects.update(f.project.id, f.admin, { revision: 2, settings }), { statusCode: 400 });
+  const changed = await f.projects.update(f.project.id, f.admin, { revision: 2, settings: { initCommands: ["npm ci"], prompts: { manual: template } } });
+  assert.equal(Object.hasOwn(changed.project.settings, "tapd"), false);
   assert.ok(!JSON.stringify(changed).includes("fixture-project-secret"));
   const after = await f.projects.store.readWorkspace(space.workspaceId, f.member.id);
   assert.equal(after.execution.repository, before.execution.repository);
@@ -183,8 +187,9 @@ test("project settings propagate to prepared spaces without exposing secrets or 
   assert.equal(after.prompt_templates.manual, template);
   const persisted = await f.database.client.project.findUnique({ where: { id: f.project.id } });
   assert.ok(!JSON.stringify(persisted).includes("fixture-project-secret"));
-  const preserved = await f.projects.update(f.project.id, f.admin, { revision: changed.project.revision, settings: { prompts: { manual: null }, tapd: { workspaceId: "12345", cookie: "" } } });
-  assert.equal(preserved.project.settings.tapd.hasCookie, true);
+  const preserved = await f.projects.update(f.project.id, f.admin, { revision: changed.project.revision, settings: { prompts: { manual: null } } });
+  assert.equal(Object.hasOwn(preserved.project.settings, "tapd"), false);
+  assert.equal(Object.hasOwn(after, "tapd"), false);
   assert.deepEqual((await f.projects.store.readWorkspace(space.workspaceId, f.member.id)).prompt_templates, {});
 });
 

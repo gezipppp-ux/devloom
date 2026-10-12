@@ -224,7 +224,7 @@ test('manual upload HTTP requires same origin and token, checks bytes, and keeps
   const bootstrap = await (await fetch(origin + '/api/bootstrap')).json();
   const url = origin + '/api/channels/manual/images';
   const headers = {
-    'x-tapd-token': bootstrap.token,
+    'x-csrf-token': bootstrap.token,
     'content-type': 'image/png',
   };
   assert.equal((await fetch(url, { method: 'POST', body: png })).status, 403);

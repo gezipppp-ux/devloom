@@ -16,7 +16,7 @@ node test/browser/session.test.cjs && node test/browser/workspaces.test.cjs && n
 
 测试前设置 `TEST_DATABASE_URL` 为专用 PostgreSQL 连接；测试账号需要在该专用数据库创建／删除 schema 的权限。禁止配置为生产数据库。测试以随机 schema 隔离，应用子进程只接收当前测试 schema 的 `DATABASE_URL`。
 
-上述命令依次执行 lint、全部架构/单元/集成测试、前端构建、Web 功能回归和视觉截图。测试只使用 fake Codex、模拟 TAPD 与临时 Git 仓库，不需要 Codex 登录，不执行真实需求。
+上述命令依次执行 lint、全部架构/单元/集成测试、前端构建、Web 功能回归和视觉截图。测试只使用 fake Codex 与临时 Git 仓库，不需要 Codex 登录，不执行真实需求。
 
 Linux 首次运行浏览器测试时，管理员需为测试节点安装 Chromium 系统依赖，例如 `npx playwright install --with-deps chromium`。Windows 默认使用本机 Edge；要使用上面安装的 Chromium，在 PowerShell 设置 `$env:BROWSER_CHANNEL = 'chromium'`；Linux 可在运行上述浏览器脚本前设置 `BROWSER_CHANNEL=chromium`。截图输出到被忽略的 `state/browser/`。
 

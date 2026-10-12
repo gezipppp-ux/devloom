@@ -88,7 +88,7 @@ async function fixture(t) {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-tapd-token": token,
+        "x-csrf-token": token,
         ...headers,
       },
       body: JSON.stringify(input),
@@ -132,7 +132,7 @@ test("delete API validates origin, scope, snapshot and risk acknowledgement with
   assert.equal((await snapshot()).unpublished, true);
   assert.equal((await snapshot()).ahead, null);
   assert.equal(
-    (await remove((await confirmation()), { "x-tapd-token": "wrong" })).status,
+    (await remove((await confirmation()), { "x-csrf-token": "wrong" })).status,
     403,
   );
   assert.equal(
@@ -258,7 +258,7 @@ test("repository HTTP fetch uses saved repository and configured remote; persist
       await f.post(
         "/repository/git/fetch",
         { remote: "origin" },
-        { "x-tapd-token": "wrong" },
+        { "x-csrf-token": "wrong" },
       )
     ).status,
     403,

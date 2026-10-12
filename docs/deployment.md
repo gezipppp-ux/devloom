@@ -63,11 +63,11 @@ npm run db:deploy
 
 启动前设置 `RUNNER_DATA_DIR` 为独立运行数据目录，`DATABASE_URL` 指向新的 PostgreSQL 数据库。业务数据通过 Prisma 保存，独立凭据主密钥位于 `secrets/database.key`。`workspaces/` 仅保留执行图片缓存和必要锁。未设置数据目录时使用应用目录；静态页面始终取自安装包的 `web/dist`。账号与升级完整约定见 [账号与数据库](engineering/accounts-and-database.md)。
 
-先运行 `npm run init:admin` 交互创建管理员，再启动和登录页面。密码需要输入两次且不回显，不会写入命令行或 npm 配置。管理员维护部门和成员，并为自己分配部门；获授权的创建者直接填写 Git 仓库地址建立项目，再添加成员及分配权限。普通成员不能自行创建空间，拥有代码操作权限后自动分配个人开发空间。TAPD Cookie 在项目设置中加密入库，不回显。旧配置和运行文件不迁移、不自动清理；业务仓库和 Worktree 保留原位。
+先运行 `npm run init:admin` 交互创建管理员，再启动和登录页面。密码需要输入两次且不回显，不会写入命令行或 npm 配置。管理员维护部门和成员，并为自己分配部门；获授权的创建者直接填写 Git 仓库地址建立项目，再添加成员及分配权限。普通成员不能自行创建空间，拥有代码操作权限后自动分配个人开发空间。旧配置和运行文件不迁移、不自动清理；业务仓库和 Worktree 保留原位。
 
 Web 不接受 `--config`。不要将凭据写入 service 文件或版本控制。
 
-登录 Codex 的用户必须与运行服务的用户一致。管理员在「系统设置」维护成员目录基础路径并查看 Git 环境；开发成员在「个人设置」维护多个 Git 主机账号和独立提交作者，在项目开发空间选择本人账号验证实际仓库并准备克隆。非开发成员无需 Git 或 Codex。项目基准引用、初始化命令及 TAPD 在项目设置中维护。新目录为 `<成员目录>/projects/<项目ID>/members/<用户ID>/{repository-<准备修订号>,worktree/<任务>}`。准备失败保留原目录，明确重试使用新目录；已就绪空间的记录路径保持不变。SSH 生成需要服务器安装 OpenSSH（`ssh-keygen`）。Linux 路径区分大小写，不接受 Windows 盘符路径。
+登录 Codex 的用户必须与运行服务的用户一致。管理员在「系统设置」维护成员目录基础路径并查看 Git 环境；开发成员在「个人设置」维护多个 Git 主机账号和独立提交作者，在项目开发空间选择本人账号验证实际仓库并准备克隆。非开发成员无需 Git 或 Codex。初始化命令和提示词在项目设置中维护。新目录为 `<成员目录>/projects/<项目ID>/members/<用户ID>/{repository-<准备修订号>,worktree/<任务>}`。准备失败保留原目录，明确重试使用新目录；已就绪空间的记录路径保持不变。SSH 生成需要服务器安装 OpenSSH（`ssh-keygen`）。Linux 路径区分大小写，不接受 Windows 盘符路径。
 
 Windows 路径需带完整盘符（例如 `D:\repos\project`）或使用 UNC 共享路径；`\repos\project`、`/repos/project` 依赖当前磁盘，不能作为明确的服务端绝对路径。中文、空格和 Windows 扩展路径可用于仓库及 worktree。Linux 保留路径中的空格并按大小写匹配。
 
@@ -156,7 +156,7 @@ node test/browser/accounts.test.cjs
 
 测试必须设置 `TEST_DATABASE_URL` 指向独立测试数据库。测试创建并清理随机 schema，不应使用生产连接或生产运行目录。
 
-浏览器 smoke 在 Linux/macOS 默认使用 Playwright Chromium；Windows 默认使用本机 Edge。`BROWSER_CHANNEL` 可显式选择已安装的浏览器渠道。执行核心与 HTTP 测试不依赖浏览器、真实模型或 TAPD 写入。
+浏览器 smoke 在 Linux/macOS 默认使用 Playwright Chromium；Windows 默认使用本机 Edge。`BROWSER_CHANNEL` 可显式选择已安装的浏览器渠道。执行核心与 HTTP 测试不依赖浏览器或真实模型。
 
 完整检查由 Jenkinsfile 按上述同一顺序执行，并额外包含视觉截图。双平台 CI 节点准备和运行步骤见 [平台验证说明](engineering/platform-verification.md)。
 

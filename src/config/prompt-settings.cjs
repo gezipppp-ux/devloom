@@ -2,6 +2,7 @@ const { readOptional, updateConfig } = require("../storage/json-files.cjs");
 const {
   promptTemplateCatalog,
   getPromptTemplates,
+  storedPromptOverrides,
   validatePromptTemplate,
 } = require("../domain/prompt-templates.cjs");
 
@@ -18,7 +19,7 @@ async function savePromptSettings(configFile, input) {
       (channel) => !Object.hasOwn(promptTemplateCatalog, channel),
     )
   )
-    throw new Error("仅允许修改手动需求、TAPD 需求和 TAPD 需求融合提示词模板。");
+    throw new Error("仅允许修改手动需求提示词模板。");
   for (const [channel, template] of Object.entries(input)) {
     if (template !== null) validatePromptTemplate(channel, template);
   }
@@ -30,7 +31,7 @@ async function savePromptSettings(configFile, input) {
         Array.isArray(current.prompt_templates))
     )
       throw new Error("提示词配置必须是渠道模板对象。");
-    const overrides = { ...current.prompt_templates };
+    const overrides = storedPromptOverrides(current.prompt_templates);
     for (const [channel, template] of Object.entries(input)) {
       if (template === null) delete overrides[channel];
       else overrides[channel] = template;

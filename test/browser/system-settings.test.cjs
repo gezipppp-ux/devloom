@@ -125,7 +125,7 @@ async function verifySystemSettings(browser, { origin, output, errors, directory
     await preview.waitFor();
     assert.equal((await preview.innerText()).trim(), expected);
     const auth = await (await page.request.get(`${origin}/api/auth/session`)).json();
-    const rejected = await page.request.post(settingsEndpoint, { headers: { origin, "x-tapd-token": auth.token }, data: { projectName: "../outside" } });
+    const rejected = await page.request.post(settingsEndpoint, { headers: { origin, "x-csrf-token": auth.token }, data: { projectName: "../outside" } });
     assert.equal(rejected.status(), 400);
     assert.equal((await readWorkspace()).worktreeRoot, expected, "paths cannot be changed through settings");
 

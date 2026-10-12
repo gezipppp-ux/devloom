@@ -367,7 +367,7 @@ test('HTTP dispatches source searches and protects persisted settings with same-
     (
       await fetch(`${url}/api/settings`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-tapd-token': token },
+        headers: { 'content-type': 'application/json', 'x-csrf-token': token },
         body: payload,
       })
     ).status,

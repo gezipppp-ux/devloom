@@ -16,10 +16,10 @@ src/
   codex/           # Codex 原生协议、进程与条目转换
   agents/          # 显式 provider 注册、Codex 适配器与标准会话接口
   execution/       # 通用任务流水线、初始化命令执行
-  channels/        # 注册表及 tapd/、manual/ 来源适配器
-  application/     # 工作区服务、会话命令/事件/查询/呈现与 TAPD 执行用例
+  channels/        # 注册表及 manual/ 来源适配器
+  application/     # 工作区服务、会话命令/事件/查询/呈现与任务执行用例
   http/            # 本地 HTTP、路由、同源保护、SSE、静态资源
-  cli/             # 参数/退出处理、web.cjs 服务入口、tapd/ 渠道命令入口
+  cli/             # 参数/退出处理、web.cjs 服务入口
 web/src/
   main.js          # Vue 挂载与主题入口
   app/             # 应用壳层、工作区选择、跨功能协调
@@ -55,7 +55,7 @@ docs/engineering/  # 行为契约与架构规则
 | http | http、application、domain、shared，以及 config/runtime 的安装位置 |
 | cli | 组合命令所需的模块；其他模块不能依赖 cli |
 
-禁止循环依赖和动态加载浏览器提交的模块名。渠道实现只依赖本渠道或通用模块，不能依赖其他渠道或反向依赖注册表。通用执行器通过渠道接口调用准备和流转，不导入 TAPD 实现；新增渠道在独立子目录实现并显式注册。domain 不进行文件、子进程和网络 I/O，storage/config 不直接启动子进程；Git 操作通过 git 模块调用。
+禁止循环依赖和动态加载浏览器提交的模块名。渠道实现只依赖本渠道或通用模块，不能依赖其他渠道或反向依赖注册表。通用执行器通过渠道接口调用准备和流转，不导入具体渠道实现；新增渠道在独立子目录实现并显式注册。domain 不进行文件、子进程和网络 I/O，storage/config 不直接启动子进程；Git 操作通过 git 模块调用。
 
 纯校验放在 domain，SQL、持久化格式和文件适配放在 storage，路径比较放在 shared，避免为了复用一个函数反向依赖整个执行模块。application 不直接导入文件系统或底层 Git 命令，而调用存储和 Git 操作接口；执行流水线通过 ExecutionStore 管理运行记录与锁。模块从实际归属文件导入函数，不用无关模块转导出它们。不要通过聚合入口加载有副作用的认证脚本。
 
@@ -67,7 +67,6 @@ docs/engineering/  # 行为契约与架构规则
 | --- | --- |
 | `cli/arguments.cjs` | Web 与开发服务的命令参数校验 |
 | `cli/init-admin.cjs`、`cli/web.cjs` | 管理员初始化和 Web 服务进程入口；导出 main，以主模块保护执行 |
-| `channels/tapd/` | 认证、浏览器采集、查询、素材准备和流程规则；接收显式参数，不读取 argv |
 | `channels/manual/adapter.cjs` | 手动输入校验与渠道组合 |
 | `channels/channel-registry.cjs` | ChannelRegistry 校验并注册渠道接口、组合渠道默认配置 |
 | `channels/manual/manual-upload-store.cjs`、`task-package.cjs` | ManualUploadStore 管理上传生命周期；任务包模块管理标题命名、图片复制和任务包 |
@@ -75,7 +74,7 @@ docs/engineering/  # 行为契约与架构规则
 | `config/repository.cjs`、`git/` | 配置决定选择哪个仓库；git 负责验证、引用查询和 worktree 操作 |
 | `execution/runner.cjs` | 准备、初始化、执行、渠道同步顺序及记录；通过回调通知调用方，不写终端 |
 | `application/project-services.cjs`、`project-presenter.cjs` | 部门、项目及其仓库地址、成员权限和个人开发空间生命周期；公开字段由 presenter 脱敏 |
-| `application/project-content-services.cjs`、`project-content-presenter.cjs` | 按不可变流程版本流转事项、TAPD 只读导入、评论／交付、项目附件、资产加密与独立敏感字段授权 |
+| `application/project-content-services.cjs`、`project-content-presenter.cjs` | 按不可变流程版本流转事项、评论／交付、项目附件、资产加密与独立敏感字段授权 |
 | `application/project-lifecycle-services.cjs`、`project-lifecycle-presenter.cjs` | 项目发布版本与归档门禁；storage 拥有事务与修订号 |
 | `application/system-workflow-services.cjs`、`system-workflow-presenter.cjs` | 系统管理员维护需求／Bug 全局流程与不可变发布版本，项目授权读取已发布版本；`domain/issue-workflows.cjs` 拥有图规则，`storage/system-workflow-store.cjs` 拥有无项目归属的流程持久化 |
 | `application/project-development-services.cjs`、`project-development-presenter.cjs` | 认领／指派规划、唯一活跃认领、内容快照、显式幂等启动、完成／取消及追加／发送；不推进业务状态、不读取资产 |

@@ -12,7 +12,7 @@
 | `features/workspaces/` | 工作区创建、编辑、切换入口和图标目录。 |
 | `features/tasks/` | 需求启动表单、执行偏好与人员选择、任务列表快照、类型及人工进度。 |
 | `features/session/` | 会话详情状态、历史分页、输入卡片和下一轮设置；消息、工具输出、审批与澄清、需求快照的安全渲染。 |
-| `features/settings/` | 系统成员项目与任务目录、服务器目录选择、自动生成目录的项目执行设置、基准引用选择、TAPD 渠道设置和独立保存的提示词模板。 |
+| `features/settings/` | 系统成员项目与任务目录、服务器目录选择、自动生成目录的项目执行设置、基准引用选择、独立保存的提示词模板。 |
 | `shared/components/` | 不依赖具体功能的界面组件，例如表单分区、模型/强度控件与权限选择器。 |
 | `shared/api/` | HTTP 请求、页面令牌、工作区 API 路径、模型/权限能力发现和共享执行状态文案。 |
 | `shared/styles/` | 全站设计变量、布局与基础控件样式。 |
@@ -47,7 +47,7 @@ Vue 组件使用 PascalCase 文件名；JavaScript 辅助模块使用 kebab-case
 - 项目开发空间按稳定项目／用户 ID 定位，新仓库目录为「基础目录 / projects / 项目 ID / members / 用户 ID / repository-准备修订号」，任务使用同根的「worktree / 任务」。失败目录保留，明确重试使用新的准备修订号目录，已就绪空间沿用记录路径。GitAccountSettings 维护主机凭据和独立提交作者；保存与实际项目仓库检测分开，私钥和密码不回显。个人空间创建组件只用于明确的文件测试夹具，不作为生产导航入口。
 - `app/use-workspace-console.js` 负责渠道 bootstrap、SSE 建连/关闭与防抖刷新，将事件分发给任务列表和会话状态，不处理 DOM 或表单草稿。
 - `features/tasks/use-task-list.js` 负责列表刷新、请求乱序保护和请求期间的人工进度覆盖。
-- `features/tasks/TapdRequirementPicker.vue` 复用多选、ID 添加与顺序调整；`use-tapd-selection.js` 拥有检索请求和代际隔离。`AppendRequirements.vue` 与 `use-requirement-additions.js` 管理已有任务的追加草稿与保存；app 通过需求抽屉插槽组合这些组件，避免 session 直接依赖 tasks。原始与追加资料均由 session 的 `RequirementDetails.vue` 安全渲染，明确区分待处理、已发送和发送结果待确认；继续按钮通过 app 调用会话动作，SSE 更新完整资料且不会清空会话草稿。
+- 新建任务只提供手动图文输入，项目需求／Bug 页不提供外部导入。原始与历史追加资料由 session 的 `RequirementDetails.vue` 安全渲染；已保存资料可在原会话明确继续，读取历史不触发外部抓取。
 - `features/tasks/ArchivedSessions.vue` 提供侧栏归档入口、名称搜索、恢复和删除交互；`use-archived-sessions.js` 拥有归档请求、恢复状态与卸载/乱序保护。壳层通过归档、删除、恢复与重连事件通知刷新，并通过插槽组合 session 功能的删除确认窗口，功能之间不互相导入。删除目标独立于列表快照保存，刷新或提前到达的 SSE 不卸载正在提交的确认窗口；恢复后不自动启动任务或切换当前草稿。
 - 会话名称由 `SessionTitleEditor.vue` 呈现，长名称换行，编辑图标紧随标题。编辑区最大 1040px，字数说明位于标签旁，取消/保存在宽屏时紧邻输入区、窄屏时移到下方，并保留输入法处理。壳层将面包屑并入会话标题区，执行状态与刷新在宽屏时对齐标题行，编辑时位于表单上方；`SessionDetailsDrawer.vue` 拥有右侧信息、Git、需求抽屉的呈现状态、键盘关闭及焦点恢复。抽屉默认收起、独立滚动，打开时不压缩对话列；切换资料保留草稿、滚动位置与子组件状态，切换会话重建抽屉。任务元数据控件由 app 通过插槽组合，不跨功能导入。
 - `features/session/use-session.js` 负责详情快照、请求期间的 SSE 覆盖、会话动作和历史分页；执行偏好拥有独立保存状态和错误反馈，迟到响应不能覆盖较新的设置/当前轮状态。打开会话、收到消息和完成动作通过回调交给应用/界面层处理，不导入任务列表或界面组件。

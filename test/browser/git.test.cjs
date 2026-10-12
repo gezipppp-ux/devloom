@@ -56,7 +56,7 @@ async function verifyGit(browser, { origin, output, errors, directory, workspace
   };
   try {
     const bootstrap = await (await page.request.get(`${origin}/api/bootstrap`)).json();
-    const headers = { origin, "x-tapd-token": bootstrap.token };
+    const headers = { origin, "x-csrf-token": bootstrap.token };
     const settings = await page.request.post(`${api}/settings`, {
       headers, data: { baseBranch: "main", initCommands: [] },
     });

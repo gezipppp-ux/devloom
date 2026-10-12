@@ -29,7 +29,7 @@ export async function uploadSessionImage(url, file, signal) {
     method: "POST",
     headers: {
       "content-type": file.type || "application/octet-stream",
-      "x-tapd-token": token,
+      "x-csrf-token": token,
     },
     body: file,
     signal,
@@ -52,7 +52,7 @@ export async function uploadManualImage(file) {
     method: "POST",
     headers: {
       "content-type": file.type || "application/octet-stream",
-      "x-tapd-token": token,
+      "x-csrf-token": token,
     },
     body: file,
   });
@@ -77,7 +77,7 @@ async function request(url, data) {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            "x-tapd-token": token,
+            "x-csrf-token": token,
           },
           body: JSON.stringify(data),
         },

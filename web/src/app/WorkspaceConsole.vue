@@ -13,7 +13,6 @@ import { statusLabel } from "../shared/api/api.js";
 import FeedbackMessage from "../shared/components/FeedbackMessage.vue";
 import { useWorkspaceConsole } from "./use-workspace-console.js";
 import StartTask from "../features/tasks/StartTask.vue";
-import AppendRequirements from "../features/tasks/AppendRequirements.vue";
 import SettingsPanel from "../features/settings/SettingsPanel.vue";
 import RepositoryGitPanel from "../features/settings/RepositoryGitPanel.vue";
 import SessionDetailsDrawer from "../features/session/SessionDetailsDrawer.vue";
@@ -310,7 +309,6 @@ async function refreshCurrentSession() {
         :channels="channels"
         :workspace="workspace"
         @cancel="creating = false"
-        @open-task="open"
         @started="
           (key) => {
             refreshList();
@@ -454,9 +452,6 @@ async function refreshCurrentSession() {
           >
             <template #metadata>
               <TaskMetadataControls v-if="allowed('session.continue')" :task-key="session.key" :metadata="session.metadata" @saved="metadataSaved" />
-            </template>
-            <template #append-requirements>
-              <AppendRequirements v-if="session.source?.channel === 'tapd'" :key="session.key" :task-key="session.key" :workspace="workspace" :disabled="!canSend || running || busy || ['preparing', 'initializing', 'starting'].includes(session.status) || Boolean(session.archivedAt)" @saved="refreshSession(); refreshList()" @open-task="open" />
             </template>
           </SessionDetailsDrawer>
         </div>

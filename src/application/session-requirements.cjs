@@ -1,7 +1,6 @@
 const { taskPrompt } = require("../domain/agent-config.cjs");
-const { REQUEST_ID, MAX_REQUIREMENTS } = require("../domain/requirement-fusion.cjs");
+const { REQUEST_ID } = require("../domain/requirement-fusion.cjs");
 const { presentError } = require("./error-presenter.cjs");
-const { runKey } = require("../domain/run-identity.cjs");
 
 class SessionRequirements {
   /** @param {import('./session-manager.cjs').SessionManager} manager */
@@ -29,41 +28,6 @@ class SessionRequirements {
       requirementCount: (await this.store.requirements.read(key)).sources?.length || 1,
       at: new Date().toISOString() });
     return { requirement };
-  }
-
-  async append(key, input) {
-    return (await this.manager.exclusive(key, async () => {
-      const state = (await this.store.read(key));
-      const channel = this.manager.channels.get(state.source?.channel || "tapd");
-      if (!channel.capabilities?.fusion) throw new Error("该任务不支持追加 TAPD 需求。");
-      const resolved = await channel.resolve({ ...input, title: "追加需求" });
-      if (!resolved.item.requirements) throw new Error("请选择要追加的需求。");
-      if (String(resolved.item.workspace_id) !== String(state.workitem.workspace_id))
-        throw new Error("追加需求必须与原任务属于同一个 TAPD 项目。");
-      const saved = (await this.store.requirements.read(key));
-      const previous = saved.additions?.find(entry => entry.id === input.requestId);
-      if (previous) {
-        if (previous.fingerprint !== resolved.item.request_fingerprint)
-          throw new Error("同一操作标识不能提交不同需求，请重新打开表单。");
-        return (await this.publish(key));
-      }
-      if ((saved.sources?.length || state.workitem.sources?.length || 1) + resolved.item.sources.length > MAX_REQUIREMENTS)
-        throw new Error("一个任务最多关联 20 条需求。");
-      const assignments = (await this.store.requirements.assignments());
-      for (const source of resolved.item.sources)
-        if (assignments.has(runKey(source)))
-          throw new Error(`需求 ${source.id} 已归属任务 ${assignments.get(runKey(source))}，请打开原任务。`);
-      await this.idle(key);
-      const { task } = await channel.prepare({ ...resolved,
-        directory: this.store.additionDirectory(key, input.requestId) });
-      this.manager.assertOpen();
-      await this.idle(key);
-      (await this.store.requirements.claim(key, resolved.item.sources, {
-        addition: { id: input.requestId, fingerprint: resolved.item.request_fingerprint,
-          status: "ready", createdAt: new Date().toISOString(), task },
-      }));
-      return (await this.publish(key));
-    }));
   }
 
   async continue(key, id) {
