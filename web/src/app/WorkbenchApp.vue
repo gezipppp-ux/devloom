@@ -46,9 +46,14 @@ async function logout() { try { await logoutAccount(); } catch (failure) { logou
       <button @click="logout"><LogoutOutlined aria-hidden="true" /><span>退出登录</span></button>
     </nav></header>
     <FeedbackMessage :message="logoutError" type="error" />
-    <main v-if="['personal', 'system', 'accounts'].includes(route.name)" class="system-settings-main account-page-view"><div class="page-breadcrumb"><button class="text-button" @click="page('workspace')">{{ admin ? "全部项目" : "我的项目" }}</button><span>/</span><strong>{{ { personal: '个人设置', system: '系统设置', accounts: '账号管理' }[route.name] }}</strong></div><button v-if="route.name === 'personal' && personalReturn" class="project-return-button" @click="router.push(personalReturn)">返回开发环境</button><PersonalSettings v-if="route.name === 'personal'" :notifications="desktopNotifications" /><SystemSettings v-else-if="route.name === 'system' && admin" /><AccountManagement v-else-if="route.name === 'accounts' && admin" /></main>
+    <main v-if="['personal', 'system', 'accounts'].includes(route.name)" class="page-layout account-page-view">
+      <button v-if="route.name === 'personal' && personalReturn" class="project-return-button" @click="router.push(personalReturn)">返回开发环境</button>
+      <PersonalSettings v-if="route.name === 'personal'" :notifications="desktopNotifications" />
+      <SystemSettings v-else-if="route.name === 'system' && admin" />
+      <AccountManagement v-else-if="route.name === 'accounts' && admin" />
+    </main>
     <DepartmentAdministration v-else-if="route.name === 'departments' && admin" />
-    <ProjectOverview v-else-if="route.name === 'project'" :key="route.params.projectId" :project-id="route.params.projectId" :tab="String(route.query.tab || 'overview')" @tab="tab" @back="page('workspace')" @open-workspace="navigate" />
+    <ProjectOverview v-else-if="route.name === 'project'" :key="route.params.projectId" :project-id="route.params.projectId" :tab="String(route.query.tab || 'overview')" @tab="tab" @open-workspace="navigate" />
     <template v-else-if="route.name === 'workspace' && (route.query.workspace || standalone)"><div v-if="current?.projectId" class="project-back"><button @click="returnToProject">返回项目协作</button></div><WorkspaceConsole v-if="ready && (current || standalone) && (!current?.projectId || current?.permissions?.includes('session.view'))" :key="current?.id || 'standalone'" :initial-task="String(route.query.task || '')" :workspace-name="current?.name || ''" :project-id="current?.projectId || ''" :permissions="current?.permissions" :notify-unread-result="desktopNotifications.notifyResult" :can-manage-system="admin" @task-change="selectTask" @system-settings="page('system')" @open-project="value => project(current.projectId, value || 'issues')" /><RepositoryGitPanel v-else-if="ready && current?.permissions?.includes('code.view')" :key="current.id" :can-operate="current.permissions.includes('code.operate')" /><FeedbackMessage v-else-if="error" :message="error" type="error" /><p v-else role="status">正在读取开发空间…</p></template>
     <ProjectDirectory v-else @open="project" />
   </div>

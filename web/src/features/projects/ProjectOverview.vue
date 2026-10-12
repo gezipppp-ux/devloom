@@ -14,7 +14,7 @@ import ProjectReleases from "./ProjectReleases.vue";
 import ProjectTasks from "./ProjectTasks.vue";
 
 const props = defineProps({ projectId: { type: String, required: true }, tab: { type: String, default: "overview" } });
-const emit = defineEmits(["tab", "open-workspace", "back"]);
+const emit = defineEmits(["tab", "open-workspace"]);
 const route = useRoute(), router = useRouter();
 const { data, loading, saving, error, notice, reload, save } = useResource(() => appApi(`/projects/${props.projectId}`), { interval: 15000 });
 const can = permission => data.value?.permissions.includes(permission);
@@ -56,16 +56,15 @@ function returnToIssue() {
 </script>
 
 <template>
-  <section class="project-page">
-    <div class="page-breadcrumb"><button class="text-button" @click="emit('back')">{{ accountSession.user?.role === 'admin' ? '全部项目' : '我的项目' }}</button><span>/</span><strong>{{ data?.project.name || '项目' }}</strong></div>
+  <section class="page-layout project-page">
     <FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="notice" type="success" />
     <p v-if="loading && !data" role="status">正在读取项目…</p>
     <template v-if="data">
-      <header class="project-heading">
+      <header class="page-heading project-heading">
         <div><h1>{{ data.project.name }}</h1><p v-if="archived" class="warning">项目已归档，内容只读。</p></div>
         <button :disabled="loading" @click="reload">刷新项目</button>
       </header>
-      <nav class="project-tabs" aria-label="项目功能"><button v-for="item in tabs" :key="item.id" :class="{ active: currentTab === item.id }" :aria-current="currentTab === item.id ? 'page' : undefined" @click="emit('tab', item.id)">{{ item.label }}</button></nav>
+      <nav class="page-tabs" aria-label="项目功能"><button v-for="item in tabs" :key="item.id" :class="{ active: currentTab === item.id }" :aria-current="currentTab === item.id ? 'page' : undefined" @click="emit('tab', item.id)">{{ item.label }}</button></nav>
       <p v-if="currentTab !== tab" class="warning" role="status">当前项目状态或你的分工未开放所选功能，可在下方查看当前权限。</p>
       <template v-if="currentTab === 'overview'">
         <section v-if="managementOnly && !archived" class="project-setup-callout" aria-label="完成项目配置">

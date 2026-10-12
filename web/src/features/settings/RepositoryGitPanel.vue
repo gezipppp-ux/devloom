@@ -68,7 +68,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="start-panel repository-git-panel" aria-label="代码仓库">
+  <section class="page-layout repository-git-panel" aria-label="代码仓库">
     <header class="page-heading">
       <div class="eyebrow">REPOSITORY</div>
       <h1>代码仓库</h1>

@@ -77,7 +77,7 @@ async function save() {
 </script>
 
 <template>
-  <section class="start-panel">
+  <section class="page-layout">
     <header class="page-heading">
       <div class="eyebrow">EXECUTION SETTINGS</div>
       <h1>
@@ -98,7 +98,7 @@ async function save() {
         }}。保存后用于新建任务，已有 session 继续使用原来的 worktree。
       </p>
     </header>
-    <nav v-if="props.workspaceName" class="section-nav" aria-label="设置分区">
+    <nav v-if="props.workspaceName" class="page-tabs" aria-label="设置分区">
       <a href="#workspace-settings">基本信息</a>
       <a href="#project-settings">项目环境</a>
       <a href="#tapd-settings">TAPD 渠道</a>

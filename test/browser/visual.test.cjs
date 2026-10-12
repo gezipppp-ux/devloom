@@ -30,6 +30,7 @@ async function main() {
   const output = path.resolve("state/browser/unified");
   fs.mkdirSync(output, { recursive: true });
   const captures = [];
+  let departmentContentWidth;
   const projects = projectVisual(workspace.id);
   const errors = [];
   const filePath = "web/src/views/marketing/hotspot-creation-workspace.vue";
@@ -556,6 +557,7 @@ async function main() {
         await page.goto(origin + '/departments');
         await page.getByLabel('部门名称', { exact: true }).waitFor();
         await capture('18-department-permissions-' + width);
+        if (width === 1440) departmentContentWidth = (await page.locator('.page-heading').boundingBox()).width;
         await load('project-session');
         await page.getByRole('button', { name: '返回项目协作', exact: true }).waitFor();
         await capture('19-project-session-' + width);
@@ -588,7 +590,7 @@ async function main() {
     });
     assert.ok(wideLayout.pageHeight <= 1082, "desktop conversation fits the viewport without a second page scrollbar");
     assert.ok(wideLayout.timelineHeight >= 750, "the full HD viewport gives most vertical space to history");
-    assert.ok(wideLayout.messageWidth >= 1400, "wide screens make use of the available conversation space");
+    assert.ok(Math.abs(wideLayout.messageWidth - departmentContentWidth) <= 2, "wide conversations use the same content width as department administration");
     assert.ok(Math.abs(wideLayout.messageWidth - wideLayout.composerWidth) <= 2, "history and composer remain aligned");
     assert.ok(wideLayout.composerBottom <= 1080, "the input stays reachable within the full HD viewport");
     await captureLongSessionTitle("1920x1080");

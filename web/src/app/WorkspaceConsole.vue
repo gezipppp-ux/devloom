@@ -297,21 +297,6 @@ async function refreshCurrentSession() {
       </div>
     </aside>
     <main>
-      <div v-if="settingsOpen || repositoryOpen || creating || !session" class="page-breadcrumb" aria-label="当前位置">
-        <span :title="props.workspaceName || '开发工作台'">{{
-          props.workspaceName || "开发工作台"
-        }}</span>
-        <span aria-hidden="true">/</span>
-        <strong>{{
-          settingsOpen
-            ? "工作区设置"
-            : repositoryOpen
-              ? "代码仓库"
-              : creating
-                ? "新需求"
-                : "工作台"
-        }}</strong>
-      </div>
       <SettingsPanel
         v-if="settingsOpen && !props.projectId"
         :can-manage-system="canManageSystem"

@@ -181,7 +181,7 @@ async function start() {
 </script>
 
 <template>
-  <section class="start-panel">
+  <section class="page-layout">
     <header class="page-heading">
       <div class="eyebrow">NEW SESSION</div>
       <h1>从需求，开始开发。</h1>

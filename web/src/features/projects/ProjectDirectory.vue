@@ -14,8 +14,8 @@ const administrator = computed(() => accountSession.user?.role === "admin");
 function create() { return save("/projects", { name: form.name, description: form.description, remoteUrl: form.remoteUrl }, result => { creating.value = false; emit("open", result.project.id); }, "项目已创建。"); }
 </script>
 <template>
-  <section class="project-page">
-    <header class="project-heading"><div><div class="eyebrow">PROJECTS</div><h1>{{ administrator ? '全部项目' : '我的项目' }}</h1><p class="muted">{{ administrator ? '管理全部项目的成员、配置和协作内容；开发操作按项目授权开放。' : '需求、Bug 和交付在项目中协作，开发空间按权限分配。' }}</p></div><div class="actions"><button :disabled="loading" @click="reload">刷新</button><button v-if="data?.canCreateProjects" class="primary" :disabled="saving" @click="creating = !creating">创建项目</button></div></header>
+  <section class="page-layout project-page">
+    <header class="page-heading project-heading"><div><div class="eyebrow">PROJECTS</div><h1>{{ administrator ? '全部项目' : '我的项目' }}</h1><p class="muted">{{ administrator ? '管理全部项目的成员、配置和协作内容；开发操作按项目授权开放。' : '需求、Bug 和交付在项目中协作，开发空间按权限分配。' }}</p></div><div class="actions"><button :disabled="loading" @click="reload">刷新</button><button v-if="data?.canCreateProjects" class="primary" :disabled="saving" @click="creating = !creating">创建项目</button></div></header>
     <FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="notice" type="success" />
     <FormSection v-if="data?.isAdmin && !projects.length" title="首次使用准备清单">
       <p class="field-hint">管理员可以直接创建和管理项目。为参与者配置部门和项目分工后，再按需准备开发环境。</p>

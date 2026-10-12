@@ -19,7 +19,7 @@ function select(tab) {
 <template>
   <section class="system-settings-panel">
     <header class="page-heading"><div class="eyebrow">SYSTEM</div><h1><SettingOutlined aria-hidden="true" /> 系统设置</h1><p>管理服务器目录、运行环境与系统统一的事项流程。</p></header>
-    <nav class="system-sections" aria-label="系统设置分类">
+    <nav class="page-tabs" aria-label="系统设置分类">
       <button :aria-pressed="currentTab === 'storage'" :class="{ active: currentTab === 'storage' }" @click="select('storage')">目录设置</button>
       <button :aria-pressed="currentTab === 'environment'" :class="{ active: currentTab === 'environment' }" @click="select('environment')">环境检测</button>
       <button :aria-pressed="currentTab === 'workflows'" :class="{ active: currentTab === 'workflows' }" @click="select('workflows')">流程编排</button>
@@ -29,8 +29,3 @@ function select(tab) {
     <MemberStorageSettings v-else />
   </section>
 </template>
-
-<style scoped>
-.system-sections { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
-.system-sections .active { color: var(--accent); background: var(--selected); border-color: var(--field-border); }
-</style>

@@ -26,8 +26,12 @@
   --radius-dialog: 16px;
   --radius-composer: 16px;
   --control-height: 40px;
-  --content-width: 800px;
-  --conversation-width: 1440px;
+  --page-width: 1160px;
+  --page-gutter: 32px;
+  --page-padding-top: 28px;
+  --page-padding-bottom: 64px;
+  --content-width: calc(var(--page-width) - 2 * var(--page-gutter));
+  --conversation-width: var(--content-width);
   --project-pane-width: 240px;
   --font-size-message: 14px;
   --font-size-tool: 13px;
@@ -35,4 +39,20 @@
   --font-size-session-meta: 12px;
   --font-ui: "Segoe UI", "Microsoft YaHei", sans-serif;
   --font-code: "Cascadia Code", Consolas, monospace;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --page-gutter: 20px;
+    --page-padding-top: 24px;
+    --page-padding-bottom: 48px;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --page-gutter: 16px;
+    --page-padding-top: 20px;
+    --page-padding-bottom: 40px;
+  }
 }
