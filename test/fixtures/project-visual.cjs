@@ -6,7 +6,8 @@ function projectVisual(workspaceId) {
   const project = { id: '00000000-0000-4000-8000-000000000001', name: '客户管理系统', description: '统一管理客户搜索、业务交付和测试环境资料，让产品与研发在同一个项目中协作。', remoteUrl: 'https://git.example.test/team/customer.git', repositoryEditable: false, status: 'active', ownerUserId: 'visual-admin', revision: 1, settings: { initCommands: ['npm ci', 'npm run build'], prompts: {}, tapd: { workspaceId: '123456', hasCookie: true } } };
   const members = ['演示管理员', '张明', '李欣'].map((displayName, i) => ({ userId: i ? `member-${i}` : 'visual-admin', username: i ? `member-${i}` : 'visual-admin', displayName, departmentName: department.name, status: 'active', userStatus: 'active', permissions, departmentPermissions: permissions, grantablePermissions: permissions, administratorAccess: !i, effectivePermissions: permissions, revision: 1 }));
   const people = members.map(m => ({ id: m.userId, username: m.username, displayName: m.displayName }));
-  const release = { id: 'release-1', name: 'v0.2', description: '客户体验优化', revision: 1, status: 'active' };
+  const release = { id: 'release-1', name: 'v0.2', description: '优化客户搜索与筛选体验。\n补充空结果提示，完善移动端交互与验收流程。', revision: 1, status: 'active', createdAt: '2026-10-08T08:00:00Z', updatedAt: '2026-10-12T08:00:00Z' };
+  const releases = [release, { ...release, id: 'release-2', name: 'v0.1', description: '项目首个迭代版本。', updatedAt: '2026-10-08T08:00:00Z' }, { ...release, id: 'release-archived', name: 'v0.0.9', status: 'archived', description: '早期验证版本，保留历史记录。' }];
   const issues = [
     { id: 'search', number: 1, type: 'requirement', title: '优化客户搜索体验', status: 'planned', description: '支持按姓名和手机号搜索客户，输入后实时筛选。无匹配结果时显示清晰提示，并保留现有分页行为。', acceptanceCriteria: '支持组合筛选；清空关键词后恢复完整列表；手机上输入与清除按钮均可直接操作。' },
     { id: 'export', number: 2, type: 'bug', title: '修复导出结果与筛选条件不一致', status: 'pending', description: '筛选客户后导出的结果仍包含其他客户。', reproductionSteps: '输入客户姓名，点击导出并检查文件内容。', expectedResult: '仅导出筛选后的客户。', actualResult: '导出了全部客户。' },
@@ -22,7 +23,7 @@ function projectVisual(workspaceId) {
     if (endpoint === '/api/projects') return { projects: [project, { ...project, id: 'operations', name: '运营后台', description: '运营指标、客户跟进与业务配置。' }], canCreateProjects: true };
     if (endpoint === '/api/admin/departments') return { departments: [department] };
     if (endpoint === '/api/projects/00000000-0000-4000-8000-000000000001') return { project, permissions, space: { status: 'ready', workspaceId, gitAccountId: 'fixture-account' } };
-    if (endpoint.endsWith('/releases')) return { items: [release] };
+    if (endpoint.endsWith('/releases')) return { items: releases.filter(item => url.searchParams.get('includeArchived') === 'true' || item.status !== 'archived') };
     if (/^\/api\/system\/workflows\/(requirement|bug)$/.test(endpoint) || /\/issue-workflows\/(requirement|bug)$/.test(endpoint)) { const workflowDefinition = require('../../src/domain/issue-workflows.cjs').defaultWorkflow(endpoint.split('/').at(-1)); return { workflow: { id: 'workflow-1', publishedVersion: 1, versions: [{ version: 1, definition: workflowDefinition }], ...(endpoint.startsWith('/api/system/') ? { revision: 1, draft: workflowDefinition } : {}) } }; }
     if (endpoint.endsWith('/branches')) return { branches: [{ name: 'main', commit: 'a'.repeat(40) }], fetchedAt: '2026-10-12T08:00:00Z' };
     if (endpoint.endsWith('/members')) return { members, candidates: members.map(m => ({ id: m.userId, ...m })) };

@@ -52,7 +52,7 @@ async function verifyProjectReleases({ page, origin, projectId, output }) {
     const created = await createdResponse;
     assert.equal(created.status(), 201);
     const release = await created.json();
-    await page.locator(".project-issue-list strong").filter({ hasText: "v0.5.9" }).waitFor();
+    await page.getByRole("heading", { name: "v0.5.9", exact: true }).waitFor();
     await page.getByRole("button", { name: "编辑版本", exact: true }).click();
     await name.fill("v1.0-rc");
     await save.click();
@@ -73,8 +73,75 @@ async function verifyProjectReleases({ page, origin, projectId, output }) {
     const edited = await editedResponse;
     assert.equal(edited.status(), 200);
     assert.equal((await edited.json()).name, "v1.0");
-    await page.locator(".project-issue-list strong").filter({ hasText: "v1.0" }).waitFor();
+    await page.getByRole("heading", { name: "v1.0", exact: true }).waitFor();
+    await page.getByRole("button", { name: "新建版本", exact: true }).click();
+    await name.fill("v1.1");
+    await page.getByLabel("版本说明", { exact: true }).fill("第二个版本\n保留分行说明。");
+    await save.click();
+    await page.getByRole("heading", { name: "v1.1", exact: true }).waitFor();
+    const versions = page.getByRole("navigation", { name: "版本列表" });
+    await versions.getByRole("button", { name: /v1.0/ }).click();
+    await page.getByRole("heading", { name: "v1.0", exact: true }).waitFor();
+    await page.getByRole("button", { name: "刷新版本", exact: true }).click();
+    await page.getByRole("heading", { name: "v1.0", exact: true }).waitFor();
+    await page.getByText("暂无版本说明", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "编辑版本", exact: true }).click();
+    await name.fill("v1.2");
+    assert.equal(await versions.getByRole("button", { name: /v1.1/ }).isDisabled(), true, "version switching cannot discard an edit draft");
+    await name.press("Escape");
+    assert.equal(await page.getByRole("button", { name: "编辑版本", exact: true }).evaluate(button => button === document.activeElement), true);
+    const beforeConfirmation = writes.length;
+    await page.getByRole("button", { name: "归档版本", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "归档版本", exact: true });
+    await dialog.waitFor();
+    assert.equal(writes.length, beforeConfirmation, "opening confirmation cannot archive a release");
+    await page.keyboard.press("Escape");
+    assert.equal(await dialog.isVisible(), false);
+    assert.equal(await page.getByRole("button", { name: "归档版本", exact: true }).evaluate(button => button === document.activeElement), true);
+    await page.getByRole("button", { name: "归档版本", exact: true }).click();
+    await dialog.getByRole("button", { name: "确认归档版本", exact: true }).click();
+    await versions.getByRole("button", { name: /v1.0/ }).waitFor({ state: "detached" });
+    await page.getByRole("heading", { name: "v1.1", exact: true }).waitFor();
+    await page.getByLabel("包含已归档版本").check();
+    await versions.getByRole("button", { name: /v1.0/ }).click();
+    await page.getByText("归档内容只读", { exact: true }).waitFor();
+    assert.equal(await page.getByRole("button", { name: "编辑版本", exact: true }).count(), 0);
+    await page.getByRole("button", { name: "恢复版本", exact: true }).click();
+    await page.getByRole("button", { name: "编辑版本", exact: true }).waitFor();
+    await page.getByLabel("包含已归档版本").uncheck();
+    await page.getByRole("heading", { name: "v1.0", exact: true }).waitFor();
   } finally { page.off("request", record); }
 }
 
-module.exports = { verifyReleaseNameForm, verifyProjectReleases };
+async function verifyReleaseViewStates({ page, origin, projectId, capture }) {
+  const url = `${origin}/api/projects/${projectId}/releases?*`;
+  let respond, status = 200, response = { items: [] };
+  let pending = new Promise(resolve => { respond = resolve; });
+  const handler = async route => { await pending; await route.fulfill({ status, json: response }); };
+  await page.route(url, handler);
+  try {
+    await page.goto(`${origin}/projects/${projectId}?tab=releases`);
+    await page.getByText('正在读取版本…', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: '新建版本', exact: true }).isDisabled(), true);
+    await capture('loading');
+    respond(); pending = null;
+    await page.getByRole('heading', { name: '暂无版本', exact: true }).waitFor();
+    await capture('empty');
+    status = 500; response = { error: '模拟版本读取失败' };
+    await page.reload();
+    await page.getByText('版本加载失败，请刷新重试。', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('heading', { name: '暂无版本', exact: true }).count(), 0, 'a failed load is not an empty release list');
+    await capture('error');
+    const longName = `v${'1'.repeat(97)}.0`;
+    status = 200; response = { items: [{ id: 'long-release', name: longName, revision: 1, status: 'active', updatedAt: null, description: '长文本版本说明，需要在手机和桌面完整阅读。\n'.repeat(14) + '<img src=x onerror=alert(1)>保持纯文本展示' }] };
+    await page.getByRole('button', { name: '刷新版本', exact: true }).click();
+    await page.getByRole('heading', { name: longName, exact: true }).waitFor();
+    assert.equal(await page.locator('.release-description img').count(), 0);
+    await capture('long-content');
+  } finally {
+    respond();
+    await page.unroute(url, handler);
+  }
+}
+
+module.exports = { verifyReleaseNameForm, verifyProjectReleases, verifyReleaseViewStates };

@@ -13,6 +13,7 @@ const { temporary, png } = require("../support/helpers.cjs");
 const { promptTemplateCatalog, MAX_PROMPT_TEMPLATE_LENGTH } = require("../../src/domain/prompt-templates.cjs");
 const { messageMarkdown } = require("../fixtures/message-markdown.cjs");
 const { projectVisual } = require("../fixtures/project-visual.cjs");
+const { verifyReleaseViewStates } = require("./project-releases.test.cjs");
 const { structuredPatch } = require("diff");
 
 async function main() {
@@ -561,7 +562,26 @@ async function main() {
         await capture('15-project-development-' + width);
         await tabs.getByRole('button', { name: '版本', exact: true }).click();
         await page.getByRole('heading', { name: '发布版本', exact: true }).waitFor();
+        await page.getByRole('heading', { name: 'v0.2', exact: true }).waitFor();
         await capture('15-project-releases-' + width);
+        await page.getByRole('navigation', { name: '版本列表' }).getByRole('button', { name: /v0.1/ }).click();
+        await page.getByRole('heading', { name: 'v0.1', exact: true }).waitFor();
+        await page.getByRole('button', { name: '刷新版本', exact: true }).click();
+        await page.getByRole('heading', { name: 'v0.1', exact: true }).waitFor();
+        await page.getByLabel('包含已归档版本').check();
+        await page.getByRole('navigation', { name: '版本列表' }).getByRole('button', { name: /v0.0.9/ }).click();
+        await page.getByText('归档内容只读', { exact: true }).waitFor();
+        assert.equal(await page.getByRole('button', { name: '编辑版本', exact: true }).count(), 0);
+        await capture('15-project-releases-archived-' + width);
+        await page.getByLabel('包含已归档版本').uncheck();
+        await page.getByRole('heading', { name: 'v0.2', exact: true }).waitFor();
+        await page.getByRole('button', { name: '归档版本', exact: true }).click();
+        const archiveDialog = page.getByRole('dialog', { name: '归档版本', exact: true });
+        await archiveDialog.waitFor();
+        await capture('15-project-releases-confirm-' + width);
+        await page.keyboard.press('Escape');
+        assert.equal(await archiveDialog.isVisible(), false);
+        if (width === 1440 || width === 320) await verifyReleaseViewStates({ page, origin, projectId: projects.projectId, capture: state => capture(`15-project-releases-${state}-${width}`) });
         await page.goto(origin + '/system?tab=workflows');
         await page.getByRole('heading', { name: '流程编排', exact: true }).waitFor();
         await page.getByRole('group', { name: '事项流程图', exact: true }).waitFor();

@@ -4,19 +4,24 @@ const path = require("node:path");
 
 async function verifyProjectLifecycle({ page, origin, project, database, output, projects, admin }) {
   const tab = name => page.getByRole("navigation", { name: "项目功能" }).getByRole("button", { name, exact: true }).click();
-  const releaseName = page.getByText("v0.2", { exact: true });
-  const releaseRow = page.getByRole("listitem").filter({ has: releaseName });
+  const releaseName = page.getByRole("navigation", { name: "版本列表" }).getByRole("button", { name: /v0.2/ });
+  async function archiveVersion() {
+    await releaseName.click();
+    await page.getByRole("button", { name: "归档版本", exact: true }).click();
+    await page.getByRole("dialog", { name: "归档版本", exact: true }).getByRole("button", { name: "确认归档版本", exact: true }).click();
+  }
   await tab("版本");
   await page.getByRole("button", { name: "新建版本", exact: true }).click();
   await page.getByLabel("版本名称", { exact: true }).fill("v0.2");
   await page.getByLabel("版本说明", { exact: true }).fill("隔离数据库中的发布计划");
   await page.getByRole("button", { name: "保存版本", exact: true }).click();
   await releaseName.waitFor();
-  await releaseRow.getByRole("button", { name: "确认归档版本", exact: true }).click();
+  await archiveVersion();
   await releaseName.waitFor({ state: "hidden" });
   await page.getByRole("checkbox", { name: "包含已归档版本", exact: true }).check();
-  await releaseRow.getByRole("button", { name: "恢复版本", exact: true }).click();
-  await releaseRow.getByRole("button", { name: "编辑版本", exact: true }).waitFor();
+  await releaseName.click();
+  await page.getByRole("button", { name: "恢复版本", exact: true }).click();
+  await page.getByRole("button", { name: "编辑版本", exact: true }).waitFor();
   assert.equal(await page.getByRole("navigation", { name: "项目功能" }).getByRole("button", { name: "流程", exact: true }).count(), 0);
   await page.getByLabel("账号导航").getByRole("button", { name: "系统设置", exact: true }).click();
   await page.getByRole("navigation", { name: "系统设置分类" }).getByRole("button", { name: "流程编排", exact: true }).click();
@@ -79,7 +84,7 @@ async function verifyProjectLifecycle({ page, origin, project, database, output,
   await page.getByRole("button", { name: "更新状态", exact: true }).click();
   assert.equal((await transition).status(), 200);
   await tab("版本");
-  await releaseRow.getByRole("button", { name: "确认归档版本", exact: true }).click();
+  await archiveVersion();
   await releaseName.waitFor({ state: "hidden" });
   await page.goto(`${origin}/projects/${project.id}?tab=issues&issue=${issue.id}`);
   await page.getByText("版本已归档，内容只读。", { exact: true }).waitFor();

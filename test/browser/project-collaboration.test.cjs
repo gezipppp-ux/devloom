@@ -440,6 +440,7 @@ async function main() {
     await page.unroute(tasksUrl);
     await require("./project-lifecycle.test.cjs").verifyProjectLifecycle({ page, origin, project, database, output, projects, admin });
     await page.getByRole("button", { name: "退出登录", exact: true }).click();
+    await page.getByLabel("账号", { exact: true }).waitFor();
     const codeRequestStart = requests.length;
     await login("codeonly");
     assert.equal(await page.getByRole("navigation", { name: "项目功能" }).getByRole("button", { name: "需求", exact: true }).count(), 0);
