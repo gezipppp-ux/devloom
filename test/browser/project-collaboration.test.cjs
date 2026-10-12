@@ -189,7 +189,7 @@ async function main() {
       await page.getByText("可重复验证的标准", { exact: true }).waitFor();
       assert.equal(await database.client.developmentTask.count(), 0, "editing and assignment cannot start Codex");
     }
-    await page.getByRole("button", { name: "返回事项列表", exact: true }).click();
+    await tab("Bug");
     await page.getByRole("button", { name: "新建Bug", exact: true }).click();
     await page.getByLabel("标题", { exact: true }).fill("取消的本地草稿");
     const beforeCancel = await database.client.projectFile.count();
@@ -431,7 +431,7 @@ async function main() {
     await page.getByRole("button", { name: "保存待开发任务", exact: true }).waitFor();
     await page.getByRole("button", { name: "保存待开发任务", exact: true }).click();
     await started;
-    await page.getByRole("button", { name: "返回事项列表", exact: true }).evaluate(button => button.click());
+    await page.getByRole("navigation", { name: "项目功能" }).getByRole("button", { name: new URL(sourceIssueUrl).searchParams.get("tab") === "bugs" ? "Bug" : "需求", exact: true }).evaluate(button => button.click());
     await page.getByRole("dialog", { name: "认领到开发任务" }).waitFor({ state: "detached" });
     const listAfterStart = page.url();
     const lateResponse = page.waitForResponse(response => response.url() === tasksUrl && response.request().method() === "POST");

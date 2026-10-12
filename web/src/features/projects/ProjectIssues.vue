@@ -12,8 +12,8 @@ import IssueFields from "./IssueFields.vue";
 import { emptyIssue, issueFieldsInput, removeAttachmentLinks } from "./issue-fields.js";
 import { useProjectAttachments } from "./use-project-attachments.js";
 import FormSection from "../../shared/components/FormSection.vue";
-const props = defineProps({ projectId: { type: String, required: true }, type: { type: String, required: true }, permissions: { type: Array, required: true }, spaceReady: Boolean });
-const emit = defineEmits(["open-task", "prepare-development"]);
+const props = defineProps({ projectId: { type: String, required: true }, type: { type: String, required: true }, permissions: { type: Array, required: true } });
+const emit = defineEmits(["open-task"]);
 const route = useRoute(), router = useRouter();
 const scalar = value => typeof value === "string" ? value : "";
 const selected = computed(() => scalar(route.query.issue));
@@ -60,10 +60,6 @@ function start(issue, assign = false) {
   if (!issueIds.length || !can(assign ? "issue.assign" : "session.start")) return;
   assigning.value = assign; startingIssues.value = issueIds;
 }
-async function prepare(issue) {
-  if (!issue?.id) await router.replace({ query: { ...route.query, selection: checked.value.length ? checked.value : undefined } });
-  emit("prepare-development", issue?.id ? issue : null);
-}
 watch(() => [route.query.q, route.query.status, route.query.offset, route.query.releaseId, route.query.includeArchived], () => {
   query.value = scalar(route.query.q); status.value = scalar(route.query.status); offset.value = pageOffset(); releaseId.value = scalar(route.query.releaseId); includeArchived.value = route.query.includeArchived === "true"; void reload();
 });
@@ -73,7 +69,7 @@ watch(() => [route.query.q, route.query.status, route.query.offset, route.query.
   <FeedbackMessage :message="releases.error.value" type="error" /><button v-if="releases.error.value" :disabled="releases.loading.value" @click="releases.reload">重新读取版本</button>
   <FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="notice" type="success" />
   <p v-if="selected && saving" role="status">正在保存任务规划…</p>
-  <IssueDetail v-if="selected" :key="selected" :project-id="projectId" :issue-id="selected" :permissions="permissions" :space-ready="spaceReady" :development-busy="saving" @back="openIssue(''); reload()" @changed="reload" @start-development="start" @assign-development="issue => start(issue, true)" @prepare-development="prepare" @open-task="task => emit('open-task', task)" />
+  <IssueDetail v-if="selected" :key="selected" :project-id="projectId" :issue-id="selected" :permissions="permissions" :development-busy="saving" @changed="reload" @start-development="start" @assign-development="issue => start(issue, true)" />
   <section v-else><header class="project-heading"><h2>{{ type === 'bug' ? 'Bug' : '需求' }}</h2><div v-if="can('issue.create')" class="actions"><button :disabled="saving" @click="toggleImport">从 TAPD 导入</button><button class="primary" :disabled="saving" @click="toggleCreate">新建{{ type === 'bug' ? 'Bug' : '需求' }}</button></div></header>
     <FormSection v-if="creating" :title="type === 'bug' ? '新建 Bug' : '新建需求'"><form class="project-form" @submit.prevent="create">
       <IssueFields :model-value="form" :type="type" can-edit :can-assign="can('issue.assign')" :disabled="saving" :context-key="`${projectId}/${type}/new/${draftVersion}`" :members="activeMembers" :releases="releases.data.value?.items || []" :images="images" :attachments="pending" :attachment-error="attachmentError" :attachment-busy="attachmentBusy" @update:model-value="Object.assign(form, $event)" @files="attach" @remove="removeFile" />

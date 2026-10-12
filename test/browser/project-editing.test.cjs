@@ -9,7 +9,7 @@ async function main() {
   await require("./operation-feedback.test.cjs").operationFeedbackChecks();
   const { createServer } = await import("vite"), { default: vue } = await import("@vitejs/plugin-vue");
   const project = { id: "p", name: "原项目", description: "原说明", ownerUserId: "u", revision: 1, settings: {} };
-  const issue = { id: "i", number: 1, type: "requirement", title: "原事项", description: "原描述", revision: 1, priority: "normal", status: "ready", participantIds: [], assigneeId: null, acceptanceCriteria: "", availableTransitions: [], people: [] };
+  const issue = { id: "i", number: 1, type: "requirement", title: "原事项", description: "原描述", revision: 1, priority: "normal", status: "ready", statusName: "规划中", participantIds: [], assigneeId: null, acceptanceCriteria: "", availableTransitions: [{ id: "develop", name: "开发中", permission: "issue.edit", requiresReason: true }], people: [] };
   const asset = { id: "a", title: "测试资产", type: "note", environment: "test", category: "", tags: ["参考"], content: "内容", ownerId: "u", issueIds: ["i"], expiresAt: "2027-01-01T00:00:00Z", revision: 32, people: [{ id: "u", username: "product-member", displayName: "产品成员" }] };
   const permissions = ["asset.view", "asset.edit", "issue.view", "issue.edit", "collaboration.view", "comment.create", "deliverable.create", "session.start"];
   const source = `import {createApp,h,ref} from 'vue'; import {createRouter,createWebHistory} from 'vue-router';
@@ -37,6 +37,7 @@ createApp({render:()=>h('div',[h(OperationMessages),kind==='settings'?h('button'
         if (pathname.endsWith("/comments")) { pendingComment = true; await new Promise(resolve => { releaseComment = resolve; }); response = {}; }
         else if (pathname === "/api/projects/p") { if (input.revision === 1) { status = 409; response = { error: "项目已修改" }; } else response = { project: { ...project, ...input, revision: 3 } }; }
         else if (pathname.endsWith("/issues/i")) { if (input.revision === 1) { status = 409; response = { error: "事项已修改" }; } else response = { ...issue, ...input, revision: 3 }; }
+        else if (pathname.endsWith("/issues/i/transition")) response = { ...issue, status: "developing", statusName: "开发中", availableTransitions: [], revision: 3 };
       } else if (pathname.endsWith('/comments')) response = { items: [{ id: 'loaded', body: '已有评论缓存' }], people: [] };
       else if (pathname.endsWith("/members")) response = { members: [{ userId: "u", username: "product-member", displayName: "产品成员", status: "active", userStatus: "active" }] };
       else if (pathname === "/api/projects/p") response = { project: { ...project, name: "他人项目名称", description: "他人说明", revision: 2 } };
@@ -75,6 +76,24 @@ createApp({render:()=>h('div',[h(OperationMessages),kind==='settings'?h('button'
     await open("settings"); await page.getByRole("button", { name: "模拟父级刷新" }).click(); assert.equal(await page.getByLabel("项目名称", { exact: true }).inputValue(), "父级刷新名称"); await page.getByLabel("项目名称", { exact: true }).fill("待保留草稿"); await page.getByRole("button", { name: "模拟父级刷新" }).click(); await page.getByText(/服务器上的项目已更新/).waitFor(); assert.equal(await page.getByLabel("项目名称", { exact: true }).inputValue(), "待保留草稿");
     await open("settings"); await page.getByLabel("项目名称", { exact: true }).fill("我的项目名称"); await page.getByRole("button", { name: "保存项目设置" }).click(); await page.locator('.operation-message[data-type="error"]').filter({ hasText: "项目已修改" }).last().waitFor(); await page.getByRole("button", { name: "保留草稿，加载最新内容" }).click(); await page.getByLabel("项目名称冲突处理").selectOption("draft"); await page.getByRole("button", { name: "确认合并并继续编辑" }).click(); assert.equal(await page.getByLabel("说明", { exact: true }).inputValue(), "他人说明"); await page.getByRole("button", { name: "保存项目设置" }).click(); await page.locator('.operation-message[data-type="success"]').filter({ hasText: "已保存。" }).last().waitFor(); assert.equal(writes.at(-1).input.revision, 2); assert.equal(writes.at(-1).input.name, "我的项目名称");
     const count = writes.length; await page.getByLabel("清除已保存 Cookie").check(); await page.getByRole("button", { name: "保存项目设置" }).click(); await page.locator('.operation-message[data-type="error"]').filter({ hasText: /请填写 TAPD 项目 ID 后再修改/ }).last().waitFor(); assert.equal(writes.length, count);
+    await open("issue");
+    await page.getByRole("heading", { name: "他人事项标题", exact: true }).waitFor();
+    assert.equal(await page.getByRole("button", { name: "返回事项列表", exact: true }).count(), 0);
+    assert.equal(await page.getByRole("button", { name: "刷新详情", exact: true }).count(), 0);
+    assert.equal(await page.getByRole("heading", { name: "开发任务", exact: true }).count(), 0);
+    await page.getByLabel("评论内容").fill("切换编辑时保留讨论草稿");
+    await page.getByRole("button", { name: "编辑事项", exact: true }).click();
+    await page.getByRole("button", { name: "取消编辑", exact: true }).click();
+    assert.equal(await page.getByLabel("评论内容").inputValue(), "切换编辑时保留讨论草稿");
+    assert.equal(await page.getByLabel("原因", { exact: true }).count(), 0);
+    await page.getByLabel("目标状态", { exact: true }).selectOption("develop");
+    assert.equal(await page.getByLabel("原因", { exact: true }).getAttribute("required"), "");
+    await page.getByLabel("原因", { exact: true }).fill("开始实现已确认的需求");
+    await page.getByRole("button", { name: "更新状态", exact: true }).click();
+    await page.getByText("当前没有可用的状态操作。", { exact: true }).waitFor();
+    assert.deepEqual(writes.at(-1).input, { transitionId: "develop", reason: "开始实现已确认的需求", revision: 2 });
+    assert.equal(writes.some(write => write.pathname.endsWith("/tasks")), false, "changing status never creates a development task");
+    assert.equal(await page.getByLabel("评论内容").inputValue(), "切换编辑时保留讨论草稿");
     // Load revision one for the edit baseline, then the latest version for conflict recovery.
     let issueReads = 0;
     await page.route("**/api/projects/p/issues/i", async route => { if (route.request().method() === "POST") return route.fallback(); await route.fulfill({ json: issueReads++ ? { ...issue, title: "他人事项标题", description: "他人描述", revision: 2 } : issue }); });

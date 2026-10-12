@@ -21,7 +21,7 @@ async function fixture(t) {
 
 test("release creation and editing reject invalid names without changing persisted data", async t => {
   const { database, actor, projectId, lifecycle } = await fixture(t);
-  for (const name of ["v0.5.9", "v0.1", "v1.0"]) {
+  for (const [index, name] of ["v0.5.9", "v0.1", "v1.0"].entries()) {
     let release = await lifecycle.saveRelease(projectId, null, actor, { name });
     assert.equal(release.name, name);
     for (const invalid of [undefined, null, 1, "", "随意命名", "1.0", "V1.0", "v1", "v1.0.0.0", "v01.0", "v1.0-beta", "v1.0\n"]) {
@@ -32,8 +32,9 @@ test("release creation and editing reject invalid names without changing persist
     assert.equal(unchanged.name, name);
     assert.equal(unchanged.description, "");
     assert.equal(unchanged.revision, release.revision);
-    release = await lifecycle.saveRelease(projectId, release.id, actor, { name: "v2.0", revision: release.revision });
-    assert.equal(release.name, "v2.0");
+    const updatedName = `v2.${index}`;
+    release = await lifecycle.saveRelease(projectId, release.id, actor, { name: updatedName, revision: release.revision });
+    assert.equal(release.name, updatedName);
     assert.equal(release.revision, unchanged.revision + 1);
   }
   assert.equal(await database.client.projectRelease.count({ where: { projectId } }), 3);

@@ -502,6 +502,20 @@ async function main() {
       await input.fill("");
     }
     async function captureProjects() {
+      async function checkIssueCards(width) {
+        const content = await page.getByRole('region', { name: /^(需求内容|Bug 信息)$/ }).boundingBox();
+        const status = await page.getByRole('region', { name: '状态流转', exact: true }).boundingBox();
+        const discussion = await page.getByRole('region', { name: '沟通与记录', exact: true }).boundingBox();
+        const files = await page.getByRole('region', { name: '附件', exact: true }).boundingBox();
+        if (width > 768) {
+          assert.ok(status.x >= content.x + content.width + 20, `status has a separate sidebar at ${width}`);
+          assert.ok(Math.abs(discussion.x - content.x) < 1 && discussion.y >= content.y + content.height + 20, 'discussion is a separate card below content');
+          assert.ok(Math.abs(files.x - status.x) < 1, 'attachments align with the sidebar');
+        } else {
+          assert.ok(content.y >= status.y + status.height + 16, `mobile status and content do not overlap at ${width}`);
+          assert.ok(discussion.y >= files.y + files.height + 16, 'mobile attachments precede discussion');
+        }
+      }
       for (const width of [1440, 1100, 768, 390, 320]) {
         scenario = "session";
         await page.setViewportSize({ width, height: 1000 });
@@ -525,12 +539,14 @@ async function main() {
         await page.getByRole('button', { name: '取消', exact: true }).click();
         await page.getByRole('button', { name: /#1 优化客户搜索体验/ }).click();
         await page.getByRole('button', { name: '编辑事项', exact: true }).waitFor();
+        await checkIssueCards(width);
         await capture('12-project-issue-detail-' + width);
         await page.getByRole('button', { name: '编辑事项', exact: true }).click();
         await capture('12-project-issue-edit-' + width);
         await tabs.getByRole('button', { name: 'Bug', exact: true }).click();
         await page.getByRole('button', { name: /#2 修复导出结果/ }).click();
         await page.getByRole('heading', { name: '复现步骤', exact: true }).waitFor();
+        await checkIssueCards(width);
         await capture('13-project-bug-' + width);
         await tabs.getByRole('button', { name: '资产', exact: true }).click();
         await page.getByRole('button', { name: /测试环境演示账号/ }).click();

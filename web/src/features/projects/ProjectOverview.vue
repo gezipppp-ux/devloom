@@ -88,7 +88,7 @@ function returnToIssue() {
           <details v-if="can('project.archive')"><summary>项目归档管理</summary><p>归档保留历史并禁止新开发任务。现有工作目录会保留。</p><button :disabled="saving" @click="archive">{{ archived ? '恢复项目' : '确认归档项目' }}</button></details>
         </div>
       </template>
-      <ProjectIssues v-else-if="currentTab === 'issues' || currentTab === 'bugs'" :key="currentTab" :project-id="projectId" :type="currentTab === 'bugs' ? 'bug' : 'requirement'" :permissions="contentPermissions" :space-ready="data.space?.status === 'ready'" @open-task="task => task.runKey ? emit('open-workspace', task.workspaceId, task.runKey) : router.push({ query: { tab: 'tasks', task: task.id } })" @prepare-development="prepareDevelopment" />
+      <ProjectIssues v-else-if="currentTab === 'issues' || currentTab === 'bugs'" :key="currentTab" :project-id="projectId" :type="currentTab === 'bugs' ? 'bug' : 'requirement'" :permissions="contentPermissions" @open-task="task => task.runKey ? emit('open-workspace', task.workspaceId, task.runKey) : router.push({ query: { tab: 'tasks', task: task.id } })" />
       <ProjectTasks v-else-if="currentTab === 'tasks'" :project-id="projectId" :space-ready="data.space?.status === 'ready'" :can-assign="contentPermissions.includes('issue.assign')" :can-continue="contentPermissions.includes('session.continue')" @prepare-development="prepareDevelopment" @open-workspace="(id, key) => emit('open-workspace', id, key)" />
       <ProjectReleases v-else-if="currentTab === 'releases'" :project-id="projectId" :can-manage="contentPermissions.includes('release.manage')" />
       <ProjectAssets v-else-if="currentTab === 'assets'" :project-id="projectId" :permissions="contentPermissions" />

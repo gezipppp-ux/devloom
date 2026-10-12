@@ -358,7 +358,7 @@ test("package Node entrypoints still resolve after module moves", () => {
     fs.readFileSync(path.join(root, "package.json"), "utf8"),
   ).scripts;
   const entries = Object.entries(scripts).flatMap(([name, command]) =>
-    [...command.matchAll(/\bnode\s+(src\/[\w/-]+\.cjs)\b/g)].map((match) => ({
+    [...command.matchAll(/\bnode\s+(?:--env-file-if-exists=\.env\s+)?(src\/[\w/-]+\.cjs)\b/g)].map((match) => ({
       name,
       file: match[1],
     })),
