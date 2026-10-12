@@ -70,11 +70,13 @@ async function verifyProjectLifecycle({ page, origin, project, database, output,
   const taskId = new URL(page.url()).searchParams.get("task");
   const task = await database.client.developmentTask.findUnique({ where: { id: taskId } });
   assert.equal(task.status, "planned"); assert.equal(task.runKey, null);
+  await page.getByRole("button", { name: "编辑任务信息", exact: true }).click();
   await page.getByLabel("任务标题", { exact: true }).fill("调整后的开发计划");
-  await page.getByRole("button", { name: "保存任务规划", exact: true }).click();
+  await page.getByRole("button", { name: "保存任务信息", exact: true }).click();
   await page.getByRole("heading", { name: "调整后的开发计划", exact: true }).waitFor();
   await page.getByRole("button", { name: "取消任务并释放认领", exact: true }).click();
-  await page.getByText(/^已取消 ·/).waitFor();
+  await page.getByRole("dialog", { name: "取消任务并释放认领", exact: true }).getByRole("button", { name: "确认取消任务", exact: true }).click();
+  await page.getByText("任务：已取消", { exact: true }).waitFor();
   assert.equal((await database.client.developmentTask.findUnique({ where: { id: taskId } })).status, "cancelled");
   const issue = await database.client.projectIssue.findFirst({ where: { projectId: project.id, title: "版本规划事项" } });
   await page.goto(`${origin}/projects/${project.id}?tab=issues&issue=${issue.id}`);

@@ -64,7 +64,7 @@ function returnToIssue() {
         <div><h1>{{ data.project.name }}</h1><p v-if="archived" class="warning">项目已归档，内容只读。</p></div>
         <button :disabled="loading" @click="reload">刷新项目</button>
       </header>
-      <nav class="page-tabs" aria-label="项目功能"><button v-for="item in tabs" :key="item.id" :class="{ active: currentTab === item.id }" :aria-current="currentTab === item.id ? 'page' : undefined" @click="emit('tab', item.id)">{{ item.label }}</button></nav>
+      <nav class="page-tabs project-navigation" aria-label="项目功能"><button v-for="item in tabs" :key="item.id" :class="{ active: currentTab === item.id }" :aria-current="currentTab === item.id ? 'page' : undefined" @click="emit('tab', item.id)">{{ item.label }}</button></nav>
       <p v-if="currentTab !== tab" class="warning" role="status">当前项目状态或你的分工未开放所选功能，可在下方查看当前权限。</p>
       <template v-if="currentTab === 'overview'">
         <section v-if="managementOnly && !archived" class="project-setup-callout" aria-label="完成项目配置">
@@ -89,7 +89,7 @@ function returnToIssue() {
         </div>
       </template>
       <ProjectIssues v-else-if="currentTab === 'issues' || currentTab === 'bugs'" :key="currentTab" :project-id="projectId" :type="currentTab === 'bugs' ? 'bug' : 'requirement'" :permissions="contentPermissions" @open-task="task => task.runKey ? emit('open-workspace', task.workspaceId, task.runKey) : router.push({ query: { tab: 'tasks', task: task.id } })" />
-      <ProjectTasks v-else-if="currentTab === 'tasks'" :project-id="projectId" :space-ready="data.space?.status === 'ready'" :can-assign="contentPermissions.includes('issue.assign')" :can-continue="contentPermissions.includes('session.continue')" @prepare-development="prepareDevelopment" @open-workspace="(id, key) => emit('open-workspace', id, key)" />
+      <ProjectTasks v-else-if="currentTab === 'tasks'" :project-id="projectId" :space-ready="data.space?.status === 'ready'" :can-assign="contentPermissions.includes('issue.assign')" :can-continue="contentPermissions.includes('session.continue')" :read-only-reason="archived ? '项目已归档，开发任务只读。' : ''" @prepare-development="prepareDevelopment" @open-workspace="(id, key) => emit('open-workspace', id, key)" />
       <ProjectReleases v-else-if="currentTab === 'releases'" :project-id="projectId" :can-manage="contentPermissions.includes('release.manage')" />
       <ProjectAssets v-else-if="currentTab === 'assets'" :project-id="projectId" :permissions="contentPermissions" />
       <ProjectMembers v-else-if="currentTab === 'members'" :project-id="projectId" :can-manage="can('project.members.manage') && !archived" @saved="reload" />

@@ -53,18 +53,20 @@ async function verifyProjectTaskMerging({ page, origin, project, database, conte
   await taskLink.click();
   assert.equal(new URL(page.url()).searchParams.get("task"), id);
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.getByLabel("本次开发分支", { exact: true }).selectOption("main");
-  await page.getByRole("button", { name: "确认并开始开发", exact: true }).click();
-  await page.getByRole("button", { name: "打开我的会话", exact: true }).click();
+  await page.getByLabel("起始分支", { exact: true }).selectOption("main");
+  await page.getByRole("button", { name: "启动 Codex 开发", exact: true }).click();
+  await page.getByRole("button", { name: "进入 Codex 会话", exact: true }).click();
   await page.getByRole("button", { name: "■ 停止", exact: true }).waitFor();
   assert.equal(starts(), before + 1);
   await page.getByRole("button", { name: "■ 停止", exact: true }).click();
   await page.getByRole("button", { name: "■ 停止", exact: true }).waitFor({ state: "hidden" });
   await page.getByRole("button", { name: "返回项目协作", exact: true }).click();
   await page.getByRole("heading", { name: "搜索功能与缺陷统一开发", exact: true }).waitFor();
-  await page.getByRole("button", { name: "刷新任务", exact: true }).click();
+  await page.getByRole("button", { name: "刷新状态", exact: true }).click();
+  await page.getByRole("button", { name: "标记开发任务完成", exact: true }).click();
   await page.getByRole("button", { name: "确认完成开发任务", exact: true }).click();
-  await page.getByRole("button", { name: "确认完成开发任务", exact: true }).waitFor({ state: "hidden" });
+  await page.getByText("任务：已完成", { exact: true }).waitFor();
+  assert.equal(await database.client.issueDevelopmentClaim.count({ where: { taskId: id } }), 0);
   for (const issue of issues) {
     let current = await content.readIssue(project.id, issue.id, admin);
     current = await content.transitionIssue(project.id, issue.id, admin, { revision: current.revision, status: "developing" });

@@ -4,59 +4,196 @@ import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { appApi, statusLabel } from "../../shared/api/api.js";
 import MergeDevelopmentDialog from "./MergeDevelopmentDialog.vue";
-import RemoteBranchSelect from "./RemoteBranchSelect.vue";
-import { createRequestId } from "../../shared/api/request-id.js";
+import DevelopmentTaskDetail from "./DevelopmentTaskDetail.vue";
+import { developmentTaskLabels as labels } from "./development-task-view.js";
 import { useResource } from "../../shared/api/use-resource.js";
-const props = defineProps({ projectId: { type: String, required: true }, issueId: { type: String, default: "" }, canContinue: Boolean, spaceReady: Boolean, canAssign: Boolean });
+const props = defineProps({
+  projectId: { type: String, required: true },
+  issueId: { type: String, default: "" },
+  canContinue: Boolean,
+  spaceReady: Boolean,
+  canAssign: Boolean,
+  readOnlyReason: { type: String, default: "" },
+});
 const emit = defineEmits(["open-workspace", "prepare-development"]);
 const endpoint = `/projects/${props.projectId}/tasks`;
-const route = useRoute(), router = useRouter();
-const taskId = computed(() => typeof route.query.task === "string" ? route.query.task : "");
-const offset = computed(() => Math.max(0, Number.parseInt(typeof route.query.taskOffset === "string" ? route.query.taskOffset : "", 10) || 0));
-const scope = computed(() => props.issueId || route.query.taskScope === "all" ? "all" : "mine");
-const selectedTasks = ref([]), merging = ref(false);
-const choices = ref([]), checked = ref([]), query = ref(""), baseBranch = ref(""), editTitle = ref(""), executorId = ref("");
-const members = useResource(() => props.canAssign ? appApi(`/projects/${props.projectId}/members`) : null);
-const requestId = ref(createRequestId());
-const { data, loading, saving, error, notice, reload, save, perform } = useResource(() => appApi(`${endpoint}?offset=${offset.value}&scope=${scope.value}${props.issueId ? `&issueId=${props.issueId}` : ""}`));
-const detail = useResource(() => taskId.value ? appApi(`${endpoint}/${encodeURIComponent(taskId.value)}`) : null, { immediate: false });
-const selected = computed(() => detail.data.value?.task?.id === taskId.value ? detail.data.value.task : null);
-watch(taskId, () => { choices.value = []; checked.value = []; query.value = ""; void detail.reload(); }, { immediate: true });
-watch([offset, scope], () => { selectedTasks.value = []; merging.value = false; void reload(); });
-watch(taskId, () => { merging.value = false; selectedTasks.value = []; });
-const mergeTasks = computed(() => (data.value?.tasks || []).filter(task => selectedTasks.value.includes(task.id)));
+const route = useRoute(),
+  router = useRouter();
+const taskId = computed(() =>
+  typeof route.query.task === "string" ? route.query.task : "",
+);
+const offset = computed(() =>
+  Math.max(
+    0,
+    Number.parseInt(
+      typeof route.query.taskOffset === "string" ? route.query.taskOffset : "",
+      10,
+    ) || 0,
+  ),
+);
+const scope = computed(() =>
+  props.issueId || route.query.taskScope === "all" ? "all" : "mine",
+);
+const selectedTasks = ref([]),
+  merging = ref(false);
+const { data, loading, error, reload } = useResource(() =>
+  appApi(
+    `${endpoint}?offset=${offset.value}&scope=${scope.value}${props.issueId ? `&issueId=${props.issueId}` : ""}`,
+  ),
+);
+watch([offset, scope], () => {
+  selectedTasks.value = [];
+  merging.value = false;
+  void reload();
+});
+watch(taskId, () => {
+  merging.value = false;
+  selectedTasks.value = [];
+});
+const mergeTasks = computed(() =>
+  (data.value?.tasks || []).filter((task) =>
+    selectedTasks.value.includes(task.id),
+  ),
+);
 const mergeError = computed(() => {
   const tasks = mergeTasks.value;
-  if (tasks.length < 2) return "选择至少两个自己的待开发任务，可将需求和缺陷一起处理。";
-  if (tasks.some(task => !task.canMerge || task.releaseId !== tasks[0].releaseId)) return "请选择同一版本、尚未启动的本人任务。";
-  if (tasks.reduce((total, task) => total + task.issueIds.length, 0) > 20) return "合并后的任务最多包含 20 条事项。";
+  if (tasks.length < 2)
+    return "选择至少两个自己的待开发任务，可将需求和缺陷一起处理。";
+  if (
+    tasks.some(
+      (task) => !task.canMerge || task.releaseId !== tasks[0].releaseId,
+    )
+  )
+    return "请选择同一版本、尚未启动的本人任务。";
+  if (tasks.reduce((total, task) => total + task.issueIds.length, 0) > 20)
+    return "合并后的任务最多包含 20 条事项。";
   return "";
 });
-function changeScope(value) { return router.push({ query: { ...route.query, taskScope: value, taskOffset: undefined } }); }
-const labels = { planned: "待开发", merged: "已合并", completed: "已完成", cancelled: "已取消", started: "已启动", unknown: "执行结果待确认" };
-const additionLabels = { ready: "待发送", sending: "发送中", sent: "已发送", unknown: "发送结果待确认" };
-watch(selected, task => { baseBranch.value = ""; editTitle.value = task?.title || ""; executorId.value = task?.executorId || ""; });
-function mutate(action, input = {}) {
-  const task = selected.value;
-  return save(`${endpoint}/${task.id}${action ? `/${action}` : ''}`, { revision: task.revision, ...input }, result => { if (taskId.value === task.id) detail.data.value = result; void reload(); });
+function changeScope(value) {
+  return router.push({
+    query: { ...route.query, taskScope: value, taskOffset: undefined },
+  });
 }
-function start() { return mutate("start", { requestId: requestId.value, baseBranch: baseBranch.value }); }
-async function updatePlan() { const id = taskId.value; const result = await mutate("", { title: editTitle.value, ...(props.canAssign ? { executorId: executorId.value } : {}), ...(checked.value.length ? { issueIds: [...new Set([...selected.value.issueIds, ...checked.value])] } : {}) }); if (result && taskId.value === id) checked.value = []; }
-function removeIssue(id) { return mutate("", { issueIds: selected.value.issueIds.filter(value => value !== id) }); }
-function open(task) { return router.push({ query: { ...route.query, tab: "tasks", issue: undefined, task: task.id } }); }
-function back() { const query = { ...route.query }; delete query.task; return router.push({ query }); }
-function page(nextOffset) { return router.push({ query: { ...route.query, taskOffset: nextOffset || undefined } }); }
-function refresh() { selectedTasks.value = []; merging.value = false; return Promise.all([reload(), ...(taskId.value ? [detail.reload()] : [])]); }
-function search() { return perform(() => appApi(`/projects/${props.projectId}/issues?query=${encodeURIComponent(query.value)}&limit=100&releaseId=${selected.value?.releaseId || "unassigned"}`), result => { choices.value = result.items; }, ""); }
-function append() { if (detail.loading.value || !selected.value) return; const id = taskId.value; return save(`${endpoint}/${id}/issues`, { requestId: requestId.value, issueIds: checked.value, send: false }, result => { if (taskId.value !== id) return; detail.data.value = result; checked.value = []; requestId.value = createRequestId(); void reload(); }, "追加快照已保存，点击发送才会继续会话。"); }
-function send(batch) { if (detail.loading.value || !selected.value) return; const id = taskId.value; return save(`${endpoint}/${id}/additions/${batch.requestId}/continue`, {}, result => { if (taskId.value === id) detail.data.value = result; }, "追加资料已发送。"); }
+function open(task) {
+  return router.push({
+    query: { ...route.query, tab: "tasks", issue: undefined, task: task.id },
+  });
+}
+function back() {
+  const query = { ...route.query };
+  delete query.task;
+  return router.push({ query });
+}
+function page(nextOffset) {
+  return router.push({
+    query: { ...route.query, taskOffset: nextOffset || undefined },
+  });
+}
+function refresh() {
+  selectedTasks.value = [];
+  merging.value = false;
+  return reload();
+}
 </script>
-<template><MergeDevelopmentDialog v-if="merging" :project-id="projectId" :tasks="mergeTasks" @closed="merging = false" @merged="task => { merging = false; selectedTasks = []; open(task); reload(); }" /><section class="project-section"><header class="project-heading"><h2>{{ issueId ? '关联开发任务' : '开发任务' }}</h2><button :disabled="loading || detail.loading.value || saving" @click="refresh">刷新任务</button></header><FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="notice" type="success" /><p v-if="loading" role="status">正在读取开发任务…</p>
-  <FeedbackMessage v-if="selected" :message="detail.error.value" type="error" /><article v-if="selected" class="project-detail"><div class="actions"><button :disabled="saving" @click="back">返回任务列表</button><button v-if="selected.canOpenSession && selected.runKey" class="primary" @click="emit('open-workspace', selected.workspaceId, selected.runKey)">打开我的会话</button></div><h3>{{ selected.title }}</h3><p v-if="selected.mergedIntoTaskId" class="field-hint">此任务已合并。<button @click="open({ id: selected.mergedIntoTaskId })">查看合并后的任务</button></p><p v-if="selected.release?.status === 'archived'" class="warning">版本已归档，开发任务只读。</p><p>开发负责人：{{ selected.executor?.displayName || '未分配' }} · 版本：{{ selected.release?.name || '未排期' }}</p><p>{{ labels[selected.status] || selected.status }} · {{ statusLabel(selected.execution?.status) }}</p><p class="project-text">开发基线：{{ selected.baseBranch || '尚未开始开发' }} · {{ selected.baseCommit || '提交待准备' }}</p><p v-if="selected.fetchedAt" class="field-hint">远端获取时间：{{ selected.fetchedAt }}</p><p v-if="selected.error || selected.execution?.error" class="error">{{ selected.error || selected.execution?.error }}</p><section v-if="selected.status === 'planned'" class="project-section"><form v-if="selected.canEdit" class="project-form" @submit.prevent="updatePlan"><h3>任务规划</h3><FeedbackMessage :message="members.error.value" type="error" /><button v-if="members.error.value" type="button" :disabled="members.loading.value" @click="members.reload">重新读取开发负责人</button><label>任务标题<input v-model="editTitle" required maxlength="200" :disabled="saving" /></label><label v-if="canAssign">开发负责人<select aria-label="开发负责人" v-model="executorId" :disabled="saving"><option v-for="member in members.data.value?.members?.filter(m => m.status === 'active' && m.userStatus === 'active' && m.effectivePermissions?.includes('session.start'))" :key="member.userId" :value="member.userId">{{ member.displayName }}</option></select></label><button :disabled="saving">保存任务规划</button></form><p v-if="selected.canStart && !spaceReady" class="field-hint">准备个人 Git 和开发空间后即可选择远端分支。</p><button v-if="selected.canStart && !spaceReady" class="primary" @click="emit('prepare-development', selected)">准备我的开发环境</button><form v-else-if="selected.canStart" class="project-form" @submit.prevent="start"><RemoteBranchSelect :project-id="projectId" v-model="baseBranch" :disabled="saving" /><button class="primary" :disabled="saving || !baseBranch">确认并开始开发</button></form><p class="field-hint">开始开发要求所有关联事项处于允许开发的流程节点；此操作会获取远端最新提交并创建工作树。</p></section><div class="actions"><button v-if="selected.canComplete" :disabled="saving" @click="mutate('complete')">确认完成开发任务</button><button v-if="selected.canCancel" :disabled="saving" @click="mutate('cancel')">取消任务并释放认领</button></div><details><summary>关联事项与内容快照</summary><section v-for="issue in selected.issues" :key="issue.id"><h4>#{{ issue.number }} {{ issue.title }}</h4><button v-if="selected.canEdit && selected.issueIds.length > 1" :disabled="saving" @click="removeIssue(issue.id)">移出任务</button><p class="project-text">{{ issue.description }}</p><p class="project-text">{{ issue.acceptanceCriteria || issue.reproductionSteps }}</p></section></details><section v-for="batch in selected.additions" :key="batch.requestId" class="project-section"><h4>追加资料 · {{ additionLabels[batch.status] }}</h4><p v-for="issue in batch.issues" :key="issue.id">#{{ issue.number }} {{ issue.title }}</p><p v-if="batch.error" class="error">{{ batch.error }}</p><button v-if="batch.status === 'ready' && canContinue && selected.canOpenSession" :disabled="saving || detail.loading.value" @click="send(batch)">发送追加资料并继续会话</button></section>
-    <section v-if="selected.canEdit || canContinue && selected.canOpenSession && selected.status === 'started' && selected.execution?.sessionId" class="project-section"><h3>{{ selected.status === 'planned' ? '补充同版本事项' : '追加项目事项' }}</h3><form class="project-filter" @submit.prevent="search"><input v-model="query" aria-label="搜索追加事项" placeholder="搜索待追加的事项" /><button :disabled="saving">搜索事项</button></form><label v-for="issue in choices" :key="issue.id" class="permission-choice"><input v-model="checked" type="checkbox" :value="issue.id" :disabled="saving" />#{{ issue.number }} {{ issue.title }}</label><div class="actions"><button :disabled="saving || detail.loading.value || !checked.length" @click="selected.status === 'planned' ? updatePlan() : append()">{{ selected.status === 'planned' ? '保存关联事项' : '保存追加快照' }}</button></div></section>
-  </article>
-  <template v-else-if="taskId"><p v-if="detail.loading.value" role="status">正在读取指定开发任务…</p><FeedbackMessage v-else :message="detail.error.value || '指定开发任务不存在或无权访问。'" type="error" /><button @click="back">返回任务列表</button></template><template v-else>
-    <nav v-if="!issueId" class="page-tabs" aria-label="开发任务范围"><button :class="{ active: scope === 'mine' }" :aria-pressed="scope === 'mine'" :disabled="saving" @click="changeScope('mine')">我的开发任务</button><button :class="{ active: scope === 'all' }" :aria-pressed="scope === 'all'" :disabled="saving" @click="changeScope('all')">项目全部任务</button></nav>
-    <div v-if="!issueId" class="project-development-action"><button class="primary" :disabled="saving || loading || Boolean(mergeError)" @click="merging = true">合并所选任务（{{ selectedTasks.length }}）</button><span class="field-hint">{{ mergeError || '所选任务将共用一个 Codex 会话，合并后再开始开发。' }}</span></div>
-    <ul class="project-issue-list"><li v-for="task in data?.tasks" :key="task.id"><input v-if="!issueId" v-model="selectedTasks" type="checkbox" :value="task.id" :aria-label="`选择开发任务 ${task.title}`" :disabled="saving || loading || !task.canMerge" /><button class="project-issue-link" :disabled="saving" @click="open(task)"><span>{{ labels[task.status] || task.status }}</span><strong>{{ task.title }}</strong><small>{{ task.executor?.displayName || '未分配' }} · {{ task.release?.name || '未排期' }} · {{ task.baseBranch || '基线未记录' }} · {{ task.issueIds.length }} 条事项<span v-if="task.execution"> · Codex：{{ statusLabel(task.execution.status) }}</span></small></button></li></ul><p v-if="data && !data.tasks.length" class="muted">{{ scope === 'mine' ? '暂无我的开发任务，请先认领需求或缺陷，或由项目成员指派给你。' : '暂无开发任务。' }}</p><div class="actions"><button v-if="offset" @click="page(Math.max(0, offset - 30))">上一页</button><button v-if="data?.nextOffset != null" @click="page(data.nextOffset)">下一页</button></div></template>
-</section></template>
+<template>
+  <DevelopmentTaskDetail
+    v-if="taskId"
+    :key="`${projectId}/${taskId}`"
+    :project-id="projectId"
+    :task-id="taskId"
+    :space-ready="spaceReady"
+    :can-assign="canAssign"
+    :can-continue="canContinue"
+    :read-only-reason="readOnlyReason"
+    @back="back"
+    @changed="reload"
+    @open-task="open"
+    @prepare-development="(task) => emit('prepare-development', task)"
+    @open-workspace="(id, key) => emit('open-workspace', id, key)"
+  />
+  <section v-else class="development-task-list">
+    <MergeDevelopmentDialog
+      v-if="merging"
+      :project-id="projectId"
+      :tasks="mergeTasks"
+      @closed="merging = false"
+      @merged="
+        (task) => {
+          merging = false;
+          selectedTasks = [];
+          open(task);
+          reload();
+        }
+      "
+    />
+    <header class="project-heading">
+      <h2>{{ issueId ? "关联开发任务" : "开发任务" }}</h2>
+      <button :disabled="loading" @click="refresh">刷新任务</button>
+    </header>
+    <FeedbackMessage :message="error" type="error" />
+    <p v-if="loading" role="status">正在读取开发任务…</p>
+    <nav v-if="!issueId" class="page-tabs" aria-label="开发任务范围">
+      <button
+        :class="{ active: scope === 'mine' }"
+        :aria-pressed="scope === 'mine'"
+        @click="changeScope('mine')"
+      >
+        我的开发任务</button
+      ><button
+        :class="{ active: scope === 'all' }"
+        :aria-pressed="scope === 'all'"
+        @click="changeScope('all')"
+      >
+        项目全部任务
+      </button>
+    </nav>
+    <div v-if="!issueId && !readOnlyReason" class="project-development-action">
+      <button
+        class="primary"
+        :disabled="loading || Boolean(mergeError)"
+        @click="merging = true"
+      >
+        合并所选任务（{{ selectedTasks.length }}）</button
+      ><span class="field-hint">{{
+        mergeError || "所选任务将共用一个 Codex 会话，合并后再开始开发。"
+      }}</span>
+    </div>
+    <ul class="project-issue-list">
+      <li v-for="task in data?.tasks" :key="task.id">
+        <input
+          v-if="!issueId && !readOnlyReason"
+          v-model="selectedTasks"
+          type="checkbox"
+          :value="task.id"
+          :aria-label="`选择开发任务 ${task.title}`"
+          :disabled="loading || !task.canMerge"
+        /><button class="project-issue-link" @click="open(task)">
+          <span>{{ labels[task.status] || task.status }}</span
+          ><strong>{{ task.title }}</strong
+          ><small
+            >{{ task.executor?.displayName || "未分配" }} ·
+            {{ task.release?.name || "未排期" }} ·
+            {{ task.baseBranch || "基线未记录" }} ·
+            {{ task.issueIds.length }} 条事项<span v-if="task.execution">
+              · Codex：{{ statusLabel(task.execution.status) }}</span
+            ></small
+          >
+        </button>
+      </li>
+    </ul>
+    <p v-if="data && !data.tasks.length" class="muted">
+      {{
+        scope === "mine"
+          ? "暂无我的开发任务，请先认领需求或缺陷，或由项目成员指派给你。"
+          : "暂无开发任务。"
+      }}
+    </p>
+    <div class="actions">
+      <button v-if="offset" @click="page(Math.max(0, offset - 30))">
+        上一页</button
+      ><button v-if="data?.nextOffset != null" @click="page(data.nextOffset)">
+        下一页
+      </button>
+    </div>
+  </section>
+</template>

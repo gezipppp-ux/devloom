@@ -81,3 +81,5 @@ ProjectPermissionEditor 在部门模式显示功能上限，在成员模式显�
 流程画布提供缩放、适应画布和全屏视图；全屏保留草稿、选中项、保存／发布及操作反馈，退出按钮或 Esc 返回。优先使用浏览器 Fullscreen API，不支持时使用视口覆盖层并管理焦点与页面滚动；卸载时清理全屏监听、尺寸观察与滚动锁。坐标经 SVG 屏幕矩阵换算，缩放或全屏不会改变已保存的节点位置。
 
 开发流程采用事项页逐条认领／指派，再到 ProjectTasks 默认的「我的开发任务」多选合并。PlanDevelopmentDialog 只分配负责人并创建独立待开发任务；MergeDevelopmentDialog 保存带修订号的选择与独立请求标识。scope 与分页同步 URL，切换范围、分页、任务后清除合并选择，卸载后忽略迟到响应。任务的人工状态与 Codex 状态分开呈现，已合并来源详情提供目标任务链接。
+
+开发任务详情由按项目／任务 ID 重建的 `DevelopmentTaskDetail` 呈现步骤引导，`use-development-task` 拥有详情、变更与独立的事项搜索请求。`development-task-view` 只解释服务端状态，不推断业务验收或改变权限。任务信息按需编辑，信息保存与事项关联分开提交；刷新保留编辑草稿及其修订基线。追加资料保存与继续执行分别操作；完成、取消及移出事项由 `DevelopmentTaskConfirmation` 明确确认后提交。项目功能导航使用 `.page-tabs.project-navigation` 的轻量选中态与窄屏换行，保留权限、URL 和原生键盘访问。

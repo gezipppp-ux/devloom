@@ -544,7 +544,7 @@ async function main() {
         await capture('14-project-asset-edit-' + width);
         await tabs.getByRole('button', { name: '开发任务', exact: true }).click();
         await page.getByRole('button', { name: /客户搜索与空结果提示/ }).click();
-        await page.getByRole('button', { name: '发送追加资料并继续会话', exact: true }).waitFor();
+        await page.getByRole('button', { name: '发送资料并继续 Codex', exact: true }).waitFor();
         await capture('15-project-development-' + width);
         await tabs.getByRole('button', { name: '版本', exact: true }).click();
         await page.getByRole('heading', { name: '发布版本', exact: true }).waitFor();
