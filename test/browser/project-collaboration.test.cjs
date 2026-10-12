@@ -18,6 +18,7 @@ const { saveSystemSettings } = require("../../src/config/system-settings.cjs");
 const { projectPermissionCatalog, productTemplate } = require("../../src/domain/project-permissions.cjs");
 const { promptTemplateCatalog } = require("../../src/domain/prompt-templates.cjs");
 const { verifyAdministratorProjectAccess } = require("./administrator-project-access.test.cjs");
+const { verifyProjectReleases } = require("./project-releases.test.cjs");
 const { verifyProjectPermissions, verifyDepartmentCapabilities } = require("./project-permissions.test.cjs");
 const { markdown, editor, setMarkdown, markdownValue, visual, pasteImage, verifyVisualWriting, captureEditor } = require("../support/issue-markdown.cjs");
 
@@ -226,6 +227,7 @@ async function main() {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.getByRole("button", { name: "退出登录", exact: true }).click();
     await login("admin");
+    await verifyProjectReleases({ page, origin, projectId: project.id, output });
     await verifyAdministratorProjectAccess({ page, origin, projects, accounts, admin, department, remoteUrl: remote.remoteUrl, output });
     await page.getByLabel("账号导航").getByRole("button", { name: "全部项目", exact: true }).click();
     await page.getByRole("button", { name: "创建项目", exact: true }).click();

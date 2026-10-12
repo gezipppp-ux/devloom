@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const { chromium } = require('playwright');
 const { agentDescriptor } = require('../fixtures/agent-descriptor.cjs');
 const { projectVisual } = require('../../test/fixtures/project-visual.cjs');
+const { verifyReleaseNameForm } = require('./project-releases.test.cjs');
 
 async function main() {
   const fixture = projectVisual('ux-workspace');
@@ -66,6 +67,11 @@ async function main() {
       }
       return route.fulfill({body:fs.readFileSync(path.join(dist,'index.html')),contentType:'text/html'});
     });
+
+    await page.goto(origin + projectPath + '?tab=releases');
+    await page.getByRole('button', { name: '新建版本', exact: true }).click();
+    await verifyReleaseNameForm({ page, output, endpoint: origin + '/api' + projectPath + '/releases' });
+    await page.getByRole('button', { name: '取消', exact: true }).click();
 
     const pendingProject = async route => {
       const result = fixture.response(new URL(route.request().url()));
