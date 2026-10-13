@@ -1,8 +1,9 @@
-.project-navigation { gap: 8px; align-items: center; }
-.project-navigation > button { background: transparent; border-color: transparent; padding: 8px 16px; position: relative; }
-.project-navigation > button:hover:not(:disabled) { background: var(--soft); border-color: transparent; }
-.project-navigation > button.active { background: var(--selected); border-color: transparent; color: var(--accent); }
-.project-navigation > button.active::after { content: ""; position: absolute; height: 2px; background: var(--accent); inset: auto 16px 3px; border-radius: 2px; }
+.page-tabs.project-navigation { gap: 8px; align-items: center; }
+.page-tabs.project-navigation > button { background: transparent; border-color: transparent; padding: 8px 16px; position: relative; font-size: inherit; box-shadow: none; transition: background 0.15s, border-color 0.15s; }
+.page-tabs.project-navigation > button:hover:not(:disabled) { background: var(--soft); border-color: transparent; box-shadow: none; }
+.page-tabs.project-navigation > button:active:not(:disabled) { transform: none; }
+.page-tabs.project-navigation > button.active { background: var(--selected); border-color: transparent; color: var(--accent); }
+.page-tabs.project-navigation > button.active::after { content: ""; position: absolute; height: 2px; background: var(--accent); inset: auto 16px 3px; border-radius: 2px; }
 .development-task-detail, .development-task-list { min-width: 0; }
 .development-toolbar, .development-heading, .development-panel-heading, .development-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .development-toolbar { margin-bottom: 20px; }
@@ -55,13 +56,13 @@
 .development-confirmation > p { line-height: 1.8; }
 .development-confirmation .workspace-dialog-heading > button { flex-shrink: 0; white-space: nowrap; }
 @media (max-width: 768px) {
-  .project-navigation { gap: 4px; }
-  .project-navigation > button { padding-inline: 12px; }
+  .page-tabs.project-navigation { gap: 4px; }
+  .page-tabs.project-navigation > button { padding-inline: 12px; }
   .development-panel { padding: 20px; }
   .development-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 480px) {
-  .project-navigation > button { min-height: 44px; padding-inline: 10px; }
+  .page-tabs.project-navigation > button { min-height: 44px; padding-inline: 10px; }
   .development-panel { padding: 16px; }
   .development-heading h2 { font-size: 21px; }
   .development-next h3 { font-size: 18px; }
