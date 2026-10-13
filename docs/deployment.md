@@ -4,14 +4,13 @@
 
 ## 独立安装
 
-需要 Node.js **22.13+**（推荐当前 LTS）、npm、Git、PostgreSQL **17**（当前验证版本），以及已安装并登录的 Codex CLI。将应用源码复制到单独目录；不复制 `node_modules`、运行记录和凭据。先设置独立的 `RUNNER_DATA_DIR` 和 `DATABASE_URL`。
+启动需要 Node.js **22.13+**（推荐当前 LTS）、npm、PostgreSQL **17**（当前验证版本）。Git 与 Codex CLI 可在初始化向导检测和安装，安装器不可用时按提示在服务器处理；实际执行开发前须完成服务账号的 Codex 认证。将应用源码复制到单独目录；不复制 `node_modules`、运行记录和凭据。先设置独立的 `RUNNER_DATA_DIR` 和 `DATABASE_URL`。
 
 ```sh
 cd /opt/requirement-runner
 npm ci
 npm run build
 npm run db:deploy
-npm run init:admin
 npm start -- --port 4317
 ```
 
@@ -63,7 +62,9 @@ npm run db:deploy
 
 启动前设置 `RUNNER_DATA_DIR` 为独立运行数据目录，`DATABASE_URL` 指向新的 PostgreSQL 数据库。业务数据通过 Prisma 保存，独立凭据主密钥位于 `secrets/database.key`。`workspaces/` 仅保留执行图片缓存和必要锁。未设置数据目录时使用应用目录；静态页面始终取自安装包的 `web/dist`。账号与升级完整约定见 [账号与数据库](engineering/accounts-and-database.md)。
 
-先运行 `npm run init:admin` 交互创建管理员，再启动和登录页面。密码需要输入两次且不回显，不会写入命令行或 npm 配置。管理员维护部门和成员，并为自己分配部门；获授权的创建者直接填写 Git 仓库地址建立项目，再添加成员及分配权限。普通成员不能自行创建空间，拥有代码操作权限后自动分配个人开发空间。旧配置和运行文件不迁移、不自动清理；业务仓库和 Worktree 保留原位。
+首次启动会在终端输出 `/setup#token=…` 初始化链接，有效期 30 分钟；浏览器读取后立即清除地址中的凭证。通过向导创建管理员、检测并安装工具、设置成员目录、创建产品及研发部门，可跳过测试账号和首个项目。保存并退出后管理员再次登录可继续，密码不存为草稿。需要新凭证时，在同一数据库、运行目录和密钥环境下运行 `npm run setup:link`。常驻服务的链接可在受限服务日志中查看。创建完成后凭证入口永久关闭。
+
+运维也可使用 `npm run init:admin` 交互创建管理员，再登录网页继续配置。管理员管理项目无需部门，参与开发需分配部门及相应项目权限。普通成员不能自行创建空间，拥有代码操作权限后自动分配个人开发空间。当前基线上已有业务数据的部署不会强制初始化；不覆盖现有部门、成员、项目和路径。
 
 Web 不接受 `--config`。不要将凭据写入 service 文件或版本控制。
 

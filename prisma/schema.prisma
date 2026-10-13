@@ -182,6 +182,31 @@ model SystemSetting {
   @@map("system_settings")
 }
 
+model SystemSetup {
+  id              String    @id @default("installation")
+  status          String    @default("awaiting_admin")
+  revision        Int       @default(1)
+  initialAdminId  String?   @map("initial_admin_id")
+  steps           Json      @default("{}")
+  drafts          Json      @default("{}")
+  tokenHash       String?   @map("token_hash")
+  tokenExpiresAt  DateTime? @map("token_expires_at") @db.Timestamptz(3)
+  completedAt     DateTime? @map("completed_at") @db.Timestamptz(3)
+  completedBy     String?   @map("completed_by")
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("system_setup")
+}
+
+model SetupOperation {
+  requestId String   @id @map("request_id")
+  step      String
+  inputHash String   @map("input_hash")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("setup_operations")
+}
+
 model Workspace {
   id          String            @id @default(uuid())
   ownerUserId String            @map("owner_user_id")

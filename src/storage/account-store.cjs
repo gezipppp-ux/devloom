@@ -1,5 +1,6 @@
 const { accountError, DEFAULT_ACCOUNT_SETTINGS } = require("../domain/account.cjs");
 const { projectContextPermissions, ownerPermissions } = require("../domain/project-permissions.cjs");
+const { SETUP_ID } = require("../domain/setup-state.cjs");
 
 // Internal account record contract shared with password and authentication
 // services. Public response shaping remains in account-presenter.
@@ -26,11 +27,16 @@ class AccountStore {
       return await this.database.transaction(async () => {
         if (initial && await this.count()) throw accountError("管理员已初始化。", 409);
         if (input.departmentId && !(await this.database.client.department.findFirst({ where: { id: input.departmentId, status: "active" } }))) throw accountError("部门不存在或已停用。");
-        return accountRecord(await this.database.client.user.create({ data: {
+        const row = await this.database.client.user.create({ data: {
           username: input.username, displayName: input.displayName, passwordHash: input.password_hash,
           role: input.role, mustChangePassword: Boolean(input.must_change_password),
           departmentId: input.departmentId || null, canCreateProjects: Boolean(input.canCreateProjects),
-        } }));
+        } });
+        if (initial) await this.database.client.systemSetup.updateMany({ where: { id: SETUP_ID, status: "awaiting_admin" }, data: {
+          status: "pending", initialAdminId: row.id, steps: { admin: { status: "completed" } },
+          tokenHash: null, tokenExpiresAt: null, revision: { increment: 1 },
+        } });
+        return accountRecord(row);
       });
     } catch (error) {
       if (error.code === "P2002") throw accountError("账号已存在。", 409);

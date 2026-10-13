@@ -23,6 +23,8 @@
 
 依赖方向为 `main.js → app → features → shared`。应用壳层组合各功能；功能内的组件与辅助模块放在同一目录，功能之间通过壳层传入数据和事件协作。共享模块不引用应用或功能组件。
 
+`app/SetupPage.vue` 组合首次初始化：管理员表单位于 `features/accounts`，环境安装和目录选择位于 `features/settings`，步骤、非敏感草稿与结果位于 `features/setup`，通过 app 插槽协作。`shared/setup-steps.json` 为前后端步骤契约。路由和渲染门禁依据服务端初始化状态；一次性凭证从 fragment 读取后立即清除，仅存页面内存。UUID 提交复用公共 HTTP 兼容生成器，未知结果重试沿用原请求。密码在保存退出和卸载时清除，迟到响应受账号代际和组件生命周期保护。无首次登录冒泡引导。
+
 需求／Bug 新增与编辑共用 `features/projects/IssueFields.vue`；五类正文通过共享 `MarkdownEditor`、`MarkdownContent` 和 `shared/components/markdown-content.js` 安全渲染。原 `features/session/requirement-content.js` 保留会话入口及图片／链接规则。项目附件草稿由 `use-project-attachments.js` 管理，读取完成后生成正文链接并同步序列化；保存前不上传，取消、卸载和上下文切换撤销 blob URL，迟到读取不得插回其他草稿。保存冲突保留附件并支持原有逐字段合并。
 
 `MarkdownEditor` 默认懒加载 `VisualMarkdownEditor`（Tiptap），提供可视图文编辑，另保留 Markdown 源码和预览模式。图片节点仅通过已验证映射显示，文档保留原始附件路径，blob URL 不得序列化入正文。剪贴板 HTML 只取纯文本，不作为可执行内容解析。源码到可视化的转换先检查语义等价，不支持无损转换时保留原文。初始化、外部合并、移除附件和上下文重置建立新的撤销基线，普通编辑保留撤销／重做；异步插图使用映射后的光标书签，源码模式在读取附件期间禁用输入，避免位置漂移。

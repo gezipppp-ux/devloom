@@ -43,7 +43,7 @@ async function readSystemSettings(directory = dataRoot) {
   };
 }
 
-async function saveSystemSettings(input, directory = dataRoot) {
+function prepareSystemSettings(input) {
   if (
     !input ||
     typeof input !== "object" ||
@@ -62,12 +62,20 @@ async function saveSystemSettings(input, directory = dataRoot) {
   } finally {
     if (fs.existsSync(probe)) fs.unlinkSync(probe);
   }
+  return { memberStorageRoot: canonical };
+}
+
+async function savePreparedSystemSettings(prepared, directory = dataRoot) {
   (await updateConfig(settingsFile(directory), (current) => ({
     ...current,
     version: 1,
-    memberStorageRoot: canonical,
+    memberStorageRoot: prepared.memberStorageRoot,
   })));
   return (await readSystemSettings(directory));
 }
 
-module.exports = { readSystemSettings, saveSystemSettings };
+async function saveSystemSettings(input, directory = dataRoot) {
+  return savePreparedSystemSettings(prepareSystemSettings(input), directory);
+}
+
+module.exports = { readSystemSettings, saveSystemSettings, prepareSystemSettings, savePreparedSystemSettings };

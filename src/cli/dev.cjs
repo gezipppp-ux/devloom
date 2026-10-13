@@ -3,6 +3,7 @@ const { argument } = require("./arguments.cjs");
 const { root } = require("../config/runtime.cjs");
 const { createWebServer } = require("../http/server.cjs");
 const { requestOrigin } = require("../http/origin.cjs");
+const { printSetupLink } = require("./setup-link.cjs");
 
 async function main(argv = process.argv.slice(2)) {
   if (argument("--config", null, argv))
@@ -16,7 +17,7 @@ async function main(argv = process.argv.slice(2)) {
   const application = createWebServer({
     host,
     pageHandler(request, response, url) {
-      if (["/login", "/password", "/personal", "/system", "/accounts", "/environment"].includes(url.pathname))
+      if (["/setup", "/login", "/password", "/personal", "/system", "/accounts", "/environment"].includes(url.pathname))
         request.url = `/index.html${url.search}`;
       // Only development pages need Vite's HMR socket and reconnect worker.
       // The HTTP adapter has already validated this request's host and origin.
@@ -73,6 +74,7 @@ async function main(argv = process.argv.slice(2)) {
       },
     });
     const origin = await application.listen(port);
+    await printSetupLink(application, process.env.PUBLIC_ORIGIN || origin);
     process.stdout.write(
       `Web Coding Dev: ${origin}\n监听地址：${host}:${application.server.address().port}\n前端保存后自动更新。使用 dev:watch 时，后端修改会重启服务、中断活动任务并刷新页面。\n`,
     );

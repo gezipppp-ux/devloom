@@ -5,6 +5,7 @@ import { ArrowUpOutlined, FolderOutlined } from "@antdv-next/icons";
 import { appApi } from "../../shared/api/api.js";
 
 const emit = defineEmits(["select"]);
+defineProps({ saveLabel: { type: String, default: "保存基础目录" } });
 const dialog = ref();
 const pathInput = ref();
 const draftPath = ref("");
@@ -86,7 +87,7 @@ defineExpose({ open });
         </button>
       </div>
       <p class="muted">
-        浏览运行服务的主机目录。选择后返回表单，点击「保存基础目录」生效。
+        浏览运行服务的主机目录。选择后返回表单，点击「{{ saveLabel }}」生效。
       </p>
       <form @submit.prevent="browse(draftPath)">
         <label for="directory-browse-path">浏览目录路径</label>

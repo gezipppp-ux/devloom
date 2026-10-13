@@ -32,7 +32,7 @@ class EnvironmentServices {
       { name: "数据目录可写", status: writableDirectory(this.dataDirectory) ? "pass" : "fail", detail: "数据库与上传数据存储目录" },
       { name: "成员目录可写", status: writableDirectory((await readSystemSettings(this.dataDirectory)).memberStorageRoot) ? "pass" : "fail", detail: "项目与任务目录，未创建时检查上级目录权限" },
     ];
-    return { tools, checks, runningNode: process.version, checkedAt: new Date().toISOString(), job: this.job, busy: this.busy,
+    return { tools, checks, runningNode: process.version, checkedAt: new Date().toISOString(), ...this.status(),
       ready: tools.every(tool => tool.status === "pass") && checks.every(check => check.status === "pass") };
   }
 
@@ -55,12 +55,12 @@ class EnvironmentServices {
     }
   }
 
-  async start(input, authorize) {
+  async start(input, authorize, fromBatch = false) {
     if (!input || !["codex", "npm", "git", "node"].includes(input.id) ||
         !(input.id === "git" ? /^\d+\.\d+\.\d+(?:\.windows\.\d+)?$/ : /^\d+\.\d+\.\d+$/).test(input.version || "") ||
         (input.operation !== undefined && !["install", "update"].includes(input.operation)) || Object.keys(input).some(key => !["id", "version", "operation"].includes(key)))
       throw new Error("更新参数无效。");
-    if (this.busy || this.closed) throw new Error("更新正在进行或服务正在关闭，请稍后再试。");
+    if (this.busy || this.closed || this.batch?.status === "running" && !fromBatch) throw new Error("更新正在进行或服务正在关闭，请稍后再试。");
     if (input.id === "node" && this.pendingNodeVersion) throw new Error("Node.js 已完成安装，请先重启服务使新版本生效。");
     this.busy = true;
     try {
@@ -100,8 +100,33 @@ class EnvironmentServices {
     } catch (error) { this.busy = false; throw error; }
   }
 
-  status() { return { job: this.job, busy: this.busy }; }
-  async close() { this.closed = true; await this.pending; }
+  async installMissing(input, authorize) {
+    if (!input || Object.keys(input).some(key => key !== "tools") || !Array.isArray(input.tools) ||
+        !input.tools.length || input.tools.length > 2 || new Set(input.tools.map(tool => tool?.id)).size !== input.tools.length ||
+        input.tools.some(tool => !tool || !["git", "codex"].includes(tool.id) || Object.keys(tool).some(key => !["id", "version"].includes(key)) ||
+          typeof tool.version !== "string" || !/^\d+\.\d+\.\d+(?:\.windows\.\d+)?$/.test(tool.version)))
+      throw new Error("请选择确切版本的缺失 Git / Codex 工具。");
+    if (this.status().busy || this.closed) throw new Error("已有安装正在进行或服务正在关闭。");
+    // Reserve before authorization; another request must not start in this gap.
+    this.batch = { status: "running", tools: [...input.tools].sort((a, b) => a.id === b.id ? 0 : a.id === "git" ? -1 : 1), completed: [], message: "正在检查安装计划。" };
+    try { await authorize(); this.assertIdle(); }
+    catch (error) { this.batch.status = "failed"; this.batch.message = error.message; throw error; }
+    this.batchPending = (async () => {
+      try {
+        for (const tool of this.batch.tools) {
+          await this.start({ ...tool, operation: "install" }, authorize, true);
+          await this.pending;
+          if (this.job.status !== "completed") { this.batch.status = this.job.status; this.batch.message = this.job.message; return; }
+          this.batch.completed.push(tool.id);
+        }
+        this.batch.status = "completed";
+        this.batch.message = "缺失工具安装完成，请重新检测；Codex 仍需服务账号完成认证。";
+      } catch (error) { this.batch.status = "failed"; this.batch.message = error.message; }
+    })();
+    return this.status();
+  }
+  status() { return { job: this.job, busy: this.busy || this.batch?.status === "running", ...(this.batch ? { batch: this.batch } : {}) }; }
+  async close() { this.closed = true; await this.batchPending; await this.pending; }
 }
 
 module.exports = { EnvironmentServices };

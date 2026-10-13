@@ -70,6 +70,9 @@ docs/engineering/  # 行为契约与架构规则
 | http/mcp-api.cjs、mcp-tools.cjs | Bearer HTTP 上传、无状态 Streamable HTTP MCP、工具 schema；复用应用用例，不直接操作存储 |
 | `cli/arguments.cjs` | Web 与开发服务的命令参数校验 |
 | `cli/init-admin.cjs`、`cli/web.cjs` | 管理员初始化和 Web 服务进程入口；导出 main，以主模块保护执行 |
+| `cli/setup-link.cjs` | 输出首次启动链接与运维重新签发凭证；导入无副作用 |
+| `domain/setup-state.cjs`、`application/setup-services.cjs`、`setup-presenter.cjs` | 初始化输入/步骤规则、短事务用例与公开快照；外部环境和文件探测不进入数据库事务 |
+| `storage/setup-store.cjs`、`http/setup-api.cjs` | 部署状态、凭证摘要及请求去重持久化；HTTP 仅适配初始化服务 |
 | `channels/manual/adapter.cjs` | 手动输入校验与渠道组合 |
 | `channels/channel-registry.cjs` | ChannelRegistry 校验并注册渠道接口、组合渠道默认配置 |
 | `channels/manual/manual-upload-store.cjs`、`task-package.cjs` | ManualUploadStore 管理上传生命周期；任务包模块管理标题命名、图片复制和任务包 |
@@ -141,7 +144,7 @@ app 中的 `use-workspace-selection` 管理工作区与 URL，`use-workspace-con
 
 ## 兼容与验证
 
-- 对外 npm 命令为 `init:admin`、`dev`、`dev:watch`、`build` 和 `start`，实际文件入口由 package.json 维护。systemd 的源码入口使用 `src/cli/web.cjs`，`src/http/server.cjs` 仅导出服务工厂。
+- 对外 npm 命令为 `init:admin`、`setup:link`、`dev`、`dev:watch`、`build` 和 `start`，实际文件入口由 package.json 维护。systemd 的源码入口使用 `src/cli/web.cjs`，`src/http/server.cjs` 仅导出服务工厂。
 - 安装根由 `src/config/runtime.cjs` 定位；静态资源始终来自安装根 `web/dist`。`RUNNER_DATA_DIR` 只选择数据根。
 - 开发入口 `src/cli/dev.cjs` 可以向 HTTP 工厂注入非 API 页面处理器，以同端口 Vite 中间件替代静态页面；正式入口仍固定使用 `web/dist`。仅开发页面增加 HMR 所需的同源 WebSocket 和 blob worker CSP，HTTP 与 WebSocket 均校验 Host/Origin，Vite 源码访问只允许 `web/`、`shared/` 和依赖目录。
 - `src/cli/dev-watch.cjs` 拥有开发文件监听和子进程生命周期；变更合并后通过 IPC 请求关闭并等待旧进程退出，再启动替代进程。不能用 Windows 强制终止进程代替会话清理，也不能因热更新自动重跑需求。

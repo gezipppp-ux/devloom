@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>首次初始化引导 · Web Coding 交互原型</title>
+  <link rel="stylesheet" href="../../web/src/shared/styles/design-tokens.css">
+  <link rel="stylesheet" href="initialization-guide.css">
+  <script src="initialization-guide.js" defer></script>
+</head>
+<body>
+  <div class="review-bar">
+    <div><strong>交互原型</strong><span>仅演示 · 不连接业务服务</span></div>
+    <div class="review-controls">
+      <label for="scenario">评审场景</label>
+      <select id="scenario">
+        <option value="missing">首次运行 · 缺少工具</option>
+        <option value="token-expired">初始化链接已失效</option>
+        <option value="ready">环境已就绪</option>
+        <option value="failed">安装失败</option>
+        <option value="restart">安装后待重启</option>
+        <option value="unavailable">无可用安装器</option>
+        <option value="unknown">检测异常</option>
+        <option value="auth">Codex 尚未登录</option>
+      </select>
+      <button id="reset-demo" class="text-button">重置演示</button>
+    </div>
+  </div>
+  <header class="app-bar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">W</span><strong>Web Coding</strong><span class="brand-divider"></span><span>首次初始化</span></div>
+    <div class="identity"><span class="avatar">A</span><span>admin <small>系统管理员</small></span></div>
+  </header>
+  <main class="page-layout" id="app"></main>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <dialog id="directory-dialog" aria-labelledby="directory-title">
+    <div class="dialog-heading"><h2 id="directory-title">选择服务器目录</h2><button class="icon-button" data-close-directory aria-label="关闭目录选择">×</button></div>
+    <p class="muted">以下目录为演示数据，选择后返回表单。</p>
+    <div class="directory-options">
+      <button data-directory="D:\wt"><span>D:\wt</span><small>推荐的短路径</small></button>
+      <button data-directory="D:\web-coding\workspaces"><span>D:\web-coding\workspaces</span><small>集中存放成员仓库与任务</small></button>
+      <button data-directory="/srv/wt"><span>/srv/wt</span><small>Linux 路径示例</small></button>
+    </div>
+    <div class="dialog-actions"><button data-close-directory>取消</button></div>
+  </dialog>
+  <noscript>请启用 JavaScript 以体验初始化向导。</noscript>
+</body>
+</html>

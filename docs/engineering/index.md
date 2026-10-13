@@ -27,7 +27,7 @@ Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install
 - Read `README.md` and the task PRD/design for CLI and configuration contracts.
 - For Web CLI changes, read [web-cli.md](./web-cli.md) for session identity, streaming, approval and HTTP contracts.
 - For source integration, settings or portability changes, read [channels-and-settings.md](./channels-and-settings.md).
-- 日常 npm 命令为 `init:admin`、`dev`、`dev:watch`、`build` 和 `start`；Prisma 基础接入新增 `db:generate`（生成客户端）和 `db:deploy`（部署版本化迁移）。生产环境先构建再启动。运行参数由对应入口解析。
+- 日常 npm 命令为 `init:admin`、`setup:link`、`dev`、`dev:watch`、`build` 和 `start`；Prisma 使用 `db:generate`（生成客户端）和 `db:deploy`（部署版本化迁移）。生产环境先构建再启动，通过一次性链接完成首次初始化。运行参数由对应入口解析。
 - `npm run dev` serves Vite HMR and the API on one development port; `npm run dev:watch` also restarts the backend after source changes. The watch supervisor must shut down its child over IPC and wait for exit before replacement, including on Windows. Neither command automatically resumes interrupted requirements.
 
 ## Behavioral invariants

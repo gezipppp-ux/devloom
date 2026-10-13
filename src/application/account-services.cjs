@@ -68,20 +68,23 @@ class AccountServices {
   }
   async create(input, actor, initial = false, authorize) {
     if (!initial) (await this.requireAdmin(actor));
-    const validated = validateAccountCreation(input, { initial });
-    const encoded = await hashPassword(validated.password);
+    const prepared = await this.prepareCreation(input, initial);
     await authorize?.();
+    return this.createPrepared(prepared, actor, initial);
+  }
+  async prepareCreation(input, initial = false) {
+    const validated = validateAccountCreation(input, { initial });
+    return {
+      username: validated.username, displayName: validated.displayName,
+      password_hash: await hashPassword(validated.password), role: validated.role,
+      must_change_password: !initial, departmentId: validated.departmentId,
+      canCreateProjects: validated.canCreateProjects,
+    };
+  }
+  async createPrepared(prepared, actor, initial = false) {
     if (!initial) (await this.requireAdmin(actor));
     const row = (await this.store.create(
-      {
-        username: validated.username,
-        displayName: validated.displayName,
-        password_hash: encoded,
-        role: validated.role,
-        must_change_password: !initial,
-        departmentId: validated.departmentId,
-        canCreateProjects: validated.canCreateProjects,
-      },
+      prepared,
       { initial },
     ));
     return publicAccount(row);

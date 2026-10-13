@@ -11,6 +11,8 @@ const { WorkspaceManager } = require("../application/workspace-manager.cjs");
 const { WorkspaceCloneManager } = require("../application/workspace-clone-manager.cjs");
 const { SystemServices } = require("../application/system-services.cjs");
 const { EnvironmentServices } = require("../application/environment-services.cjs");
+const { SetupServices } = require("../application/setup-services.cjs");
+const { serveSetup } = require("./setup-api.cjs");
 const { GitAccountServices } = require("../application/git-account-services.cjs");
 const { presentError } = require("../application/error-presenter.cjs");
 const { ProjectServices } = require("../application/project-services.cjs");
@@ -135,6 +137,7 @@ function createWebServer({
   let projectBranches;
   let mcpTokens;
   let mcpProjects;
+  let setup;
   let closing = false, closePromise;
   const ownedDatabase = !testIdentity && !database;
 
@@ -188,6 +191,7 @@ function createWebServer({
         : dataDirectory,
     );
     environment ||= new EnvironmentServices({ dataDirectory, manager, workspaces, workspaceClones });
+    if (accounts) setup = new SetupServices(accounts.database, { accounts, projects, environment, directory: dataDirectory });
     instance.removeAllContentTypeParsers();
     instance.addContentTypeParser("*", (_request, payload, done) =>
       done(null, payload),
@@ -217,6 +221,7 @@ function createWebServer({
       )
         return reply.code(400).send({ error: "接口地址必须使用规范路径。" });
       request.applicationUrl = url;
+      if (setup && isMcpRequest(url.pathname)) await setup.gate(null, request.method, url.pathname);
       if (request.method === "POST" && !(!testIdentity && isMcpRequest(url.pathname))) {
         if (testIdentity) {
           if (request.headers["x-csrf-token"] !== token)
@@ -263,6 +268,8 @@ function createWebServer({
         config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
         handler: dispatch,
       });
+    if (!testIdentity) instance.route({ method: "POST", url: "/api/setup/admin",
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } }, handler: dispatch });
     instance.setErrorHandler((error, _request, reply) => {
       error = presentError(error);
       reply.code(error.statusCode || 400).send({
@@ -302,6 +309,7 @@ function createWebServer({
       const description = async () => ({
         user: actor,
         token: csrfToken(),
+        ...(setup ? { setup: await setup.status(actor) } : {}),
         ...(actor
           ? {
               settings: testIdentity
@@ -312,6 +320,17 @@ function createWebServer({
       });
       if (request.method === "GET" && url.pathname === "/api/auth/session")
         return json(response, 200, (await description()));
+      if (setup && request.method === "GET" && url.pathname === "/api/setup/status")
+        return json(response, 200, await setup.status());
+      if (setup && request.method === "POST" && url.pathname === "/api/setup/admin") {
+        const input = await body(raw);
+        await setup.bootstrap(input);
+        const row = await accounts.login(input);
+        await establish(request, row);
+        actor = accounts.describe(row);
+        request.applicationActor = actor;
+        return json(response, 201, await description());
+      }
       if (
         request.method === "POST" &&
         url.pathname === "/api/auth/login" &&
@@ -361,8 +380,10 @@ function createWebServer({
           403,
           "PASSWORD_CHANGE_REQUIRED",
         );
-      if (request.method === "POST" && environment.status().busy && !url.pathname.startsWith("/api/auth/"))
+      if (setup) await setup.gate(actor, request.method, url.pathname);
+      if (request.method === "POST" && environment.status().busy && !url.pathname.startsWith("/api/auth/") && url.pathname !== "/api/system/setup/draft")
         throw accountError("环境工具正在更新，请完成后再提交操作。", 409);
+      if (setup && await serveSetup(request, response, url, { setup, actor, input, authorize })) return;
       if (mcpTokens && await serveMcpAccount(request, response, url, { tokens: mcpTokens, actor, input, authorize })) return;
       if (projects && await serveProjectApi(request, response, url, { projects, actor, input })) return;
       if (systemWorkflows && await serveSystemWorkflows(request.raw, response, url, { services: systemWorkflows, actor, input })) return;
@@ -510,6 +531,11 @@ function createWebServer({
           return json(response, 200, await environment.read());
         if (request.method === "POST" && url.pathname === "/api/system/environment/check")
           return json(response, 200, await environment.checkLatest());
+        if (request.method === "POST" && url.pathname === "/api/system/environment/install")
+          return json(response, 202, await environment.installMissing(input, async () => {
+            const current = await authorize();
+            if (!testIdentity) await accounts.requireAdmin(current);
+          }));
         if (url.pathname === "/api/system/environment/update") {
           if (request.method === "GET") return json(response, 200, environment.status());
           if (request.method === "POST") return json(response, 202, await environment.start(input, async () => {
@@ -610,6 +636,7 @@ function createWebServer({
       return accounts;
     },
     get projects() { return projects; },
+    async initializationToken() { await app.ready(); return setup ? setup.issueToken() : null; },
     async listen(port = 4317) {
       await app.ready();
       await app.listen({ port, host });

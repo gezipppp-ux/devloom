@@ -4,6 +4,8 @@ function presentEnvironmentTool(tool, installed, latest, plan) {
   return {
     ...tool,
     version: installed?.version || null,
+    authentication: installed?.authentication ?? null,
+    binaryReady: Boolean(installed?.version && !installed?.error && !installed?.missing && (installed?.versionSatisfies ?? installed?.satisfies)),
     missing: Boolean(installed?.missing),
     status: installed?.missing ? "fail" : installed?.error ? "unknown" : installed?.satisfies ? "pass" : "fail",
     detail: installed?.error || (installed?.authentication === false ? "无法确认 Codex 已登录，请在服务账号下运行 codex login status 检查。" : installed?.satisfies ? "满足基础要求" : "版本未满足最低要求"),

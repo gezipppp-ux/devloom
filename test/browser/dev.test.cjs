@@ -141,6 +141,7 @@ async function main() {
     });
     const seeding = await database.open();
     await seedProjectDepartment(seeding);
+    await seeding.client.systemSetup.update({ where: { id: "installation" }, data: { status: "not_required" } });
     await seeding.close();
     const port = await availablePort();
     const origin = `http://127.0.0.1:${port}`;

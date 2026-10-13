@@ -30,7 +30,7 @@ async function inspectTool(id, { run = runTool, codex = () => getAgentProvider("
     try { await run(launch.command, [...launch.args, "login", "status"]); authentication = true; }
     catch { authentication = false; }
   }
-  return { version, satisfies: satisfies && authentication !== false, authentication, launch };
+  return { version, versionSatisfies: satisfies, satisfies: satisfies && authentication !== false, authentication, launch };
 }
 
 async function latestTool(id, fetchJson = remoteJson, platform = process.platform) {

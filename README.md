@@ -78,6 +78,8 @@ CLI Agent 已通过独立适配层接入，目前仅支持 Codex。项目协作�
 
 目标项目需要的 Java、Python、pnpm、编译器等工具，也要在服务端另外安装。Web Coding 只提供任务工作台，不会自动安装所有业务项目的运行环境。磁盘需要容纳依赖、数据库、项目仓库和多个任务 worktree，具体容量取决于仓库规模。
 
+首次启动前需准备 Node.js、npm 和 PostgreSQL。初始化向导会检测 Git / Codex，并在安装器可用时按展示的确切版本安装缺失工具；Codex 登录可稍后完成，实际开始开发前仍需认证。
+
 ### 检查运行环境
 
 管理员可在「系统设置 → Agent 供应商」选择 Codex API Key 直连配置或“服务器现有配置”。API Key 模式要求供应商提供原生 Responses 接口；支持手填／获取模型及手动生成检测，检测可能产生少量费用。切换不打断当前轮次，失败不自动回退；配置和升级说明见 [Agent 供应商](docs/engineering/agent-suppliers.md)。Codex CLI 仍需安装；只有使用服务器现有认证时才需要在服务账号下完成对应登录。
@@ -167,7 +169,6 @@ $env:DATABASE_URL = 'postgresql://web_coding:替换为URL编码密码@127.0.0.1:
 New-Item -ItemType Directory -Force -Path $env:RUNNER_DATA_DIR | Out-Null
 npm run build
 npm run db:deploy
-npm run init:admin
 npm start -- --host 127.0.0.1 --port 4317
 ```
 
@@ -179,7 +180,6 @@ export DATABASE_URL='postgresql://web_coding:替换为URL编码密码@127.0.0.1:
 mkdir -p "$RUNNER_DATA_DIR"
 npm run build
 npm run db:deploy
-npm run init:admin
 npm start -- --host 127.0.0.1 --port 4317
 ```
 
@@ -187,13 +187,16 @@ npm start -- --host 127.0.0.1 --port 4317
 
 ### 2. 创建初始管理员
 
-上面的 `npm run init:admin` 会提示输入两次密码，输入时不回显：
+打开服务终端输出的一次性初始化链接，在网页中创建管理员：
 
-- 初始账号固定为 **`admin`**。
+- 登录名默认 **`admin`**，可修改；显示名称与登录名分别填写。
 - 密码长度为 **6–256 个字符**，两次输入必须一致。
-- 命令不接受参数，不支持通过 `--username`、`--password` 指定账号或密码。
-- 没有预置的默认密码；初始化成功后会提示管理员已创建。
-- 已创建的账号不会通过再次执行此命令重置密码。后续成员由页面中的「账号管理」维护。
+- 没有预置密码；创建后自动登录，继续检测并安装缺失的 Git / Codex、配置成员目录、创建产品部门与研发部门。
+- 可选创建「测试#产品」「测试#研发」及第一个项目，并分配对应权限；测试账号首次登录须改密。
+- 已完成步骤自动保存，「保存并退出」保留非敏感草稿。密码不会保存为草稿。
+- 链接有效期 30 分钟，只能用于首次创建管理员。过期时在相同数据库、数据目录和密钥环境下运行 `npm run setup:link`，将新凭证粘贴到 `/setup` 页面。
+
+`npm run init:admin` 仍可作为运维入口：交互创建固定登录名 `admin`，两次输入密码且不回显，不接受命令行参数。随后登录网页继续初始化。已有账号不会被重置；已有业务数据的部署不会强制进入向导。
 
 先创建空 PostgreSQL 数据库，运行 `npm run db:deploy` 部署版本化表结构；启动时校验迁移并补齐默认设置，未部署或升级失败会拒绝启动。**初始化管理员和启动服务必须使用同一个 `DATABASE_URL`、`RUNNER_DATA_DIR` 及凭据主密钥。** 可使用 [Docker Compose 配置](compose.yaml) 启动本地数据库，步骤见[部署说明](docs/deployment.md)。
 
@@ -203,7 +206,7 @@ npm start -- --host 127.0.0.1 --port 4317
 
 [http://127.0.0.1:4317](http://127.0.0.1:4317)
 
-使用 `admin` 和刚刚设置的密码登录。保持服务终端运行；在前台启动时，按 `Ctrl+C` 可正常关闭服务。关闭浏览器不会停止已启动的后台任务，关闭服务会中断正在初始化或执行的任务，之后可在原会话继续，程序不会自动重跑需求。
+首次启动使用终端的初始化链接；已创建账号时使用自己的登录名和密码。保持服务终端运行；在前台启动时，按 `Ctrl+C` 可正常关闭服务。关闭浏览器不会停止已启动的后台任务，关闭服务会中断正在初始化或执行的任务，之后可在原会话继续，程序不会自动重跑需求。
 
 ## 首次登录后的配置
 
@@ -232,6 +235,7 @@ npm start -- --host 127.0.0.1 --port 4317
 | --- | --- | --- |
 | `npm ci` | 安装锁文件中的依赖 | 无 |
 | `npm run init:admin` | 交互创建初始管理员 | 无 |
+| `npm run setup:link` | 为尚未创建管理员的部署重新签发初始化凭证 | 无 |
 | `npm run db:generate` | 生成并编译 Prisma CommonJS 客户端 | 无 |
 | `npm run db:deploy` | 部署 PostgreSQL 版本化迁移 | 无 |
 | `npm run build` | 生成客户端并构建正式前端到 `web/dist` | 无 |
@@ -261,7 +265,7 @@ npm run dev:watch
 npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
-默认访问 [http://127.0.0.1:5173](http://127.0.0.1:5173)。页面、API、SSE 和热更新共用同一端口，无需额外启动 `npm start` 或配置前端代理；开发模式无需构建前端，但需要先生成 Prisma 客户端、部署数据库迁移和初始化管理员。
+默认访问 [http://127.0.0.1:5173](http://127.0.0.1:5173)。页面、API、SSE 和热更新共用同一端口，无需额外启动 `npm start` 或配置前端代理；开发模式无需构建前端，但需要先生成 Prisma 客户端并部署数据库迁移。首次运行同样通过终端初始化链接创建管理员。
 
 `dev` 修改前端后自动更新，修改后端需手动重启。`dev:watch` 监听 `src/` 的 CJS 和 `shared/` 的 JSON；后端重启会停止活动初始化及 Codex 轮次，并刷新页面、清空未发送草稿。实际任务运行期间，建议使用只热更新前端的 `dev`。
 

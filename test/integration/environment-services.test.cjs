@@ -4,6 +4,43 @@ const { temporary } = require("../support/helpers.cjs");
 const { EnvironmentServices } = require("../../src/application/environment-services.cjs");
 const { saveSystemSettings } = require("../../src/config/system-settings.cjs");
 
+test("missing-tool batch serializes Git before Codex, excludes concurrent requests and reauthorizes each tool", async t => {
+  const order = [], installed = new Set();
+  let release, entered, authorizations = 0;
+  const started = new Promise(resolve => { entered = resolve; });
+  const service = await fixture(t, {
+    inspect: async id => { if (!installed.has(id)) throw Object.assign(new Error("missing"), { code: "TOOL_NOT_FOUND" }); return { version: "2.0.0" }; },
+    plan: async () => ({ available: true, operation: "install" }),
+    install: async id => { order.push(id); if (id === "git") { entered(); await new Promise(resolve => { release = resolve; }); } installed.add(id); },
+  });
+  const input = { tools: ["codex", "git"].map(id => ({ id, version: "2.0.0" })) };
+  assert.equal((await service.installMissing(input, () => authorizations++)).busy, true);
+  await started;
+  await assert.rejects(service.installMissing(input, () => {}));
+  await assert.rejects(service.start({ id: "npm", version: "2.0.0" }, () => {}));
+  release(); await service.batchPending;
+  assert.deepEqual(order, ["git", "codex"]);
+  assert.equal(authorizations, 3);
+  assert.equal(service.status().busy, false);
+  assert.equal(service.status().batch.status, "completed");
+});
+
+test("missing-tool batch stops at failure or restart and cannot install after permission revocation", async t => {
+  for (const outcome of ["failure", "restart", "revoked"]) {
+    const order = []; let authorized = 0;
+    const service = await fixture(t, {
+      inspect: async () => { throw Object.assign(new Error("missing"), { code: "TOOL_NOT_FOUND" }); },
+      plan: async () => ({ available: true, operation: "install" }),
+      install: async id => { order.push(id); if (outcome === "failure") throw new Error("fixture failure"); return { installedVersion: "2.0.0", restartRequired: outcome === "restart" }; },
+    });
+    await service.installMissing({ tools: ["git", "codex"].map(id => ({ id, version: "2.0.0" })) }, () => { if (++authorized === 3) throw new Error("revoked"); });
+    await service.batchPending;
+    assert.deepEqual(order, ["git"]);
+    assert.equal(service.status().batch.status, outcome === "restart" ? "restart-required" : "failed");
+    assert.equal(service.status().busy, false);
+  }
+});
+
 async function fixture(t, overrides = {}) {
   const dataDirectory = temporary(t);
   (await saveSystemSettings({ memberStorageRoot: dataDirectory }, dataDirectory));

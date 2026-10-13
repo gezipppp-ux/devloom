@@ -6,10 +6,11 @@ import MemberStorageSettings from "../features/settings/MemberStorageSettings.vu
 import SystemWorkflows from "../features/settings/SystemWorkflows.vue";
 import EnvironmentPage from "../features/settings/EnvironmentPage.vue";
 import AgentSuppliers from "../features/settings/AgentSuppliers.vue";
+import SetupRecord from "../features/setup/SetupRecord.vue";
 
 const route = useRoute();
 const router = useRouter();
-const currentTab = computed(() => ["environment", "workflows", "agent-suppliers"].includes(route.query.tab) ? route.query.tab : "storage");
+const currentTab = computed(() => ["environment", "workflows", "agent-suppliers", "initialization"].includes(route.query.tab) ? route.query.tab : "storage");
 function select(tab) {
   const query = { ...route.query };
   if (tab !== "storage") query.tab = tab;
@@ -25,10 +26,12 @@ function select(tab) {
       <button :aria-pressed="currentTab === 'storage'" :class="{ active: currentTab === 'storage' }" @click="select('storage')">目录设置</button>
       <button :aria-pressed="currentTab === 'environment'" :class="{ active: currentTab === 'environment' }" @click="select('environment')">环境检测</button>
       <button :aria-pressed="currentTab === 'workflows'" :class="{ active: currentTab === 'workflows' }" @click="select('workflows')">流程编排</button>
+      <button :aria-pressed="currentTab === 'initialization'" :class="{ active: currentTab === 'initialization' }" @click="select('initialization')">初始化记录</button>
     </nav>
     <AgentSuppliers v-if="currentTab === 'agent-suppliers'" />
     <EnvironmentPage v-else-if="currentTab === 'environment'" />
     <SystemWorkflows v-else-if="currentTab === 'workflows'" />
+    <SetupRecord v-else-if="currentTab === 'initialization'" @continue="router.push({ name: 'setup' })" />
     <MemberStorageSettings v-else />
   </section>
 </template>

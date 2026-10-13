@@ -184,6 +184,7 @@ test("development CLI serves Vite and workspace APIs on one guarded origin", asy
   );
   const seeding = await fixture.open();
   await seedProjectDepartment(seeding);
+  await seeding.client.systemSetup.update({ where: { id: "installation" }, data: { status: "not_required" } });
   await seeding.close();
   const privateFile = path.join(directory, "private-fixture.json");
   const secret = "development-test-private-data-must-not-be-served";

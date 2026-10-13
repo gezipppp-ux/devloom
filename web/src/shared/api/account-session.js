@@ -2,7 +2,7 @@
 import { reactive } from "vue";
 import { appApi, onAuthenticationFailure, resetApiSession, setAuthenticationToken } from "./api.js";
 
-export const accountSession = reactive({ ready: false, user: null, settings: {}, generation: 0, error: "" });
+export const accountSession = reactive({ ready: false, user: null, settings: {}, setup: null, generation: 0, error: "" });
 let initialization;
 let settingsQueue = Promise.resolve();
 let settingsRevision = 0;
@@ -22,6 +22,7 @@ function applySession(result) {
   setAuthenticationToken(result.token);
   accountSession.user = result.user || null;
   accountSession.settings = result.settings || {};
+  accountSession.setup = result.setup || null;
   accountSession.ready = true;
   accountSession.error = "";
 }
@@ -31,6 +32,7 @@ export function clearAccountSession() {
   accountSession.generation++;
   accountSession.user = null;
   accountSession.settings = {};
+  accountSession.setup = null;
   accountSession.ready = true;
   initialization = null;
   settingsQueue = Promise.resolve();
@@ -64,6 +66,11 @@ export async function loginAccount(credentials) {
   initialization = null;
   await loadAccountSession();
   applySession(await appApi("/auth/login", credentials));
+  broadcastIdentityChange();
+}
+
+export async function createInitialAccount(credentials) {
+  applySession(await appApi("/setup/admin", credentials));
   broadcastIdentityChange();
 }
 

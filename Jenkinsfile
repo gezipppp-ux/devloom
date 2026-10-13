@@ -56,9 +56,9 @@ pipeline {
               dir("verification/${PLATFORM}") {
                 script {
                   if (isUnix()) {
-                    sh 'npx eslint src test web/src web/vite.config.mjs && node --test test/architecture/*.test.cjs test/unit/*.test.cjs test/integration/*.test.cjs && npm run build && node test/browser/session.test.cjs && node test/browser/workspaces.test.cjs && node test/browser/dev.test.cjs && node test/browser/accounts.test.cjs && node test/browser/project-collaboration.test.cjs && node test/browser/development-flows.test.cjs && node test/browser/project-editing.test.cjs && node test/browser/visual.test.cjs'
+                    sh 'npx eslint src test web/src web/vite.config.mjs && node --test test/architecture/*.test.cjs test/unit/*.test.cjs test/integration/*.test.cjs && npm run build && node test/browser/session.test.cjs && node test/browser/workspaces.test.cjs && node test/browser/dev.test.cjs && node test/browser/accounts.test.cjs && node test/browser/setup.test.cjs && node test/browser/project-collaboration.test.cjs && node test/browser/development-flows.test.cjs && node test/browser/project-editing.test.cjs && node test/browser/visual.test.cjs'
                   } else {
-                    bat 'npx eslint src test web/src web/vite.config.mjs && node --test test/architecture/*.test.cjs test/unit/*.test.cjs test/integration/*.test.cjs && npm run build && node test/browser/session.test.cjs && node test/browser/workspaces.test.cjs && node test/browser/dev.test.cjs && node test/browser/accounts.test.cjs && node test/browser/project-collaboration.test.cjs && node test/browser/development-flows.test.cjs && node test/browser/project-editing.test.cjs && node test/browser/visual.test.cjs'
+                    bat 'npx eslint src test web/src web/vite.config.mjs && node --test test/architecture/*.test.cjs test/unit/*.test.cjs test/integration/*.test.cjs && npm run build && node test/browser/session.test.cjs && node test/browser/workspaces.test.cjs && node test/browser/dev.test.cjs && node test/browser/accounts.test.cjs && node test/browser/setup.test.cjs && node test/browser/project-collaboration.test.cjs && node test/browser/development-flows.test.cjs && node test/browser/project-editing.test.cjs && node test/browser/visual.test.cjs'
                   }
                 }
               }

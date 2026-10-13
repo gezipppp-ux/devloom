@@ -52,7 +52,7 @@ class ProjectServices {
     return { ...context, permissions: projectContextPermissions(context) };
   }
   async departments(actor) { await this.admin(actor); return { departments: (await this.store.departments()).map(presentDepartment) }; }
-  async saveDepartment(actor, input, id) {
+  async saveDepartment(actor, input, id, { enforce = true } = {}) {
     const value = departmentInput(input, Boolean(id));
     if (id) projectId(id);
     const saved = await this.store.transaction(async () => {
@@ -61,7 +61,7 @@ class ProjectServices {
       await this.store.audit(actor, "department.saved", { departmentId: row.id, revision: row.revision });
       return row;
     });
-    await this.enforce();
+    if (enforce) await this.enforce();
     return { department: presentDepartment(saved) };
   }
   async list(actor) {
@@ -158,7 +158,7 @@ class ProjectServices {
     if (context.permissions.includes("project.members.manage")) result.candidates = (await this.store.users()).map(user => ({ id: user.id, username: user.username, displayName: user.displayName, departmentId: user.departmentId, departmentName: user.department?.name || "", administratorAccess: user.role === "admin", grantablePermissions: grantableProjectPermissions(user), permissions: user.department?.status === "active" ? user.department.permissions : [] }));
     return result;
   }
-  async saveMember(id, actor, input, userId) {
+  async saveMember(id, actor, input, userId, { enforce = true } = {}) {
     const updating = Boolean(userId);
     const value = memberInput(input, updating);
     userId = projectId(userId || value.userId);
@@ -181,7 +181,7 @@ class ProjectServices {
       await this.store.audit(actor, "project.member.saved", { projectId: id, userId, revision: membership.revision });
       return membership;
     });
-    await this.enforce();
+    if (enforce) await this.enforce();
     return { membership: presentMember({ ...row, user: await this.store.user(userId) }), space: presentSpace(await this.store.space(id, userId)) };
   }
   async archive(id, actor, input, restore = false) {

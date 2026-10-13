@@ -1,5 +1,6 @@
 const { argument } = require("./arguments.cjs");
 const { createWebServer } = require("../http/server.cjs");
+const { printSetupLink } = require("./setup-link.cjs");
 
 async function main(argv = process.argv.slice(2)) {
   if (argument("--config", null, argv))
@@ -12,6 +13,7 @@ async function main(argv = process.argv.slice(2)) {
   const host = argument("--host", "0.0.0.0", argv);
   const application = createWebServer({ host });
   const origin = await application.listen(port);
+  await printSetupLink(application, process.env.PUBLIC_ORIGIN || origin);
   process.stdout.write(
     `Web Coding: ${origin}\n监听地址：${host}:${port}\n保持此进程运行；关闭浏览器不会停止 Codex。\n`,
   );

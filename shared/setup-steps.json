@@ -1,0 +1,9 @@
+[
+  { "id": "admin", "title": "管理员账号", "description": "建立管理身份", "optional": false },
+  { "id": "environment", "title": "运行环境", "description": "检测并安装工具", "optional": false },
+  { "id": "directory", "title": "成员目录", "description": "项目与任务位置", "optional": false },
+  { "id": "departments", "title": "部门与权限", "description": "应用默认权限", "optional": false },
+  { "id": "accounts", "title": "测试账号", "description": "可跳过", "optional": true },
+  { "id": "project", "title": "第一个项目", "description": "可跳过", "optional": true },
+  { "id": "complete", "title": "完成配置", "description": "检查初始化结果", "optional": false }
+]
