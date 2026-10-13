@@ -9,6 +9,11 @@ const props = defineProps({
   disabled: Boolean, required: Boolean, rows: { type: Number, default: 8 },
   images: { type: Array, default: () => [] }, attachments: { type: Array, default: () => [] },
   error: { type: String, default: "" }, busy: Boolean, contextKey: { type: [String, Number], default: "" },
+  accept: { type: String, default: "" },
+  attachmentLabel: { type: String, default: "待保存附件" },
+  attachmentHint: { type: String, default: "随内容一起保存" },
+  uploadHint: { type: String, default: "单个附件最多 10 MiB，每次合计 20 MiB。" },
+  attachButtonLabel: { type: String, default: "添加图片 / 附件" },
 });
 const emit = defineEmits(["update:modelValue", "files", "remove"]);
 const id = useId(), textarea = ref(null), visual = ref(null), picker = ref(null), mode = ref("write");
@@ -59,8 +64,8 @@ onBeforeUnmount(() => { generation++; });
         <div class="markdown-editor-modes" :aria-label="`${label}编辑模式`">
           <button v-for="[value, title] in modes" :key="value" type="button" :aria-pressed="mode === value" :disabled="busy" @click="mode = value">{{ title }}</button>
         </div>
-        <button class="markdown-attach-button" type="button" :disabled="!canAttach" @click="picker.click()"><PaperClipOutlined aria-hidden="true" />{{ busy ? '读取附件中…' : '添加图片 / 附件' }}</button>
-        <input ref="picker" type="file" multiple hidden :disabled="!canAttach" @change="filesSelected($event.target.files); $event.target.value = ''" />
+        <button class="markdown-attach-button" type="button" :disabled="!canAttach" @click="picker.click()"><PaperClipOutlined aria-hidden="true" />{{ busy ? '读取附件中…' : attachButtonLabel }}</button>
+        <input ref="picker" type="file" :accept="accept" multiple hidden :disabled="!canAttach" @change="filesSelected($event.target.files); $event.target.value = ''" />
       </div>
       <VisualMarkdownEditor v-show="mode === 'write'" ref="visual" :model-value="modelValue" :label="label" :input-id="id" :active="mode === 'write'" :images="images" :disabled="disabled" :busy="busy" :rows="rows" :context-key="contextKey" @update:model-value="emit('update:modelValue', $event)" @files="emit('files', $event)" @source-request="mode = 'source'" />
       <textarea v-if="mode === 'source'" :id="id" ref="textarea" class="markdown-source" :value="modelValue" :aria-label="label" :disabled="disabled || busy" :required="required" :rows="rows" maxlength="60000" spellcheck="false" @input="emit('update:modelValue', $event.target.value)" @select="remember" @click="remember" @keyup="remember" @blur="remember" @paste="paste"></textarea>
@@ -68,7 +73,7 @@ onBeforeUnmount(() => { generation++; });
     </div>
     <span class="markdown-editor-help">{{ mode === 'source' ? '正在编辑 Markdown 源码，可切回写作查看图片。' : '直接粘贴图片，或添加附件；图片与文字一起编辑。' }}</span>
     <div v-if="attachments.length" class="markdown-attachment-section">
-      <div class="markdown-attachment-heading"><span>待保存附件</span><span>{{ attachments.length }} 个 · 随内容一起保存</span></div>
+      <div class="markdown-attachment-heading"><span>{{ attachmentLabel }}</span><span>{{ attachments.length }} 个 · {{ attachmentHint }}</span></div>
       <ul class="markdown-attachments">
         <li v-for="item in attachments" :key="item.id">
           <img v-if="item.previewUrl" class="markdown-attachment-thumbnail" :src="item.previewUrl" alt="" />
@@ -78,7 +83,7 @@ onBeforeUnmount(() => { generation++; });
         </li>
       </ul>
     </div>
-    <span class="markdown-editor-help markdown-upload-limit">单个附件最多 10 MiB，每次合计 20 MiB。</span>
+    <span class="markdown-editor-help markdown-upload-limit">{{ uploadHint }}</span>
     <FeedbackMessage :message="error" type="error" />
   </div>
 </template>

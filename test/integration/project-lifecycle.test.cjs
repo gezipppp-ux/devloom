@@ -71,24 +71,6 @@ test("release archive gates unfinished work and protects all issue write paths u
   await content.addComment(projectId, issue.id, actor, { body: "恢复后可评论" });
 });
 
-test("archived imported issues are reused without modifying snapshots or attachments", async t => {
-  const { database, actor, projectId, lifecycle, content } = await fixture(t);
-  const material = { type: "requirement", title: "来源事项", source: { channel: "tapd", scope: "1", type: "story", externalId: "22", url: "https://www.tapd.cn/1/story/view/22", snapshot: { title: "原始快照" } } };
-  content.fetchTapd = async () => [material];
-  let issue = (await content.importTapd(projectId, actor, {})).items[0];
-  const release = await lifecycle.saveRelease(projectId, null, actor, { name: "v0.3" });
-  issue = await content.updateIssue(projectId, issue.id, actor, { revision: issue.revision, releaseId: release.id });
-  issue = await content.transitionIssue(projectId, issue.id, actor, { revision: issue.revision, status: "rejected", reason: "关闭历史需求" });
-  await lifecycle.archiveRelease(projectId, release.id, actor, { revision: release.revision }, true);
-  material.title = "不应覆盖的远端标题";
-  material.attachments = [{ name: "unexpected.txt", mimeType: "text/plain", data: Buffer.from("unexpected") }];
-  const reused = (await content.importTapd(projectId, actor, {})).items[0];
-  assert.equal(reused.title, "来源事项");
-  assert.equal(reused.revision, issue.revision);
-  assert.equal(reused.reused, true);
-  assert.equal(await database.client.projectFile.count({ where: { issueId: issue.id } }), 0);
-});
-
 test("release archive racing an issue reopen cannot leave an archived unfinished issue", async t => {
   const { actor, projectId, lifecycle, content } = await fixture(t);
   for (let attempt = 0; attempt < 3; attempt++) {

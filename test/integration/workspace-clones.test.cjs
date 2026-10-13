@@ -109,11 +109,11 @@ test("production HTTP refuses personal clones and conceals legacy background job
   const bootstrap = await fetch(origin + "/api/auth/session");
   let cookie = bootstrap.headers.get("set-cookie")?.split(";", 1)[0] || "";
   let token = (await bootstrap.json()).token;
-  const login = await fetch(origin + "/api/auth/login", { method: "POST", headers: { cookie, "content-type": "application/json", "x-tapd-token": token }, body: JSON.stringify({ username: "admin", password: "clone-fixture" }) });
+  const login = await fetch(origin + "/api/auth/login", { method: "POST", headers: { cookie, "content-type": "application/json", "x-csrf-token": token }, body: JSON.stringify({ username: "admin", password: "clone-fixture" }) });
   assert.equal(login.status, 200);
   cookie = login.headers.get("set-cookie")?.split(";", 1)[0] || cookie;
   token = (await login.json()).token;
-  const create = await fetch(origin + "/api/workspaces", { method: "POST", headers: { cookie, "content-type": "application/json", "x-tapd-token": token }, body: JSON.stringify(input) });
+  const create = await fetch(origin + "/api/workspaces", { method: "POST", headers: { cookie, "content-type": "application/json", "x-csrf-token": token }, body: JSON.stringify(input) });
   assert.equal(create.status, 403);
   assert.match((await create.json()).error, /个人空间创建已关闭/);
   assert.equal(pending.length, 0);

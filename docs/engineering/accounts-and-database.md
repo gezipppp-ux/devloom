@@ -23,7 +23,18 @@
 | --- | --- | --- |
 | 个人设置 | Git 账号、通知开关、任务分组、默认模型、思考强度、执行权限 | 本人，适用本人全部工作区 |
 | 系统设置 | 成员目录基础地址、环境检测、部门权限上限、账号资格 | 仅管理员修改 |
-| 项目设置 | 名称、负责人、Git 仓库地址、初始化命令、TAPD 配置与凭据、提示词模板 | 对应项目配置权限 |
+| 项目设置 | 名称、负责人、Git 仓库地址、初始化命令、提示词模板 | 对应项目配置权限 |
+| 项目个人提示词 | 当前项目的 Bug／需求／补充模板覆盖 | 当前有效项目成员仅修改本人，不要求项目配置或开发空间权限 |
+
+项目创建时在 `settings.prompts` 保存 `bug`、`requirement`、`supplement` 三份内置模板。`project_members.prompts` 仅保存该成员的覆盖项，`prompt_revision` 独立处理并发保存，不影响成员权限修订号。每种类型按个人覆盖、项目默认的顺序生效；个人重置删除该类型覆盖，后续跟随项目变化。项目默认重置则保存内置模板。成员列表及他人的项目响应不得返回个人模板。
+
+`GET /api/projects/:id/prompts` 返回项目默认、当前成员覆盖、生效模板、项目和个人修订号及模板目录；`POST` 仅接受 `scope: project|personal`、`revision` 和 `templates`。个人身份来自登录账号，不接受用户 ID；项目默认修改复核 `project.configure`，个人写入复核有效成员及项目非归档。保存冲突返回 409，页面保留草稿并支持逐字段合并。
+
+模板按事项类型而非渠道选择。显式开始开发和追加事项受理时读取执行人的生效模板，逐条填入完整资料及有序图片说明，混合任务可同时包含两种模板。渲染结果进入任务／追加快照，发送已受理批次不重新渲染，也不在初次启动时再套一层需求模板。设置更新不改写已有快照、会话或 Worktree。
+
+待开发任务在启动表单中提供可选补充提示词输入框；`POST /api/projects/:id/tasks/:taskId/start` 接受 `supplementaryPrompt`（最多 20000 字），省略或空文本均表示无补充，非法类型拒绝。该字段属于启动请求，不接受通过任务信息编辑接口保存。受理启动时将任务标题与补充内容填入执行人的 `supplement` 模板（必填 `{{content}}`，可选 `{{title}}`），在全部事项指令后追加一次；未填写时不渲染补充模板。总指令仍限 60000 字。原始补充内容、渲染结果和启动请求一并进入执行快照，幂等重试必须保持补充内容一致；后续模板修改不重渲染或重新执行已受理任务。启动前刷新状态或校验失败保留当前任务的本地草稿，任务切换后清空。追加事项不重复发送初始补充要求。
+
+本次直接移除 `manual` 模板字段；旧 `manual`、`tapd`、`tapd_fusion` 配置拒绝读取及保存，不转换旧提示词、不做双写或兼容回退。个人模板结构直接包含在当前全新安装基线中，不迁移历史提示词。
 
 新任务可覆盖个人执行默认值。已启动任务保存实际选择，后续全局设置修改不回写已有任务。通知授权仍属于浏览器设备权限。未读记录按账号和工作区保存于数据库，不混入系统设置。
 
@@ -41,6 +52,8 @@
 - `resolveAccountRemote` 统一解析账号对应的连接地址；主机及认证方式一致时保持原地址。Gitee 官方 `gitee.com` 的默认端口、两段仓库路径支持 HTTPS 与 `git@` SSH 等价地址，按个人账号选择传输方式；不推断企业主机、自定义端口、其他 SSH 用户或任意服务的地址映射，不将 HTTPS 降级为 HTTP。连接检测和克隆使用同一解析结果，项目地址保留原值，开发空间保存实际传输地址；后续同步项目设置不改写已准备空间的传输地址。
 - `POST /api/account/git-keys` 生成所有者隔离的 24 小时加密草稿，仅返回 `id, publicKey, expiresAt`。SSH 保存提交 `keyDraftId`，成功事务消费草稿；生成或检测失败不替换原密钥。私钥、密码从不进入公开响应。
 - `POST /api/account/git-accounts/check` 检测新增草稿，`POST /api/account/git-accounts/:id/test` 检测已保存账号或编辑草稿；均需 `projectId`，不接受客户端指定任意仓库。
+- 个人 Git 账号表单另提供独立的「验证登录」。`POST /api/account/git-accounts/verify` 验证草稿，`POST /api/account/git-accounts/:id/verify` 验证本人已保存账号或编辑草稿，不需要项目、不保存账号、不消费 SSH 密钥草稿。网络返回后重新校验登录会话及已有账号修订号，迟到响应不能写入卸载或切换后的账号页面。
+- 主机登录验证中，SSH 通过服务端 OpenSSH 以 `git` 用户执行公钥认证，使用独立私钥及空配置；成功依据独立诊断文件中的 OpenSSH 认证事件，不依据远端欢迎文字或退出码。HTTP 使用 Gitee、GitHub、GitLab 的当前用户 API，以请求头传递令牌、禁止重定向并核对返回登录名；官方主机自动识别，自建服务需显式选择 `provider: github|gitee|gitlab`，默认 `auto`。服务类型仅用于验证，不持久化。主机 API 验证要求能读取本人资料的访问令牌，不支持普通密码；未知接口、网络错误、无效身份或令牌失败不视为登录成功。主机验证成功不代表仓库读取或推送权限。
 - 凭据以 AES-256-GCM 保存；临时私钥目录在 POSIX 限制模式，在 Windows 限制 ACL，操作结束清理。HTTP Basic 凭据通过仅对子进程生效的 Git 配置传递，不进入命令参数、远程 URL 或仓库配置；禁止跨站重定向。HTTP 明文传输有明确风险提示。
 - SSH 的 `-F` 指向私钥临时目录内的真实空配置文件，以隔离用户／系统 SSH 配置；不使用 Windows 与 Git 自带 OpenSSH 解释不一致的 `NUL` 或 `/dev/null`。配置文件与私钥同目录、同权限，并随连接或单次 Git 操作一起清理。
 - 关联工作区只保存 Git 账号 ID 与远程地址；克隆及 fetch 在确认远端地址未被改写后使用该账号。该工作区 Codex 会话中的 Git 网络操作也使用该账号。HTTP Basic 凭据仅注入对应 Codex 子进程的 Git 配置，并按保存远端的 URL origin 限定；SSH 私钥写入受限临时文件，并在会话客户端关闭时清理。凭据不写入远程 URL 或仓库配置。关联中的账号不能删除。测试不验证推送权限。
@@ -59,11 +72,11 @@ Git 使用 `--progress` 和英文机器环境输出阶段百分比，服务只�
 
 - 账号、登录会话、三类设置、工作区、任务身份、来源、状态、需求快照、提示词、工具和会话历史、操作记录、日志、图片及偏好入库。
 - 工作区和运行记录包含有约束的身份、归属和查询字段；渠道快照等异构内容保留 JSON 字段。`storage` 拥有 SQL 和格式，其他模块调用存储接口。
-- 登录使用 Fastify Cookie/Session/CSRF/限流插件，Session ID 的摘要保存在 PostgreSQL。业务 POST 保留 `x-tapd-token` 请求头作为与当前会话绑定的 CSRF token。
-- TAPD session、Git 凭据与 SSH 草稿使用 AES-256-GCM 加密；主密钥来自 `RUNNER_ENCRYPTION_KEY` 或自动生成的 `<RUNNER_DATA_DIR>/secrets/database.key`。主密钥不会与数据库备份打包；已有数据缺失密钥时拒绝启动。应用密钥不传给 Codex／初始化子进程。
+- 登录使用 Fastify Cookie/Session/CSRF/限流插件，Session ID 的摘要保存在 PostgreSQL。业务 POST 保留 `x-csrf-token` 请求头作为与当前会话绑定的 CSRF token。
+- Git 凭据与 SSH 草稿使用 AES-256-GCM 加密；主密钥来自 `RUNNER_ENCRYPTION_KEY` 或自动生成的 `<RUNNER_DATA_DIR>/secrets/database.key`。主密钥不会与数据库备份打包；已有数据缺失密钥时拒绝启动。应用密钥不传给 Codex／初始化子进程。
 - 标准 Agent 通知和执行诊断日志按块保存；会话展示条目幂等保存，并在继续会话和轮次结束时补齐。分页读取数据库，Codex 离线仍可查看已保存历史。历史补齐保留实时更新，独立维护展示顺序。
 - 图片 BLOB 是权威数据，本地图片仅是 Codex 所需的缓存，可校验并重建。缓存不能通过符号链接越界；读取图片必须先经过工作区授权。暂存图片 24 小时过期。
-- 任务的 `requirements.json` 是 PostgreSQL `run_documents` 中的资源标识，保存来源归属、创建请求指纹及追加批次快照/发送状态，不是生产磁盘 JSON。RunRequirementsStore 在短事务内同时检查当前工作区所有原始运行记录和新归属记录，再原子写入成员与追加快照，覆盖历史单需求和归档任务；无需重写已有来源、会话或路径。素材抓取、Git 和 Codex 等待在事务外。显式文件测试适配使用工作区级短文件锁，旧任务无需预先迁移；永久删除任务同时删除归属文档。
+- 任务的 `requirements.json` 是 PostgreSQL `run_documents` 中的资源标识，保存来源归属、创建请求指纹及追加批次快照/发送状态，不是生产磁盘 JSON。RunRequirementsStore 在短事务内同时检查当前工作区所有原始运行记录和新归属记录，再原子写入成员与追加快照，覆盖显式来源的单需求和归档任务；缺失来源时拒绝操作，不推断旧渠道，不重写已有来源、会话或路径。素材抓取、Git 和 Codex 等待在事务外。显式文件测试适配使用工作区级短文件锁，使用当前任务结构；永久删除任务同时删除归属文档。
 - Git 仓库、Worktree、构建产物、Codex 原生登录和引擎会话资料、必要的执行锁保留文件形式。业务数据库保存其身份和路径，不移动业务 Worktree。
 - Web 与 CLI 工作区命令共用数据库，CLI 属于可信服务器运维入口，审计标记 `local_operator`。显式 `--config` 保留配置输入能力，执行记录仍使用数据库。
 
@@ -85,7 +98,7 @@ npm start -- --host 127.0.0.1 --port 4317
 
 服务在监听前检查 Prisma 迁移记录、文件校验和及凭据主密钥指纹，再幂等补齐生产默认值。模块导入不连接数据库、不执行迁移。未部署、失败、被修改或高于当前代码版本的迁移都会拒绝启动；不会回退 SQLite、自动重跑任务或执行降级。
 
-运维显式运行 `npm run db:deploy` 部署 `prisma/migrations/` 中的版本化 SQL。已发布迁移不能修改，后续改动添加新迁移；默认值补齐不创建固定密码账号、演示工作区或需求。历史 `src/storage/migrations/` 脚本不参与新部署。
+运维显式运行 `npm run db:deploy` 部署唯一当前基线 `20261012200000_baseline`。本轮按不兼容旧数据的要求合并旧 PostgreSQL 迁移并删除 SQLite 升级脚本，只允许新的空数据库/schema 与运行数据目录；旧部署不原地升级，不自动删除旧资料。后续基于此基线的兼容变更添加新迁移；默认值补齐不创建固定密码账号、演示工作区或需求。
 
 升级前停止旧服务及 CLI，并完成 PostgreSQL 的一致性备份和恢复演练。Prisma 管理迁移互斥，迁移 SQL 使用数据库事务；程序不再建立 SQLite 文件备份或检查旧库升级锁。
 
@@ -102,7 +115,7 @@ npm start -- --host 127.0.0.1 --port 4317
 - `POST /api/projects/:id/tasks` 为每条事项分别认领／指派待开发任务；按 `issue.assign` 指派有效且有 `session.start` 权限的执行人，无需 Git。批量分配可跨版本，合并任务仅关联同一发布版本的事项。数据库 `issue_development_claims` 的唯一约束和串行化事务防止重复认领。
 - `POST /tasks/:taskId/start` 由执行人提交 revision、requestId 与从实时远端列表选择的 baseBranch，持久化启动意图后准备和执行。GET `/api/projects/:id/branches` 使用本人已准备空间的凭据读取 origin，网络返回后复核授权及空间、账号修订号。Git、网络与 Agent 等待均在事务外。
 - 完成／取消任务前校验会话互斥、待处理审批、执行器状态及持久状态，再释放活跃认领。已结束任务的原会话仍可读，禁止续聊和审批启动执行。项目 `issue.view` 可查看计划，执行人之外的成员不获得私有 runKey、工作区或会话 ID。
-- 新模型不提供旧状态、旧启动接口或旧数据库格式的运行时兼容。已有业务库需先备份并按明确的数据处置方案更新；迁移不会自动删除旧事项和执行记录。
+- 新模型不提供旧状态、旧启动接口或旧数据库格式的运行时兼容。旧业务库留在原处，使用新数据库/schema 和运行目录部署当前基线；不转换或自动删除旧事项和执行记录。
 
 业务接口需要登录，只有静态登录入口和 `/api/auth/session`、登录接口允许匿名访问。`/api/auth/session` 返回登录状态与 CSRF token；已登录时还返回当前账号的公开信息和个人设置，不返回工作区目录或凭据。
 
@@ -117,11 +130,11 @@ npm start -- --host 127.0.0.1 --port 4317
 - 事项创建／编辑可随 JSON 提交 `attachments: [{id, name, mimeType, data}]`；`id` 为客户端生成的 UUIDv4，`data` 为严格 base64，正文引用 `/api/projects/:projectId/files/:id`。每个附件 10 MiB、每批最多 20 个且合计 20 MiB；只有这两类 JSON 路由允许 30 MiB 正文。附件与事项事务保存，创建随 `issue.create` 授权，编辑随 `issue.edit` 授权；修订冲突不留下附件。附件 ID 重试只复用同项目、事项、作者和完全相同内容的文件。
 - 事项创建可带稳定的 UUIDv4 `requestId`，同作者、项目与原始输入的重复提交复用事项，不重复编号或历史；重复标识改变输入返回 409。正文、附件列表和开发快照继续归事项，资产文件不能混入。
 - 图片 DTO 的 `images`／`previewUrl` 由附件魔数验证生成，PNG／JPEG／WebP／GIF 可以通过 `?inline=1` 预览；普通文件及伪图始终作为附件下载。文件读取再次校验资源权限，返回 `nosniff` 和私有无缓存；不信任上传 MIME，不允许内联 SVG／HTML。
-- 新 TAPD 事项导入在事务外按渠道白名单下载并验证 PNG／JPEG／WebP，单图最多 10 MiB、每事项最多 20 张、整批图片合计最多 20 MiB；任一图片失败则不保存该批事项。来源快照的 `projectImages` 保存原引用与附件 ID 映射，保留原文；事项、来源和附件在同一事务保存。详情仅映射本事项已验证的文件，开发快照读取同一附件。重复导入保留既有事项、本地修改与历史快照，不自动回填此前漏图的数据。
+- 历史导入事项的来源快照和附件继续保留；详情只映射本事项已验证的文件，开发快照读取同一附件。不提供新的外部来源导入接口，也不自动抓取或补全旧资料。
 - 生产 `POST /api/workspaces`、旧个人克隆入口、工作区配置写入和直接 `POST .../runs` 已关闭；项目配置和显式开发任务使用项目 API。
 - 仍可用的工作区需求检索 `/requirements`、`/stories` 必须同时满足工作区所有者、会话查看与需求查看权限；渠道查询返回后再次授权。
 - `/api/system/settings`：系统级设置；工作区接口保持 `/api/workspaces/:id/...`。
-- `/api/system/environment`（GET）：管理员环境检测；`/check`（POST）：查询四种工具的官方更新版本；`/update`（POST/GET）：确认工具更新／读取更新状态。写操作沿用 CSRF 与正文读取后权限复核，异步更新预检结束后再次复核管理员身份。
+- `/api/system/environment`（GET）：管理员环境检测；`/check`（POST）：查询四种工具的官方更新版本；`/update`（POST/GET）：确认工具安装／更新或读取状态，输入为 `{id, version, operation: install|update}`，省略 operation 表示 update。写操作沿用 CSRF 与正文读取后权限复核，异步预检结束后再次复核管理员身份。
 
 本机 HTTP 和开发服务器保留 IP/Host/Origin 校验。正式远程部署建议通过 HTTPS 反代，设置 `PUBLIC_ORIGIN=https://coding.example.com` 并将应用绑定 `127.0.0.1`；代理必须保留公开 Host。代理模式仅接受本机代理连接，不信任任意客户端提供的转发头。HTTPS 模式使用 Secure Cookie。
 
@@ -129,13 +142,19 @@ npm start -- --host 127.0.0.1 --port 4317
 
 Vue 页面路径 `/login`、`/password`、`/personal`、`/system`、`/accounts`、`/environment` 支持直接刷新（旧环境检测地址跳转到 `/system?tab=environment`）；系统设置通过「目录设置 / 环境检测」分类切换内容；未知文件路径不回退到页面入口。开发源码访问范围仍受 Vite 文件白名单限制。
 
+缺失工具支持首次安装：只有明确的 TOOL_NOT_FOUND 才进入安装流程，无法启动、版本异常或显式 CODEX_BIN 配置错误仍属于检测异常。Codex CLI 在 Windows/Linux 使用已有 npm 固定版本全局安装，安装后仍需服务账号完成登录；npm 缺失通过 Node.js 原安装工具修复。Git 在 Windows 使用 winget 的 Git.Git，在 Linux 使用 APT 或 DNF 的稳定候选版本，Linux 服务账号必须已有 root 权限，不自动提权。Linux 安装目标来自发行版软件源，单独显示版本和来源，不要求与上游最新版本一致；提交前重新读取软件源候选版本，目标变化则拒绝安装。已有包管理器登记或默认目录二进制但服务 PATH 不可见时拒绝重复安装。安装过程复用管理员复核、活动任务门禁与进程内互斥，固定包与版本，结束后验证二进制；Git 的 PATH 尚未生效时报告待重启，不伪造环境就绪。
+
 ## 验证
 
-Jenkinsfile 运行 eslint、Node 测试、`npm run build` 和浏览器脚本。数据库测试使用独立 PostgreSQL 的随机 schema，执行测试使用假 Codex/TAPD 和临时 Git。覆盖成员越权、登录撤销、SSE/图片隔离、完整执行、离线历史、图片缓存重建、迁移版本校验、事务回滚及连接失败，以及开发种子隔离。
+Jenkinsfile 运行 eslint、Node 测试、`npm run build` 和浏览器脚本。数据库测试使用独立 PostgreSQL 的随机 schema，执行测试使用假 Codex 和临时 Git。覆盖成员越权、登录撤销、SSE/图片隔离、完整执行、离线历史、图片缓存重建、迁移版本校验、事务回滚及连接失败，以及开发种子隔离。
 
 执行配置与任务记录采用 [Agent 契约](./agents.md) 的新格式，不提供旧 `codex` 字段回退。Git 账号引用查询使用 `execution.gitAccountId`，会话固定使用记录中的 `agent.provider`。
 
 ### 开发任务分配与合并接口
+
+- `POST /api/projects/:id/tasks/manual` 接受 `requestId`、`title`、`content`、`images`、`taskType`、`baseBranch` 和可选执行设置，直接受理本人独立开发。要求有效开发成员、启动权限和已准备的个人空间；不接受事项、执行人、版本或保存待开发参数。标题必填，内容与图片至少一项，最多 20 张本人当前空间的有效暂存图片。起始分支沿用实时远端选择与执行前固定 SHA 的规则。
+- 独立启动在短事务内直接保存 `unknown` 派发意图（`snapshot.kind = manual`），不创建 planned 任务或事项认领；网络、图片校验、模型能力发现及执行位于事务外。受理时冻结开发目标、当前生效类型提示词、个人默认执行设置、分支及图片 ID；相同标识参数相同只读返回原任务，参数变化返回 409，未知结果不重放。`GET .../tasks/manual?requestId=` 仅查询当前账号发起的请求，用于响应丢失后确认结果。
+- 独立任务通过现有会话与执行记录查看，项目任务列表标注「独立开发」；任务详情展示初始目标，不提供追加项目事项。会话所有者、完成／取消、归档权限及现有路径规则继续适用。
 
 - POST /api/projects/:id/tasks 接受 requestId、issueIds 和可选 executorId，返回 { tasks, reused }。一条事项对应一个初始待开发任务；整批原子提交，可跨版本，不再接受合并标题。省略 executorId 为认领本人，指派他人要求 issue.assign；执行人仍须有效成员且具备 session.start。
 - 事项创建／编辑不接受 assigneeId；负责人由任务认领、指派、转派和释放维护，事项参与人仍可独立编辑。事项 DTO 的 development 只含当前任务 ID、开发负责人 ID 和显示名称。

@@ -1,7 +1,7 @@
 const { isDeepStrictEqual } = require("node:util");
 const { ProjectDevelopmentStore } = require("../storage/project-development-store.cjs");
 const { AccountStore } = require("../storage/account-store.cjs");
-const { developmentInput, developmentMergeInput, developmentStartInput, developmentEditInput, developmentPrompt } = require("../domain/project-development.cjs");
+const { developmentInput, developmentMergeInput, developmentStartInput, manualDevelopmentInput, manualDevelopmentPrompt, developmentEditInput, developmentPrompt } = require("../domain/project-development.cjs");
 const { issueDevelopmentAllowed, assertIssueWritable } = require("../domain/issue-workflows.cjs");
 const { pageInput, identifier, object, revision } = require("../domain/project-issues.cjs");
 const { accountError } = require("../domain/account.cjs");
@@ -129,7 +129,9 @@ class ProjectDevelopmentServices {
       const space = await this.store.space(projectId, actor.id);
       const issues = await this.store.issues(projectId, current.snapshot.issues.map(issue => issue.id));
       this.assertIssues(issues, current.releaseId, true);
-      const prompt = developmentPrompt(issues);
+      const prompt = developmentPrompt(issues, false, await this.projects.effectivePrompts(projectId, actor), {
+        title: current.snapshot.title, content: request.supplementaryPrompt,
+      });
       const defaults = await this.accounts.settings(actor.id);
       const selection = Object.fromEntries(["model", "reasoningEffort", "permissionMode"].map(field => [field,
         Object.hasOwn(request, field) ? request[field] : defaults[field] ?? ""]));
@@ -138,11 +140,46 @@ class ProjectDevelopmentServices {
       return { task, created: true };
     });
     if (!accepted.created) return { task: await this.present(accepted.task, actor, true), reused: true };
-    let task = accepted.task;
+    return this.launchAccepted(accepted.task, actor);
+  }
+  async readManual(projectId, actor, input) {
+    object(input, ["requestId"]);
+    const requestId = identifier(input.requestId, "开发请求");
+    await this.authorize(projectId, actor, "session.start");
+    const task = await this.store.existing(projectId, actor.id, requestId);
+    return { task: task?.snapshot.kind === "manual" ? await this.present(task, actor, true) : null };
+  }
+  async startManual(projectId, actor, input) {
+    const request = manualDevelopmentInput(input);
+    await this.authorize(projectId, actor, "session.start");
+    const existing = await this.store.existing(projectId, actor.id, request.requestId);
+    if (existing) { this.store.sameRequest(existing, request); return { task: await this.present(existing, actor, true), reused: true }; }
+    const space = await this.store.space(projectId, actor.id);
+    const context = await this.workspaces.get(space.workspaceId, actor);
+    // Validate the original input and owning workspace's uploads before accepting dispatch.
+    await context.channels.get("manual").resolve({ ...request, renderedPrompt: false });
+    const defaults = await this.accounts.settings(actor.id);
+    const selection = await context.sessions.validateStartSelection(Object.fromEntries(["model", "reasoningEffort", "permissionMode"].map(field => [field,
+      Object.hasOwn(request, field) ? request[field] : defaults[field] ?? ""])));
+    const accepted = await this.store.transaction(async () => {
+      await this.authorizePlan(projectId, actor, actor.id);
+      const existing = await this.store.existing(projectId, actor.id, request.requestId);
+      if (existing) { this.store.sameRequest(existing, request); return { task: existing, created: false }; }
+      const currentSpace = await this.store.space(projectId, actor.id);
+      if (currentSpace.revision !== space.revision || currentSpace.workspaceId !== space.workspaceId)
+        throw accountError("开发空间已变化，请重新打开表单。", 409);
+      const prompt = manualDevelopmentPrompt(request, await this.projects.effectivePrompts(projectId, actor));
+      return { task: await this.store.acceptManual(projectId, actor.id, currentSpace, request, prompt, selection), created: true };
+    });
+    if (!accepted.created) return { task: await this.present(accepted.task, actor, true), reused: true };
+    return this.launchAccepted(accepted.task, actor, true);
+  }
+  async launchAccepted(task, actor, returnFailure = false) {
+    const projectId = task.projectId;
     this.starting.add(task.id);
     try {
       const context = await this.workspaces.get(task.workspaceId, actor);
-      const imageIds = [];
+      const imageIds = [...(task.snapshot.manual?.images || [])];
       for (const bytes of await this.images(projectId, task.snapshot.issues)) {
         await this.authorize(projectId, actor, "session.start");
         imageIds.push((await context.channels.get("manual").uploadImage(bytes)).id);
@@ -150,13 +187,14 @@ class ProjectDevelopmentServices {
       await this.authorize(projectId, actor, "session.start");
       await this.store.space(projectId, actor.id);
       const started = await context.sessions.start({ channel: "manual", requestId: task.id,
-        baseBranch: task.snapshot.baseBranch, title: task.snapshot.title, content: task.snapshot.prompt, images: imageIds, ...task.snapshot.selection });
+        baseBranch: task.snapshot.baseBranch, title: task.snapshot.title, content: task.snapshot.prompt, renderedPrompt: true,
+        metadata: { type: task.snapshot.manual?.taskType || (task.snapshot.issues.every(issue => issue.type === "bug") ? "bug" : "requirement") }, images: imageIds, ...task.snapshot.selection });
       if (started.key !== task.runKey) throw new Error("开发任务与会话身份不一致，请检查已记录任务。");
       task = await this.store.transaction(async () => this.store.update(await this.store.task(projectId, task.id), { status: "started" }));
     } catch (error) {
       const safe = presentError(error);
-      await this.store.transaction(async () => this.store.update(await this.store.task(projectId, task.id), { status: "unknown", error: safe.message }));
-      throw safe;
+      task = await this.store.transaction(async () => this.store.update(await this.store.task(projectId, task.id), { status: "unknown", error: safe.message }));
+      if (!returnFailure) throw safe;
     } finally { this.starting.delete(task.id); }
     await this.authorize(projectId, actor, "session.start");
     return { task: await this.present(task, actor, true) };
@@ -205,6 +243,7 @@ class ProjectDevelopmentServices {
     const result = await this.store.transaction(async () => {
       await this.authorize(projectId, actor, "session.continue");
       const task = await this.store.task(projectId, id);
+      if (task.snapshot.kind === "manual") throw accountError("独立开发任务不关联项目事项，请在会话中补充开发目标。", 409);
       this.assertExecutor(task, actor);
       const existing = task.snapshot.additions.find(batch => batch.requestId === request.requestId);
       let issues = existing?.issues || await this.store.issues(projectId, request.issueIds);
@@ -212,7 +251,8 @@ class ProjectDevelopmentServices {
         this.assertIssues(issues, task.releaseId, true);
         issues = await this.store.assignIssues(projectId, issues, task.executorId, actor.id);
       }
-      const result = await this.store.addIssues(task, request, issues, existing?.prompt || developmentPrompt(issues, true));
+      const prompt = existing ? existing.prompt : developmentPrompt(issues, true, await this.projects.effectivePrompts(projectId, actor));
+      const result = await this.store.addIssues(task, request, issues, prompt);
       await this.authorize(projectId, actor, "session.continue");
       return result;
     });

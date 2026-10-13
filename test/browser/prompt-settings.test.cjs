@@ -18,7 +18,7 @@ async function verifyPromptSettings(browser, { origin, output, errors, workspace
   };
   const editor = page.getByRole("textbox", { name: "提示词模板内容", exact: true });
   const save = page.getByRole("button", { name: "保存提示词模板", exact: true });
-  const reset = page.getByRole("button", { name: "恢复当前渠道默认模板", exact: true });
+  const reset = page.getByRole("button", { name: "恢复当前类型默认模板", exact: true });
   const switchWorkspace = async (workspace) => {
     await navigateWorkspace(page, workspace);
     await page.getByRole("heading", { name: `${workspace.name} · 工作区设置`, exact: true }).waitFor();
@@ -41,7 +41,7 @@ async function verifyPromptSettings(browser, { origin, output, errors, workspace
     await page.route(pattern, async (route) => {
       const response = await route.fetch();
       const result = await response.json();
-      result.catalog.manual.placeholders.find((item) => item.name === "title").example = previewTitle;
+      result.catalog.requirement.placeholders.find((item) => item.name === "title").example = previewTitle;
       await route.fulfill({ response, json: result });
     }, { times: 1 });
     await page.getByRole("button", { name: "重新加载提示词模板", exact: true }).click();
@@ -49,7 +49,7 @@ async function verifyPromptSettings(browser, { origin, output, errors, workspace
     const labelBottom = await page.locator(".prompt-editor-label").evaluate((label) => label.getBoundingClientRect().bottom);
     const editorTop = await editor.evaluate((field) => field.getBoundingClientRect().top);
     assert.ok(editorTop >= labelBottom + 7, "editor label keeps the shared 8px field spacing");
-    assert.equal(await editor.inputValue(), initial.templates.manual);
+    assert.equal(await editor.inputValue(), initial.templates.requirement);
     assert.equal(await save.isDisabled(), true);
     const custom = `自定义提示词：{{title}}\n{{content}}\n{{images}}\n<img src=x onerror="window.promptPreviewExecuted=true">\n$& 保留原文`;
     await editor.fill(custom);
@@ -64,103 +64,47 @@ async function verifyPromptSettings(browser, { origin, output, errors, workspace
     const manualDraft = `{{image_count}}${custom}`;
     assert.equal(await editor.inputValue(), manualDraft);
     assert.equal(await editor.evaluate((field) => field.selectionStart), "{{image_count}}".length);
-    await page.getByRole("button", { name: initial.catalog.tapd.label, exact: true }).click();
-    const tapdDraft = `${initial.templates.tapd}\n尚未保存的 TAPD 草稿`;
-    await editor.fill(tapdDraft);
-    await page.getByRole("button", { name: `${initial.catalog.manual.label} （未保存）`, exact: true }).click();
-    assert.equal(await editor.inputValue(), manualDraft);
+    assert.deepEqual(Object.keys(initial.catalog), ["bug", "requirement", "supplement"]);
     const request = page.waitForRequest((entry) => entry.url() === endpoint && entry.method() === "POST");
     await save.click();
-    assert.deepEqual((await request).postDataJSON(), { manual: manualDraft });
+    assert.deepEqual((await request).postDataJSON(), { requirement: manualDraft });
     await saved();
-    assert.equal((await read()).templates.manual, manualDraft);
-    assert.equal((await read()).templates.tapd, initial.templates.tapd, "saving one channel preserves the other");
-    await page.getByRole("button", { name: `${initial.catalog.tapd.label} （未保存）`, exact: true }).click();
-    assert.equal(await editor.inputValue(), tapdDraft, "channel switches preserve unsaved drafts");
+    assert.equal((await read()).templates.requirement, manualDraft);
     await page.reload();
     await editor.waitFor();
     assert.equal(new URL(page.url()).searchParams.get("workspace"), workspaceA.id);
     assert.equal(await editor.inputValue(), manualDraft, "saved templates survive refresh");
-    assert.equal((await read(workspaceB.id)).templates.manual, otherInitial.templates.manual,
+    assert.equal((await read(workspaceB.id)).templates.requirement, otherInitial.templates.requirement,
       "saving workspace A never changes workspace B");
     await switchWorkspace(workspaceB);
-    assert.equal(await editor.inputValue(), otherInitial.templates.manual);
-    const otherDraft = `工作区 B 专用\n${otherInitial.templates.manual}`;
+    assert.equal(await editor.inputValue(), otherInitial.templates.requirement);
+    const otherDraft = `工作区 B 专用\n${otherInitial.templates.requirement}`;
     await editor.fill(otherDraft);
     await save.click();
     await saved();
-    assert.equal((await read(workspaceB.id)).templates.manual, otherDraft);
-    assert.equal((await read()).templates.manual, manualDraft);
+    assert.equal((await read(workspaceB.id)).templates.requirement, otherDraft);
+    assert.equal((await read()).templates.requirement, manualDraft);
     await editor.fill(`${otherDraft}\n不能进入工作区 A 的草稿`);
     await switchWorkspace(workspaceA);
     assert.equal(await editor.inputValue(), manualDraft, "workspace switching keeps saved templates and drafts isolated");
-    await page.getByRole("button", { name: initial.catalog.tapd.label, exact: true }).click();
-    await editor.fill("{{title}}\n{{content}}\n{{images}}");
-    await save.click();
-    await page.getByRole("alert").filter({ hasText: "{{supplement}}" }).waitFor();
-    const tapdSaved = "{{title}}\n{{content}}\n{{images}}\n{{supplement}}";
-    await editor.fill(tapdSaved);
-    await save.click();
-    await saved();
-    assert.equal((await read()).templates.tapd, tapdSaved);
-    assert.equal((await read()).templates.manual, manualDraft);
-    await reset.click();
-    await save.click();
-    await saved();
-    await page.getByRole("button", { name: initial.catalog.tapd_fusion.label, exact: true }).click();
-    assert.equal(await editor.inputValue(), initial.templates.tapd_fusion);
-    await editor.fill("{{title}}\n{{supplement}}\n{{images}}");
-    await save.click();
-    await page.getByRole("alert").filter({ hasText: "{{requirements}}" }).waitFor();
-    const fusionDraft = `独立融合模板\n${initial.templates.tapd_fusion}`;
-    await editor.fill(fusionDraft);
-    await save.click();
-    await saved();
-    assert.equal((await read()).templates.tapd_fusion, fusionDraft);
-    assert.equal((await read()).templates.tapd, initial.templates.tapd);
-    assert.equal((await read()).templates.manual, manualDraft);
-    assert.equal((await read(workspaceB.id)).templates.tapd_fusion, otherInitial.templates.tapd_fusion);
-    await page.reload();
-    await editor.waitFor();
-    await page.getByRole("button", { name: initial.catalog.tapd_fusion.label, exact: true }).click();
-    assert.equal(await editor.inputValue(), fusionDraft);
-    await page.locator(".prompt-preview > summary").click();
-    assert.match(await preview.innerText(), /第 1 条需求 #101/);
-    assert.match(await preview.innerText(), /第 2 条需求 #102/);
-    for (const width of [1440, 768, 390, 320]) {
-      await page.setViewportSize({ width, height: 1000 });
-      await page.locator("#prompt-settings").scrollIntoViewIfNeeded();
-      await page.screenshot({ path: path.join(output, `prompt-fusion-${width}.png`), fullPage: true });
-      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `prompt page overflow at ${width}: ${JSON.stringify(await page.locator("body *").evaluateAll(nodes => nodes.filter(el => el.getBoundingClientRect().right > window.innerWidth + 1).map(el => ({ tag: el.tagName, class: el.className, width: el.getBoundingClientRect().width })).slice(0, 12)))}`);
-      assert.ok(await page.locator("main").evaluate(element => element.scrollWidth <= element.clientWidth));
-      await page.screenshot({ path: path.join(output, `prompt-fusion-${width}.png`), fullPage: true });
-      await save.scrollIntoViewIfNeeded();
-      assert.ok(await save.isVisible());
-    }
-    await page.setViewportSize({ width: 1440, height: 1100 });
-    await reset.click();
-    await save.click();
-    await saved();
-    assert.equal((await read()).templates.tapd_fusion, initial.templates.tapd_fusion);
-    await page.getByRole("button", { name: initial.catalog.manual.label, exact: true }).click();
     await editor.fill(`${manualDraft}\n{{unknown_placeholder}}`);
     await save.click();
     await page.getByRole("alert").filter({ hasText: "未知占位符" }).waitFor();
     assert.equal(await editor.inputValue(), `${manualDraft}\n{{unknown_placeholder}}`);
-    assert.equal((await read()).templates.manual, manualDraft, "failed save does not persist an invalid draft");
+    assert.equal((await read()).templates.requirement, manualDraft, "failed save does not persist an invalid draft");
     await page.screenshot({ path: path.join(output, "prompt-settings-error.png"), fullPage: true });
     await reset.click();
     await page.getByRole("status").filter({ hasText: "默认模板填入草稿" }).waitFor();
-    assert.equal(await editor.inputValue(), initial.catalog.manual.defaultTemplate);
-    assert.equal((await read()).templates.manual, manualDraft, "reset changes only the draft before explicit save");
+    assert.equal(await editor.inputValue(), initial.catalog.requirement.defaultTemplate);
+    assert.equal((await read()).templates.requirement, manualDraft, "reset changes only the draft before explicit save");
     const resetRequest = page.waitForRequest((entry) => entry.url() === endpoint && entry.method() === "POST");
     await save.click();
-    assert.deepEqual((await resetRequest).postDataJSON(), { manual: null });
+    assert.deepEqual((await resetRequest).postDataJSON(), { requirement: null });
     await saved();
     await page.reload();
     await editor.waitFor();
-    assert.equal(await editor.inputValue(), initial.catalog.manual.defaultTemplate);
-    const longDraft = `${initial.catalog.manual.defaultTemplate}\n${"无空格长文本验证".repeat(120)}`;
+    assert.equal(await editor.inputValue(), initial.catalog.requirement.defaultTemplate);
+    const longDraft = `${initial.catalog.requirement.defaultTemplate}\n${"无空格长文本验证".repeat(120)}`;
     await editor.fill(longDraft);
     await page.locator(".prompt-preview > summary").click();
     for (const [name, width, height] of [["desktop", 1440, 1100], ["tablet", 820, 1100], ["mobile", 390, 844]]) {
@@ -205,7 +149,7 @@ async function verifyPromptSettings(browser, { origin, output, errors, workspace
     await leaveSettings();
     await openSettings();
     await editor.waitFor();
-    const freshDraft = `${initial.catalog.manual.defaultTemplate}\n保留新页面的草稿`;
+    const freshDraft = `${initial.catalog.requirement.defaultTemplate}\n保留新页面的草稿`;
     await editor.fill(freshDraft);
     await stale.route.fulfill({
       response: stale.response,
@@ -219,7 +163,7 @@ async function verifyPromptSettings(browser, { origin, output, errors, workspace
     await save.click();
     await saved();
     await switchWorkspace(workspaceA);
-    assert.equal(await editor.inputValue(), initial.catalog.manual.defaultTemplate,
+    assert.equal(await editor.inputValue(), initial.catalog.requirement.defaultTemplate,
       "unpersisted drafts do not leak across workspace navigation");
   } finally {
     await page.close();

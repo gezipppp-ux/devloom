@@ -23,7 +23,7 @@ test("aborted binary request releases its connection and later parallel uploads 
   });
   const { token } = await (await fetch(`${origin}/api/bootstrap`)).json();
   const headers = {
-    "x-tapd-token": token,
+    "x-csrf-token": token,
     "content-type": "image/png",
     "content-length": String(png.length),
   };

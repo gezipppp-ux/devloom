@@ -60,10 +60,10 @@ test("force session deletion discards dirty, untracked, ignored and unpublished 
   const origin = await app.listen(0);
   const { token } = await (await fetch(`${origin}/api/bootstrap`)).json();
   const post = (input, headers = {}) => fetch(`${origin}/api/runs/${f.key}/delete`, {
-    method: "POST", headers: { "content-type": "application/json", "x-tapd-token": token, ...headers },
+    method: "POST", headers: { "content-type": "application/json", "x-csrf-token": token, ...headers },
     body: JSON.stringify(input),
   });
-  assert.equal((await post(f.input, { "x-tapd-token": "wrong" })).status, 403);
+  assert.equal((await post(f.input, { "x-csrf-token": "wrong" })).status, 403);
   for (const input of [{ ...f.input, confirm: false }, { ...f.input, force: "true" },
     { ...f.input, confirmBranch: "main" }, { ...f.input, path: f.repository }, { confirm: true }]) {
     assert.equal((await post(input)).status, 400);

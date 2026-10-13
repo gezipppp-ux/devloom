@@ -13,7 +13,8 @@ import { statusLabel } from "../shared/api/api.js";
 import FeedbackMessage from "../shared/components/FeedbackMessage.vue";
 import { useWorkspaceConsole } from "./use-workspace-console.js";
 import StartTask from "../features/tasks/StartTask.vue";
-import AppendRequirements from "../features/tasks/AppendRequirements.vue";
+import ManualDevelopmentStart from "../features/tasks/ManualDevelopmentStart.vue";
+import RemoteBranchSelect from "../features/projects/RemoteBranchSelect.vue";
 import SettingsPanel from "../features/settings/SettingsPanel.vue";
 import RepositoryGitPanel from "../features/settings/RepositoryGitPanel.vue";
 import SessionDetailsDrawer from "../features/session/SessionDetailsDrawer.vue";
@@ -31,6 +32,8 @@ import {
   ReloadOutlined,
   FolderOpenOutlined,
   BranchesOutlined,
+  ArrowLeftOutlined,
+  PlusOutlined,
 } from "@antdv-next/icons";
 import "../features/session/session-files.css";
 
@@ -49,6 +52,7 @@ const emit = defineEmits([
   "unread-results-change",
   "system-settings",
   "open-project",
+  "return-project",
   "task-change",
 ]);
 const allowed = permission => !props.projectId || props.permissions?.includes(permission);
@@ -208,7 +212,7 @@ async function refreshCurrentSession() {
 <template>
   <div
     class="workspace"
-    :class="{ 'with-workspace-rail': $slots['workspace-rail'] }"
+    :class="{ 'with-workspace-rail': $slots['workspace-rail'], 'project-workspace': props.projectId }"
   >
     <slot name="workspace-rail" />
     <aside class="sidebar">
@@ -218,6 +222,7 @@ async function refreshCurrentSession() {
       </div>
       <div v-if="props.workspaceName" class="workspace-heading">
         <h2 :title="props.workspaceName">{{ props.workspaceName }}</h2>
+        <button v-if="props.projectId" type="button" class="workspace-project-return" @click="emit('return-project')"><ArrowLeftOutlined aria-hidden="true" />返回项目协作</button>
         <button
           v-if="!props.projectId"
           type="button"
@@ -275,7 +280,10 @@ async function refreshCurrentSession() {
       >
         ＋ 从需求启动
       </button>
-      <button v-if="props.projectId && allowed('session.start')" class="new-task" @click="emit('open-project', 'issues')">从项目事项启动开发</button>
+      <div v-if="props.projectId && allowed('session.start')" class="development-start-actions">
+        <button type="button" class="new-task" @click="emit('open-project', 'issues')">从项目事项</button>
+        <button type="button" :disabled="workspaceLoading" @click="creating = true; settingsOpen = false; repositoryOpen = false"><PlusOutlined aria-hidden="true" />手动开启</button>
+      </div>
       <TaskList
         :runs="runs"
         :active="!creating && !settingsOpen && !repositoryOpen ? active : null"
@@ -305,12 +313,14 @@ async function refreshCurrentSession() {
         @saved="reloadChannels"
         @rename-workspace="emit('rename-workspace')"
       />
+      <ManualDevelopmentStart v-else-if="creating && props.projectId" :project-id="props.projectId" @cancel="creating = false" @started="key => { refreshList(); open(key); }" @open-record="id => emit('open-project', { tab: 'tasks', task: id })">
+        <template #branch-select="{ value, disabled, update }"><RemoteBranchSelect :project-id="props.projectId" :model-value="value" :disabled="disabled" @update:model-value="update" /></template>
+      </ManualDevelopmentStart>
       <StartTask
         v-else-if="creating"
         :channels="channels"
         :workspace="workspace"
         @cancel="creating = false"
-        @open-task="open"
         @started="
           (key) => {
             refreshList();
@@ -454,9 +464,6 @@ async function refreshCurrentSession() {
           >
             <template #metadata>
               <TaskMetadataControls v-if="allowed('session.continue')" :task-key="session.key" :metadata="session.metadata" @saved="metadataSaved" />
-            </template>
-            <template #append-requirements>
-              <AppendRequirements v-if="session.source?.channel === 'tapd'" :key="session.key" :task-key="session.key" :workspace="workspace" :disabled="!canSend || running || busy || ['preparing', 'initializing', 'starting'].includes(session.status) || Boolean(session.archivedAt)" @saved="refreshSession(); refreshList()" @open-task="open" />
             </template>
           </SessionDetailsDrawer>
         </div>

@@ -16,11 +16,13 @@ const { SessionManager } = require("../support/session-manager.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { saveSystemSettings } = require("../../src/config/system-settings.cjs");
 const { projectPermissionCatalog, productTemplate } = require("../../src/domain/project-permissions.cjs");
-const { promptTemplateCatalog } = require("../../src/domain/prompt-templates.cjs");
+const { getPromptTemplates } = require("../../src/domain/prompt-templates.cjs");
+const { verifyProjectPromptSettings } = require("./project-prompts.test.cjs");
 const { verifyAdministratorProjectAccess } = require("./administrator-project-access.test.cjs");
 const { verifyProjectReleases } = require("./project-releases.test.cjs");
 const { verifyProjectPermissions, verifyDepartmentCapabilities } = require("./project-permissions.test.cjs");
 const { markdown, editor, setMarkdown, markdownValue, visual, pasteImage, verifyVisualWriting, captureEditor } = require("../support/issue-markdown.cjs");
+const { selectRemoteBranch } = require("../support/remote-branch-select.cjs");
 
 async function main() {
   const cleanup = [], t = { after: callback => cleanup.push(callback) };
@@ -74,6 +76,19 @@ async function main() {
     }
     const tab = name => page.getByRole("navigation", { name: "项目功能" }).getByRole("button", { name, exact: true }).click();
     await login("product");
+    await tab("提示词");
+    const memberBugPrompt = page.getByRole("textbox", { name: "Bug提示词", exact: true });
+    await memberBugPrompt.waitFor();
+    await page.getByRole("group", { name: "提示词作用域" }).getByRole("button", { name: "项目默认", exact: true }).click();
+    assert.equal(await memberBugPrompt.isDisabled(), true, "ordinary project members cannot edit project defaults");
+    await page.getByRole("group", { name: "提示词作用域" }).getByRole("button", { name: "我的配置", exact: true }).click();
+    await page.getByRole("checkbox", { name: "自定义此提示词，仅对我生效" }).check();
+    await memberBugPrompt.fill("产品成员独立模板 {{title}}\n{{content}}\n{{images}}");
+    const memberPromptSaved = page.waitForResponse(response => response.url() === `${origin}/api/projects/${project.id}/prompts` && response.request().method() === "POST");
+    await page.getByRole("button", { name: "保存我的提示词", exact: true }).click();
+    assert.equal((await memberPromptSaved).status(), 200, "personal templates do not require project configuration or a development space");
+    assert.deepEqual((await projects.promptSettings(project.id, admin)).overrides, {});
+    await tab("概览");
     assert.equal(await page.getByLabel("账号导航").getByRole("button", { name: "系统设置", exact: true }).count(), 0, "ordinary members have no system workflow management entry");
     assert.equal(await page.getByRole("navigation", { name: "项目功能" }).getByRole("button", { name: "流程", exact: true }).count(), 0);
     assert.equal((await page.request.get(`${origin}/api/system/workflows/requirement`)).status(), 403);
@@ -105,6 +120,7 @@ async function main() {
         await setMarkdown(page, "实际结果", "实际出现错误");
         await page.getByLabel("严重程度", { exact: true }).selectOption("major");
       }
+      assert.equal(await page.getByRole("button", { name: "从 TAPD 导入", exact: true }).count(), 0);
       const fileCount = await database.client.projectFile.count();
       await pasteImage(page); await verifyVisualWriting(page);
       await editor(page).locator('input[type="file"]').setInputFiles({ name: "verification.txt", mimeType: "text/plain", buffer: Buffer.from("fixture attachment") });
@@ -276,44 +292,23 @@ async function main() {
     const repositoryAddress = page.getByRole("textbox", { name: "Git 仓库地址", exact: true });
     assert.equal(await repositoryAddress.inputValue(), remote.remoteUrl);
     assert.equal(await repositoryAddress.getAttribute("readonly"), "");
-    for (const endpoint of ["/api/admin/repositories", "/api/project-repositories", "/api/unknown-fixture-endpoint"]) {
+    for (const endpoint of [`/api/projects/${project.id}/issues/import/tapd`, "/api/admin/repositories", "/api/project-repositories", "/api/unknown-fixture-endpoint"]) {
       for (const method of ["GET", "POST"]) {
         const status = await page.evaluate(async ({ url, method }) => {
           const session = await (await fetch("/api/auth/session")).json();
-          return (await fetch(url, { method, ...(method === "POST" ? { headers: { "content-type": "application/json", "x-tapd-token": session.token }, body: JSON.stringify({ name: "Removed API must reject", remoteUrl: "https://git.example.test/removed.git" }) } : {}) })).status;
+          return (await fetch(url, { method, ...(method === "POST" ? { headers: { "content-type": "application/json", "x-csrf-token": session.token }, body: JSON.stringify({ name: "Removed API must reject", remoteUrl: "https://git.example.test/removed.git" }) } : {}) })).status;
         }, { url: endpoint, method });
         assert.equal(status, 404, `${method} ${endpoint}`);
       }
     }
-    const manualPrompt = page.getByLabel("手动任务提示词", { exact: true });
-    const tapdPrompt = page.getByLabel("TAPD 任务提示词", { exact: true });
-    assert.equal(await manualPrompt.inputValue(), "");
-    assert.equal(await tapdPrompt.inputValue(), "");
-    async function saveProjectSettings() {
-      const response = page.waitForResponse(response => response.url() === `${origin}/api/projects/${project.id}` && response.request().method() === "POST");
-      await page.getByRole("button", { name: "保存项目设置", exact: true }).click();
-      assert.equal((await response).status(), 200, "blank prompt fields must allow project settings to save");
-      await page.locator('.operation-message[data-type="success"]').filter({ hasText: "已保存。" }).last().waitFor();
-      return (await database.client.project.findUnique({ where: { id: project.id } })).settings;
-    }
-    await page.getByLabel("说明", { exact: true }).fill("未配置模板的新项目可以保存设置");
-    let savedSettings = await saveProjectSettings();
-    assert.equal("baseBranch" in savedSettings, false);
-    assert.deepEqual(savedSettings.prompts, {});
-    const customManual = `  手动任务自定义模板\n${promptTemplateCatalog.manual.defaultTemplate}  `;
-    const customTapd = `  TAPD 自定义模板\n${promptTemplateCatalog.tapd.defaultTemplate}  `;
-    await manualPrompt.fill(customManual);
-    await tapdPrompt.fill(customTapd);
-    savedSettings = await saveProjectSettings();
-    assert.deepEqual(savedSettings.prompts, { manual: customManual, tapd: customTapd });
-    await manualPrompt.fill("");
-    await tapdPrompt.fill("  \n  ");
-    savedSettings = await saveProjectSettings();
-    assert.deepEqual(savedSettings.prompts, {}, "clearing prompt overrides restores channel defaults");
-    await tab("概览");
-    await tab("设置");
-    assert.equal(await manualPrompt.inputValue(), "");
-    assert.equal(await tapdPrompt.inputValue(), "");
+    assert.equal(await page.getByText(/TAPD/).count(), 0);
+    await page.getByLabel("说明", { exact: true }).fill("项目默认提供两类模板");
+    const settingsResponse = page.waitForResponse(response => response.url() === `${origin}/api/projects/${project.id}` && response.request().method() === "POST");
+    await page.getByRole("button", { name: "保存项目设置", exact: true }).click();
+    assert.equal((await settingsResponse).status(), 200);
+    assert.deepEqual((await database.client.project.findUnique({ where: { id: project.id } })).settings.prompts, getPromptTemplates());
+    await tab("提示词");
+    await verifyProjectPromptSettings({ page, origin, project, projects, admin, output });
     await tab("资产");
     await page.getByRole("button", { name: /测试登录凭据/ }).click();
     await page.getByRole("button", { name: "显示敏感值", exact: true }).click();
@@ -342,13 +337,13 @@ async function main() {
     await page.setViewportSize({ width: 1440, height: 1000 });
     assert.equal(await database.client.developmentTask.count(), 0);
     await confirmation.getByRole("button", { name: "确认认领", exact: true }).click();
-    await page.getByRole("button", { name: "准备我的开发环境", exact: true }).waitFor();
+    await page.getByRole("button", { name: "去准备开发环境", exact: true }).waitFor();
     assert.equal(await database.client.developmentTask.count(), 1);
     assert.equal(clients.flatMap(client => client.calls).filter(call => call.method === "turn/start").length, 0, "claiming without Git does not execute");
     const planned = await database.client.developmentTask.findFirst();
     assert.equal(planned.status, "planned"); assert.equal(planned.workspaceId, null);
     const sourceTaskUrl = page.url();
-    await page.getByRole("button", { name: "准备我的开发环境", exact: true }).click();
+    await page.getByRole("button", { name: "去准备开发环境", exact: true }).click();
     assert.equal(new URL(page.url()).searchParams.get("returnTask"), planned.id);
     await page.getByRole("combobox", { name: /^个人 Git 账号/ }).selectOption(git.id);
     await page.getByRole("button", { name: "验证访问并准备空间", exact: true }).click();
@@ -360,25 +355,25 @@ async function main() {
     await page.getByRole("button", { name: "返回待开发任务", exact: true }).click();
     assert.equal(new URL(page.url()).searchParams.get("task"), planned.id);
     await page.goto(sourceTaskUrl);
-    const branch = page.getByLabel("本次开发分支", { exact: true });
-    await branch.locator('option[value="main"]').waitFor({ state: "attached", timeout: 10000 }).catch(async error => { console.error('Branch context', page.url(), await page.locator('.project-page').innerText()); await page.screenshot({ path: path.join(output, 'branch-failure.png'), fullPage: true }); throw error; });
-    assert.equal(await page.locator('input[aria-label="本次开发分支"]').count(), 0, "branch accepts remote options only");
+    const branch = page.getByLabel("起始分支", { exact: true });
+    await selectRemoteBranch(page);
+    assert.equal(await page.locator('.development-branch-select input[type="search"]').count(), 0, "branch search belongs to the dropdown");
     await page.route(`${origin}/api/projects/${project.id}/branches`, route => route.fulfill({ status: 502, json: { error: "模拟远端暂不可用，请刷新重试。" } }), { times: 1 });
     await page.getByRole("button", { name: "刷新远端分支", exact: true }).click();
     await page.getByText("模拟远端暂不可用，请刷新重试。", { exact: true }).waitFor();
     assert.equal(await branch.isDisabled(), true);
-    assert.equal(await page.getByRole("button", { name: "确认并开始开发", exact: true }).isDisabled(), true);
+    assert.equal(await page.getByRole("button", { name: "启动 Codex 开发", exact: true }).isDisabled(), true);
     for (const width of [1440, 768, 390, 320]) {
       await page.setViewportSize({ width, height: 1000 });
+      await page.waitForFunction(() => document.documentElement.scrollWidth <= window.innerWidth, null, { timeout: 5000 });
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `branch failure overflow at ${width}`);
       await page.screenshot({ path: path.join(output, `remote-branch-failure-${width}.png`), fullPage: true });
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.getByRole("button", { name: "刷新远端分支", exact: true }).click();
-    await branch.locator('option[value="main"]').waitFor({ state: "attached" });
-    await branch.selectOption("main");
-    await page.getByRole("button", { name: "确认并开始开发", exact: true }).click();
-    await page.getByRole("button", { name: "打开我的会话", exact: true }).click();
+    await selectRemoteBranch(page);
+    await page.getByRole("button", { name: "启动 Codex 开发", exact: true }).click();
+    await page.getByRole("button", { name: "进入 Codex 会话", exact: true }).click();
     await page.getByRole("button", { name: "返回项目协作", exact: true }).waitFor();
     await page.getByRole("button", { name: "■ 停止", exact: true }).waitFor();
     assert.equal(await database.client.developmentTask.count(), 1);
@@ -391,13 +386,13 @@ async function main() {
     await page.getByRole("button", { name: "■ 停止", exact: true }).click();
     await page.getByRole("button", { name: "返回项目协作", exact: true }).click();
     assert.equal(new URL(page.url()).searchParams.get("task"), planned.id, "return from session restores source task");
-    await page.getByText("关联事项与内容快照", { exact: true }).click();
-    await page.getByRole("heading", { name: "#1 支持验收的需求", exact: true }).waitFor();
+    await page.getByRole("button", { name: "追加关联事项", exact: true }).click();
+    await page.getByRole("heading", { name: /#1 支持验收的需求/ }).waitFor();
     await page.getByLabel("搜索追加事项", { exact: true }).fill("可复现的缺陷");
     await page.getByRole("button", { name: "搜索事项", exact: true }).click();
     await page.getByRole("checkbox", { name: /可复现的缺陷/ }).check();
-    await page.getByRole("button", { name: "保存追加快照", exact: true }).click();
-    await page.locator('.operation-message[data-type="success"]').filter({ hasText: "追加快照已保存，点击发送才会继续会话。" }).last().waitFor();
+    await page.getByRole("button", { name: "保存追加资料（暂不发送）", exact: true }).click();
+    await page.locator('.operation-message[data-type="success"]').filter({ hasText: "追加资料已保存，点击发送才会继续 Codex。" }).last().waitFor();
     const appendedTask = await database.client.developmentTask.findFirst();
     const bugSnapshot = appendedTask.snapshot.additions[0].issues[0];
     assert.equal(bugSnapshot.reproductionSteps, "可重复验证的标准");
@@ -406,7 +401,7 @@ async function main() {
     assert.equal(bugSnapshot.severity, "major");
     assert.equal(bugSnapshot.files.filter(file => file.mimeType === "image/png").length, 1);
     assert.equal(clients.flatMap(client => client.calls).filter(call => call.method === "turn/start").length, 1, "saving an addition never sends it automatically");
-    await page.getByRole("button", { name: "发送追加资料并继续会话", exact: true }).click();
+    await page.getByRole("button", { name: "发送资料并继续 Codex", exact: true }).click();
     await page.getByText("追加资料已发送。", { exact: true }).waitFor();
     assert.equal(clients.flatMap(client => client.calls).filter(call => call.method === "turn/start").length, 2);
     await page.getByRole("button", { name: "部门可用功能", exact: true }).click();

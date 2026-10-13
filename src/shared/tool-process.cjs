@@ -21,7 +21,7 @@ function runTool(command, args, { timeout = 15000, env = process.env } = {}) {
     child.once("close", async code => {
       clearTimeout(timer);
       await stopping;
-      if (failure || code !== 0) reject(failure || new Error(`命令执行失败（退出码 ${code}），请检查安装、权限和网络。`));
+      if (failure || code !== 0) reject(failure || Object.assign(new Error(`命令执行失败（退出码 ${code}），请检查安装、权限和网络。`), { exitCode: code }));
       else resolve(stdout.trim());
     });
   });
@@ -53,6 +53,8 @@ function npmCommand() {
   // nvm 2 uses native proxy executables instead of npm.cmd on PATH.
   const script = file ? (process.platform === "win32" ? path.join(path.dirname(file), "node_modules/npm/bin/npm-cli.js") : file)
     : path.join(path.dirname(process.execPath), "node_modules/npm/bin/npm-cli.js");
+  if (!file && !fs.existsSync(script))
+    throw Object.assign(new Error("未找到可用的 npm 启动入口，请使用 Node.js 原安装工具修复 npm。"), { code: "TOOL_NOT_FOUND" });
   if (path.basename(script) !== "npm-cli.js" || !fs.existsSync(script))
     throw new Error("未识别 npm 安装方式，请使用原安装工具管理。");
   return { command: process.execPath, args: [script], script: fs.realpathSync(script) };

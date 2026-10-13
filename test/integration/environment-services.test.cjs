@@ -84,3 +84,49 @@ test("Node installation is recorded as pending restart without pretending the li
   assert.equal(report.runningNode, process.version);
   await assert.rejects(service.start({ id: "node", version: "2.0.0" }, () => {}), /先重启/);
 });
+
+test("first installation distinguishes missing tools from broken probes, reauthorizes, and reprobes", async t => {
+  let installed = false, authorized = 0;
+  const service = await fixture(t, {
+    inspect: async id => { if (id === "codex" && !installed) throw Object.assign(new Error("missing"), { code: "TOOL_NOT_FOUND" }); return { version: "2.0.0", satisfies: id !== "codex", authentication: id === "codex" ? false : null }; },
+    plan: async (_id, inspected) => ({ available: true, operation: inspected.missing ? "install" : "update" }),
+    install: async () => { installed = true; },
+  });
+  const initial = (await service.checkLatest()).tools.find(tool => tool.id === "codex");
+  assert.equal(initial.missing, true);
+  assert.equal(initial.installAvailable, true);
+  assert.equal(initial.latestStatus, "installable");
+  assert.equal(initial.updateAvailable, false);
+  assert.equal(initial.installVersion, "2.0.0");
+  const input = { id: "codex", version: "2.0.0", operation: "install" };
+  await service.start(input, () => authorized++);
+  await service.pending;
+  assert.equal(authorized, 1);
+  assert.equal(service.job.operation, "install");
+  assert.equal(service.job.status, "completed");
+  assert.match(service.job.message, /登录/);
+  const report = await service.read();
+  assert.equal(report.ready, false);
+  assert.equal(report.tools.find(tool => tool.id === "codex").installAvailable, false);
+  await assert.rejects(service.start(input, () => {}), /已检测到/);
+  const broken = await fixture(t, { inspect: async () => { throw new Error("broken probe"); }, install: async () => assert.fail("must not install") });
+  assert.equal((await broken.read()).tools[0].installAvailable, false);
+  await assert.rejects(broken.start(input, () => {}), /broken probe/);
+});
+
+test("Linux first Git install confirms distro target, refuses changed candidates and revoked permission", async t => {
+  const overrides = { inspect: async () => { throw Object.assign(new Error("missing"), { code: "TOOL_NOT_FOUND" }); },
+    latest: async () => assert.fail("distro installs do not require upstream latest"),
+    plan: async () => ({ available: true, operation: "install", targetVersion: "2.43.0", source: "Linux APT 软件源" }),
+    install: async () => ({ installedVersion: "2.43.0" }) };
+  const input = { id: "git", version: "2.43.0", operation: "install" };
+  const service = await fixture(t, overrides);
+  assert.equal((await service.read()).tools.find(tool => tool.id === "git").installSource, "Linux APT 软件源");
+  await service.start(input, () => {});
+  await service.pending;
+  assert.equal(service.job.status, "completed");
+  await assert.rejects(service.start({ ...input, version: "2.44.0" }, () => {}), /目标版本已变化/);
+  const revoked = await fixture(t, { ...overrides, install: async () => assert.fail("must not install") });
+  await assert.rejects(revoked.start(input, () => { throw new Error("revoked"); }), /revoked/);
+  await assert.rejects(revoked.start({ ...input, operation: "shell" }, () => {}), /参数/);
+});

@@ -10,12 +10,14 @@
 | `features/accounts/` | 登录、首次改密、账号管理、个人设置和成员桌面通知偏好。 |
 | `features/projects/` | 部门、项目及仓库地址、权限与成员、需求／Bug、资产、开发空间及事项与执行任务关联。 |
 | `features/workspaces/` | 工作区创建、编辑、切换入口和图标目录。 |
-| `features/tasks/` | 需求启动表单、执行偏好与人员选择、任务列表快照、类型及人工进度。 |
+| `features/tasks/` | 需求启动表单、人员选择、任务列表快照、类型及人工进度。共享执行偏好控件位于 `shared/components/AgentModelSettings.vue`。 |
 | `features/session/` | 会话详情状态、历史分页、输入卡片和下一轮设置；消息、工具输出、审批与澄清、需求快照的安全渲染。 |
-| `features/settings/` | 系统成员项目与任务目录、服务器目录选择、自动生成目录的项目执行设置、基准引用选择、TAPD 渠道设置和独立保存的提示词模板。 |
+| `features/settings/` | 系统成员项目与任务目录、服务器目录选择、自动生成目录的项目执行设置、基准引用选择、独立保存的提示词模板。 |
 | `shared/components/` | 不依赖具体功能的界面组件，例如表单分区、模型/强度控件与权限选择器。 |
 | `shared/api/` | HTTP 请求、页面令牌、工作区 API 路径、模型/权限能力发现和共享执行状态文案。 |
 | `shared/styles/` | 全站设计变量、布局与基础控件样式。 |
+
+项目「提示词」由 `ProjectPromptSettings` 管理 Bug、需求和补充模板的项目默认和当前成员覆盖，独立保存、修订号冲突合并和卸载请求隔离沿用项目功能基础。`shared/components/PromptTemplateEditor` 提供占位符插入及纯文本预览，不读写任何项目数据。待开发任务在选择起始分支的启动表单中填写可选补充提示词，点击「启动 Codex 开发」时一并提交并保存到执行快照；刷新状态或启动前校验失败保留本地草稿，任务切换后清空，任务信息保存不提交该字段。
 
 依赖方向为 `main.js → app → features → shared`。应用壳层组合各功能；功能内的组件与辅助模块放在同一目录，功能之间通过壳层传入数据和事件协作。共享模块不引用应用或功能组件。
 
@@ -43,11 +45,12 @@ Vue 组件使用 PascalCase 文件名；JavaScript 辅助模块使用 kebab-case
 - `app/SystemSettings.vue` 组合管理员的目录设置、环境检测和系统流程编排；账号业务页面属于 `features/accounts/`：`LoginPage.vue` 负责登录，`PasswordPage.vue` 组合首次改密入口，两类改密入口复用 `PasswordForm.vue`；`PersonalSettings.vue` 管理账号默认模型、强度、权限、分组、通知和改密；`AccountManagement.vue` 管理账号身份，不提供读取他人工作区的入口。工作区配置仍由所有者在 `features/settings` 管理。
 - `features/accounts/use-desktop-notifications.js` 拥有浏览器通知授权、个人通知偏好保存与通知投递；应用壳层将其设置状态传给个人设置页，并把投递回调传给工作区。账号功能不反向依赖应用壳层或其他功能目录。
 - `features/settings/MemberStorageSettings.vue` 使用全局 `appApi` 独立加载和保存成员目录基础路径，并展示 Git 环境检测；`ServerDirectoryPicker.vue` 仅浏览服务器目录并返回选择，表单保存才生效。工作区设置只读展示服务端生成的项目与任务路径。
-- `features/settings/EnvironmentPage.vue` 由系统设置内的「环境检测」分类组合，展示工具、最新版本、目录检查和直接更新、安装器不可用原因与待重启状态。`use-environment.js` 拥有检测、版本查询、更新与轮询生命周期；卸载清理计时器并丢弃迟到响应。更新确认展示确切版本，失败和未知状态独立呈现，不将网络错误视为已经最新。
-- 项目开发空间按稳定项目／用户 ID 定位，新仓库目录为「基础目录 / projects / 项目 ID / members / 用户 ID / repository-准备修订号」，任务使用同根的「worktree / 任务」。失败目录保留，明确重试使用新的准备修订号目录，已就绪空间沿用记录路径。GitAccountSettings 维护主机凭据和独立提交作者；保存与实际项目仓库检测分开，私钥和密码不回显。个人空间创建组件只用于明确的文件测试夹具，不作为生产导航入口。
+- `features/settings/EnvironmentPage.vue` 由系统设置内的「环境检测」分类组合，展示工具、最新版本、目录检查和自动安装／更新、安装器不可用原因与待重启状态。明确缺失时显示安装按钮，Linux Git 单独展示发行版软件源候选版本与来源。`use-environment.js` 拥有检测、版本查询、安装／更新与轮询生命周期；卸载清理计时器并丢弃迟到响应。确认展示确切版本，失败和未知状态独立呈现，不将网络错误视为已经最新。
+- 项目开发空间按稳定项目／用户 ID 定位，新仓库目录为「基础目录 / projects / 项目 ID / members / 用户 ID / repository-准备修订号」，任务使用同根的「worktree / 任务」。失败目录保留，明确重试使用新的准备修订号目录，已就绪空间沿用记录路径。GitAccountSettings 维护主机凭据和独立提交作者；可在保存前直接验证 Git 主机登录，无需项目，验证服务类型仅用于本次请求。验证、保存与实际项目仓库检测分开，私钥和密码不回显。个人空间创建组件只用于明确的文件测试夹具，不作为生产导航入口。
 - `app/use-workspace-console.js` 负责渠道 bootstrap、SSE 建连/关闭与防抖刷新，将事件分发给任务列表和会话状态，不处理 DOM 或表单草稿。
 - `features/tasks/use-task-list.js` 负责列表刷新、请求乱序保护和请求期间的人工进度覆盖。
-- `features/tasks/TapdRequirementPicker.vue` 复用多选、ID 添加与顺序调整；`use-tapd-selection.js` 拥有检索请求和代际隔离。`AppendRequirements.vue` 与 `use-requirement-additions.js` 管理已有任务的追加草稿与保存；app 通过需求抽屉插槽组合这些组件，避免 session 直接依赖 tasks。原始与追加资料均由 session 的 `RequirementDetails.vue` 安全渲染，明确区分待处理、已发送和发送结果待确认；继续按钮通过 app 调用会话动作，SSE 更新完整资料且不会清空会话草稿。
+- 新建任务只提供手动图文输入，项目需求／Bug 页不提供外部导入。原始与历史追加资料由 session 的 `RequirementDetails.vue` 安全渲染；已保存资料可在原会话明确继续，读取历史不触发外部抓取。
+- 生产开发空间的「手动开启」由 `features/tasks/ManualDevelopmentStart.vue` 提交项目独立启动接口，不关联事项、不保存待开发。app 通过插槽组合项目功能的 `RemoteBranchSelect`，避免跨 feature 导入；启动后进入原空间会话。响应丢失先查询当前账号的原请求，未知结果锁定表单并提供检查／任务记录入口。返回项目协作位于侧栏项目名旁；工作台通过 flex 使用账号栏实际剩余高度，消息与长表单局部滚动。
 - `features/tasks/ArchivedSessions.vue` 提供侧栏归档入口、名称搜索、恢复和删除交互；`use-archived-sessions.js` 拥有归档请求、恢复状态与卸载/乱序保护。壳层通过归档、删除、恢复与重连事件通知刷新，并通过插槽组合 session 功能的删除确认窗口，功能之间不互相导入。删除目标独立于列表快照保存，刷新或提前到达的 SSE 不卸载正在提交的确认窗口；恢复后不自动启动任务或切换当前草稿。
 - 会话名称由 `SessionTitleEditor.vue` 呈现，长名称换行，编辑图标紧随标题。编辑区最大 1040px，字数说明位于标签旁，取消/保存在宽屏时紧邻输入区、窄屏时移到下方，并保留输入法处理。壳层将面包屑并入会话标题区，执行状态与刷新在宽屏时对齐标题行，编辑时位于表单上方；`SessionDetailsDrawer.vue` 拥有右侧信息、Git、需求抽屉的呈现状态、键盘关闭及焦点恢复。抽屉默认收起、独立滚动，打开时不压缩对话列；切换资料保留草稿、滚动位置与子组件状态，切换会话重建抽屉。任务元数据控件由 app 通过插槽组合，不跨功能导入。
 - `features/session/use-session.js` 负责详情快照、请求期间的 SSE 覆盖、会话动作和历史分页；执行偏好拥有独立保存状态和错误反馈，迟到响应不能覆盖较新的设置/当前轮状态。打开会话、收到消息和完成动作通过回调交给应用/界面层处理，不导入任务列表或界面组件。
@@ -81,3 +84,5 @@ ProjectPermissionEditor 在部门模式显示功能上限，在成员模式显�
 流程画布提供缩放、适应画布和全屏视图；全屏保留草稿、选中项、保存／发布及操作反馈，退出按钮或 Esc 返回。优先使用浏览器 Fullscreen API，不支持时使用视口覆盖层并管理焦点与页面滚动；卸载时清理全屏监听、尺寸观察与滚动锁。坐标经 SVG 屏幕矩阵换算，缩放或全屏不会改变已保存的节点位置。
 
 开发流程采用事项页逐条认领／指派，再到 ProjectTasks 默认的「我的开发任务」多选合并。PlanDevelopmentDialog 只分配负责人并创建独立待开发任务；MergeDevelopmentDialog 保存带修订号的选择与独立请求标识。scope 与分页同步 URL，切换范围、分页、任务后清除合并选择，卸载后忽略迟到响应。任务的人工状态与 Codex 状态分开呈现，已合并来源详情提供目标任务链接。
+
+开发任务详情由按项目／任务 ID 重建的 `DevelopmentTaskDetail` 呈现步骤引导，`use-development-task` 拥有详情、变更与独立的事项搜索请求。`development-task-view` 只解释服务端状态，不推断业务验收或改变权限。任务信息按需编辑，信息保存与事项关联分开提交；刷新保留编辑草稿及其修订基线。追加资料保存与继续执行分别操作；完成、取消及移出事项由 `DevelopmentTaskConfirmation` 明确确认后提交。项目功能导航使用 `.page-tabs.project-navigation` 的轻量选中态与窄屏换行，保留权限、URL 和原生键盘访问。

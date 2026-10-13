@@ -1,5 +1,3 @@
-const { createTapdChannel } = require("./tapd/adapter.cjs");
-const { defaultTapdConfig } = require("./tapd/config.cjs");
 const { createManualChannel } = require("./manual/adapter.cjs");
 
 class ChannelRegistry {
@@ -17,7 +15,7 @@ class ChannelRegistry {
       this.channels.set(channel.id, channel);
     }
   }
-  get(id = "tapd") {
+  get(id = "manual") {
     const channel = this.channels.get(id);
     if (!channel) throw new Error(`未接入需求渠道：${id}`);
     return channel;
@@ -28,13 +26,12 @@ class ChannelRegistry {
 }
 function defaultChannels(configFile, options) {
   return new ChannelRegistry([
-    createTapdChannel(configFile),
     createManualChannel(configFile, options),
   ]);
 }
 
 function defaultChannelConfig() {
-  return { ...defaultTapdConfig() };
+  return {};
 }
 
 module.exports = { ChannelRegistry, defaultChannels, defaultChannelConfig };

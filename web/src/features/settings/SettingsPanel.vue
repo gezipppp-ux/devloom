@@ -3,7 +3,6 @@ import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { showMessage } from "../../shared/components/operation-messages.js";
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from "vue";
 import { api } from "../../shared/api/api.js";
-import TapdSettings from "./TapdSettings.vue";
 import PromptSettings from "./PromptSettings.vue";
 import BaseBranchSelect from "./BaseBranchSelect.vue";
 import FormSection from "../../shared/components/FormSection.vue";
@@ -101,7 +100,6 @@ async function save() {
     <nav v-if="props.workspaceName" class="page-tabs" aria-label="设置分区">
       <a href="#workspace-settings">基本信息</a>
       <a href="#project-settings">项目环境</a>
-      <a href="#tapd-settings">TAPD 渠道</a>
       <a href="#prompt-settings">提示词模板</a>
     </nav>
     <FormSection
@@ -177,7 +175,6 @@ async function save() {
         </div>
       </a-form>
     </FormSection>
-    <TapdSettings v-if="props.workspaceName" @saved="emit('saved')" />
     <PromptSettings v-if="props.workspaceName" />
   </section>
 </template>

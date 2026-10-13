@@ -3,15 +3,15 @@ const path = require("node:path");
 const { git } = require("./command.cjs");
 const { resolveCommit } = require("./repository.cjs");
 const { createHash } = require("node:crypto");
-const { runKey, sourceFor } = require("../domain/run-identity.cjs");
+const { runKey } = require("../domain/run-identity.cjs");
 const { validateWorktreeName } = require("../domain/worktree-name.cjs");
 const { assertWorktreeCheckoutPaths } = require("./worktree-checkout.cjs");
 const { validateWorkspaceId } = require("../domain/workspace.cjs");
 const { absolutePath } = require("../shared/paths.cjs");
 
-function worktreePlan(repository, item, baseRef = "HEAD", options = {}) {
+function worktreePlan(repository, _item, baseRef = "HEAD", options = {}) {
   const root = absolutePath(options.root, "Worktree 根目录");
-  const source = options.source || sourceFor("tapd", item);
+  const source = options.source;
   runKey(source);
   if (
     options.slug !== undefined &&

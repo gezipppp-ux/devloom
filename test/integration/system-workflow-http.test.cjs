@@ -26,7 +26,7 @@ test("system workflow HTTP is administrator-only, hides drafts from projects and
     return {
       async request(route, input, headers = {}) {
         const response = await fetch(origin + route, { method: input === undefined ? "GET" : "POST",
-          headers: { cookie, "x-tapd-token": token, ...(input === undefined ? {} : { "content-type": "application/json" }), ...headers },
+          headers: { cookie, "x-csrf-token": token, ...(input === undefined ? {} : { "content-type": "application/json" }), ...headers },
           ...(input === undefined ? {} : { body: JSON.stringify(input) }) });
         const saved = response.headers.get("set-cookie");
         if (saved) cookie = saved.split(";", 1)[0];
@@ -50,7 +50,7 @@ test("system workflow HTTP is administrator-only, hides drafts from projects and
   for (const [url, input] of [[endpoint, undefined], [endpoint, { revision: workflow.revision, definition: workflow.draft }], [endpoint + "/publish", { revision: workflow.revision }]]) {
     assert.equal((await owner.request(url, input)).status, 403, "project owner permissions never authorize system workflow management");
   }
-  assert.equal((await administrator.request(endpoint, { revision: workflow.revision, definition: workflow.draft }, { "x-tapd-token": "invalid" })).status, 403);
+  assert.equal((await administrator.request(endpoint, { revision: workflow.revision, definition: workflow.draft }, { "x-csrf-token": "invalid" })).status, 403);
   const draft = structuredClone(workflow.draft);
   draft.nodes[0].name = "未发布的系统草稿";
   const saved = await administrator.request(endpoint, { revision: workflow.revision, definition: draft });

@@ -20,7 +20,7 @@ const next = {
 
 function saveRun(store, key, directory) {
   const state = {
-    source: { channel: 'tapd', workspace: '1', id: key.slice(2) },
+    source: { channel: 'manual', scope: '1', id: key.slice(2) },
     agent: { provider: "codex" },
     workitem: { title: '设置回归测试', id: key.slice(2), workspace_id: '1' },
     worktree: { path: directory, repository: directory, branch: 'codex/fixture' },
@@ -48,7 +48,7 @@ async function setup(t) {
   const { token } = await (await fetch(`${origin}/api/bootstrap`)).json();
   const post = (action, input, extraHeaders = {}) => fetch(`${origin}/api/runs/${key}/${action}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-tapd-token': token, ...extraHeaders },
+    headers: { 'content-type': 'application/json', 'x-csrf-token': token, ...extraHeaders },
     body: JSON.stringify(input),
   });
   async function settings(input) {
@@ -333,7 +333,7 @@ test('late initial turn acknowledgement cannot overwrite newer saved and applied
 
 test('execution settings API keeps token, origin, read-only and workspace boundaries', async (t) => {
   const { post, manager, store, key } = await setup(t);
-  assert.equal((await post('execution-settings', next, { 'x-tapd-token': 'wrong' })).status, 403);
+  assert.equal((await post('execution-settings', next, { 'x-csrf-token': 'wrong' })).status, 403);
   assert.equal((await post('execution-settings', next, { origin: 'https://foreign.invalid' })).status, 403);
   manager.worktreeReason = () => '原 worktree 已不可用';
   assert.equal((await post('execution-settings', next)).status, 400);
@@ -354,7 +354,7 @@ test('execution settings API keeps token, origin, read-only and workspace bounda
   t.after(() => application.close());
   const { token } = await (await fetch(`${origin}/api/bootstrap`)).json();
   const scoped = (id) => fetch(`${origin}/api/workspaces/${id}/runs/${key}/execution-settings`, {
-    method: 'POST', headers: { 'content-type': 'application/json', 'x-tapd-token': token }, body: JSON.stringify(next),
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-csrf-token': token }, body: JSON.stringify(next),
   });
   assert.equal((await scoped(b.id)).status, 404);
   assert.equal(await bContext.sessions.store.hasRun(key), false);

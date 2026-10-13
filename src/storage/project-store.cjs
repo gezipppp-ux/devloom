@@ -1,17 +1,15 @@
 const { accountError } = require("../domain/account.cjs");
-const { encodeSettings, decodeSettings } = require("./database-secrets.cjs");
 
 class ProjectStore {
   constructor(database) { this.database = database; }
   transaction(operation) { return this.database.transaction(operation); }
   async user(id) { return this.database.client.user.findUnique({ where: { id }, include: { department: true } }); }
   async departments() { return this.database.client.department.findMany({ orderBy: { name: "asc" } }); }
-  decodeProject(row) { return row ? { ...row, settings: decodeSettings(JSON.stringify(row.settings), this.database.encryptionKey) } : null; }
-  async project(id) { return this.decodeProject(await this.database.client.project.findUnique({ where: { id }, include: { _count: { select: { spaces: true } } } })); }
+  async project(id) { return this.database.client.project.findUnique({ where: { id }, include: { _count: { select: { spaces: true } } } }); }
   async membership(projectId, userId) { return this.database.client.projectMember.findUnique({ where: { projectId_userId: { projectId, userId } } }); }
   async members(projectId) { return this.database.client.projectMember.findMany({ where: { projectId }, include: { user: { include: { department: true } } }, orderBy: { createdAt: "asc" } }); }
   async users() { return this.database.client.user.findMany({ where: { status: "active" }, include: { department: true }, orderBy: { username: "asc" } }); }
-  async projects(userId, { includeAll = false } = {}) { return (await this.database.client.project.findMany({ where: includeAll ? {} : { members: { some: { userId, status: "active" } } }, include: { _count: { select: { spaces: true } } }, orderBy: { updatedAt: "desc" } })).map(row => this.decodeProject(row)); }
+  async projects(userId, { includeAll = false } = {}) { return this.database.client.project.findMany({ where: includeAll ? {} : { members: { some: { userId, status: "active" } } }, include: { _count: { select: { spaces: true } } }, orderBy: { updatedAt: "desc" } }); }
   async saveCatalog(model, value, id) {
     const { revision, ...data } = value;
     try {
@@ -25,10 +23,15 @@ class ProjectStore {
     }
   }
   async spaceCount(projectId) { return this.database.client.developmentSpace.count({ where: { projectId } }); }
+  async savePromptPreferences(projectId, userId, promptRevision, prompts) {
+    const result = await this.database.client.projectMember.updateMany({
+      where: { projectId, userId, promptRevision, status: "active" },
+      data: { prompts, promptRevision: { increment: 1 } },
+    });
+    if (!result.count) throw accountError("个人提示词已变更，请保留草稿并加载最新配置。", 409, "REVISION_CONFLICT");
+  }
   async saveProject(value, id) {
-    const data = { ...value };
-    if (data.settings) data.settings = JSON.parse(encodeSettings(data.settings, this.database.encryptionKey));
-    return this.decodeProject(await this.saveCatalog("project", data, id));
+    return this.saveCatalog("project", value, id);
   }
   async saveMember(projectId, userId, value, updating) {
     const { revision, ...data } = value;

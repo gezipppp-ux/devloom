@@ -107,7 +107,7 @@ function resolveCodex(config = {}, options = {}) {
         : null;
     if (result) return result;
     throw new Error(
-      `无法启动 Codex：指定的命令不可用：${explicit}。请修正 codex.command / CODEX_BIN；迁移系统后移除旧路径可启用自动查找。脚本启动器仅支持标准 npm codex.cmd，其他情况请配置 node 与 command_args。`,
+      `无法启动 Codex：指定的命令不可用：${explicit}。请修正 agent.options.command / CODEX_BIN；迁移系统后移除旧路径可启用自动查找。脚本启动器仅支持标准 npm codex.cmd，其他情况请配置 node 与 command_args。`,
     );
   }
   let result = search('codex', directories);
@@ -140,9 +140,9 @@ function resolveCodex(config = {}, options = {}) {
   }
   result = search('codex', fallback);
   if (result) return result;
-  throw new Error(
+  throw Object.assign(new Error(
     '未找到 Codex CLI。请为运行服务的用户安装并登录 Codex，将其目录加入服务 PATH，或设置 CODEX_BIN / codex.command 为可执行文件绝对路径。systemd 不会自动读取终端的 nvm 初始化配置；修改后请重启服务。',
-  );
+  ), { code: 'TOOL_NOT_FOUND' });
 }
 
 module.exports = { resolveCodex };

@@ -55,16 +55,10 @@ async function serveApi(
     );
   if (request.method === "GET" && url.pathname === "/api/bootstrap")
     return json(response, 200, { token, ...(await services.describe()) });
-  if (request.method === "GET" && url.pathname === "/api/settings/tapd")
-    return json(response, 200, (await services.readTapdSettings()));
-  if (request.method === "POST" && url.pathname === "/api/settings/tapd")
-    return json(response, 200, (await services.saveTapdSettings(input)));
   if (request.method === "GET" && url.pathname === "/api/settings/prompts")
     return json(response, 200, (await services.readPromptSettings()));
   if (request.method === "POST" && url.pathname === "/api/settings/prompts")
     return json(response, 200, (await services.savePromptSettings(input)));
-  if (request.method === "POST" && url.pathname === "/api/settings/tapd/check")
-    return json(response, 200, await services.checkTapdSettings(input));
   if (request.method === "GET" && url.pathname === "/api/settings")
     return json(response, 200, (await services.readSettings()));
   if (request.method === "GET" && url.pathname === "/api/settings/branches")
@@ -86,7 +80,7 @@ async function serveApi(
     return json(response, 200, { runs: (await sessions.list({ archived: url.searchParams.get("archived") === "true" })) });
   if (
     request.method === "GET" &&
-    ["/api/stories", "/api/requirements"].includes(url.pathname)
+    url.pathname === "/api/requirements"
   ) {
     const authorizeSearch = async () => {
       if (authorization && !(await authorization.authorize("issue.view")))
@@ -94,9 +88,7 @@ async function serveApi(
     };
     await authorizeSearch();
     const items = await services.search(
-      url.pathname === "/api/stories"
-        ? "tapd"
-        : url.searchParams.get("channel") || "tapd",
+      url.searchParams.get("channel") || "manual",
       {
         query: url.searchParams.get("query"),
         workspace: url.searchParams.get("workspace"),
@@ -107,7 +99,7 @@ async function serveApi(
   }
   if (request.method === "GET" && url.pathname === "/api/users") {
     const users = await services.searchUsers(
-      url.searchParams.get("channel") || "tapd",
+      url.searchParams.get("channel") || "manual",
       {
         query: url.searchParams.get("query"),
         workspace: url.searchParams.get("workspace"),
@@ -126,8 +118,6 @@ async function serveApi(
   const route = /^\/api\/runs\/([^/]+)(?:\/(.*))?$/.exec(url.pathname);
   if (route && RUN_KEY.test(route[1])) {
     const [, key, action] = route;
-    if (request.method === "POST" && action === "requirements")
-      return json(response, 200, await sessions.requirements.append(key, input));
     if (request.method === "POST" && action === "requirements/continue")
       return json(response, 202, await sessions.requirements.continue(key, input.id));
     if (request.method === "GET" && /^addition-images\/[^/]+\/\d+$/.test(action || "")) {

@@ -3,14 +3,12 @@ const { ProjectContentStore } = require("../storage/project-content-store.cjs");
 const { issueRequestId, issueInput, issueTransition, pageInput, text, object, identifier, choice, ISSUE_TYPES, contentFields, assignmentFields } = require("../domain/project-issues.cjs");
 const { assetInput, ASSET_TYPES } = require("../domain/project-assets.cjs");
 const { accountError } = require("../domain/account.cjs");
-const { importProjectTapd } = require("../channels/tapd/project-import.cjs");
 const { presentIssueImages, presentIssue, presentAsset, presentProjectFile, presentPage } = require("./project-content-presenter.cjs");
 
 class ProjectContentServices {
-  constructor(database, projects, { fetchTapd = importProjectTapd } = {}) {
+  constructor(database, projects) {
     this.store = new ProjectContentStore(database);
     this.projects = projects;
-    this.fetchTapd = fetchTapd;
   }
   async authorized(projectId, actor, permissions) {
     let context;
@@ -56,7 +54,7 @@ class ProjectContentServices {
     const permissions = ["issue.create", ...(data.participantIds.length ? ["issue.assign"] : [])];
     return this.mutate(projectId, actor, permissions, async () => {
       await this.store.members(projectId, data.participantIds);
-      const issue = await this.store.createIssue(projectId, actor.id, data, undefined, { requestId, attachments });
+      const issue = await this.store.createIssue(projectId, actor.id, data, { requestId, attachments });
       for (const file of attachments) await this.store.addFile(projectId, "issues", issue.id, actor.id, file);
       return { ...presentIssue(issue), images: presentIssueImages(await this.store.issuePreviewFiles(projectId, issue.id), issue.source) };
     });
@@ -105,22 +103,6 @@ class ProjectContentServices {
     const data = { body: text(input.body, "交付内容", 60000, { required: true }), taskId: input.taskId ? identifier(input.taskId, "开发任务") : null,
       commit: input.commit ? text(input.commit, "提交信息", 2000) : null };
     return this.mutate(projectId, actor, ["deliverable.create"], async () => (await this.store.deliverable(projectId, id, actor.id, data)));
-  }
-  async importTapd(projectId, actor, input) {
-    const { project } = await this.authorized(projectId, actor, ["issue.create"]);
-    // Fetching never holds a database transaction and never changes TAPD.
-    const materials = await this.fetchTapd(project.settings, input);
-    return this.mutate(projectId, actor, ["issue.create"], async () => {
-      const items = [];
-      for (const { source, attachments = [], ...fields } of materials) {
-        const existing = await this.store.source(projectId, source.scope, source.type, source.externalId);
-        const issue = existing?.issue || await this.store.createIssue(projectId, actor.id, issueInput(fields), source);
-        if (!existing) for (const file of attachments)
-          await this.store.addFile(projectId, "issues", issue.id, actor.id, { id: file.id, ...projectFileInput(file) });
-        items.push({ ...presentIssue(issue), images: presentIssueImages(await this.store.issuePreviewFiles(projectId, issue.id), issue.source), reused: Boolean(existing) });
-      }
-      return { items };
-    });
   }
   async listAssets(projectId, actor, input) {
     const page = pageInput(input);

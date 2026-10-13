@@ -9,6 +9,7 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
   const title = "【SIT】模型网关：点击切换自定义供应商时，保留配置与会话上下文，支持长名称完整展示。".repeat(3);
   (await saveState(path.join(manager.store.dir(key), "run.json"), {
     workitem: { id: "98", workspace_id: "1", title: original },
+    source: { channel: "manual", scope: "1", id: "98" },
     agent: { provider: "codex" },
     session_id: "archive-fixture", execution: { status: "completed" },
   }));

@@ -8,6 +8,7 @@ import { useResource } from "../../shared/api/use-resource.js";
 import ProjectIssues from "./ProjectIssues.vue";
 import ProjectAssets from "./ProjectAssets.vue";
 import ProjectMembers from "./ProjectMembers.vue";
+import ProjectPromptSettings from "./ProjectPromptSettings.vue";
 import ProjectSettings from "./ProjectSettings.vue";
 import ProjectDevelopment from "./ProjectDevelopment.vue";
 import ProjectReleases from "./ProjectReleases.vue";
@@ -29,6 +30,7 @@ const tabs = computed(() => [
   { id: "development", label: "代码与环境", show: can("code.view") },
   { id: "assets", label: "资产", show: can("asset.view") },
   { id: "members", label: "成员", show: true },
+  { id: "prompts", label: "提示词", show: true },
   { id: "settings", label: "设置", show: can("project.configure") && !archived.value },
 ].filter(item => item.show));
 const currentTab = computed(() => tabs.value.some(item => item.id === props.tab) ? props.tab : "overview");
@@ -64,7 +66,7 @@ function returnToIssue() {
         <div><h1>{{ data.project.name }}</h1><p v-if="archived" class="warning">项目已归档，内容只读。</p></div>
         <button :disabled="loading" @click="reload">刷新项目</button>
       </header>
-      <nav class="page-tabs" aria-label="项目功能"><button v-for="item in tabs" :key="item.id" :class="{ active: currentTab === item.id }" :aria-current="currentTab === item.id ? 'page' : undefined" @click="emit('tab', item.id)">{{ item.label }}</button></nav>
+      <nav class="page-tabs project-navigation" aria-label="项目功能"><button v-for="item in tabs" :key="item.id" :class="{ active: currentTab === item.id }" :aria-current="currentTab === item.id ? 'page' : undefined" @click="emit('tab', item.id)">{{ item.label }}</button></nav>
       <p v-if="currentTab !== tab" class="warning" role="status">当前项目状态或你的分工未开放所选功能，可在下方查看当前权限。</p>
       <template v-if="currentTab === 'overview'">
         <section v-if="managementOnly && !archived" class="project-setup-callout" aria-label="完成项目配置">
@@ -89,10 +91,11 @@ function returnToIssue() {
         </div>
       </template>
       <ProjectIssues v-else-if="currentTab === 'issues' || currentTab === 'bugs'" :key="currentTab" :project-id="projectId" :type="currentTab === 'bugs' ? 'bug' : 'requirement'" :permissions="contentPermissions" @open-task="task => task.runKey ? emit('open-workspace', task.workspaceId, task.runKey) : router.push({ query: { tab: 'tasks', task: task.id } })" />
-      <ProjectTasks v-else-if="currentTab === 'tasks'" :project-id="projectId" :space-ready="data.space?.status === 'ready'" :can-assign="contentPermissions.includes('issue.assign')" :can-continue="contentPermissions.includes('session.continue')" @prepare-development="prepareDevelopment" @open-workspace="(id, key) => emit('open-workspace', id, key)" />
+      <ProjectTasks v-else-if="currentTab === 'tasks'" :project-id="projectId" :workspace-id="data.space?.workspaceId || ''" :space-ready="data.space?.status === 'ready'" :can-assign="contentPermissions.includes('issue.assign')" :can-continue="contentPermissions.includes('session.continue')" :read-only-reason="archived ? '项目已归档，开发任务只读。' : ''" @prepare-development="prepareDevelopment" @open-workspace="(id, key) => emit('open-workspace', id, key)" />
       <ProjectReleases v-else-if="currentTab === 'releases'" :project-id="projectId" :can-manage="contentPermissions.includes('release.manage')" />
       <ProjectAssets v-else-if="currentTab === 'assets'" :project-id="projectId" :permissions="contentPermissions" />
       <ProjectMembers v-else-if="currentTab === 'members'" :project-id="projectId" :can-manage="can('project.members.manage') && !archived" @saved="reload" />
+      <ProjectPromptSettings v-else-if="currentTab === 'prompts'" :key="projectId" :project-id="projectId" @saved="reload" />
       <ProjectSettings v-else-if="currentTab === 'settings'" :project="data.project" @saved="reload" />
       <ProjectDevelopment v-else-if="currentTab === 'development'" :project-id="projectId" :remote-url="data.project.remoteUrl" :space="data.space" :can-view-session="can('session.view')" :can-start="can('code.operate') && !archived" @refresh="reload" @return-to-issue="returnToIssue" @open-workspace="(id, key) => emit('open-workspace', id, key)" />
     </template>

@@ -72,7 +72,7 @@ test("explicit wildcard bind serves a real LAN address while retaining Host, Ori
   const { token } = JSON.parse(bootstrap.text);
   const headers = {
     "content-type": "application/json",
-    "x-tapd-token": token,
+    "x-csrf-token": token,
     origin,
   };
   const payload = JSON.stringify({ name: "局域网测试" });
@@ -108,8 +108,8 @@ test("explicit wildcard bind serves a real LAN address while retaining Host, Ori
     );
   for (const value of [undefined, "wrong-token"]) {
     const invalid = { ...headers };
-    if (value === undefined) delete invalid["x-tapd-token"];
-    else invalid["x-tapd-token"] = value;
+    if (value === undefined) delete invalid["x-csrf-token"];
+    else invalid["x-csrf-token"] = value;
     assert.equal(
       (
         await send(`${origin}/api/workspaces`, {

@@ -7,6 +7,8 @@ const { agentDescriptor } = require('../fixtures/agent-descriptor.cjs');
 const { projectVisual } = require('../../test/fixtures/project-visual.cjs');
 const { verifyReleaseNameForm } = require('./project-releases.test.cjs');
 const { verifyWorkflowCanvas } = require('./workflow-canvas.test.cjs');
+const { verifyDevelopmentTaskDetail } = require('./development-task-detail.test.cjs');
+const { verifyManualDevelopment } = require('./manual-development.test.cjs');
 
 async function main() {
   const fixture = projectVisual('ux-workspace');
@@ -112,6 +114,7 @@ async function main() {
     assert.equal(new URL(page.url()).searchParams.get('task'), 'search-task');
     await page.reload();
     await page.getByRole('heading',{name:'客户搜索与空结果提示',exact:true}).waitFor();
+    await page.getByRole('button', { name: '追加关联事项', exact: true }).click();
     await page.getByLabel('搜索追加事项').fill('保留搜索');
     await page.getByRole('button',{name:'搜索事项',exact:true}).click();
     await page.locator('.permission-choice input').first().check();
@@ -123,12 +126,12 @@ async function main() {
       await route.fallback();
     }, { times: 1 });
     const detailResponse=page.waitForResponse(r=>new URL(r.url()).pathname.endsWith('/tasks/search-task'));
-    await page.getByRole('button',{name:'刷新任务',exact:true}).click();
-    assert.equal(await page.getByRole('button',{name:'保存追加快照',exact:true}).isDisabled(),true);
-    assert.equal(await page.getByRole('button',{name:'发送追加资料并继续会话',exact:true}).isDisabled(),true);
+    await page.getByRole('button',{name:'刷新状态',exact:true}).click();
+    assert.equal(await page.getByRole('button',{name:'保存追加资料（暂不发送）',exact:true}).isDisabled(),true);
+    assert.equal(await page.getByRole('button',{name:'发送资料并继续 Codex',exact:true}).isDisabled(),true);
     releaseDetail();
     await detailResponse;
-    await page.getByText('已启动 · 本轮结束',{exact:true}).waitFor();
+    await page.getByText('Codex：本轮结束',{exact:true}).waitFor();
     assert.equal(await page.getByLabel('搜索追加事项').inputValue(), '保留搜索');
     assert.equal(await page.locator('.permission-choice input').first().isChecked(),true);
     await page.getByRole('button',{name:'返回任务列表',exact:true}).click();
@@ -184,7 +187,9 @@ async function main() {
     await page.goBack(); await page.waitForURL('**task=1-1');
     releaseInitialTask();
     await page.getByRole('heading',{name:'不应被替代打开的任务 A',exact:true}).waitFor();
+    await verifyManualDevelopment({ page, origin, projectId: fixture.projectId, output });
     await verifyWorkflowCanvas({ page, origin, output });
+    await verifyDevelopmentTaskDetail({ browser, output });
     assert.deepEqual(errors,[]);
     process.stdout.write('Development flow regression passed.\n');
   } finally {await browser.close();}

@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { execFileSync } = require("node:child_process");
-const { temporary, png, json } = require("../support/helpers.cjs");
+const { temporary, png } = require("../support/helpers.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
 const { WorkspaceManager } = require("../../src/application/workspace-manager.cjs");
 const { SessionManager } = require("../support/session-manager.cjs");
@@ -18,11 +18,6 @@ const { worktreePlan } = require("../../src/git/worktrees.cjs");
 const { sourceFor } = require("../../src/domain/run-identity.cjs");
 const { runsPath } = require("../../src/config/runtime.cjs");
 const { seedWorkspaceProject } = require("../support/workspace-project.cjs");
-const {
-  saveTapdSettings,
-  readTapdSettings,
-  checkTapdSettings,
-} = require("../../src/channels/tapd/settings.cjs");
 
 async function fixtures(t) {
   const directory = temporary(t);
@@ -72,10 +67,6 @@ test("workspaces isolate settings, credentials and restart state; names never be
   const { workspaces, a, b, settings, directory } = (await fixtures(t));
   t.after(() => workspaces.close());
   (await saveSettings(settings, workspaces.configFile(a.id)));
-  (await saveTapdSettings(workspaces.configFile(a.id), {
-    workspaceId: "42",
-    cookie: "dsc-token=secret-a; auth=private",
-  }));
   assert.equal((await readSettings(workspaces.configFile(a.id))).model, undefined);
   (await assert.rejects(
     async () =>
@@ -91,12 +82,7 @@ test("workspaces isolate settings, credentials and restart state; names never be
     /仅允许/,
   ));
   assert.equal((await readSettings(workspaces.configFile(b.id))).baseBranch, "");
-  assert.equal((await readTapdSettings(workspaces.configFile(b.id))).hasCookie, false);
   (await saveSettings({ ...settings, baseBranch: "" }, workspaces.configFile(a.id)));
-  assert.equal(
-    (await readOptional(workspaces.configFile(a.id))).tapd.session.cookie_header,
-    "dsc-token=secret-a; auth=private",
-  );
   (await workspaces.save({ name: "重命名 A" }, a.id));
   assert.equal((await readSettings(workspaces.configFile(a.id))).baseBranch, "");
   (await assert.rejects(async () => (await workspaces.save({ name: "项目 B" })), /已存在/));
@@ -205,70 +191,6 @@ test("new tasks use changed system bases while recorded sessions retain their or
   assert.equal(resumed.threadId, original.state.session_id);
   assert.equal((await manager.store.read(original.key)).worktree.path, original.state.worktree.path);
   await manager.interrupt(original.key);
-});
-
-test("Cookie maintenance preserves secrets, checks drafts without saving, and sanitizes failures", async (t) => {
-  const { workspaces, a } = (await fixtures(t));
-  const file = workspaces.configFile(a.id);
-  const draft = {
-    workspaceId: "42",
-    cookie: "dsc-token=secret-a; auth=private",
-  };
-  (await saveTapdSettings(file, draft));
-  const saved = fs.readFileSync(file, "utf8");
-  assert.equal(
-    JSON.stringify((await readTapdSettings(file))).includes("secret-a"),
-    false,
-  );
-  const calls = [];
-  const result = await checkTapdSettings(
-    file,
-    { workspaceId: "99", cookie: "dsc-token=draft-only" },
-    async (session, endpoint, options) => {
-      calls.push({ session, endpoint, options });
-      return { workitem_list: [] };
-    },
-  );
-  assert.equal(result.ok, true);
-  assert.equal(calls[0].session.cookie_header, "dsc-token=draft-only");
-  assert.equal(JSON.parse(calls[0].options.body).group_id, "99");
-  assert.equal(JSON.parse(calls[0].options.body).perpage, "1");
-  assert.equal(fs.readFileSync(file, "utf8"), saved);
-  for (const response of [
-    Response.json({ meta: { code: 1 }, data: {} }),
-    new Response("<html>Login</html>"),
-    json({ unexpected: true }),
-  ]) {
-    t.mock.method(global, "fetch", async () => response);
-    await assert.rejects(
-      checkTapdSettings(file, { workspaceId: "42" }),
-      /检测失败/,
-    );
-    t.mock.restoreAll();
-  }
-  t.mock.method(global, "fetch", async () => json({ workitem_list: [] }));
-  assert.equal(
-    (await checkTapdSettings(file, { workspaceId: "42", cookie: "" })).ok,
-    true,
-  );
-  (await saveTapdSettings(file, { workspaceId: "42", cookie: "" }));
-  assert.equal((await readOptional(file)).tapd.session.cookie_header, draft.cookie);
-  (await assert.rejects(
-    async () => (await saveTapdSettings(file, { ...draft, cookie: "bad\nheader" })),
-    /格式/,
-  ));
-  (await assert.rejects(
-    async () => (await saveTapdSettings(file, { ...draft, cookie: "no-token=1" })),
-    /dsc-token/,
-  ));
-  (await assert.rejects(
-    async () =>
-      (await saveTapdSettings(file, { ...draft, imageHosts: ["https://example.com"] })),
-    /域名/,
-  ));
-  (await saveTapdSettings(file, { workspaceId: "42", clearCookie: true }));
-  assert.equal((await readTapdSettings(file)).hasCookie, false);
-  await assert.rejects(checkTapdSettings(file, { workspaceId: "42" }), /填写/);
 });
 
 test("same requirement runs independently in two workspaces with isolated uploads, branches and model", async (t) => {
@@ -392,7 +314,7 @@ test("same requirement runs independently in two workspaces with isolated upload
   ]);
 });
 
-test("HTTP requires explicit workspace context and isolates lists, images, SSE and bound TAPD projects", async (t) => {
+test("HTTP requires explicit workspace context and isolates lists, images, SSE and reject retired channel endpoints", async (t) => {
   const { workspaces, a, b } = (await fixtures(t));
   const app = createWebServer({ testIdentity: true, workspaces, workspaceClones: fixtureWorkspaceClones(workspaces) });
   const origin = await app.listen(0);
@@ -402,7 +324,7 @@ test("HTTP requires explicit workspace context and isolates lists, images, SSE a
   assert.equal((await fetch(`${origin}/api/runs`)).status, 404);
   const headers = {
     "content-type": "application/json",
-    "x-tapd-token": boot.token,
+    "x-csrf-token": boot.token,
   };
   const post = (url, data, extra = {}) =>
     fetch(`${origin}${url}`, {
@@ -415,7 +337,7 @@ test("HTTP requires explicit workspace context and isolates lists, images, SSE a
       await post(
         "/api/workspaces",
         { name: "blocked" },
-        { "x-tapd-token": "bad" },
+        { "x-csrf-token": "bad" },
       )
     ).status,
     403,
@@ -439,6 +361,7 @@ test("HTTP requires explicit workspace context and isolates lists, images, SSE a
     path.join(first.sessions.store.dir("1-2"), "run.json"),
     JSON.stringify({
       workitem: { title: "A 的任务", id: "2", workspace_id: "1" },
+      source: { channel: "manual", scope: "1", id: "2" },
       agent: { provider: "codex", model: "", reasoningEffort: "", permissionMode: "ask" },
       execution: { status: "completed" },
     }),
@@ -452,30 +375,19 @@ test("HTTP requires explicit workspace context and isolates lists, images, SSE a
     0,
   );
   assert.equal((await fetch(`${origin}${prefix(b.id)}/runs/1-2`)).status, 404);
-  const saved = await post(`${prefix(a.id)}/settings/tapd`, {
-    workspaceId: "42",
-    cookie: "dsc-token=private",
-  });
-  assert.equal(saved.status, 200);
-  assert.equal((await saved.text()).includes("private"), false);
-  assert.equal(
-    (await fetch(`${origin}${prefix(a.id)}/requirements?workspace=43`)).status,
-    400,
-  );
-  assert.equal(
-    (await fetch(`${origin}${prefix(a.id)}/users?workspace=43`)).status,
-    400,
-  );
-  const bootstrap = await (
-    await fetch(`${origin}${prefix(a.id)}/bootstrap`)
-  ).json();
-  assert.equal(bootstrap.workspace, "42");
-  assert.equal(bootstrap.channels[0].scopeLocked, true);
-  assert.equal(
-    (await (await fetch(`${origin}${prefix(b.id)}/settings/tapd`)).json())
-      .hasCookie,
-    false,
-  );
+  for (const workspace of [a, b]) {
+    const base = prefix(workspace.id);
+    for (const suffix of ["/settings/tapd", "/settings/tapd/check", "/stories"]) {
+      assert.equal((await fetch(origin + base + suffix)).status, 404);
+      assert.equal((await post(base + suffix, {})).status, 404);
+    }
+    for (const suffix of ["/requirements?channel=tapd", "/users?channel=tapd"])
+      assert.equal((await fetch(origin + base + suffix)).status, 400);
+    assert.equal((await post(base + "/runs", { channel: "tapd", workspace: "42", id: "2" })).status, 400);
+    const bootstrap = await (await fetch(origin + base + "/bootstrap")).json();
+    assert.deepEqual(bootstrap.channels.map(channel => channel.id), ["manual"]);
+  }
+  assert.equal((await post(`${prefix(a.id)}/runs/1-2/requirements`, { items: [{ id: "3" }] })).status, 404);
   const abort = new AbortController();
   const events = await fetch(`${origin}${prefix(a.id)}/events`, {
     signal: abort.signal,
@@ -608,7 +520,6 @@ test("workspace icon IDs persist independently, validate before saving and prese
   t.after(() => workspaces.close());
   const file = workspaces.configFile(a.id);
   (await saveSettings(settings, file));
-  (await saveTapdSettings(file, { workspaceId: "42", cookie: "dsc-token=private" }));
   const before = (await readOptional(file));
   const context = (await workspaces.get(a.id));
   (await workspaces.save({ name: a.name, icon: "rocket" }, a.id));
@@ -649,7 +560,7 @@ test("workspace icon IDs persist independently, validate before saving and prese
   const boot = await (await fetch(`${origin}/api/bootstrap`)).json();
   const res = await fetch(`${origin}/api/workspaces`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-tapd-token": boot.token },
+    headers: { "content-type": "application/json", "x-csrf-token": boot.token },
     body: JSON.stringify({ name: "带图标的工作区", icon: "code" }),
   });
   assert.equal(res.status, 202);

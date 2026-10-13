@@ -25,6 +25,7 @@ function setup(t) {
   fs.writeFileSync(
     path.join(store.dir(key), "run.json"),
     JSON.stringify({
+      source: { channel: "manual", scope: "1", id: "2" },
       agent: { provider: "codex" },
       workitem: { id: "2", workspace_id: "1", title: "shutdown fixture" },
       session_id: "original",

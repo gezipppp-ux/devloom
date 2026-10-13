@@ -7,10 +7,9 @@ const { chromium } = require("playwright");
 const { WorkspaceManager } = require("../../src/application/workspace-manager.cjs");
 const { SessionManager } = require("../support/session-manager.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
-const { readOptional } = require("../../src/storage/json-files.cjs");
 const { seedWorkspaceProject } = require("../support/workspace-project.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
-const { temporary, png, json } = require("../support/helpers.cjs");
+const { temporary, png } = require("../support/helpers.cjs");
 const { verifyLateImageUpload } = require("./session-images.test.cjs");
 const { verifyPromptSettings } = require("./prompt-settings.test.cjs");
 const { verifyWorkspaceNavigation } = require("./workspace-navigation.test.cjs");
@@ -60,17 +59,6 @@ async function main() {
   };
   const application = createWebServer({ workspaces, workspaceClones: fixtureWorkspaceClones(workspaces), testIdentity: true });
   const origin = await application.listen(0);
-  const originalFetch = global.fetch;
-  let checks = 0;
-  global.fetch = async (url, options) => {
-    if (new URL(url).origin !== "https://www.tapd.cn")
-      return originalFetch(url, options);
-    checks++;
-    assert.match(String(url), /get_my_worktable_by_page/);
-    return options.headers.cookie.includes("expired")
-      ? new Response("<html>Login</html>")
-      : json({ workitem_list: [] });
-  };
   let browser;
   try {
     browser = await chromium.launch({
@@ -92,7 +80,7 @@ async function main() {
     await page.goto(`${origin}/?workspace=${a.id}`);
     const bootstrap = await (await page.request.get(`${origin}/api/bootstrap`)).json();
     const systemSettings = await page.request.post(`${origin}/api/system/settings`, {
-      headers: { origin, "x-tapd-token": bootstrap.token },
+      headers: { origin, "x-csrf-token": bootstrap.token },
       data: { memberStorageRoot: path.join(directory, "trees") },
     });
     assert.equal(systemSettings.status(), 200);
@@ -131,46 +119,7 @@ async function main() {
     await page
       .getByText("设置已保存，新任务将使用此配置。", { exact: true })
       .waitFor();
-    await page.getByLabel("TAPD 项目 ID", { exact: true }).fill("42");
-    await page
-      .getByLabel("TAPD Cookie", { exact: true })
-      .fill("dsc-token=valid-fixture; auth=private");
-    await page.getByRole("button", { name: "检测连接", exact: true }).click();
-    await page
-      .getByText("Cookie 可用，TAPD 待办接口访问成功。检测不会保存配置。", {
-        exact: true,
-      })
-      .waitFor();
-    assert.equal((await readOptional(workspaces.configFile(a.id))).tapd, undefined);
-    await page
-      .getByRole("button", { name: "保存 TAPD 配置", exact: true })
-      .click();
-    await page.getByText("TAPD 配置已保存。", { exact: true }).waitFor();
-    assert.equal(
-      await page.getByLabel("TAPD Cookie", { exact: true }).inputValue(),
-      "",
-    );
-    await page
-      .getByLabel("TAPD Cookie", { exact: true })
-      .fill("dsc-token=expired");
-    await page.getByRole("button", { name: "检测连接", exact: true }).click();
-    await page
-      .getByText(
-        "检测失败：Cookie 已失效、项目不可访问或网络异常，请检查后重试。",
-        { exact: true },
-      )
-      .waitFor();
-    assert.equal(
-      (await readOptional(workspaces.configFile(a.id))).tapd.session.cookie_header,
-      "dsc-token=valid-fixture; auth=private",
-    );
-    await page.getByLabel("TAPD Cookie", { exact: true }).fill("");
-    await page.getByRole("button", { name: "检测连接", exact: true }).click();
-    await page
-      .getByText("Cookie 可用，TAPD 待办接口访问成功。检测不会保存配置。", {
-        exact: true,
-      })
-      .waitFor();
+    assert.equal(await page.getByText(/TAPD/).count(), 0);
     await page.screenshot({
       path: path.join(output, "workspace-settings.png"),
       fullPage: true,
@@ -216,23 +165,10 @@ async function main() {
       await page.getByLabel("Codex 模型", { exact: true }).count(),
       0,
     );
-    assert.equal(
-      await page.getByLabel("TAPD Cookie", { exact: true }).inputValue(),
-      "",
-    );
     await page
       .getByRole("button", { name: "＋ 从需求启动", exact: true })
       .click();
-    assert.equal(
-      await page.getByLabel("TAPD 项目 ID", { exact: true }).inputValue(),
-      "42",
-    );
-    assert.equal(
-      await page
-        .getByLabel("TAPD 项目 ID", { exact: true })
-        .getAttribute("readonly"),
-      "",
-    );
+    assert.deepEqual(await page.getByLabel("需求渠道", { exact: true }).locator("option").evaluateAll(options => options.map(option => option.value)), ["manual"]);
     assert.equal(
       await page.getByLabel("Codex 模型", { exact: true }).inputValue(),
       "",
@@ -439,7 +375,6 @@ async function main() {
         await page.getByText("历史回复", { exact: true }).waitFor();
       },
     });
-    assert.equal(checks, 3);
     const promptWorkspaceA = (await workspaces.save({ name: "提示词配置 A" }));
     const promptWorkspaceB = (await workspaces.save({ name: "提示词配置 B" }));
     await verifyPromptSettings(browser, {
@@ -458,7 +393,6 @@ async function main() {
   } finally {
     await browser?.close();
     await application.close();
-    global.fetch = originalFetch;
     for (const callback of cleanup.reverse()) await callback();
   }
 }

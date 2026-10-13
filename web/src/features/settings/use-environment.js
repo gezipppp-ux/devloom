@@ -38,7 +38,7 @@ export function useEnvironment() {
     submitting.value = true;
     error.value = "";
     try {
-      const result = await appApi("/system/environment/update", { id: tool.id, version: tool.latest });
+      const result = await appApi("/system/environment/update", { id: tool.id, version: tool.missing ? tool.installVersion : tool.latest, operation: tool.missing ? "install" : "update" });
       if (disposed) return false;
       job.value = result;
       busy.value = result.status === "running";

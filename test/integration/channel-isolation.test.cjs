@@ -176,7 +176,7 @@ test('repository settings and continuation preserve Unicode, spaces and filesyst
   assert.equal(settings.worktreeRoot, fs.realpathSync(root));
   const config = (await executionConfig({ agent: { provider: "codex" } }, configFile));
   assert.equal(repositoryFor(config, configFile, '1'), fs.realpathSync(repo));
-  const plan = createWorktree(worktreePlan(settings.repository, { workspace_id: '1', id: '9' }, 'HEAD', { root }));
+  const plan = createWorktree(worktreePlan(settings.repository, { workspace_id: '1', id: '9' }, 'HEAD', { root, source: { channel: 'tracker', scope: '1', id: '9' } }));
   assert.equal(worktreeReason({ worktree: plan }), null);
   if (process.platform === 'win32')
     assert.equal(worktreeReason({ worktree: { ...plan, path: path.toNamespacedPath(plan.path) } }), null);
@@ -273,7 +273,7 @@ test('a non-TAPD channel runs through real Git, session controller and history w
 
 test('channel identity isolates duplicate IDs while preserving recorded TAPD source and images', async (t) => {
   const item = { workspace_id: '1', id: '2' };
-  assert.equal(runKey(sourceFor('tapd', item)), '1-2');
+  assert.match(runKey(sourceFor('tapd', item)), /^tapd-[a-f0-9]{32}$/);
   assert.notEqual(
     runKey(sourceFor('tracker', item)),
     runKey(sourceFor('other', item)),
@@ -367,7 +367,7 @@ test('HTTP dispatches source searches and protects persisted settings with same-
     (
       await fetch(`${url}/api/settings`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-tapd-token': token },
+        headers: { 'content-type': 'application/json', 'x-csrf-token': token },
         body: payload,
       })
     ).status,

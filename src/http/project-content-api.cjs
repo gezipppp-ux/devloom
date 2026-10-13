@@ -19,8 +19,6 @@ async function serveProjectContent(request, response, url, { services, actor, in
     if (request.method === "GET") return send(200, resource === "issues" ? await services.listIssues(projectId, actor, query) : await services.listAssets(projectId, actor, query));
     if (request.method === "POST") return send(201, resource === "issues" ? await services.createIssue(projectId, actor, input) : await services.saveAsset(projectId, null, actor, input));
   }
-  if (resource === "issues" && id === "import" && action === "tapd" && request.method === "POST")
-    return send(200, await services.importTapd(projectId, actor, input));
   if (id && !action) {
     if (request.method === "GET") return send(200, resource === "issues" ? await services.readIssue(projectId, id, actor) : await services.readAsset(projectId, id, actor));
     if (request.method === "POST") return send(200, resource === "issues" ? await services.updateIssue(projectId, id, actor, input) : await services.saveAsset(projectId, id, actor, input));

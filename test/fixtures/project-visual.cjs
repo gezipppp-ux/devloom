@@ -1,9 +1,10 @@
 const { projectPermissionCatalog } = require('../../src/domain/project-permissions.cjs');
+const { getPromptTemplates, promptTemplateCatalog, MAX_PROMPT_TEMPLATE_LENGTH } = require('../../src/domain/prompt-templates.cjs');
 
 function projectVisual(workspaceId) {
   const permissions = projectPermissionCatalog.filter(p => p.scope === 'project').map(p => p.id);
   const department = { id: 'product', name: '产品研发部', status: 'active', permissions };
-  const project = { id: '00000000-0000-4000-8000-000000000001', name: '客户管理系统', description: '统一管理客户搜索、业务交付和测试环境资料，让产品与研发在同一个项目中协作。', remoteUrl: 'https://git.example.test/team/customer.git', repositoryEditable: false, status: 'active', ownerUserId: 'visual-admin', revision: 1, settings: { initCommands: ['npm ci', 'npm run build'], prompts: {}, tapd: { workspaceId: '123456', hasCookie: true } } };
+  const project = { id: '00000000-0000-4000-8000-000000000001', name: '客户管理系统', description: '统一管理客户搜索、业务交付和测试环境资料，让产品与研发在同一个项目中协作。', remoteUrl: 'https://git.example.test/team/customer.git', repositoryEditable: false, status: 'active', ownerUserId: 'visual-admin', revision: 1, settings: { initCommands: ['npm ci', 'npm run build'], prompts: {} } };
   const members = ['演示管理员', '张明', '李欣'].map((displayName, i) => ({ userId: i ? `member-${i}` : 'visual-admin', username: i ? `member-${i}` : 'visual-admin', displayName, departmentName: department.name, status: 'active', userStatus: 'active', permissions, departmentPermissions: permissions, grantablePermissions: permissions, administratorAccess: !i, effectivePermissions: permissions, revision: 1 }));
   const people = members.map(m => ({ id: m.userId, username: m.username, displayName: m.displayName }));
   const release = { id: 'release-1', name: 'v0.2', description: '优化客户搜索与筛选体验。\n补充空结果提示，完善移动端交互与验收流程。', revision: 1, status: 'active', createdAt: '2026-10-08T08:00:00Z', updatedAt: '2026-10-12T08:00:00Z' };
@@ -20,6 +21,7 @@ function projectVisual(workspaceId) {
   const task = { id: 'search-task', revision: 1, releaseId: release.id, release, executorId: 'visual-admin', executor: { id: 'visual-admin', displayName: '演示管理员' }, issueIds: ['search'], canStart: false, canEdit: false, canComplete: true, canCancel: true, baseBranch: 'main', baseCommit: '1234567890abcdef1234567890abcdef12345678', fetchedAt: '2026-10-12T08:00:00Z', title: '客户搜索与空结果提示', status: 'started', canOpenSession: true, workspaceId, runKey: '1-1', execution: { status: 'completed', sessionId: 'fixture-session' }, issues: [issues[0]], additions: [{ requestId: 'append-fixture', status: 'ready', issues: [issues[2]] }] };
   function response(url) {
     const endpoint = url.pathname;
+    if (endpoint.endsWith('/prompts')) return { projectTemplates: getPromptTemplates(), overrides: {}, templates: getPromptTemplates(), projectRevision: 1, personalRevision: 1, canConfigure: true, canPersonalize: true, catalog: promptTemplateCatalog, maxLength: MAX_PROMPT_TEMPLATE_LENGTH };
     if (endpoint === '/api/projects') return { projects: [project, { ...project, id: 'operations', name: '运营后台', description: '运营指标、客户跟进与业务配置。' }], canCreateProjects: true };
     if (endpoint === '/api/admin/departments') return { departments: [department] };
     if (endpoint === '/api/projects/00000000-0000-4000-8000-000000000001') return { project, permissions, space: { status: 'ready', workspaceId, gitAccountId: 'fixture-account' } };

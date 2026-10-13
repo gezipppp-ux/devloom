@@ -38,11 +38,12 @@ async function fixture(t) {
   const sessions = {
     git: { activeReason() { return sessions.active ? "active" : null; }, async assertIdle() {} },
     store: { async read() { return {}; } },
+    async validateStartSelection(selection) { return selection; },
     async start(input) {
       calls.starts.push(input);
       const recorded = await database.client.developmentTask.findUnique({ where: { id: input.requestId } });
       assert.equal(recorded.status, "unknown", "durable task intent precedes Codex dispatch");
-      assert.equal(await database.client.taskIssueLink.count({ where: { taskId: input.requestId } }), input.content.match(/--- 项目事项/g).length);
+      assert.equal(await database.client.taskIssueLink.count({ where: { taskId: input.requestId } }), (input.content.match(/--- 项目事项/g) || []).length);
       return { key: runKey({ channel: "manual", scope: "local", id: input.requestId }), accepted: true };
     },
     async exclusive(_key, operation) { return operation(); },
@@ -59,7 +60,7 @@ async function fixture(t) {
   const workspaces = { async get(id, selected) {
     assert.equal(id, workspace.id);
     assert.equal(selected.id, actor.id);
-    return { sessions, channels: { get: () => ({ async uploadImage(bytes) { calls.images.push(bytes); return { id: randomUUID() }; } }) } };
+    return { sessions, channels: { get: () => ({ async resolve() {}, async uploadImage(bytes) { calls.images.push(bytes); return { id: randomUUID() }; } }) } };
   } };
   const services = new ProjectDevelopmentServices(database, projects, workspaces);
   const issue = async title => {
@@ -98,14 +99,20 @@ test("project tasks and image additions use the real session manager with tempor
     agent: { provider: "codex" }, execution: { repository, projectName: project.id, baseBranch: "main", initCommands: [] } });
   const services = new ProjectDevelopmentServices(database, projects, workspaces);
   const first = await issue("图示需求"), added = await issue("追加图示");
+  const personalTemplate = "个人需求模板 {{title}}\n{{content}}\n{{images}}";
+  await projects.savePrompts(project.id, actor, { scope: "personal", revision: 1, templates: { requirement: personalTemplate, supplement: "本轮补充 {{title}}\n{{content}}" } });
   for (const selected of [first, added]) await content.updateIssue(project.id, selected.id, actor, { revision: 1, attachments: [{ id: randomUUID(), name: "资料.png", mimeType: "image/png", data: png.toString("base64") }] });
-  const { task } = await launch(services, project.id, actor, { requestId: randomUUID(), issueIds: [first.id] });
+  const { task } = await launch(services, project.id, actor, { requestId: randomUUID(), issueIds: [first.id] }, { supplementaryPrompt: "验证首轮补充 $& {{content}}" });
   const { sessions } = await workspaces.get(space.workspaceId, actor);
   const runtime = sessions.sessions.get(task.runKey);
   const deadline = Date.now() + 10000;
   while (!runtime.turnId && !runtime.error && Date.now() < deadline) await immediate();
   assert.ok(runtime.turnId, runtime.error || "fake Codex turn did not start");
   assert.equal(client.calls.find(call => call.method === "turn/start").params.input.filter(part => part.type === "localImage").length, 1);
+  const firstText = client.calls.find(call => call.method === "turn/start").params.input[0].text;
+  assert.match(firstText, /个人需求模板 图示需求/);
+  assert.equal(firstText.match(/个人需求模板/g).length, 1, "project prompts are not wrapped in a second template");
+  assert.ok(firstText.includes("本轮补充 图示需求\n验证首轮补充 $& {{content}}"));
   client.notify("turn/completed", { turn: { id: runtime.turnId, status: "completed" } });
   await sessions.events.drain();
   await runtime.operation;
@@ -114,8 +121,13 @@ test("project tasks and image additions use the real session manager with tempor
   assert.equal(fs.readFileSync(path.join(repository, "tracked.txt"), "utf8"), "preserve dirty root");
   await database.client.projectIssue.update({ where: { id: first.id }, data: { status: "pending_verification" } });
   const requestId = randomUUID();
+  await projects.savePrompts(project.id, actor, { scope: "personal", revision: 2, templates: { requirement: "追加模板 {{title}}\n{{content}}\n{{images}}" } });
   await services.append(project.id, task.id, actor, { requestId, issueIds: [added.id] });
+  await projects.savePrompts(project.id, actor, { scope: "personal", revision: 3, templates: { requirement: "后续修改 {{title}}\n{{content}}\n{{images}}" } });
+  assert.equal((await sessions.store.readTask(task.runKey)).prompt, firstText, "settings never rewrite a started task snapshot");
   const sent = await services.continueAddition(project.id, task.id, actor, requestId);
+  assert.match(client.calls.filter(call => call.method === "turn/start").at(-1).params.input[0].text, /追加模板 追加图示/);
+  assert.doesNotMatch(client.calls.filter(call => call.method === "turn/start").at(-1).params.input[0].text, /验证首轮补充/);
   await sessions.events.drain();
   assert.equal(sent.task.additions[0].status, "sent");
   assert.equal(client.calls.filter(call => call.method === "turn/start").length, 2);
@@ -135,7 +147,7 @@ test("project tasks and image additions use the real session manager with tempor
   const origin = await app.listen(0);
   let cookie = "", token = "";
   const http = async (url, input) => {
-    const response = await fetch(origin + url, { method: input ? "POST" : "GET", headers: { cookie, "x-tapd-token": token, "content-type": "application/json" }, ...(input ? { body: JSON.stringify(input) } : {}) });
+    const response = await fetch(origin + url, { method: input ? "POST" : "GET", headers: { cookie, "x-csrf-token": token, "content-type": "application/json" }, ...(input ? { body: JSON.stringify(input) } : {}) });
     if (response.headers.get("set-cookie")) cookie = response.headers.get("set-cookie").split(";", 1)[0];
     const data = await response.json();
     if (data.token) token = data.token;
@@ -150,6 +162,41 @@ test("project tasks and image additions use the real session manager with tempor
     assert.equal(denied.status, 409, JSON.stringify(denied));
   }
   assert.equal(client.calls.filter(call => call.method === "turn/start").length, 2);
+  const manualImage = await (await workspaces.get(space.workspaceId, actor)).channels.get("manual").uploadImage(png);
+  const manualInput = { requestId: randomUUID(), title: "独立重构", content: `## 开发目标\n\n不关联事项，验证接口与响应式布局。\n\n![参考图片](manual-image:${manualImage.id})`, taskType: "other", baseBranch: "main", images: [manualImage.id] };
+  const manualResponse = await http(`/api/projects/${project.id}/tasks/manual`, manualInput);
+  assert.equal(manualResponse.status, 202, JSON.stringify(manualResponse));
+  const manualTask = manualResponse.data.task;
+  assert.equal(manualTask.status, "started");
+  assert.equal(manualTask.kind, "manual");
+  assert.deepEqual(manualTask.issueIds, []);
+  assert.equal(await database.client.taskIssueLink.count({ where: { taskId: manualTask.id } }), 0);
+  assert.equal(await database.client.issueDevelopmentClaim.count({ where: { taskId: manualTask.id } }), 0);
+  const manualRuntime = sessions.sessions.get(manualTask.runKey);
+  const manualDeadline = Date.now() + 10000;
+  while (!manualRuntime.turnId && !manualRuntime.error && Date.now() < manualDeadline) await immediate();
+  assert.ok(manualRuntime.turnId, manualRuntime.error || "independent fake turn did not start");
+  const manualTurn = client.calls.filter(call => call.method === "turn/start").at(-1);
+  assert.match(manualTurn.params.input[0].text, /独立重构/);
+  assert.equal(manualTurn.params.input.filter(part => part.type === "localImage").length, 1);
+  assert.equal((await sessions.store.readTaskMetadata(manualTask.runKey)).type, "other");
+  assert.equal((await http(`/api/projects/${project.id}/tasks/manual`, manualInput)).data.reused, true);
+  assert.equal((await http(`/api/projects/${project.id}/tasks/manual`, { ...manualInput, content: "不能改写已启动目标" })).status, 409);
+  assert.equal((await http(`/api/projects/${project.id}/tasks/manual?requestId=${manualInput.requestId}`)).data.task.id, manualTask.id);
+  await assert.rejects(services.append(project.id, manualTask.id, actor, { requestId: randomUUID(), issueIds: [first.id] }), /独立开发任务不关联/);
+  client.notify("turn/completed", { threadId: manualRuntime.sessionId, turn: { id: manualRuntime.turnId, status: "completed" } });
+  await sessions.events.drain();
+  await manualRuntime.operation;
+  const manualDetail = await http(`/api/workspaces/${space.workspaceId}/runs/${manualTask.runKey}`);
+  assert.equal(manualDetail.status, 200);
+  assert.ok(manualDetail.data.requirement.markdown.includes(manualInput.content), "session reload preserves the original Markdown image reference inside the rendered prompt");
+  assert.equal(manualDetail.data.requirement.images[0].source, `manual-image:${manualImage.id}`);
+  assert.equal(manualDetail.data.requirement.images[0].url, `/api/workspaces/${space.workspaceId}/runs/${manualTask.runKey}/images/0`);
+  assert.equal(client.calls.filter(call => call.method === "turn/start").length, 3);
+  const beforeInvalid = await database.client.developmentTask.count();
+  const missingImage = await http(`/api/projects/${project.id}/tasks/manual`, { ...manualInput, requestId: randomUUID(), images: [randomUUID()] });
+  assert.ok(missingImage.status >= 400);
+  assert.equal(await database.client.developmentTask.count(), beforeInvalid, "missing images fail before accepting dispatch");
   const changedIssue = await issue("等待期间业务状态改变");
   const prepareTurn = sessions.agent.prepareTurn.bind(sessions.agent);
   sessions.agent.prepareTurn = async (...args) => {
@@ -159,8 +206,38 @@ test("project tasks and image additions use the real session manager with tempor
   };
   const changedTask = (await launch(services, project.id, actor, { requestId: randomUUID(), issueIds: [changedIssue.id] })).task;
   await sessions.sessions.get(changedTask.runKey).operation;
-  assert.equal(client.calls.filter(call => call.method === "turn/start").length, 2, "workflow is checked again after waiting for Agent preparation");
+  assert.equal(client.calls.filter(call => call.method === "turn/start").length, 3, "workflow is checked again after waiting for Agent preparation");
   assert.equal((await services.read(project.id, changedTask.id, actor)).task.execution.status, "failed");
+});
+
+test("independent dispatch records no planned task or claim, freezes retries and preserves uncertain results", async t => {
+  const { database, actor, other, project, services, sessions, calls } = await fixture(t);
+  const input = { requestId: randomUUID(), title: "独立开发", content: "目标与验收标准", baseBranch: "main", images: [] };
+  const result = await services.startManual(project.id, actor, input);
+  assert.equal(result.task.status, "started");
+  assert.equal(result.task.kind, "manual");
+  assert.equal(result.task.releaseId, null);
+  assert.deepEqual(result.task.issueIds, []);
+  assert.equal(await database.client.projectIssue.count(), 0);
+  assert.equal(await database.client.issueDevelopmentClaim.count(), 0);
+  assert.equal(await database.client.developmentTask.count({ where: { status: "planned" } }), 0);
+  assert.equal(calls.starts.length, 1);
+  assert.equal(calls.starts[0].metadata.type, "other");
+  assert.equal((await services.startManual(project.id, actor, input)).reused, true);
+  await assert.rejects(services.startManual(project.id, actor, { ...input, baseBranch: "release/1" }), { statusCode: 409 });
+  assert.equal((await services.readManual(project.id, other, { requestId: input.requestId })).task, null, "another developer cannot recover a private request");
+  const execute = sessions.start;
+  sessions.start = async request => { await execute(request); throw new Error("lost dispatch acknowledgement"); };
+  const unknownInput = { ...input, requestId: randomUUID() };
+  const unknown = await services.startManual(project.id, actor, unknownInput);
+  assert.equal(unknown.task.status, "unknown");
+  assert.match(unknown.task.error, /lost dispatch acknowledgement/);
+  assert.equal((await services.startManual(project.id, actor, unknownInput)).reused, true);
+  assert.equal(calls.starts.length, 2, "uncertain starts never replay");
+  assert.equal((await services.readManual(project.id, actor, { requestId: unknownInput.requestId })).task.id, unknown.task.id);
+  await database.client.projectMember.update({ where: { projectId_userId: { projectId: project.id, userId: actor.id } }, data: { permissions: ["project.view", "issue.view"] } });
+  await assert.rejects(services.startManual(project.id, actor, input), { statusCode: 403 });
+  assert.equal(calls.starts.length, 2);
 });
 
 test("project additions persist ready snapshots without sending and fence unknown outcomes against replay", async t => {
@@ -190,9 +267,40 @@ test("project additions persist ready snapshots without sending and fence unknow
 });
 
 
-async function launch(services, projectId, actor, input) {
+test("start supplements use executor templates, freeze at dispatch and fence changed retries", async t => {
+  const { database, actor, other, project, services, calls, issue } = await fixture(t);
+  const selected = await issue("启动补充要求");
+  const task = (await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [selected.id] })).tasks[0];
+  const space = await database.client.developmentSpace.findUnique({ where: { projectId_userId: { projectId: project.id, userId: actor.id } } });
+  await database.writeWorkspace(space.workspaceId, { workspace: { id: space.workspaceId, name: "补充提示词测试空间", owner_user_id: actor.id, project_id: project.id },
+    agent: { provider: "codex" }, execution: { repository: database.dataRoot, baseBranch: "main", initCommands: [] } });
+  const projects = services.projects;
+  await projects.savePrompts(project.id, actor, { scope: "project", revision: project.revision, templates: { supplement: "项目补充 {{content}}" } });
+  await projects.savePrompts(project.id, actor, { scope: "personal", revision: 1, templates: { supplement: "{{content}}{{content}}{{content}}{{content}}" } });
+  const request = { requestId: randomUUID(), revision: task.revision, baseBranch: "main", supplementaryPrompt: "保留字面内容 $& {{title}}\n验证移动端" };
+  await assert.rejects(services.start(project.id, task.id, other, request), { statusCode: 403 });
+  await assert.rejects(services.start(project.id, task.id, actor, { ...request, supplementaryPrompt: "a".repeat(20000) }), /超过 60000/);
+  assert.equal((await services.read(project.id, task.id, actor)).task.status, "planned");
+  assert.equal(calls.starts.length, 0, "invalid rendered content is rejected before recording or dispatch");
+  await projects.savePrompts(project.id, actor, { scope: "personal", revision: 2, templates: { supplement: "个人补充 {{title}}\n{{content}}" } });
+  await services.start(project.id, task.id, actor, request);
+  const prompt = calls.starts[0].content;
+  assert.ok(prompt.endsWith(`个人补充 启动补充要求\n${request.supplementaryPrompt}`));
+  assert.equal(prompt.match(/个人补充/g).length, 1);
+  assert.doesNotMatch(prompt, /项目补充/);
+  const snapshot = (await database.client.developmentTask.findUnique({ where: { id: task.id } })).snapshot;
+  assert.equal(snapshot.supplementaryPrompt, request.supplementaryPrompt);
+  assert.equal(snapshot.startRequest.supplementaryPrompt, request.supplementaryPrompt);
+  await projects.savePrompts(project.id, actor, { scope: "personal", revision: 3, templates: { supplement: "后续模板 {{content}}" } });
+  assert.equal((await services.start(project.id, task.id, actor, request)).reused, true);
+  await assert.rejects(services.start(project.id, task.id, actor, { ...request, supplementaryPrompt: "改动请求" }), { statusCode: 409 });
+  assert.equal(calls.starts.length, 1);
+  assert.equal((await database.client.developmentTask.findUnique({ where: { id: task.id } })).snapshot.prompt, prompt);
+});
+
+async function launch(services, projectId, actor, input, startInput = {}) {
   const planned = await services.create(projectId, actor, input);
-  return services.start(projectId, planned.tasks[0].id, actor, { requestId: randomUUID(), revision: planned.tasks[0].revision, baseBranch: "main" });
+  return services.start(projectId, planned.tasks[0].id, actor, { requestId: randomUUID(), revision: planned.tasks[0].revision, baseBranch: "main", ...startInput });
 }
 
 test("assigning separate issues and merging my plans preserves sources and starts exactly one session", async t => {
@@ -230,12 +338,17 @@ test("assigning separate issues and merging my plans preserves sources and start
   assert.equal(await database.client.taskIssueLink.count(), 4, "original links remain as history");
   assert.equal(await database.client.issueDevelopmentClaim.count({ where: { taskId: merged.id } }), 2);
   assert.equal((await content.readIssue(project.id, bug.id, actor)).development.taskId, merged.id);
+  await services.projects.savePrompts(project.id, actor, { scope: "personal", revision: 1, templates: { bug: "执行人的 Bug 模板 {{title}}\n{{content}}\n{{images}}" } });
+  await services.projects.savePrompts(project.id, other, { scope: "personal", revision: 1, templates: { bug: "指派人的模板 {{title}}\n{{content}}\n{{images}}" } });
   const start = { requestId: randomUUID(), revision: merged.revision, baseBranch: "main" };
   await services.start(project.id, merged.id, actor, start);
   await services.start(project.id, merged.id, actor, start);
   assert.equal(calls.starts.length, 1);
   assert.match(calls.starts[0].content, /合并需求/);
   assert.match(calls.starts[0].content, /复现步骤/);
+  assert.match(calls.starts[0].content, /执行人的 Bug 模板 合并缺陷/);
+  assert.match(calls.starts[0].content, /请根据以下需求完成开发/);
+  assert.doesNotMatch(calls.starts[0].content, /指派人的模板/);
 });
 
 test("batch assignment and concurrent merging are atomic and reject stale or foreign plans", async t => {

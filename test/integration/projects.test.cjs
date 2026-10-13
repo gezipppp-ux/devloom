@@ -13,6 +13,7 @@ const { saveSystemSettings } = require("../../src/config/system-settings.cjs");
 const { cloneProject } = require("../../src/git/project-clone.cjs");
 const { gitRemote } = require("../support/git-remote.cjs");
 
+const { getPromptTemplates } = require("../../src/domain/prompt-templates.cjs");
 const all = projectPermissionCatalog.map(permission => permission.id);
 const grants = all.filter(permission => permission !== "project.create");
 async function fixture(t, options = {}) {
@@ -32,6 +33,49 @@ async function fixture(t, options = {}) {
   await saveSystemSettings({ memberStorageRoot: path.join(directory, "members") }, directory);
   return { projects, accounts, admin, member, analyst, database, department, product, project, calls };
 }
+
+test("project prompt defaults and member overrides isolate types, accounts and projects with revision checks", async t => {
+  const f = await fixture(t);
+  const defaults = getPromptTemplates();
+  assert.deepEqual((await f.database.client.project.findUnique({ where: { id: f.project.id } })).settings.prompts, defaults);
+  await f.projects.saveMember(f.project.id, f.admin, { userId: f.member.id, permissions: ["project.view"] });
+  await f.projects.saveMember(f.project.id, f.admin, { userId: f.analyst.id, permissions: ["project.view"] });
+  const personal = "私有修复说明 {{title}}\n{{content}}\n{{images}}";
+  const shared = "共享需求说明 {{title}}\n{{content}}\n{{images}}";
+  const initial = await f.projects.promptSettings(f.project.id, f.member);
+  assert.deepEqual(initial.templates, defaults);
+  assert.equal(initial.canConfigure, false);
+  const saved = await f.projects.savePrompts(f.project.id, f.member, { scope: "personal", revision: initial.personalRevision, templates: { bug: personal } });
+  assert.equal(saved.templates.bug, personal);
+  assert.equal(saved.templates.requirement, defaults.requirement);
+  assert.deepEqual((await f.projects.promptSettings(f.project.id, f.analyst)).overrides, {});
+  assert.ok(!JSON.stringify(await f.projects.members(f.project.id, f.admin)).includes(personal), "member lists never disclose personal templates");
+  assert.deepEqual((await f.projects.read(f.project.id, f.admin)).project.settings.prompts, defaults);
+  await assert.rejects(f.projects.savePrompts(f.project.id, f.member, { scope: "project", revision: 1, templates: { bug: personal } }), { statusCode: 403 });
+  await assert.rejects(f.projects.savePrompts(f.project.id, f.member, { scope: "personal", revision: 1, templates: { bug: null } }), { statusCode: 409 });
+  for (const templates of [{ manual: personal }, { bug: "缺少资料" }, { bug: "" }, { bug: personal + "{{unknown}}" }])
+    await assert.rejects(f.projects.savePrompts(f.project.id, f.member, { scope: "personal", revision: saved.personalRevision, templates }));
+  await assert.rejects(f.projects.savePrompts(f.project.id, f.member, { scope: "personal", revision: saved.personalRevision, templates: { bug: personal }, userId: f.analyst.id }), { statusCode: 400 });
+  const changed = await f.projects.savePrompts(f.project.id, f.admin, { scope: "project", revision: 1, templates: { requirement: shared, bug: shared } });
+  const effective = await f.projects.effectivePrompts(f.project.id, f.member);
+  assert.deepEqual(effective, { ...defaults, bug: personal, requirement: shared });
+  assert.deepEqual(await f.projects.effectivePrompts(f.project.id, f.analyst), { ...defaults, bug: shared, requirement: shared });
+  const another = (await f.projects.create(f.admin, { name: "独立项目", remoteUrl: f.project.remoteUrl })).project;
+  await f.projects.saveMember(another.id, f.admin, { userId: f.member.id, permissions: ["project.view"] });
+  assert.deepEqual(await f.projects.effectivePrompts(another.id, f.member), defaults);
+  const reset = await f.projects.savePrompts(f.project.id, f.member, { scope: "personal", revision: saved.personalRevision, templates: { bug: null } });
+  assert.deepEqual(reset.overrides, {});
+  assert.equal(reset.templates.bug, shared);
+  await f.projects.savePrompts(f.project.id, f.admin, { scope: "project", revision: changed.projectRevision, templates: { bug: null } });
+  assert.equal((await f.projects.effectivePrompts(f.project.id, f.member)).bug, defaults.bug);
+  const writes = await Promise.allSettled([personal, shared].map(bug => f.projects.savePrompts(f.project.id, f.member, { scope: "personal", revision: reset.personalRevision, templates: { bug } })));
+  assert.equal(writes.filter(result => result.status === "fulfilled").length, 1);
+  await f.projects.saveMember(f.project.id, f.admin, { revision: 1, permissions: ["project.view"], status: "disabled" }, f.member.id);
+  await assert.rejects(f.projects.promptSettings(f.project.id, f.member), { statusCode: 404 });
+  const project = (await f.projects.read(f.project.id, f.admin)).project;
+  await f.projects.archive(project.id, f.admin, { revision: project.revision });
+  await assert.rejects(f.projects.savePrompts(project.id, f.analyst, { scope: "personal", revision: 1, templates: { bug: personal } }), { statusCode: 409 });
+});
 
 test("department ceilings and memberships gate operations while administrators can read projects", async t => {
   const f = await fixture(t);
@@ -171,21 +215,26 @@ test("project settings propagate to prepared spaces without exposing secrets or 
   const space = (await f.projects.space(f.project.id, f.member)).space;
   const before = await f.projects.store.readWorkspace(space.workspaceId, f.member.id);
   const template = "Project instructions: {{title}}\n{{content}}\n{{images}}";
-  const cookie = "dsc-token=fixture-project-secret; session=fixture-project-cookie";
-  const changed = await f.projects.update(f.project.id, f.admin, { revision: 1, settings: { initCommands: ["npm ci"], prompts: { manual: template }, tapd: { workspaceId: "12345", cookie } } });
-  assert.equal(changed.project.settings.tapd.hasCookie, true);
+  const retired = { tapd: { session: { cookie_header: "fixture-project-secret" } }, prompts: getPromptTemplates() };
+  await f.projects.store.saveProject({ settings: retired, revision: 1 }, f.project.id);
+  await f.projects.store.writeWorkspace(space.workspaceId, { ...before, tapd: retired.tapd, prompt_templates: retired.prompts });
+  for (const settings of [{ tapd: {} }, { prompts: { tapd: "old prompt" } }])
+    await assert.rejects(f.projects.update(f.project.id, f.admin, { revision: 2, settings }), { statusCode: 400 });
+  const changed = await f.projects.update(f.project.id, f.admin, { revision: 2, settings: { initCommands: ["npm ci"], prompts: { requirement: template } } });
+  assert.equal(Object.hasOwn(changed.project.settings, "tapd"), false);
   assert.ok(!JSON.stringify(changed).includes("fixture-project-secret"));
   const after = await f.projects.store.readWorkspace(space.workspaceId, f.member.id);
   assert.equal(after.execution.repository, before.execution.repository);
   assert.deepEqual(after.workspace, before.workspace);
       assert.equal(after.execution.baseBranch, "");
   assert.deepEqual(after.execution.initCommands, ["npm ci"]);
-  assert.equal(after.prompt_templates.manual, template);
+  assert.equal(after.prompt_templates.requirement, template);
   const persisted = await f.database.client.project.findUnique({ where: { id: f.project.id } });
   assert.ok(!JSON.stringify(persisted).includes("fixture-project-secret"));
-  const preserved = await f.projects.update(f.project.id, f.admin, { revision: changed.project.revision, settings: { prompts: { manual: null }, tapd: { workspaceId: "12345", cookie: "" } } });
-  assert.equal(preserved.project.settings.tapd.hasCookie, true);
-  assert.deepEqual((await f.projects.store.readWorkspace(space.workspaceId, f.member.id)).prompt_templates, {});
+  const preserved = await f.projects.update(f.project.id, f.admin, { revision: changed.project.revision, settings: { prompts: { requirement: null } } });
+  assert.equal(Object.hasOwn(preserved.project.settings, "tapd"), false);
+  assert.equal(Object.hasOwn(after, "tapd"), false);
+  assert.deepEqual((await f.projects.store.readWorkspace(space.workspaceId, f.member.id)).prompt_templates, getPromptTemplates());
 });
 
 test("revocation during clone prevents publishing and keeps the original space for retry", async t => {

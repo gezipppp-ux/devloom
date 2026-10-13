@@ -167,7 +167,7 @@ function createWebServer({
       });
       await instance.register(csrf, {
         sessionPlugin: "@fastify/session",
-        getToken: (request) => request.headers["x-tapd-token"],
+        getToken: (request) => request.headers["x-csrf-token"],
       });
       await instance.register(rateLimit, { global: false });
     }
@@ -208,7 +208,7 @@ function createWebServer({
       request.applicationUrl = url;
       if (request.method === "POST") {
         if (testIdentity) {
-          if (request.headers["x-tapd-token"] !== token)
+          if (request.headers["x-csrf-token"] !== token)
             return reply
               .code(403)
               .send({ error: "页面令牌失效，请刷新页面。" });
@@ -396,11 +396,15 @@ function createWebServer({
         return json(response, 201, await gitAccounts.generateKey(actor, authorize));
       if (!testIdentity && request.method === "POST" && url.pathname === "/api/account/git-accounts/check")
         return json(response, 200, await gitAccounts.check(actor, input));
-      const gitAccountRoute = /^\/api\/account\/git-accounts\/([^/]+)(?:\/(test|delete))?$/.exec(url.pathname);
+      if (!testIdentity && request.method === "POST" && url.pathname === "/api/account/git-accounts/verify")
+        return json(response, 200, await gitAccounts.verify(actor, input, undefined, authorize));
+      const gitAccountRoute = /^\/api\/account\/git-accounts\/([^/]+)(?:\/(test|verify|delete))?$/.exec(url.pathname);
       if (gitAccountRoute && !testIdentity && request.method === "POST") {
         const [, id, action] = gitAccountRoute;
         if (action === "test")
           return json(response, 200, await gitAccounts.check(actor, input, id));
+        if (action === "verify")
+          return json(response, 200, await gitAccounts.verify(actor, input, id, authorize));
         if (action === "delete") {
           (await gitAccounts.remove(actor, id));
           return json(response, 200, { ok: true });
@@ -529,7 +533,7 @@ function createWebServer({
           const permission = workspacePermission(scoped[2] || "/bootstrap", request.method);
           await projects.workspaceAuthorization(id, actor, permission);
           if (request.method === "POST" && scoped[2] === "/runs")
-            throw accountError("请从项目事项显式创建开发任务。", 403);
+            throw accountError("请从项目开发入口启动事项任务或独立开发。", 403);
           if (request.method === "POST" && (!scoped[2] || scoped[2].startsWith("/settings")))
             throw accountError("请通过项目设置更新共享配置。", 403);
         }

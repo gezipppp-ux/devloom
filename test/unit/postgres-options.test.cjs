@@ -23,7 +23,7 @@ test("schema identifiers cannot inject SQL or select multiple namespaces", () =>
 });
 
 test("migration verification rejects missing, failed, edited and newer migrations", () => {
-  const expected = [{ name: "20261010000000_baseline", checksum: "original" }];
+  const expected = [{ name: "20261012200000_baseline", checksum: "original" }];
   const applied = [{ migration_name: expected[0].name, checksum: "original", finished_at: new Date(), rolled_back_at: null }];
   assert.doesNotThrow(() => verifyPostgresMigrations(expected, applied));
   assert.throws(() => verifyPostgresMigrations([], []), /没有可用/);
@@ -31,5 +31,6 @@ test("migration verification rejects missing, failed, edited and newer migration
   assert.throws(() => verifyPostgresMigrations(expected, [{ ...applied[0], finished_at: null }]), /失败或未完成/);
   assert.throws(() => verifyPostgresMigrations(expected, [{ ...applied[0], checksum: "modified" }]), /校验值/);
   assert.throws(() => verifyPostgresMigrations(expected, [...applied, { ...applied[0], migration_name: "future" }]), /版本/);
+  assert.throws(() => verifyPostgresMigrations(expected, [{ ...applied[0], migration_name: "previous_baseline" }]), /旧数据不兼容/);
   assert.doesNotThrow(() => verifyPostgresMigrations(expected, [...applied, { ...applied[0], finished_at: null, rolled_back_at: new Date() }]));
 });

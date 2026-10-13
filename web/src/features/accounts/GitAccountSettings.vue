@@ -8,6 +8,8 @@ const {
   form,
   loading,
   saving,
+  checking,
+  provider,
   generating,
   deleting,
   busy,
@@ -18,6 +20,7 @@ const {
   edit,
   load,
   save,
+  verify,
   generate,
   remove,
   changeAuthType,
@@ -29,7 +32,7 @@ const {
     id="git-accounts"
     class="git-account-settings"
     title="Git 账号"
-    description="维护适用于 Git 主机的多个个人账号。开发空间准备时检测项目仓库的实际访问权限。"
+    description="维护个人 Git 账号，可直接验证主机登录，无需选择项目。开发空间准备时检测项目仓库的实际访问权限。"
   >
     <template #action
       ><button type="button" class="text-button" :disabled="busy" @click="load">
@@ -179,12 +182,26 @@ const {
           }}
         </button>
       </a-form-item>
+      <a-form-item v-if="form.authType === 'http'" label="登录验证服务" html-for="git-login-provider">
+        <select id="git-login-provider" v-model="provider" :disabled="busy" aria-describedby="git-login-hint">
+          <option value="auto">自动识别 Gitee / GitHub / GitLab 官方主机</option>
+          <option value="gitee">Gitee</option>
+          <option value="github">GitHub / GitHub Enterprise</option>
+          <option value="gitlab">GitLab / 自建 GitLab</option>
+        </select>
+        <p id="git-login-hint" class="field-hint">主机登录验证使用个人访问令牌，需允许读取本人资料；不支持普通密码。自建服务请选择对应类型，其他服务请在准备开发空间时验证。此选项仅用于本次验证。</p>
+        <p v-if="/^http:\/\//i.test(form.host.trim())" class="field-hint">HTTP 会以明文传输凭据，建议使用 HTTPS。</p>
+      </a-form-item>
+      <p v-else class="field-hint">验证登录会使用当前公钥连接 Git 主机的 git 用户。请先将公钥添加到 Git 服务；验证不会保存或替换账号密钥。</p>
       <div class="form-columns"><a-form-item label="提交作者姓名" html-for="git-author-name"><input id="git-author-name" v-model="form.authorName" :disabled="busy" /></a-form-item><a-form-item label="提交作者邮箱" html-for="git-author-email"><input id="git-author-email" v-model="form.authorEmail" type="email" :disabled="busy" /></a-form-item></div>
       <p class="field-hint">提交作者身份与 Git 登录凭据独立；不填写时沿用服务端已配置的 Git 作者身份。</p>
       <FeedbackMessage :message="error" type="error" />
       <FeedbackMessage :message="notice" type="success" />
       <div class="actions">
         <button type="button" :disabled="busy" @click="edit()">新建账号</button
+        ><button type="button" :disabled="busy || !ready" @click="verify">
+          {{ checking ? "正在验证登录…" : "验证登录" }}
+        </button
         ><button type="submit" class="primary" :disabled="busy || !ready">
           {{ saving ? "正在保存…" : "保存 Git 账号" }}
         </button>

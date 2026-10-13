@@ -46,7 +46,7 @@ async function runExecution(
       state = (await store.read());
       getAgentProvider(agentConfig(state).provider);
       if (
-        (state.source?.channel || "tapd") !== channel.id ||
+        runKey(state.source) !== runKey(source) ||
         String(state.workitem.id) !== String(item.id) ||
         String(state.workitem.workspace_id) !== String(item.workspace_id)
       )

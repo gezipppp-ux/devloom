@@ -67,7 +67,7 @@ test('manual channel validates input, preserves full text and copies image-only 
     content: '完整内容\n' + '测试'.repeat(10000),
   };
   const resolved = await channel.resolve(base);
-  assert.match(resolved.config.prompt_templates.manual, /\{\{content\}\}/);
+  assert.match(resolved.config.prompt_templates.requirement, /\{\{content\}\}/);
   const text = await channel.prepare({ ...resolved, directory });
   assert.ok(text.task.prompt.includes(base.content));
   assert.equal(text.worktreeSlug, 'xin-zeng-deng-lu-ru-kou');
@@ -90,7 +90,7 @@ test('manual channel validates input, preserves full text and copies image-only 
     { index: 1, source: `manual-image:${uploaded.id}`, name: '01.png' },
     { index: 2, source: `manual-image:${second.id}`, name: '02.jpg' },
   ]);
-  assert.ok(prepared.task.prompt.endsWith([
+  assert.ok(prepared.task.prompt.includes([
     '附带 2 张本地图片，顺序与用户上传顺序一致，请结合图片理解需求。',
     `图片 1：${prepared.task.images[0].path}`,
     `图片 2：${prepared.task.images[1].path}`,
@@ -99,6 +99,11 @@ test('manual channel validates input, preserves full text and copies image-only 
   assert.deepEqual(imageOnly.item.image_ids, [uploaded.id, second.id]);
   assert.ok(prepared.task.images[0].path.startsWith(directory + path.sep));
   assert.equal((await channel.transition()).status, 'skipped');
+  const bug = await channel.resolve({ ...base, taskType: 'bug' });
+  assert.equal(bug.item.type, 'bug');
+  const bugTask = await channel.prepare({ ...bug, directory });
+  assert.match(bugTask.task.prompt, /请定位并修复以下 Bug/);
+  assert.ok(bugTask.task.prompt.includes(base.content));
   for (const invalid of [
     { title: '' },
     { title: 'a'.repeat(201) },
@@ -204,9 +209,9 @@ test('manual names preserve English, transliterate Chinese, isolate duplicates a
   );
   assert.match(
     path.basename(
-      worktreePlan(repo, { id: '2', workspace_id: '1' }, 'main', { root }).path,
+      worktreePlan(repo, { id: '2', workspace_id: '1' }, 'main', { root, source: sourceFor('manual', { id: '2', workspace_id: '1' }) }).path,
     ),
-    /^tapd-[a-f0-9]{12}$/,
+    /^manual-[a-f0-9]{12}$/,
   );
 });
 
@@ -224,7 +229,7 @@ test('manual upload HTTP requires same origin and token, checks bytes, and keeps
   const bootstrap = await (await fetch(origin + '/api/bootstrap')).json();
   const url = origin + '/api/channels/manual/images';
   const headers = {
-    'x-tapd-token': bootstrap.token,
+    'x-csrf-token': bootstrap.token,
     'content-type': 'image/png',
   };
   assert.equal((await fetch(url, { method: 'POST', body: png })).status, 403);

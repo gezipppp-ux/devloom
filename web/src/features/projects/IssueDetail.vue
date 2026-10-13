@@ -101,7 +101,7 @@ function person(id) { return data.value?.people?.find(p => p.id === id)?.display
           </section>
           <section v-if="!editing" class="issue-panel issue-information" aria-label="事项信息">
             <h3 class="issue-panel-heading"><InfoCircleOutlined aria-hidden="true" />事项信息</h3>
-            <dl class="issue-facts"><dt>处理人</dt><dd>{{ person(data.assigneeId) }}</dd><dt>参与人</dt><dd>{{ data.participantIds.map(person).join('、') || '无' }}</dd><dt>发布版本</dt><dd>{{ data.release?.name || '未排期' }}</dd><dt>优先级</dt><dd>{{ priorityLabels[data.priority] }}</dd><template v-if="data.type === 'bug'"><dt>严重程度</dt><dd>{{ { minor: '轻微', normal: '普通', major: '严重', critical: '致命' }[data.severity] }}</dd></template><template v-if="data.source"><dt>来源</dt><dd>{{ data.source.channel }} · {{ data.source.externalId }}</dd></template></dl>
+            <dl class="issue-facts"><dt>处理人</dt><dd>{{ person(data.assigneeId) }}</dd><dt>参与人</dt><dd>{{ data.participantIds.map(person).join('、') || '无' }}</dd><dt>发布版本</dt><dd>{{ data.release?.name || '未排期' }}</dd><dt>优先级</dt><dd>{{ priorityLabels[data.priority] }}</dd><template v-if="data.type === 'bug'"><dt>严重程度</dt><dd>{{ { minor: '轻微', normal: '普通', major: '严重', critical: '致命' }[data.severity] }}</dd></template></dl>
             <p v-if="data.development" class="field-hint">已加入 {{ data.development.executorName }} 的开发任务。<RouterLink :to="{ path: `/projects/${projectId}`, query: { tab: 'tasks', task: data.development.taskId } }">查看开发任务</RouterLink></p>
           </section>
           <ProjectFiles :key="filesVersion" class="issue-panel issue-files" :endpoint="endpoint" :can-edit="can('issue.edit') && !editing" @uploaded="reload" />

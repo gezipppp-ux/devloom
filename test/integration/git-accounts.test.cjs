@@ -75,6 +75,46 @@ test("empty Git repositories are a successful connectivity test", async t => {
   assert.ok((await services.save(actor, input)).id);
 });
 
+test("host login verifies owned unsaved and saved credentials without projects, consumption or writes", async t => {
+  const { database, actor, other, input } = await fixture(t);
+  const calls = [];
+  const services = new GitAccountServices(database, { verifyLogin: async (value, provider) => { calls.push({ value, provider }); } });
+  assert.deepEqual(await services.verify(actor, { ...input, provider: "gitlab" }), { ok: true });
+  assert.deepEqual(await services.list(actor), []);
+  assert.equal(calls.at(-1).value.password, input.password);
+  assert.equal(calls.at(-1).provider, "gitlab");
+  const saved = await services.save(actor, input);
+  const { password, ...edit } = input;
+  assert.ok(password);
+  await services.verify(actor, { ...edit, revision: saved.revision }, saved.id);
+  assert.equal(calls.at(-1).value.password, input.password);
+  await services.verify(actor, {}, saved.id);
+  await assert.rejects(services.verify(other, {}, saved.id), /不存在/);
+  const count = calls.length;
+  await assert.rejects(services.verify(actor, { ...input, provider: "invalid" }), /服务类型/);
+  await assert.rejects(services.verify(actor, { ...input, projectId: "unexpected" }), /未知字段/);
+  assert.equal(calls.length, count);
+  const key = await services.store.createKeyDraft(actor.id, { sshPrivateKey: "fixture-private", publicKey: "fixture-public" });
+  await services.verify(actor, { name: "SSH", authType: "ssh", host: "git.example", keyDraftId: key.id });
+  assert.equal(calls.at(-1).value.sshPrivateKey, "fixture-private");
+  assert.ok(await services.store.keyDraft(key.id, actor.id));
+  assert.deepEqual(await services.list(actor), [saved]);
+  services.verifyLogin = async () => { throw new Error("模拟验证失败"); };
+  await assert.rejects(services.verify(actor, { ...input, password: "wrong", revision: saved.revision }, saved.id), /模拟验证失败/);
+  assert.equal((await services.store.read(saved.id, actor.id)).password, input.password);
+});
+
+test("host login rechecks session authorization and saved credential revisions after network waits", async t => {
+  const { database, actor, input } = await fixture(t);
+  const services = new GitAccountServices(database, { verifyLogin: async () => {} });
+  const saved = await services.save(actor, input);
+  await assert.rejects(services.verify(actor, {}, saved.id, async () => { throw new Error("session revoked"); }), /session revoked/);
+  services.verifyLogin = async () => {
+    await services.save(actor, { ...input, password: "rotated", revision: saved.revision }, saved.id);
+  };
+  await assert.rejects(services.verify(actor, {}, saved.id), error => error.statusCode === 409 && /验证期间已变更/.test(error.message));
+});
+
 test("Gitee project checks use the selected account transport and retain credential ownership and host boundaries", async t => {
   const { database, actor, other } = await fixture(t);
   const calls = [];

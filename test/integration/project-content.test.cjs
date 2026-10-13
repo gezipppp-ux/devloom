@@ -21,6 +21,26 @@ async function fixture(t) {
   return { database, permissions, actor, outsider, project, other, projects, services, setPermissions };
 }
 
+test("historical source snapshots and images survive local requirement and bug edits without source access", async t => {
+  const { png } = require("../support/helpers.cjs");
+  const { database, actor, project, services } = await fixture(t);
+  t.mock.method(globalThis, "fetch", () => assert.fail("history must not contact the retired source"));
+  for (const type of ["requirement", "bug"]) {
+    const issue = await services.createIssue(project.id, actor, { type, title: "历史事项", description: "![历史图片](https://file.tapd.cn/diagram.png)" });
+    const file = await services.uploadFile(project.id, "issues", issue.id, actor, { name: "diagram.png", mimeType: "image/png", data: png });
+    const source = await database.client.issueSource.create({ data: { projectId: project.id, issueId: issue.id, channel: "tapd", scope: "123", type, externalId: issue.id,
+      url: "https://www.tapd.cn/123/story/1", snapshot: { title: "原始内容", projectImages: [{ source: "https://file.tapd.cn/diagram.png", fileId: file.id }] } } });
+    const before = await services.readIssue(project.id, issue.id, actor);
+    const changed = await services.updateIssue(project.id, issue.id, actor, { revision: before.revision, title: "本地修改" });
+    assert.deepEqual(changed.images, before.images);
+    assert.ok(changed.images.some(image => image.source === "https://file.tapd.cn/diagram.png" && image.url === file.previewUrl));
+    assert.deepEqual(await database.client.issueSource.findUnique({ where: { issueId: issue.id } }), source);
+    assert.deepEqual((await services.downloadFile(project.id, file.id, actor)).data, png);
+    assert.equal(changed.id, issue.id);
+    assert.equal(changed.title, "本地修改");
+  }
+});
+
 test("project issues enforce membership, assignment, versioned acceptance and revision history without starting execution", async t => {
   const { database, permissions, actor, outsider, project, services, setPermissions } = await fixture(t);
   const issue = await services.createIssue(project.id, actor, { type: "requirement", title: "可验收需求", participantIds: [actor.id], acceptanceCriteria: "可验证" });
@@ -85,27 +105,6 @@ test("project assets encrypt sensitive history, audit reads, enforce independent
   await assert.rejects(services.downloadFile(project.id, file.id, outsider), { statusCode: 404 });
   await setPermissions(permissions.filter(permission => !permission.startsWith("asset.")));
   await assert.rejects(services.downloadFile(project.id, file.id, actor), { statusCode: 403 });
-});
-
-test("TAPD import is project-local and idempotent, preserves local edits and rechecks revocation after fetch", async t => {
-  const { database, actor, project, other, projects } = await fixture(t);
-  const material = { type: "requirement", title: "来源标题", description: "捕获内容", source: { channel: "tapd", scope: "1", type: "story", externalId: "22", url: "https://www.tapd.cn/1/story/view/22", snapshot: { id: "22", title: "来源标题" } } };
-  let calls = 0;
-  const services = new ProjectContentServices(database, projects, { fetchTapd: async () => { calls++; return [material]; } });
-  const imported = (await services.importTapd(project.id, actor, { items: [{ id: "22", type: "story" }] })).items[0];
-  await services.updateIssue(project.id, imported.id, actor, { revision: 1, title: "本地维护标题" });
-  const again = (await services.importTapd(project.id, actor, { items: [{ id: "22", type: "story" }] })).items[0];
-  assert.equal(again.id, imported.id);
-  assert.equal(again.title, "本地维护标题");
-  assert.equal(again.reused, true);
-  assert.notEqual((await services.importTapd(other.id, actor, {})).items[0].id, imported.id);
-  const delayed = new ProjectContentServices(database, projects, { fetchTapd: async () => {
-    await database.client.projectMember.update({ where: { projectId_userId: { projectId: project.id, userId: actor.id } }, data: { status: "inactive" } });
-    return [{ ...material, source: { ...material.source, externalId: "23" } }];
-  } });
-  await assert.rejects(delayed.importTapd(project.id, actor, {}), { statusCode: 404 });
-  assert.equal(await database.client.issueSource.count({ where: { externalId: "23" } }), 0);
-  assert.equal(calls, 3);
 });
 
 test("issue attachments commit with full bug fields, enforce permissions and roll back conflicts", async t => {
@@ -179,69 +178,4 @@ test('issue creation retries preserve identity and initial request, attachment r
   assert.equal(await database.client.projectFile.count(), 1);
   assert.equal((await services.downloadFile(project.id, file.id, actor)).data.toString(), 'original');
   assert.equal(await database.client.issueHistory.count({ where: { issueId: original.id } }), 3);
-});
-
-test('TAPD import saves authenticated images atomically and retains source mappings on reuse and edits', async t => {
-  const { png, session, item, json } = require('../support/helpers.cjs');
-  const { ProjectDevelopmentServices } = require('../../src/application/project-development-services.cjs');
-  const { database, actor, project, projects, services } = await fixture(t);
-  await database.client.project.update({ where: { id: project.id }, data: { settings: { tapd: { session, image_hosts: ['cdn.example.test'] } } } });
-  const workitem = { ...item, description: '<img data-src="/diagram.png?a=1&amp;b=2">', markdown_description: '![图][ref]\n\n[ref]: https://www.tapd.cn/diagram.png?a=1&b=2' };
-  const calls = [];
-  t.mock.method(globalThis, 'fetch', async (url, options) => {
-    assert.equal(database.context.getStore(), undefined, 'network must run outside a database transaction');
-    const address = String(url); calls.push(address);
-    if (address.includes('/aggregation/')) return json({ get_workitem_basic_info_ret: { data: workitem } });
-    if (address.startsWith('https://www.tapd.cn/diagram')) {
-      assert.equal(options.headers.cookie, session.cookie_header);
-      return new Response(null, { status: 302, headers: { location: 'https://cdn.example.test/screen.png' } });
-    }
-    assert.equal(address, 'https://cdn.example.test/screen.png');
-    assert.equal(options.headers.cookie, undefined);
-    return new Response(png);
-  });
-  const input = { items: [{ id: item.id, type: 'story' }] };
-  const imported = (await services.importTapd(project.id, actor, input)).items[0];
-  assert.equal(imported.description, workitem.markdown_description);
-  assert.equal(imported.reused, false);
-  assert.equal(await database.client.projectFile.count(), 1);
-  const file = (await services.listFiles(project.id, 'issues', imported.id, actor, {})).items[0];
-  const detail = await services.readIssue(project.id, imported.id, actor);
-  for (const source of ['/diagram.png?a=1&b=2', 'https://www.tapd.cn/diagram.png?a=1&b=2'])
-    assert.ok(detail.images.some(image => image.source === source && image.url === file.previewUrl));
-  assert.deepEqual(imported.images, detail.images);
-  const originalSource = await database.client.issueSource.findFirst({ where: { issueId: imported.id } });
-  assert.equal(originalSource.snapshot.description, workitem.description);
-  const changed = await services.updateIssue(project.id, imported.id, actor, { revision: 1, title: '保留本地修改' });
-  assert.deepEqual(changed.images, detail.images);
-  const again = (await services.importTapd(project.id, actor, input)).items[0];
-  assert.equal(again.id, imported.id);
-  assert.equal(again.title, '保留本地修改');
-  assert.equal(again.reused, true);
-  assert.equal(await database.client.projectFile.count(), 1);
-  assert.equal((await database.client.issueSource.findFirst({ where: { issueId: imported.id } })).capturedAt.getTime(), originalSource.capturedAt.getTime());
-  const development = new ProjectDevelopmentServices(database, projects, {});
-  const snapshot = await development.store.issues(project.id, [imported.id]);
-  assert.deepEqual(await development.images(project.id, snapshot), [png]);
-  assert.equal(calls.length, 6, 'each import deduplicates equivalent image sources');
-});
-
-test('failed TAPD image download or attachment persistence leaves no imported issue, source or file', async t => {
-  const { png, session, item, json } = require('../support/helpers.cjs');
-  const { database, actor, project, services } = await fixture(t);
-  await database.client.project.update({ where: { id: project.id }, data: { settings: { tapd: { session } } } });
-  let mode = 'bad-image';
-  t.mock.method(globalThis, 'fetch', async url => {
-    if (String(url).includes('/aggregation/')) return json({ get_workitem_basic_info_ret: { data: { ...item, description: '<img src="https://file.tapd.cn/diagram.png">' } } });
-    return new Response(mode === 'bad-image' ? '<html>login</html>' : png);
-  });
-  const input = { items: [{ id: item.id, type: 'story' }] };
-  await assert.rejects(services.importTapd(project.id, actor, input), /not PNG/);
-  assert.equal(await database.client.projectIssue.count(), 0);
-  mode = 'valid';
-  const addFile = services.store.addFile.bind(services.store);
-  t.mock.method(services.store, 'addFile', async (...args) => { await addFile(...args); throw new Error('simulated attachment failure'); });
-  await assert.rejects(services.importTapd(project.id, actor, input), /simulated attachment failure/);
-  for (const model of ['projectIssue', 'issueSource', 'projectFile', 'issueHistory']) assert.equal(await database.client[model].count(), 0, model);
-  assert.equal((await database.client.project.findUnique({ where: { id: project.id } })).issueSequence, 0);
 });

@@ -7,7 +7,7 @@ function presentDevelopment(task, actorId, execution = null, { detail = false, p
   const canManage = writable && (own ? permissions.includes("session.start") : permissions.includes("issue.assign"));
   const open = !["completed", "cancelled", "merged"].includes(task.status);
   const idle = !task.runKey || ["completed", "failed", "interrupted", "cancelled"].includes(execution?.status);
-  return { id: task.id, projectId: task.projectId, executorId: task.executorId, title: snapshot.title,
+  return { id: task.id, projectId: task.projectId, executorId: task.executorId, title: snapshot.title, kind: snapshot.kind || "issues",
     mergedIntoTaskId: snapshot.mergedIntoTaskId || null, mergedFromTaskIds: snapshot.mergedFromTaskIds || [],
     canMerge: writable && own && permissions.includes("session.start") && task.status === "planned",
     executor: task.executor || null, releaseId: task.releaseId, release: task.release ? { id: task.release.id, name: task.release.name, status: task.release.status } : null,
@@ -17,7 +17,7 @@ function presentDevelopment(task, actorId, execution = null, { detail = false, p
     execution: privateSession && execution ? { status: execution.status, error: execution.error || null, sessionId: execution.sessionId } : null, canOpenSession: privateSession && Boolean(task.runKey), createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString(),
     issueIds: [...snapshot.issues.map(issue => issue.id), ...additions.flatMap(batch => batch.issueIds)],
     additions: additions.map(batch => ({ requestId: batch.requestId, issueIds: batch.issueIds, status: batch.status, error: privateSession ? batch.error || null : null, createdAt: batch.createdAt, sentAt: batch.sentAt || null })),
-    ...(detail ? { issues: snapshot.issues, selection: privateSession ? snapshot.selection : undefined, additions: additions.map(batch => ({ requestId: batch.requestId, issueIds: batch.issueIds, issues: batch.issues, status: batch.status, createdAt: batch.createdAt, sentAt: batch.sentAt || null })) } : {}) };
+    ...(detail ? { issues: snapshot.issues, manualContent: snapshot.manual?.content, selection: privateSession ? snapshot.selection : undefined, additions: additions.map(batch => ({ requestId: batch.requestId, issueIds: batch.issueIds, issues: batch.issues, status: batch.status, createdAt: batch.createdAt, sentAt: batch.sentAt || null })) } : {}) };
 }
 
 module.exports = { presentDevelopment };

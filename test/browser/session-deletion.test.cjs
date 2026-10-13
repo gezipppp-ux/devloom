@@ -22,6 +22,7 @@ async function verifySessionDeletion(browser, origin, manager, directory, errors
   fs.writeFileSync(path.join(tree, "untracked.txt"), "untracked");
   (await saveState(path.join(manager.store.dir(key), "run.json"), {
     workitem: { id: key.slice(2), workspace_id: "1", title },
+    source: { channel: "manual", scope: "1", id: key.slice(2) },
     agent: { provider: "codex" },
     session_id: "delete-fixture", execution: { status: "completed" },
     worktree: { repository, path: tree, branch },

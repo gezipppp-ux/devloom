@@ -23,7 +23,7 @@ async function verifyAccountProfileRaces(browser, origin) {
   await page.route("**/api/**", async route => {
     const request = route.request(), endpoint = new URL(request.url()).pathname;
     const body = request.method() === "POST" ? request.postDataJSON() : undefined;
-    requests.push({ endpoint, body, token: request.headers()["x-tapd-token"] });
+    requests.push({ endpoint, body, token: request.headers()["x-csrf-token"] });
     let result;
     if (endpoint === "/api/auth/session") result = { user: { ...actor }, settings, token: `token-${actor.id}` };
     else if (endpoint === "/api/account/profile") result = { user: { ...actor, displayName: body.displayName } };

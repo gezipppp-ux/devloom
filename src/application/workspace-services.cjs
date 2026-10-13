@@ -14,12 +14,6 @@ const {
 const { listBaseBranches } = require("../git/repository.cjs");
 const { describeAgent } = require("./agent-presenter.cjs");
 const { readRepository, mutateRepository } = require("./repository-services.cjs");
-const { presentRequirements } = require("./requirement-presenter.cjs");
-const {
-  readTapdSettings,
-  saveTapdSettings,
-  checkTapdSettings,
-} = require("../channels/tapd/settings.cjs");
 
 function presentPromptSettings(templates) {
   return {
@@ -42,8 +36,7 @@ class WorkspaceServices {
   async describe() {
     const channels = await this.channels.list();
     return {
-      workspace:
-        channels.find((source) => source.id === "tapd")?.workspace || "",
+      workspace: channels[0]?.workspace || "",
       channels,
     };
   }
@@ -75,24 +68,11 @@ class WorkspaceServices {
   async executionOptions() {
     return { agent: describeAgent(this.sessions.agent), permissionModes: await this.sessions.agent.permissionOptions() };
   }
-  async readTapdSettings() {
-    return (await readTapdSettings(this.configFile));
-  }
-  async saveTapdSettings(input) {
-    return (await saveTapdSettings(this.configFile, input));
-  }
-  async checkTapdSettings(input) {
-    return (await checkTapdSettings(this.configFile, input));
-  }
-
   async search(channelId, input) {
     const channel = this.channels.get(channelId);
     if (!channel.capabilities?.search)
       throw new Error("该渠道不支持需求检索。");
-    const items = await channel.search(input);
-    return channelId === "tapd"
-      ? presentRequirements(channelId, items, [...(await this.sessions.list()), ...(await this.sessions.list({ archived: true }))])
-      : items;
+    return channel.search(input);
   }
 
   async searchUsers(channelId, input) {

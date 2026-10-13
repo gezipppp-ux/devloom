@@ -7,6 +7,7 @@ const { SessionManager } = require("../../src/application/session-manager.cjs");
 const { RunStore } = require("../../src/storage/run-store.cjs");
 const { writeConfig } = require("../../src/storage/json-files.cjs");
 const { temporary } = require("../support/helpers.cjs");
+const { runKey } = require("../../src/domain/run-identity.cjs");
 
 async function fixture(t, { fingerprint } = {}) {
   const directory = temporary(t);
@@ -27,7 +28,7 @@ async function fixture(t, { fingerprint } = {}) {
     interruptTurn: async () => {},
     close: async () => {},
   });
-  const key = "1-2";
+  const key = runKey({ channel: "tapd", scope: "1", id: "2" });
   const item = { id: "2", workspace_id: "1", title: "Concurrent start fixture",
     ...(fingerprint ? { request_fingerprint: fingerprint } : {}) };
   const config = { agent: { provider: "fixture" }, execution: { repository: directory, worktreeRoot: directory } };

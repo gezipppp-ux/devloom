@@ -50,7 +50,7 @@ description: 在 web-coding 项目开发、重构或 review 后端与 Vue 前端
 - 每个后端命名类放在对应的 kebab-case 文件中，如 `SessionManager` → `application/session-manager.cjs`、`AppServerClient` → `codex/app-server-client.cjs`、`WorkspaceStore` → `storage/workspace-store.cjs`。
 - Manager 表示生命周期协调，Store 表示持久化，Client 表示外部协议客户端，Presenter 表示公开结构转换。按真实职责选名，不把所有模块强制改成类。
 - 迁移文件时一并更新调用方、测试、脚本入口和契约链接；只有职责、依赖或生命周期不同才拆分，不按文件行数机械拆分。
-- 升级脚本遵守现有版本命名；已发布脚本不可为了命名整齐而改名或重写。
+- 当前部署只支持 `docs/engineering/postgresql.md` 定义的全新安装基线，不维护旧数据升级链。后续基于此基线的迁移遵守版本命名，不为命名整齐改写已发布脚本；用户明确要求不兼容并合并基线时，同步部署契约和基线回归。
 
 ## 修改时必须保留的行为
 
@@ -65,7 +65,7 @@ description: 在 web-coding 项目开发、重构或 review 后端与 Vue 前端
 
 审查时先列出问题的触发条件、违反的职责或行为、最小调整范围，再修实现和必要回归。仅有文件较大、抽象较少或个人命名偏好，不构成拆分依据。新增合法功能目录时同步契约与架构检查，不通过删除断言或宽泛白名单掩盖越层。
 
-代码变更运行 `npm run lint`、`npm test`、`npm run build`；Web 变更还运行 `npm run test:web`；布局、样式或组件位置调整运行 `npm run test:visual` 并检查相关截图。纯 Skill/文档修改校验 frontmatter 和链接即可，不因此运行真实业务或强制重构无关代码。
+代码变更运行 `npx eslint src test web/src web/vite.config.mjs`、`node --test test/architecture/*.test.cjs test/unit/*.test.cjs test/integration/*.test.cjs`、`npm run build`；Web 变更还运行 Jenkinsfile 中的浏览器脚本；布局、样式或组件位置调整运行 `node test/browser/visual.test.cjs` 并检查相关截图。纯 Skill/文档修改校验 frontmatter 和链接即可，不因此运行真实业务或强制重构无关代码。
 
 回归使用隔离 PostgreSQL、临时 Git、fake Codex 和模拟 TAPD。不得拿真实需求、生产数据库或 TAPD 写操作验证实现。运行数据、凭据、日志和截图不提交。若需要提交，使用中文描述的 Conventional Commit。
 

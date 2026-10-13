@@ -271,14 +271,14 @@ test("HTTP message images require origin/token and isolate workspace and run IDs
   const endpoint = `${origin}/api/workspaces/${a.id}/runs/1-2`;
   const upload = (
     url = `${endpoint}/message-images`,
-    headers = { "x-tapd-token": token },
+    headers = { "x-csrf-token": token },
     bytes = png,
   ) => fetch(url, { method: "POST", headers, body: bytes });
   assert.equal((await upload(undefined, {})).status, 403);
   assert.equal(
     (
       await upload(undefined, {
-        "x-tapd-token": token,
+        "x-csrf-token": token,
         origin: "http://evil.invalid",
       })
     ).status,
@@ -316,7 +316,7 @@ test("HTTP message images require origin/token and isolate workspace and run IDs
   const send = (url) =>
     fetch(url, {
       method: "POST",
-      headers: { "x-tapd-token": token, "content-type": "application/json" },
+      headers: { "x-csrf-token": token, "content-type": "application/json" },
       body: JSON.stringify({ images: [image.id] }),
     });
   assert.equal(

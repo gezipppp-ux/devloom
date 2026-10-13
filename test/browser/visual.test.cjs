@@ -1,5 +1,5 @@
 /* global document, window */
-// Visual fixtures only: intercepted APIs cannot run Codex or contact TAPD.
+// Visual fixtures only: intercepted APIs cannot run real tasks.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -62,14 +62,6 @@ async function main() {
     execution: { status: "completed" },
   }));
   const channels = [
-    {
-      id: "tapd",
-      label: "TAPD",
-      workspace: "123456",
-      scopeLabel: "TAPD 项目 ID",
-      scopeLocked: true,
-      capabilities: { search: true, assignees: false },
-    },
     { id: "manual", label: "手动输入", capabilities: { manualInput: true } },
   ];
   const detail = (key) => ({
@@ -293,12 +285,6 @@ async function main() {
           templates: Object.fromEntries(Object.entries(promptTemplateCatalog).map(([name, entry]) => [name, entry.defaultTemplate])),
           catalog: promptTemplateCatalog,
           maxLength: MAX_PROMPT_TEMPLATE_LENGTH,
-        });
-      if (endpoint === "/settings/tapd")
-        return send({
-          workspaceId: "123456",
-          hasCookie: true,
-          imageHosts: [],
         });
       if (endpoint === "/models")
         return scenario === "error"
@@ -558,7 +544,7 @@ async function main() {
         await capture('14-project-asset-edit-' + width);
         await tabs.getByRole('button', { name: '开发任务', exact: true }).click();
         await page.getByRole('button', { name: /客户搜索与空结果提示/ }).click();
-        await page.getByRole('button', { name: '发送追加资料并继续会话', exact: true }).waitFor();
+        await page.getByRole('button', { name: '发送资料并继续 Codex', exact: true }).waitFor();
         await capture('15-project-development-' + width);
         await tabs.getByRole('button', { name: '版本', exact: true }).click();
         await page.getByRole('heading', { name: '发布版本', exact: true }).waitFor();
@@ -593,6 +579,12 @@ async function main() {
         await tabs.getByRole('button', { name: '设置', exact: true }).click();
         await page.getByRole('button', { name: '保存项目设置', exact: true }).waitFor();
         await capture('17-project-settings-' + width);
+        await tabs.getByRole('button', { name: '提示词', exact: true }).click();
+        await page.getByRole('textbox', { name: 'Bug提示词', exact: true }).waitFor();
+        await capture('17-project-prompts-personal-' + width);
+        await page.getByRole('group', { name: '提示词作用域' }).getByRole('button', { name: '项目默认', exact: true }).click();
+        await page.getByRole('group', { name: '提示词类型' }).getByRole('button', { name: '需求提示词', exact: true }).click();
+        await capture('17-project-prompts-default-' + width);
         await page.getByLabel('账号导航').getByRole('button', { name: '部门可用功能', exact: true }).click();
         await page.getByLabel('部门名称', { exact: true }).waitFor();
         const departmentHeading = await page.locator('.page-heading').boundingBox();
@@ -610,6 +602,9 @@ async function main() {
         await load('project-session');
         await page.getByRole('button', { name: '返回项目协作', exact: true }).waitFor();
         await capture('19-project-session-' + width);
+        await page.getByRole('button', { name: '手动开启', exact: true }).click();
+        await page.getByRole('heading', { name: '手动开启开发', exact: true }).waitFor();
+        await capture('20-manual-development-' + width);
       }
     }
     await captureProjects();

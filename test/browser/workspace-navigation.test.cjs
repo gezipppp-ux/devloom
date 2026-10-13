@@ -4,12 +4,11 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const { png } = require("../support/helpers.cjs");
 
-async function settingsReady(page, workspace, repository, tapdWorkspace) {
+async function settingsReady(page, workspace, repository) {
   await page.getByRole("heading", { name: `${workspace.name} · 工作区设置` }).waitFor();
-  await page.waitForFunction(({ repository, tapdWorkspace }) =>
-    document.querySelector('[aria-label="项目代码仓库路径"]')?.textContent === repository &&
-    document.querySelector('input[aria-label="TAPD 项目 ID"]')?.value === tapdWorkspace,
-  { repository, tapdWorkspace });
+  await page.waitForFunction(({ repository }) =>
+    document.querySelector('[aria-label="项目代码仓库路径"]')?.textContent === repository,
+  { repository });
   assert.equal(new URL(page.url()).searchParams.get("workspace"), workspace.id);
 }
 
@@ -69,20 +68,20 @@ async function verifyWorkspaceNavigation(page, { workspaceA, workspaceB, reposit
       "switching must retain the same browser document");
   };
   try {
-    await settingsReady(page, workspaceA, repository, "42");
+    await settingsReady(page, workspaceA, repository);
     const initialHistoryLength = await page.evaluate(() => window.history.length);
     await select(workspaceA);
     assert.equal(await page.evaluate(() => window.history.length), initialHistoryLength);
-    await page.getByLabel("TAPD Cookie", { exact: true }).fill("dsc-token=private-unsaved-draft");
+    await page.getByLabel("Worktree 初始化命令", { exact: true }).fill("unsaved workspace draft");
     const origin = new URL(page.url()).origin;
     const auth = await (await page.request.get(`${origin}/api/auth/session`)).json();
     for (const [workspaceId, unreadRunKeys] of [[workspaceA.id, ["workspace-a-unread"]], [workspaceB.id, ["expired-b-unread"]]])
-      await page.request.post(`${origin}/api/account/preferences`, { headers: { origin, "x-tapd-token": auth.token }, data: { workspaceId, unreadRunKeys } });
+      await page.request.post(`${origin}/api/account/preferences`, { headers: { origin, "x-csrf-token": auth.token }, data: { workspaceId, unreadRunKeys } });
     const prunedPreference = page.waitForResponse((response) => response.url().endsWith("/api/account/preferences") && response.request().method() === "POST");
     await select(workspaceB);
-    await settingsReady(page, workspaceB, repository, "");
+    await settingsReady(page, workspaceB, repository);
     await checkUrl(workspaceB);
-    assert.equal(await page.getByLabel("TAPD Cookie", { exact: true }).inputValue(), "");
+    assert.equal(await page.getByLabel("Worktree 初始化命令", { exact: true }).inputValue(), "");
     await prunedPreference;
     const unread = await Promise.all([workspaceA, workspaceB].map(async (workspace) =>
       (await (await page.request.get(`${origin}/api/account/preferences?workspaceId=${workspace.id}`)).json()).preferences.unreadRunKeys));
@@ -90,14 +89,14 @@ async function verifyWorkspaceNavigation(page, { workspaceA, workspaceB, reposit
     "refreshing B must clear only B's obsolete unread results");
     assert.equal(await page.evaluate(() => window.history.length), initialHistoryLength + 1);
     await page.goBack();
-    await settingsReady(page, workspaceA, repository, "42");
+    await settingsReady(page, workspaceA, repository);
     await checkUrl(workspaceA);
     await page.goForward();
-    await settingsReady(page, workspaceB, repository, "");
+    await settingsReady(page, workspaceB, repository);
     await checkUrl(workspaceB);
 
     await select(workspaceA);
-    await settingsReady(page, workspaceA, repository, "42");
+    await settingsReady(page, workspaceA, repository);
     const delayedBootstrap = await holdResponse(page, `**/api/workspaces/${workspaceB.id}/bootstrap`);
     await select(workspaceB);
     const oldBootstrap = await delayedBootstrap.captured;
@@ -109,9 +108,9 @@ async function verifyWorkspaceNavigation(page, { workspaceA, workspaceB, reposit
     await checkUrl(workspaceB);
     await page.screenshot({ path: path.join(output, "workspace-switch-loading.png"), fullPage: true });
     await select(workspaceA);
-    await settingsReady(page, workspaceA, repository, "42");
+    await settingsReady(page, workspaceA, repository);
     await releaseResponse(page, oldBootstrap, "old-bootstrap");
-    await settingsReady(page, workspaceA, repository, "42");
+    await settingsReady(page, workspaceA, repository);
     await checkUrl(workspaceA);
 
     await page.getByRole("button", { name: "＋ 从需求启动", exact: true }).click();
@@ -124,14 +123,14 @@ async function verifyWorkspaceNavigation(page, { workspaceA, workspaceB, reposit
     ]);
     const oldUpload = await delayedUpload.captured;
     await select(workspaceB);
-    await settingsReady(page, workspaceB, repository, "");
+    await settingsReady(page, workspaceB, repository);
     await releaseResponse(page, oldUpload, "old-manual-upload");
     await page.getByRole("button", { name: "＋ 从需求启动", exact: true }).click();
     await page.getByLabel("需求渠道", { exact: true }).selectOption("manual");
     assert.equal(await page.getByLabel("需求标题", { exact: true }).inputValue(), "");
     assert.equal(await page.locator(".manual-images img").count(), 0);
     await select(workspaceA);
-    await settingsReady(page, workspaceA, repository, "42");
+    await settingsReady(page, workspaceA, repository);
     assert.deepEqual(manualUploads, [`${new URL(page.url()).origin}/api/workspaces/${workspaceA.id}/channels/manual/images`],
       "leaving during a multi-image upload must stop before uploading remaining files to any workspace");
     await checkUrl(workspaceA);

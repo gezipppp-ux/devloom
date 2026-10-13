@@ -102,8 +102,8 @@ class AppServerClient extends EventEmitter {
     });
     await this.request('initialize', {
       clientInfo: {
-        name: 'tapd_web_cli',
-        title: 'TAPD Web CLI',
+        name: 'web_coding',
+        title: 'Web Coding',
         version: '0.1.0',
       },
       // request_user_input is an experimental app-server request, even when

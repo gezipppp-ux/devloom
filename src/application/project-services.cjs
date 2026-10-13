@@ -1,17 +1,17 @@
+const { storedPromptOverrides, getPromptTemplates, promptTemplateCatalog } = require("../domain/prompt-templates.cjs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { ProjectStore } = require("../storage/project-store.cjs");
 const { GitAccountStore } = require("../storage/git-account-store.cjs");
 const { accountError } = require("../domain/account.cjs");
-const { departmentInput, projectInput, memberInput, prepareSpaceInput, projectId, projectRevision } = require("../domain/project-input.cjs");
+const { departmentInput, projectInput, projectPromptsInput, memberInput, prepareSpaceInput, projectId, projectRevision } = require("../domain/project-input.cjs");
 const { assertProjectPermission, effectivePermissions, administratorPermissions, grantableProjectPermissions, projectContextPermissions, validatePermissions, canCreateProject, projectCreationReadiness, projectPermissionCatalog, productTemplate, developerTemplate } = require("../domain/project-permissions.cjs");
 const { resolveAccountRemote } = require("../domain/git-account.cjs");
 const { readSystemSettings } = require("../config/system-settings.cjs");
 const { cloneProject } = require("../git/project-clone.cjs");
 const { testGitConnection } = require("../git/account-credentials.cjs");
-const { buildSession, parseCookieHeader, todoRequest } = require("../channels/tapd/auth-utils.cjs");
-const { defaultChannelConfig } = require("../channels/channel-registry.cjs");
-const { presentDepartment, presentProject, presentMember, presentSpace } = require("./project-presenter.cjs");
+const { executionOptions } = require("../domain/agent-config.cjs");
+const { presentDepartment, presentProject, presentMember, presentSpace, presentProjectPrompts } = require("./project-presenter.cjs");
 const { presentError } = require("./error-presenter.cjs");
 
 class ProjectServices {
@@ -82,25 +82,40 @@ class ProjectServices {
     return { permissionContext: { administratorAccess: user.role === "admin", departmentName: department?.name || "", ceiling: department?.permissions || [], grants: membership?.permissions || [] }, project: presentProject(project, permissions), membership: presentMember(membership && { ...membership, user }), permissions, space: presentSpace(await this.store.space(id, actor.id)) };
   }
   settings(input = {}, previous = {}) {
-    const value = { ...previous, ...input };
-    delete value.baseRef;
-    delete value.baseBranch;
+    const value = { initCommands: input.initCommands ?? previous.initCommands ?? [], prompts: getPromptTemplates({ prompt_templates: previous.prompts || {} }) };
     if (input.prompts) {
-      value.prompts = { ...previous.prompts };
-      for (const [channel, template] of Object.entries(input.prompts)) {
-        if (template === null) delete value.prompts[channel];
-        else value.prompts[channel] = template;
+      for (const [type, template] of Object.entries(input.prompts)) {
+        value.prompts[type] = template === null ? promptTemplateCatalog[type].defaultTemplate : template;
       }
     }
-    if (input.tapd) {
-      const draft = input.tapd;
-      const cookie = draft.clearCookie ? "" : draft.cookie?.trim() || previous.tapd?.session?.cookie_header || "";
-      const dscToken = cookie ? parseCookieHeader(cookie)["dsc-token"] : "";
-      if (cookie && !dscToken) throw accountError("Cookie 必须包含 dsc-token。");
-      value.tapd = { image_hosts: draft.imageHosts ?? previous.tapd?.image_hosts ?? [],
-        session: buildSession({ cookieHeader: cookie, requestBody: todoRequest({ workspaceId: draft.workspaceId, dscToken }), referer: "https://www.tapd.cn/tapd_fe/my/work?left_tree=1" }) };
-    }
     return value;
+  }
+  async promptSettings(id, actor) {
+    const { project, membership, permissions } = await this.authorize(id, actor, "project.view");
+    return presentProjectPrompts(project, membership, permissions);
+  }
+  async effectivePrompts(id, actor) {
+    const { project, membership } = await this.authorize(id, actor, "project.view");
+    return { ...getPromptTemplates({ prompt_templates: project.settings.prompts || {} }), ...storedPromptOverrides(membership?.prompts) };
+  }
+  async savePrompts(id, actor, input) {
+    const value = projectPromptsInput(input);
+    if (value.scope === "project") {
+      await this.update(id, actor, { revision: value.revision, settings: { prompts: value.templates } });
+    } else {
+      await this.store.transaction(async () => {
+        const { project, membership } = await this.authorize(id, actor, "project.view");
+        if (project.status !== "active") throw accountError("项目已归档，不能修改提示词。", 409);
+        if (membership?.status !== "active") throw accountError("只有项目成员可以维护自己的提示词。", 403);
+        const prompts = storedPromptOverrides(membership.prompts);
+        for (const [type, template] of Object.entries(value.templates)) {
+          if (template === null) delete prompts[type];
+          else prompts[type] = template;
+        }
+        await this.store.savePromptPreferences(id, actor.id, value.revision, prompts);
+      });
+    }
+    return this.promptSettings(id, actor);
   }
   async create(actor, input) {
     const value = projectInput(input);
@@ -256,15 +271,12 @@ class ProjectServices {
     }
   }
   workspaceConfig(workspaceId, project, space, accountId, remote, target, previous = {}) {
-    const execution = { ...previous.execution };
-    delete execution.baseRef;
-    return { ...defaultChannelConfig(), ...previous, version: 5,
+    return { version: 5,
       workspace: { ...previous.workspace, id: workspaceId, name: `project-${project.id}`, owner_user_id: space.userId, project_id: project.id },
-      execution: { ...execution, repository: target, projectName: project.id, gitAccountId: accountId, remoteUrl: remote,
+      execution: { ...executionOptions(previous), repository: target, projectName: project.id, gitAccountId: accountId, remoteUrl: remote,
         baseBranch: "", initCommands: project.settings.initCommands || [] },
       agent: previous.agent || { provider: "codex", model: "", reasoningEffort: "", permissionMode: "ask", options: {} },
-      ...(project.settings.tapd ? { tapd: project.settings.tapd } : {}),
-      prompt_templates: project.settings.prompts || {} };
+      prompt_templates: storedPromptOverrides(project.settings.prompts) };
   }
   async syncSpaces(project) {
     for (const space of await this.store.projectSpaces(project.id)) {

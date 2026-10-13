@@ -7,6 +7,7 @@ const {
 const { accountError } = require("../domain/account.cjs");
 const { testGitConnection } = require("../git/account-credentials.cjs");
 const { generateSshKeyPair } = require("../git/ssh-key-pair.cjs");
+const { verifyGitHostLogin } = require("../git/host-login.cjs");
 const { publicGitAccount } = require("./git-account-presenter.cjs");
 
 class GitAccountServices {
@@ -15,12 +16,14 @@ class GitAccountServices {
     {
       checkConnection = testGitConnection,
       generateKeyPair = generateSshKeyPair,
+      verifyLogin = verifyGitHostLogin,
       projects,
     } = {},
   ) {
     this.store = new GitAccountStore(database);
     this.checkConnection = checkConnection;
     this.generateKeyPair = generateKeyPair;
+    this.verifyLogin = verifyLogin;
     this.projects = projects;
   }
   async list(actor) {
@@ -69,6 +72,21 @@ class GitAccountServices {
     return publicGitAccount(
       (await this.store.save(actor.id, value, previous, value.keyDraftId)),
     );
+  }
+  async verify(actor, input, id, authorize) {
+    if (!input || typeof input !== "object" || Array.isArray(input))
+      throw accountError("Git 登录验证参数无效。");
+    const { provider = "auto", ...draft } = input;
+    if (!["auto", "github", "gitee", "gitlab"].includes(provider))
+      throw accountError("Git 登录验证服务类型无效。");
+    const { value, previous } = id && !Object.keys(draft).length
+      ? await this.store.read(gitAccountId(id), actor.id).then(value => ({ value, previous: value }))
+      : await this.candidate(actor, draft, id);
+    await this.verifyLogin(value, provider);
+    await authorize?.();
+    if (previous && (await this.store.read(gitAccountId(id), actor.id)).revision !== previous.revision)
+      throw accountError("Git 账号在验证期间已变更，请重新验证。", 409);
+    return { ok: true };
   }
   async remove(actor, id) {
     (await this.store.remove(gitAccountId(id), actor.id));

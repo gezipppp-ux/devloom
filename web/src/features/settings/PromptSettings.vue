@@ -4,7 +4,7 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from "vue";
 import { api } from "../../shared/api/api.js";
 import FormSection from "../../shared/components/FormSection.vue";
 
-const channel = ref("manual");
+const type = ref("requirement");
 const catalog = ref({});
 const maxLength = ref(20000);
 const drafts = reactive({});
@@ -19,16 +19,16 @@ const editor = ref();
 let alive = true;
 let requestId = 0;
 
-const current = computed(() => catalog.value[channel.value]);
+const current = computed(() => catalog.value[type.value]);
 const busy = computed(() => loading.value || saving.value);
 const dirty = computed(
-  () => resetDrafts[channel.value] || drafts[channel.value] !== savedTemplates[channel.value],
+  () => resetDrafts[type.value] || drafts[type.value] !== savedTemplates[type.value],
 );
 const preview = computed(() => {
   const examples = new Map(
     (current.value?.placeholders || []).map((item) => [item.name, item.example]),
   );
-  return (drafts[channel.value] || "").replace(/\{\{([a-z_]+)\}\}/g, (token, name) =>
+  return (drafts[type.value] || "").replace(/\{\{([a-z_]+)\}\}/g, (token, name) =>
     examples.has(name) ? examples.get(name) : token,
   );
 });
@@ -61,19 +61,19 @@ async function load() {
   }
 }
 
-function selectChannel(name) {
-  channel.value = name;
+function selectType(name) {
+  type.value = name;
   error.value = message.value = "";
 }
 
 function edited() {
-  resetDrafts[channel.value] = false;
+  resetDrafts[type.value] = false;
   error.value = message.value = "";
 }
 
 function reset() {
-  drafts[channel.value] = current.value.defaultTemplate;
-  resetDrafts[channel.value] = true;
+  drafts[type.value] = current.value.defaultTemplate;
+  resetDrafts[type.value] = true;
   error.value = "";
   message.value = "已将默认模板填入草稿，保存后生效。";
 }
@@ -88,12 +88,12 @@ async function insertPlaceholder(name) {
   const token = placeholderToken(name);
   const start = field.selectionStart;
   const end = field.selectionEnd;
-  const draft = drafts[channel.value];
+  const draft = drafts[type.value];
   if (draft.length - (end - start) + token.length > maxLength.value) {
     error.value = `模板最多 ${maxLength.value} 个字符，请删减后再插入。`;
     return;
   }
-  drafts[channel.value] = draft.slice(0, start) + token + draft.slice(end);
+  drafts[type.value] = draft.slice(0, start) + token + draft.slice(end);
   edited();
   await nextTick();
   if (!alive || editor.value !== field) return;
@@ -103,7 +103,7 @@ async function insertPlaceholder(name) {
 
 async function save() {
   if (!loaded.value || busy.value || !dirty.value) return;
-  const name = channel.value;
+  const name = type.value;
   const request = ++requestId;
   saving.value = true;
   error.value = message.value = "";
@@ -141,14 +141,14 @@ async function save() {
       重新加载提示词模板
     </button>
     <form v-if="loaded" @submit.prevent="save">
-      <div class="prompt-channels" role="group" aria-label="提示词渠道">
+      <div class="prompt-types" role="group" aria-label="提示词类型">
         <button
           v-for="(_, name) in catalog"
           :key="name"
           type="button"
-          :aria-pressed="channel === name"
+          :aria-pressed="type === name"
           :disabled="busy"
-          @click="selectChannel(name)"
+          @click="selectType(name)"
         >
           {{ catalog[name].label }}
           <span
@@ -163,7 +163,7 @@ async function save() {
       <textarea
         id="prompt-template-editor"
         ref="editor"
-        v-model="drafts[channel]"
+        v-model="drafts[type]"
         aria-label="提示词模板内容"
         aria-describedby="prompt-template-hint prompt-template-count"
         rows="13"
@@ -177,7 +177,7 @@ async function save() {
           双花括号中的名称会替换为任务资料。保留所有必填占位符，图片和补充说明包含完整说明块。
         </p>
         <span id="prompt-template-count" class="prompt-character-count">
-          {{ drafts[channel].length }} / {{ maxLength }}
+          {{ drafts[type].length }} / {{ maxLength }}
         </span>
       </div>
       <details class="prompt-placeholders" open>
@@ -206,7 +206,7 @@ async function save() {
       <FeedbackMessage :message="message" type="success" />
       <div class="actions">
         <button type="button" :disabled="busy" @click="reset">
-          恢复当前渠道默认模板
+          恢复当前类型默认模板
         </button>
         <button class="primary" type="submit" :disabled="busy || !dirty">
           {{ saving ? "正在保存提示词…" : "保存提示词模板" }}
@@ -226,13 +226,13 @@ async function save() {
   color: var(--muted);
   font-size: 12px;
 }
-.prompt-channels {
+.prompt-types {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 24px;
 }
-.prompt-channels button[aria-pressed="true"] {
+.prompt-types button[aria-pressed="true"] {
   color: var(--accent);
   background: var(--selected);
   border-color: var(--focus);

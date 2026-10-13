@@ -184,7 +184,6 @@ onUnmounted(() => {
           <p v-else-if="!session.worktree?.path" class="empty-inline">Worktree 尚未准备完成。</p>
         </section>
         <section v-show="panel === 'requirement'" :id="`${id}-requirement`">
-          <slot name="append-requirements" />
           <RequirementDetails :requirement="session.requirement" :disabled="requirementsDisabled || active" @continue="emit('continue-requirements', $event)" />
         </section>
       </div>

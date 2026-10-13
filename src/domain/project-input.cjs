@@ -37,7 +37,7 @@ function departmentInput(input, updating = false) {
   return value;
 }
 function projectSettings(input) {
-  object(input, ["initCommands", "prompts", "tapd"]);
+  object(input, ["initCommands", "prompts"]);
   const value = {};
   if (input.initCommands !== undefined) value.initCommands = validateInitCommands(input.initCommands);
   if (input.prompts !== undefined) {
@@ -45,15 +45,13 @@ function projectSettings(input) {
     value.prompts = {};
     for (const [key, prompt] of Object.entries(input.prompts)) value.prompts[key] = prompt === null ? null : validatePromptTemplate(key, prompt);
   }
-  if (input.tapd !== undefined) {
-    object(input.tapd, ["workspaceId", "cookie", "clearCookie", "imageHosts"]);
-    if (!/^\d+$/.test(input.tapd.workspaceId || "")) throw accountError("TAPD 项目 ID 无效。");
-    if (input.tapd.cookie !== undefined && (typeof input.tapd.cookie !== "string" || input.tapd.cookie.length > 32000 || /[\r\n\0]/.test(input.tapd.cookie))) throw accountError("TAPD Cookie 无效。");
-    if (input.tapd.clearCookie !== undefined && typeof input.tapd.clearCookie !== "boolean") throw accountError("清除 Cookie 参数无效。");
-    if (input.tapd.imageHosts !== undefined && (!Array.isArray(input.tapd.imageHosts) || input.tapd.imageHosts.length > 30 || input.tapd.imageHosts.some(host => typeof host !== "string" || host.length > 253 || !/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/i.test(host)))) throw accountError("图片域名无效。");
-    value.tapd = { ...input.tapd };
-  }
   return value;
+}
+function projectPromptsInput(input) {
+  object(input, ["scope", "revision", "templates"]);
+  if (!["project", "personal"].includes(input.scope)) throw accountError("请选择项目默认或我的配置。");
+  if (!input.templates || !Object.keys(input.templates).length) throw accountError("请提供要保存的提示词。");
+  return { scope: input.scope, revision: revision(input.revision), templates: projectSettings({ prompts: input.templates }).prompts };
 }
 function projectInput(input, updating = false) {
   object(input, ["name", "description", "remoteUrl", "ownerUserId", "settings", "revision"]);
@@ -82,4 +80,4 @@ function prepareSpaceInput(input) {
   object(input, ["gitAccountId", "requestId"]);
   return { gitAccountId: id(input.gitAccountId), requestId: id(input.requestId) };
 }
-module.exports = { projectId: id, projectRevision: revision, departmentInput, projectInput, memberInput, prepareSpaceInput };
+module.exports = { projectId: id, projectRevision: revision, departmentInput, projectInput, projectPromptsInput, memberInput, prepareSpaceInput };

@@ -5,7 +5,14 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { test } = require('node:test');
 const { runExecution } = require('../../src/execution/runner.cjs');
-const { createTapdChannel } = require('../../src/channels/tapd/adapter.cjs');
+function createFixtureChannel(_configFile, services) {
+  return { id: 'tracker', async prepare({session,item,directory,config}) {
+    const workitem = await services.detail(session,item);
+    const task = await services.buildTask(workitem,session,directory,config);
+    if (!task.execution_ready) throw new Error(task.blocked_reason);
+    return {workitem,task};
+  }, async transition() { return {status: 'skipped'}; } };
+}
 const { saveState } = require('../../src/storage/run-state.cjs');
 const { SessionManager } = require('../support/session-manager.cjs');
 const { FakeClient } = require('../fixtures/web-client.cjs');
@@ -13,7 +20,7 @@ const { item, png, session, temporary, workflow } = require('../support/helpers.
 
 function runRequirement(input, dependencies = {}) {
   return runExecution(
-    { ...input, channel: createTapdChannel(input.configFile, dependencies) },
+    { ...input, channel: createFixtureChannel(input.configFile, dependencies) },
     dependencies,
   );
 }
@@ -66,7 +73,7 @@ function setup(t) {
   return { calls, input, dependencies };
 }
 
-test('TAPD execution skips status writes, persists results and prevents duplicate dispatch', async (t) => {
+test('channel execution skips status writes, persists results and prevents duplicate dispatch', async (t) => {
   const { calls, input, dependencies } = setup(t);
   const state = await runRequirement(input, dependencies);
   assert.equal(state.execution.status, 'completed');
@@ -79,6 +86,17 @@ test('TAPD execution skips status writes, persists results and prevents duplicat
     true,
   );
   assert.deepEqual(calls, ['worktree', 'session']);
+});
+
+test('existing runs require the exact recorded source without inference or redispatch', async t => {
+  const { calls, input, dependencies } = setup(t);
+  const state = await runRequirement(input, dependencies);
+  const file = path.join(input.directory, 'run.json');
+  for (const source of [undefined, { ...state.source, scope: 'another-scope' }, { ...state.source, id: 'another-id' }]) {
+    await saveState(file, { ...state, source });
+    await assert.rejects(runRequirement(input, dependencies), /source identity|Run identity/);
+    assert.deepEqual(calls, ['worktree', 'session']);
+  }
 });
 
 test('initialization runs between worktree creation and Codex; failure prevents session and transition', async (t) => {
@@ -118,7 +136,7 @@ test('initialization runs between worktree creation and Codex; failure prevents 
   }
 });
 
-test('legacy TAPD transition retries are skipped without writes or redispatch', async (t) => {
+test('skipped channel transition retries are skipped without writes or redispatch', async (t) => {
   const { calls, input, dependencies } = setup(t);
   const state = await runRequirement(input, dependencies);
   state.transition = { status: 'failed', error: 'legacy transition failure' };
@@ -161,6 +179,7 @@ test('transition retry preserves a concurrent Web followup on success and failur
     fs.mkdirSync(directory, { recursive: true });
     const workitem = { id: '2', workspace_id: '1', title: 'retry fixture' };
     (await saveState(file, {
+      source: { channel: "tapd", scope: "1", id: "2" },
       agent: { provider: "codex" },
       workitem,
       worktree: { path: directory },
@@ -233,6 +252,7 @@ test('exclusive lock blocks concurrent dispatch; uncertain state is not redispat
     path.join(input.directory, 'run.json'),
     JSON.stringify({
       agent: { provider: "codex" },
+      source: { channel: "tracker", scope: item.workspace_id, id: item.id },
       workitem: item,
       execution: { status: 'starting' },
       transition: { status: 'not_started' },
@@ -301,6 +321,12 @@ test('full pipeline uses one real Git worktree, image attachment and simulated C
     {
       startSession: startFixtureSession,
       detail: async () => withImage,
+      buildTask: async (_item, _session, target) => {
+        const image = path.join(target, '01.png');
+        fs.mkdirSync(target, { recursive: true });
+        fs.writeFileSync(image, png);
+        return { prompt: 'Implement the fixture requirement', images: [{path: image}], execution_ready: true };
+      },
       workflowInfo: async () => workflow,
       applyTransition: async () => ({ verified_status: 'developing' }),
     },
@@ -349,7 +375,7 @@ test('full pipeline uses one real Git worktree, image attachment and simulated C
 
 test('execution awaits asynchronous channel validation and worktree creation before starting Codex', async (t) => {
   const { calls, input, dependencies } = setup(t);
-  const channel = createTapdChannel(input.configFile, dependencies);
+  const channel = createFixtureChannel(input.configFile, dependencies);
   let releaseValidation, releaseWorktree, enteredValidation, enteredWorktree;
   const validating = new Promise(resolve => { enteredValidation = resolve; });
   const creating = new Promise(resolve => { enteredWorktree = resolve; });

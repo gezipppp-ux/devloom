@@ -19,7 +19,7 @@ const scalar = value => typeof value === "string" ? value : "";
 const selected = computed(() => scalar(route.query.issue));
 const pageOffset = () => Math.max(0, Number.parseInt(scalar(route.query.offset), 10) || 0);
 const query = ref(scalar(route.query.q)), status = ref(scalar(route.query.status)), offset = ref(pageOffset());
-const creating = ref(false), importing = ref(false), checked = ref([].concat(route.query.selection || []).filter(Boolean)), externalId = ref("");
+const creating = ref(false), checked = ref([].concat(route.query.selection || []).filter(Boolean));
 const startingIssues = ref([]), assigning = ref(false), releaseId = ref(scalar(route.query.releaseId)), includeArchived = ref(route.query.includeArchived === "true");
 const creationRequest = ref(createRequestId());
 const form = reactive(emptyIssue()), draftVersion = ref(0);
@@ -45,16 +45,11 @@ function openIssue(id) { void router.push({ query: { ...route.query, issue: id |
 async function attach({ files, insert }) { const markdown = await add(files); if (markdown) insert(markdown); }
 function removeFile(id) { removeAttachmentLinks(form, `/api/projects/${props.projectId}/files/${id}`); remove(id); }
 function cancelCreate() { creating.value = false; draftVersion.value++; creationRequest.value = createRequestId(); Object.assign(form, emptyIssue()); reset(); }
-function toggleCreate() { if (creating.value) cancelCreate(); else { creating.value = true; importing.value = false; } }
-function toggleImport() { cancelCreate(); importing.value = !importing.value; }
+function toggleCreate() { if (creating.value) cancelCreate(); else creating.value = true; }
 function create() {
   if (attachmentBusy.value || saving.value) return;
   const location = route.fullPath;
   return save(endpoint, { requestId: creationRequest.value, type: props.type, ...issueFieldsInput(form, { assign: can("issue.assign") }), attachments: serialize() }, issue => { cancelCreate(); if (route.fullPath === location) openIssue(issue.id); void reload(); });
-}
-function importIssue() {
-  const location = route.fullPath;
-  return save(`${endpoint}/import/tapd`, { items: [{ type: props.type === "bug" ? "bug" : "story", id: externalId.value }] }, result => { if (route.fullPath === location) { openIssue(result.items[0].id); importing.value = false; externalId.value = ""; } void reload(); }, "导入完成，重复来源复用已有事项。");
 }
 function start(issue, assign = false) {
   const issueIds = issue?.id ? [issue.id] : [...checked.value];
@@ -71,13 +66,12 @@ watch(() => [route.query.q, route.query.status, route.query.offset, route.query.
   <FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="notice" type="success" />
   <p v-if="selected && saving" role="status">正在保存任务规划…</p>
   <IssueDetail v-if="selected" :key="selected" :project-id="projectId" :issue-id="selected" :permissions="permissions" :development-busy="saving" @changed="reload" @start-development="start" @assign-development="issue => start(issue, true)" />
-  <section v-else><header class="project-heading"><h2>{{ type === 'bug' ? 'Bug' : '需求' }}</h2><div v-if="can('issue.create')" class="actions"><button :disabled="saving" @click="toggleImport">从 TAPD 导入</button><button class="primary" :disabled="saving" @click="toggleCreate">新建{{ type === 'bug' ? 'Bug' : '需求' }}</button></div></header>
+  <section v-else><header class="project-heading"><h2>{{ type === 'bug' ? 'Bug' : '需求' }}</h2><div v-if="can('issue.create')" class="actions"><button class="primary" :disabled="saving" @click="toggleCreate">新建{{ type === 'bug' ? 'Bug' : '需求' }}</button></div></header>
     <FormSection v-if="creating" :title="type === 'bug' ? '新建 Bug' : '新建需求'"><form class="project-form" @submit.prevent="create">
       <IssueFields :model-value="form" :type="type" can-edit :can-assign="can('issue.assign')" :disabled="saving" :context-key="`${projectId}/${type}/new/${draftVersion}`" :members="activeMembers" :releases="releases.data.value?.items || []" :images="images" :attachments="pending" :attachment-error="attachmentError" :attachment-busy="attachmentBusy" @update:model-value="Object.assign(form, $event)" @files="attach" @remove="removeFile" />
       <p v-if="membersLoading" role="status">正在读取可分派成员…</p><FeedbackMessage :message="membersError" type="error" /><button v-if="membersError" type="button" @click="reloadMembers">重试读取成员</button>
       <div class="actions"><button class="primary" type="submit" :disabled="saving || attachmentBusy">{{ saving ? '正在保存…' : '保存事项' }}</button><button type="button" :disabled="saving" @click="cancelCreate">取消</button></div>
     </form></FormSection>
-    <FormSection v-if="importing" title="TAPD 只读导入"><form class="project-form" @submit.prevent="importIssue"><label>TAPD {{ type === 'bug' ? 'Bug' : '需求' }}编号<input v-model="externalId" required inputmode="numeric" /></label><p class="field-hint">来源项目和凭据使用项目设置。同一来源不重复创建，也不会覆盖本地修改或回写 TAPD。</p><button class="primary" type="submit" :disabled="saving">导入事项</button></form></FormSection>
     <form class="project-filter" @submit.prevent="search()"><input v-model="query" aria-label="搜索事项" placeholder="搜索标题与描述" /><select v-model="status" aria-label="事项状态"><option value="">全部状态</option><option v-for="node in statuses" :key="node.id" :value="node.id">{{ node.name }}</option></select><select v-model="releaseId" aria-label="版本筛选"><option value="">全部版本</option><option value="unassigned">未排期</option><option v-for="release in releases.data.value?.items" :key="release.id" :value="release.id">{{ release.name }}{{ release.status === 'archived' ? '（已归档）' : '' }}</option></select><label class="permission-choice"><input v-model="includeArchived" type="checkbox" />包含归档事项</label><button type="submit" :disabled="loading">查询</button></form>
     <div v-if="can('session.start') || can('issue.assign')" class="project-development-action"><button v-if="can('session.start')" class="primary" :disabled="saving || !checked.length" @click="start()">认领</button><button v-if="can('issue.assign')" :disabled="saving || !checked.length" @click="start(null, true)">指派</button><span class="field-hint">先认领或指派，每条事项分别进入负责人的待开发任务。</span></div>
     <p v-if="loading" role="status">正在读取事项…</p><ul v-else class="project-issue-list"><li v-for="issue in data?.items" :key="issue.id"><input v-if="can('session.start') || can('issue.assign')" v-model="checked" type="checkbox" :value="issue.id" :aria-label="`选择事项 ${issue.number}`" :disabled="saving || Boolean(issue.development) || issue.release?.status === 'archived'" /><button class="project-issue-link" @click="openIssue(issue.id)"><span class="muted">#{{ issue.number }}</span><strong>{{ issue.title }}</strong><small>{{ issue.statusName }} · {{ issue.release?.name || '未排期' }} · {{ priorityLabels[issue.priority] }} · {{ issue.assigneeId ? `负责人：${assigneeName(issue.assigneeId)}` : '待认领' }}<span v-if="issue.assigneeId && !issue.development"> · 无进行中的开发任务</span></small></button></li></ul><div v-if="data && !data.items.length" class="project-empty">暂无符合条件的事项。</div><div class="actions"><button v-if="offset" @click="search(Math.max(0, offset - 30))">上一页</button><button v-if="data?.nextOffset != null" @click="search(data.nextOffset)">下一页</button></div>

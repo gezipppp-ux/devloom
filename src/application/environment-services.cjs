@@ -18,8 +18,12 @@ class EnvironmentServices {
   async read() {
     const tools = await Promise.all(TOOLS.map(async tool => {
       let installed, plan;
-      try { installed = await this.inspect(tool.id); plan = await this.plan(tool.id, installed); }
-      catch (error) { installed = { error: error.message }; }
+      try { installed = await this.inspect(tool.id); }
+      catch (error) { installed = { error: error.message, missing: error.code === "TOOL_NOT_FOUND" }; }
+      if (!installed.error || installed.missing) {
+        try { plan = await this.plan(tool.id, installed); }
+        catch { plan = { available: false, reason: "无法确认安装器状态，请稍后重新检测。" }; }
+      }
       if (tool.id === "node" && this.pendingNodeVersion) installed = { ...installed, version: this.pendingNodeVersion };
       return { ...presentEnvironmentTool(tool, installed, this.versions.get(tool.id), plan), pendingRestart: tool.id === "node" && Boolean(this.pendingNodeVersion) };
     }));
@@ -53,23 +57,32 @@ class EnvironmentServices {
 
   async start(input, authorize) {
     if (!input || !["codex", "npm", "git", "node"].includes(input.id) ||
-        !(input.id === "git" ? /^\d+\.\d+\.\d+(?:\.windows\.\d+)?$/ : /^\d+\.\d+\.\d+$/).test(input.version || "") || Object.keys(input).some(key => !["id", "version"].includes(key)))
+        !(input.id === "git" ? /^\d+\.\d+\.\d+(?:\.windows\.\d+)?$/ : /^\d+\.\d+\.\d+$/).test(input.version || "") ||
+        (input.operation !== undefined && !["install", "update"].includes(input.operation)) || Object.keys(input).some(key => !["id", "version", "operation"].includes(key)))
       throw new Error("更新参数无效。");
     if (this.busy || this.closed) throw new Error("更新正在进行或服务正在关闭，请稍后再试。");
     if (input.id === "node" && this.pendingNodeVersion) throw new Error("Node.js 已完成安装，请先重启服务使新版本生效。");
     this.busy = true;
     try {
       this.assertIdle();
-      const latest = await this.latest(input.id);
-      if (latest.version !== input.version) throw new Error("最新版本已变化，请重新检查后确认更新。");
-      const installed = await this.inspect(input.id);
-      if (compareVersions(latest.version, installed.version) <= 0) throw new Error("当前版本无需更新。");
+      const operation = input.operation || "update";
+      let installed;
+      try { installed = await this.inspect(input.id); }
+      catch (error) {
+        if (error.code !== "TOOL_NOT_FOUND" || operation !== "install") throw error;
+        installed = { missing: true, error: error.message };
+      }
+      if (operation === "install" && !installed.missing) throw new Error("已检测到工具安装，请重新检测后使用更新功能。");
       const plan = await this.plan(input.id, installed);
       if (!plan.available) throw new Error(plan.reason);
+      if (operation === "install" && plan.operation !== "install") throw new Error("该安装器不支持首次安装。");
+      const latest = operation === "install" && plan.targetVersion ? { version: plan.targetVersion } : await this.latest(input.id);
+      if (latest.version !== input.version) throw new Error("目标版本已变化，请重新检查后确认安装或更新。");
+      if (!installed.missing && compareVersions(latest.version, installed.version) <= 0) throw new Error("当前版本无需更新。");
       await authorize();
       this.assertIdle();
       if (this.closed) throw new Error("服务正在关闭。");
-      const job = { id: input.id, version: input.version, status: "running", startedAt: new Date().toISOString(), message: "正在安装，请保持服务运行。" };
+      const job = { id: input.id, version: input.version, operation, status: "running", startedAt: new Date().toISOString(), message: "正在安装，请保持服务运行。" };
       this.job = job;
       this.pending = Promise.resolve().then(async () => {
         const result = await this.install(input.id, input.version, plan);
@@ -77,8 +90,10 @@ class EnvironmentServices {
         if (version !== input.version) throw new Error("安装命令已完成，但服务检测到的版本未匹配目标，请检查 PATH 和安装位置。");
         if (input.id === "node" && result?.restartRequired) this.pendingNodeVersion = input.version;
         Object.assign(job, { status: result?.restartRequired ? "restart-required" : "completed", message: result?.restartRequired
-          ? "Node.js 已安装并切换，当前服务仍使用旧版本。请空闲时重启服务；跨 Node.js 主版本升级还需重新安装应用依赖。"
-          : "更新完成。已有 Codex 连接使用旧进程，建议空闲时重启 Web Coding 服务。" });
+          ? input.id === "node" ? "Node.js 已安装并切换，当前服务仍使用旧版本。请空闲时重启服务；跨 Node.js 主版本升级还需重新安装应用依赖。"
+            : "Git 已安装并验证版本，请重启服务以刷新 PATH 后重新检测。"
+          : operation === "install" ? input.id === "codex" ? "Codex CLI 安装完成，请在服务账号下完成 Codex 登录后重新检测。" : "安装完成，请重新检测环境。"
+            : "更新完成。已有 Codex 连接使用旧进程，建议空闲时重启 Web Coding 服务。" });
       }).catch(error => Object.assign(job, { status: "failed", message: error.message + " 请重新检测环境；需要时使用服务器终端更新。" }))
         .finally(() => { job.finishedAt = new Date().toISOString(); this.busy = false; });
       return { ...job };
