@@ -396,11 +396,15 @@ function createWebServer({
         return json(response, 201, await gitAccounts.generateKey(actor, authorize));
       if (!testIdentity && request.method === "POST" && url.pathname === "/api/account/git-accounts/check")
         return json(response, 200, await gitAccounts.check(actor, input));
-      const gitAccountRoute = /^\/api\/account\/git-accounts\/([^/]+)(?:\/(test|delete))?$/.exec(url.pathname);
+      if (!testIdentity && request.method === "POST" && url.pathname === "/api/account/git-accounts/verify")
+        return json(response, 200, await gitAccounts.verify(actor, input, undefined, authorize));
+      const gitAccountRoute = /^\/api\/account\/git-accounts\/([^/]+)(?:\/(test|verify|delete))?$/.exec(url.pathname);
       if (gitAccountRoute && !testIdentity && request.method === "POST") {
         const [, id, action] = gitAccountRoute;
         if (action === "test")
           return json(response, 200, await gitAccounts.check(actor, input, id));
+        if (action === "verify")
+          return json(response, 200, await gitAccounts.verify(actor, input, id, authorize));
         if (action === "delete") {
           (await gitAccounts.remove(actor, id));
           return json(response, 200, { ok: true });

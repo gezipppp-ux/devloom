@@ -85,6 +85,7 @@ docs/engineering/  # 行为契约与架构规则
 | `application/account-services.cjs`、`account-presenter.cjs` | AccountServices 组合账号权限、偏好、登录会话和生命周期接口；presenter 负责账号公开结构，HTTP 不穿透读取存储对象 |
 | `application/git-account-services.cjs`、`git-account-presenter.cjs` | GitAccountServices 组合 SSH 生成、个人主机凭据保存、独立提交作者身份及显式项目仓库连接检测；presenter 仅返回账号公开字段 |
 | `storage/git-account-store.cjs`、`git/account-credentials.cjs` | 前者拥有个人 Git 账号、加密密钥草稿及修订号条件更新；后者为 Git 子进程隔离凭据，不负责数据库或公开响应 |
+| `git/host-login.cjs` | 不依赖项目的 Git 主机登录验证：HTTP 当前用户 API 与 OpenSSH 公钥认证，脱敏失败反馈及临时密钥清理；应用服务拥有归属与授权复核 |
 | `application/session-events.cjs` | 标准 Agent 事件、交互请求与执行完成状态处理 |
 | `application/session-settings.cjs` | 会话执行设置校验、当前轮与下一轮选择、变更事件 |
 | `application/session-requirements.cjs`、`storage/run-requirements-store.cjs` | 分别负责追加资料的空闲/归属门禁与显式发送用例，以及来源唯一性、追加快照和发送状态的原子持久化 |

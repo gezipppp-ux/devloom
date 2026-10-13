@@ -15,6 +15,7 @@ async function verifyGitAccounts(page, output) {
     writes.push(data);
     if (hold) { const capture = hold; hold = undefined; await new Promise(resolve => { gate = resolve; capture(); }); }
     if (url.pathname.endsWith("/delete")) { accounts.splice(0, 1); return send({ ok: true }); }
+    if (url.pathname.endsWith("/verify")) return fail ? send({ error: "模拟登录验证失败：请检查令牌或公钥授权。" }, 400) : send({ ok: true });
     if (fail) return send({ error: "模拟保存失败：请检查地址和凭据。" }, 400);
     if (url.pathname.endsWith("/check") || url.pathname.endsWith("/test")) return send({ ok: true });
     const id = url.pathname.split("/").length === 5 ? url.pathname.split("/").at(-1) : String(++sequence);
@@ -25,6 +26,25 @@ async function verifyGitAccounts(page, output) {
   });
   const section = page.locator(".git-account-settings");
   const save = section.getByRole("button", { name: "保存 Git 账号", exact: true });
+  const verify = section.getByRole("button", { name: "验证登录", exact: true });
+  async function captureForms(prefix) {
+    const close = page.getByRole("button", { name: "关闭提示", exact: true });
+    while (await close.count()) await close.first().click();
+    for (const width of [1440, 768, 390, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await section.scrollIntoViewIfNeeded();
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+      const spacings = await section.locator(".ant-form-item").evaluateAll(items => items.map(item => {
+        const label = item.querySelector(".ant-form-item-label")?.getBoundingClientRect();
+        const control = item.querySelector("input,select,textarea")?.getBoundingClientRect();
+        return !label || !control || control.top >= label.bottom;
+      }));
+      assert.ok(spacings.every(Boolean), "labels cannot overlap form controls");
+      await section.screenshot({ path: path.join(output, `${prefix}-${width}.png`) });
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+  }
+  assert.equal(await verify.isDisabled(), true);
   await section.getByText("填写完整主机地址，例如 https://gitee.com，不包含仓库路径。项目仓库由管理员单独维护。", { exact: true }).waitFor();
   await section.getByLabel("账号名称", { exact: true }).fill("开发 HTTP Git");
   await section.getByLabel("Git 主机", { exact: true }).fill("http://git.example.test:3000");
@@ -32,6 +52,20 @@ async function verifyGitAccounts(page, output) {
   await section.getByLabel("密码或访问令牌", { exact: true }).fill('fixture&password|%!"');
   await section.getByLabel("提交作者姓名", { exact: true }).fill("Fixture Author");
   await section.getByLabel("提交作者邮箱", { exact: true }).fill("fixture@example.invalid");
+  await section.getByLabel("登录验证服务", { exact: true }).selectOption("gitlab");
+  const verifying = new Promise(resolve => { hold = resolve; });
+  await verify.click();
+  await verifying;
+  assert.equal(await section.getByRole("button", { name: "正在验证登录…", exact: true }).isDisabled(), true);
+  assert.equal(await save.isDisabled(), true);
+  assert.equal(await section.getByLabel("密码或访问令牌", { exact: true }).isDisabled(), true);
+  await section.screenshot({ path: path.join(output, "git-login-verifying.png") });
+  gate();
+  await page.getByRole("alert").filter({ hasText: "模拟登录验证失败" }).waitFor();
+  assert.equal(accounts.length, 0);
+  assert.equal(writes.at(-1).projectId, undefined);
+  assert.equal(writes.at(-1).provider, "gitlab");
+  assert.equal(await section.getByLabel("密码或访问令牌", { exact: true }).inputValue(), 'fixture&password|%!"');
   const held = new Promise(resolve => { hold = resolve; });
   await save.click();
   await held;
@@ -42,10 +76,17 @@ async function verifyGitAccounts(page, output) {
   assert.equal(accounts.length, 0);
   assert.equal(await section.getByLabel("密码或访问令牌", { exact: true }).inputValue(), 'fixture&password|%!"');
   fail = false;
+  await verify.click();
+  await page.locator('.operation-message[data-type="success"]').filter({ hasText: "Git 主机登录验证成功" }).waitFor();
+  assert.equal(accounts.length, 0, "verification must not save a draft");
   await save.click();
   await page.locator('.operation-message[data-type="success"]').filter({ hasText: "Git 账号已保存。准备项目开发空间时会验证实际仓库的访问权限。" }).waitFor();
   assert.equal(accounts.length, 1);
   assert.equal(await section.getByLabel("密码或访问令牌", { exact: true }).inputValue(), "");
+  await verify.click();
+  await page.locator('.operation-message[data-type="success"]').filter({ hasText: "Git 主机登录验证成功" }).waitFor();
+  assert.equal(writes.at(-1).password, undefined, "verification reuses saved credentials without exposing them");
+  assert.equal(writes.at(-1).revision, 1);
   await section.getByLabel("账号名称", { exact: true }).fill("已修改 HTTP Git");
   await save.click();
   await section.getByRole("button", { name: "编辑 Git 账号：已修改 HTTP Git", exact: true }).waitFor();
@@ -53,6 +94,7 @@ async function verifyGitAccounts(page, output) {
   assert.equal(writes.at(-1).revision, 1);
   assert.equal(writes.at(-1).authorName, "Fixture Author");
   assert.equal(writes.at(-1).remoteUrl, undefined);
+  await captureForms("git-accounts-http");
   await section.getByRole("button", { name: "新建账号", exact: true }).click();
   await section.getByLabel("账号名称", { exact: true }).fill("开发 SSH Git");
   await section.getByLabel("认证方式", { exact: true }).selectOption("ssh");
@@ -67,28 +109,33 @@ async function verifyGitAccounts(page, output) {
   assert.equal(await key.getAttribute("readonly"), "");
   assert.equal(await section.getByLabel("SSH 私钥", { exact: true }).count(), 0);
   assert.equal(await section.getByRole("button", { name: "测试连接", exact: true }).count(), 0);
+  assert.equal(await section.getByLabel("登录验证服务", { exact: true }).count(), 0);
+  await verify.click();
+  await page.locator('.operation-message[data-type="success"]').filter({ hasText: "Git 主机登录验证成功" }).waitFor();
+  assert.equal(writes.at(-1).keyDraftId, "fixture-draft");
+  assert.equal(writes.at(-1).projectId, undefined);
   assert.equal(accounts.length, 1);
   await save.click();
   await section.getByRole("button", { name: "编辑 Git 账号：开发 SSH Git", exact: true }).waitFor();
   assert.equal(writes.at(-1).keyDraftId, "fixture-draft");
   assert.equal(writes.at(-1).sshPrivateKey, undefined);
-  for (const width of [1440, 768, 390, 320]) {
-    await page.setViewportSize({ width, height: 1000 });
-    await section.scrollIntoViewIfNeeded();
-    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
-    const spacings = await section.locator(".ant-form-item").evaluateAll(items => items.map(item => {
-      const label = item.querySelector(".ant-form-item-label")?.getBoundingClientRect();
-      const control = item.querySelector("input,select,textarea")?.getBoundingClientRect();
-      return !label || !control || control.top >= label.bottom;
-    }));
-    assert.ok(spacings.every(Boolean), "labels cannot overlap form controls");
-    await section.screenshot({ path: path.join(output, `git-accounts-${width}.png`) });
-  }
-  await page.setViewportSize({ width: 1440, height: 1000 });
+  await captureForms("git-accounts");
   await section.getByRole("button", { name: "删除 Git 账号：已修改 HTTP Git", exact: true }).click();
   assert.equal(accounts.length, 2, "delete needs explicit confirmation");
   await section.getByRole("button", { name: "取消删除", exact: true }).click();
   assert.equal(accounts.length, 2);
-  process.stdout.write("Git account browser passed: host credentials, failed drafts, revisions, explicit authors, generated public keys, confirmation and responsive forms.\n");
+  await page.locator('.operation-message[data-type="success"]').filter({ hasText: "Git 主机登录验证成功" }).waitFor({ state: "hidden" });
+  const pending = new Promise(resolve => { hold = resolve; });
+  await verify.click();
+  await pending;
+  await page.getByRole("button", { name: "全部项目", exact: true }).click();
+  await page.getByRole("heading", { name: "全部项目", exact: true }).waitFor();
+  const completed = page.waitForResponse(response => response.url().endsWith("/verify"));
+  gate();
+  await completed;
+  assert.equal(await page.locator('.operation-message[data-type="success"]').filter({ hasText: "Git 主机登录验证成功" }).count(), 0, "late verification must not notify after leaving personal settings");
+  await page.getByRole("button", { name: "个人设置", exact: true }).click();
+  await section.getByRole("button", { name: "编辑 Git 账号：开发 SSH Git", exact: true }).waitFor();
+  process.stdout.write("Git account browser passed: host login, unsaved HTTP/SSH credentials, verification failures, revisions, explicit authors, generated public keys, confirmation and responsive forms.\n");
 }
 module.exports = { verifyGitAccounts };

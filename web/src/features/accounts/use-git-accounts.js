@@ -10,7 +10,8 @@ export function useGitAccounts() {
     deleting = ref(false);
   const error = ref(""),
     notice = ref(""),
-    deleteId = ref("");
+    deleteId = ref(""),
+    provider = ref("auto");
   const empty = () => ({
     id: "",
     name: "",
@@ -48,6 +49,7 @@ export function useGitAccounts() {
   function edit(account) {
     if (busy.value) return;
     Object.assign(form, empty(), account || {});
+    provider.value = "auto";
     error.value = "";
     notice.value = "";
     deleteId.value = "";
@@ -116,13 +118,14 @@ export function useGitAccounts() {
       notice.value = "Git 账号已保存。准备项目开发空间时会验证实际仓库的访问权限。";
     });
   }
-  function check() {
+  function verify() {
+    if (!ready.value) return;
     return perform(checking, async () => {
       await appApi(
-        `/account/git-accounts${form.id ? `/${form.id}/test` : "/check"}`,
-        payload(),
+        `/account/git-accounts${form.id ? `/${form.id}/verify` : "/verify"}`,
+        { ...payload(), provider: provider.value },
       );
-      if (alive) notice.value = "连接检测成功。当前填写内容尚未保存。";
+      if (alive) notice.value = "Git 主机登录验证成功。验证不会保存修改；项目仓库权限会在准备开发空间时检测。";
     });
   }
   function generate() {
@@ -154,6 +157,7 @@ export function useGitAccounts() {
     loading,
     saving,
     checking,
+    provider,
     generating,
     deleting,
     busy,
@@ -164,7 +168,7 @@ export function useGitAccounts() {
     edit,
     load,
     save,
-    check,
+    verify,
     generate,
     remove,
     changeAuthType,
