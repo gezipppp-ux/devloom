@@ -31,7 +31,7 @@ function supplierModels(input) {
   if (!Array.isArray(input) || !input.length || input.length > 100) throw accountError("请配置 1–100 个模型。", 400);
   const ids = new Set();
   return input.map(entry => {
-    object(entry, ["model", "label", "reasoningEfforts", "defaultReasoningEffort"]);
+    object(entry, ["model", "label", "reasoningEfforts", "defaultReasoningEffort", "reasoningSource"]);
     const model = text(entry.model, "模型 ID", 100);
     if (!MODEL_ID.test(model) || ids.has(model)) throw accountError("模型 ID 无效或重复。", 400);
     ids.add(model);
@@ -41,7 +41,10 @@ function supplierModels(input) {
     const defaultReasoningEffort = entry.defaultReasoningEffort ?? "";
     if (typeof defaultReasoningEffort !== "string" || (defaultReasoningEffort && !reasoningEfforts.includes(defaultReasoningEffort)))
       throw accountError("默认思考强度必须在模型支持范围内。", 400);
-    return { model, label: text(entry.label || model, "模型名称", 200), reasoningEfforts: [...new Set(reasoningEfforts)], defaultReasoningEffort };
+    if (entry.reasoningSource !== undefined && !["codex", "custom"].includes(entry.reasoningSource))
+      throw accountError("模型思考强度来源无效。", 400);
+    return { model, label: text(entry.label || model, "模型名称", 200), reasoningEfforts: [...new Set(reasoningEfforts)], defaultReasoningEffort,
+      ...(entry.reasoningSource ? { reasoningSource: entry.reasoningSource } : {}) };
   });
 }
 function validateSupplier(input, previous) {

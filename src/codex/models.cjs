@@ -2,7 +2,7 @@ function validEffort(value) {
   return typeof value === "string" && /^[a-z][a-z0-9_-]{0,31}$/.test(value);
 }
 
-async function listModels(client) {
+async function listModels(client, { includeHidden = false } = {}) {
   await client.connect();
   const models = new Map(),
     cursors = new Set();
@@ -12,7 +12,7 @@ async function listModels(client) {
       "model/list",
       {
         limit: 100,
-        includeHidden: false,
+        includeHidden,
         ...(cursor ? { cursor } : {}),
       },
       15000,
@@ -21,7 +21,7 @@ async function listModels(client) {
       throw new Error("Codex 返回了无效的模型列表，请更新 Codex 后重试。");
     for (const entry of result.data) {
       if (
-        entry.hidden ||
+        (entry.hidden && !includeHidden) ||
         typeof entry.model !== "string" ||
         !entry.model ||
         entry.model.length > 100 ||

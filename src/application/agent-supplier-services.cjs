@@ -2,13 +2,24 @@ const { AgentSupplierStore } = require("../storage/agent-supplier-store.cjs");
 const { getAgentProvider } = require("../agents/registry.cjs");
 const { supplierAgent, supplierRevision, supplierUrl, validateSupplier, object } = require("../domain/agent-supplier.cjs");
 const { accountError } = require("../domain/account.cjs");
-const { presentSupplier } = require("./agent-supplier-presenter.cjs");
+const { presentSupplier, presentSupplierModel } = require("./agent-supplier-presenter.cjs");
 
 class AgentSupplierServices {
   constructor(database, { accounts, changed = async () => {}, store, provider = getAgentProvider } = {}) {
     this.store = store || new AgentSupplierStore(database); this.accounts = accounts; this.changed = changed; this.provider = provider;
   }
   async authorize(actor, authorize) { await authorize?.(); await this.accounts.requireAdmin(actor); }
+  async catalog(actor, agentType, authorize) {
+    await this.authorize(actor, authorize); supplierAgent(agentType);
+    let models;
+    try { models = await this.provider(agentType).supplier.catalog(); }
+    catch {
+      await this.authorize(actor, authorize);
+      throw accountError("无法读取 Codex 内置模型目录，请检查 Codex 安装及服务账号配置，或继续手动配置。", 503);
+    }
+    await this.authorize(actor, authorize);
+    return { models: models.map(presentSupplierModel) };
+  }
   async list(actor, agentType) {
     await this.authorize(actor); supplierAgent(agentType);
     return this.store.transaction(async () => {

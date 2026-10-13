@@ -35,6 +35,17 @@
 .supplier-dialog-footer { border-top: 1px solid var(--line); padding-top: 20px; margin-top: 24px; justify-content: flex-end; }
 .supplier-fetched { max-height: 240px; overflow: auto; border: 1px solid var(--line); padding: 16px; border-radius: var(--radius-control); }
 .supplier-fetched label { overflow-wrap: anywhere; }
+.supplier-fetched .supplier-checkbox { flex-wrap: wrap; gap: 8px; }
+.supplier-model-id { flex: 1; min-width: 100px; overflow-wrap: anywhere; }
+.supplier-model-heading, .supplier-effort-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.supplier-effort-field { min-width: 0; margin-bottom: 20px; }
+.supplier-effort-field .supplier-toolbar { margin-bottom: 8px; gap: 8px; }
+.supplier-model-action { padding: 4px 8px; min-height: 32px; }
+.supplier-effort-chips { min-height: 40px; }
+.supplier-effort-chips > span:not(.muted) { padding: 4px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.supplier-effort-field .field-hint { margin-bottom: 0; }
+.supplier-catalog-error { display: grid; gap: 12px; margin-bottom: 20px; color: var(--warning); }
+.supplier-catalog-error button { justify-self: start; }
 .supplier-result { padding: 12px; background: var(--success-soft); color: var(--success); border-radius: var(--radius-control); }
 .supplier-confirm { width: 480px; }
 .supplier-confirm p { overflow-wrap: anywhere; }

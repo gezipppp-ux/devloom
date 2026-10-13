@@ -58,6 +58,27 @@ test("supplier network operations recheck administrator identity and saved revis
   during = () => database.client.user.update({ where: { id: admin.id }, data: { role: "member" } });
   await assert.rejects(services.request(admin, { id: supplier.id, revision: 2 }, "models"), { statusCode: 403 });
 });
+test("native supplier catalog is independent of the active supplier and rechecks administrator access after discovery", async t => {
+  const database = await initializeTestDatabase(t, temporary(t));
+  const admin = await database.client.user.create({ data: { username: "catalog-admin", displayName: "Admin", role: "admin", passwordHash: "unused" } });
+  const accounts = new AccountServices(database); t.after(() => accounts.close());
+  let during = async () => {}, calls = 0;
+  const services = new AgentSupplierServices(database, { accounts, provider: () => ({ supplier: { async catalog() {
+    calls++; await during();
+    return [{ model: "native-code", label: "Native", reasoningEfforts: ["low", "high"], defaultReasoningEffort: "high", credentials: "not-public" }];
+  } } }) });
+  await assert.rejects(services.catalog(null, "codex"), { statusCode: 403 }); assert.equal(calls, 0);
+  const current = await services.list(admin);
+  const { supplier } = await services.save(admin, draft());
+  await services.activate(admin, supplier.id, { revision: current.selectionRevision });
+  const result = await services.catalog(admin, "codex");
+  assert.equal(result.models[0].model, "native-code");
+  assert.doesNotMatch(JSON.stringify(result), /credentials|not-public|test-key/);
+  during = async () => { throw new Error("private native diagnostic"); };
+  await assert.rejects(services.catalog(admin, "codex"), error => error.statusCode === 503 && !error.message.includes("private"));
+  during = () => database.client.user.update({ where: { id: admin.id }, data: { role: "member" } });
+  await assert.rejects(services.catalog(admin, "codex"), { statusCode: 403 });
+});
 test("system supplier HTTP requires live administrator identity and CSRF without workspace selection", async t => {
   const database = await initializeTestDatabase(t, temporary(t));
   const accounts = new AccountServices(database); t.after(() => accounts.close());
@@ -80,6 +101,6 @@ test("system supplier HTTP requires live administrator identity and CSRF without
   const created = await request(endpoint, draft()); assert.equal(created.status, 200, JSON.stringify(created.data));
   assert.doesNotMatch(JSON.stringify(created.data), /test-key-never-public/);
   await database.client.user.update({ where: { id: admin.id }, data: { role: "member" } });
-  for (const [route, input] of [[endpoint, undefined], [endpoint, draft()], [`${endpoint}/models`, { baseUrl: draft().baseUrl, apiKey: "fixture" }]])
+  for (const [route, input] of [[endpoint, undefined], [`${endpoint}/catalog`, undefined], [endpoint, draft()], [`${endpoint}/models`, { baseUrl: draft().baseUrl, apiKey: "fixture" }]])
     assert.equal((await request(route, input)).status, 403);
 });

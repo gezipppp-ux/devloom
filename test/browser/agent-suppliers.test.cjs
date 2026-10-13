@@ -5,14 +5,20 @@ const path = require("node:path");
 async function verifyAgentSuppliers(page, output) {
   const builtin = { id: "server", agentType: "codex", name: "服务器现有配置", mode: "server-config", builtin: true, enabled: true, revision: 1, runtimeRevision: 1, models: [] };
   const rows = [builtin]; let currentId = "server", revision = 1, checks = 0, holdModels = false, releaseModels;
+  let catalogFailure = false, catalogMissing = false, holdCatalog = false, releaseCatalog;
+  const nativeModels = [{ model: "fixture-code", label: "Fixture Codex", reasoningEfforts: ["low", "medium", "high"], defaultReasoningEffort: "medium" }];
   const writes = [];
   await page.route("**/api/system/agent-suppliers**", async route => {
     const request = route.request(), endpoint = new URL(request.url()).pathname.split("/agent-suppliers")[1];
     const input = request.method() === "POST" ? request.postDataJSON() : null;
     if (input) writes.push({ endpoint, input });
+    if (endpoint === "/catalog") {
+      if (holdCatalog) { holdCatalog = false; await new Promise(resolve => { releaseCatalog = resolve; }); }
+      return catalogFailure ? route.fulfill({ status: 503, json: { error: "模拟 Codex 内置目录读取失败" } }) : route.fulfill({ json: { models: catalogMissing ? [] : nativeModels } });
+    }
     if (endpoint === "/models") {
       if (holdModels) { holdModels = false; await new Promise(resolve => { releaseModels = resolve; }); }
-      return route.fulfill({ json: { models: [{ model: "fixture-code", label: "Fixture" }] } });
+      return route.fulfill({ json: { models: [{ model: "fixture-code", label: "fixture-code" }, { model: "fixture-code-latest", label: "Fixture alias" }] } });
     }
     if (endpoint === "/check") { checks++; return route.fulfill({ json: { ok: true, elapsedMs: 12 } }); }
     if (!endpoint && !input) return route.fulfill({ json: { suppliers: rows, currentId, selectionRevision: revision } });
@@ -33,16 +39,19 @@ async function verifyAgentSuppliers(page, output) {
   await dialog.getByLabel("API 基础地址", { exact: true }).fill("https://fixture.invalid/v1");
   await dialog.getByLabel("API Key", { exact: true }).fill("fixture-key-only");
   await dialog.getByRole("button", { name: "获取模型", exact: true }).click();
+  await dialog.locator(".supplier-fetched label").filter({ hasText: "fixture-code-latest" }).getByText("未匹配内置目录", { exact: true }).waitFor();
   await dialog.getByLabel("fixture-code", { exact: true }).check();
   await dialog.getByRole("button", { name: "添加所选模型" }).click();
-  await dialog.getByLabel("支持的思考强度", { exact: true }).fill("low, high");
-  await dialog.getByLabel("默认思考强度", { exact: true }).click();
-  await dialog.getByLabel("默认思考强度", { exact: true }).selectOption("low");
+  await dialog.locator(".supplier-model").getByText("Codex 内置", { exact: true }).waitFor();
+  assert.deepEqual(await dialog.locator(".supplier-effort-chips span").allTextContents(), ["low", "medium", "high"]);
+  assert.equal(await dialog.getByLabel("默认思考强度", { exact: true }).inputValue(), "medium");
+  assert.equal(await dialog.getByLabel("显示名称", { exact: true }).inputValue(), "Fixture Codex");
   assert.equal(checks, 0);
   await dialog.getByRole("button", { name: "发送检测请求" }).click();
   await dialog.getByText("生成检测成功，耗时 12 ms。", { exact: true }).waitFor();
   await dialog.getByRole("button", { name: "保存供应商" }).click();
   await page.getByRole("heading", { name: "团队供应商", exact: true }).waitFor();
+  assert.equal(writes.find(entry => entry.endpoint === "").input.models[0].reasoningSource, "codex");
   assert.equal(checks, 1, "saving must not run another generation");
   const card = page.locator(".supplier-card").filter({ has: page.getByRole("heading", { name: "团队供应商", exact: true }) });
   await card.getByRole("button", { name: "设为默认", exact: true }).click();
@@ -70,9 +79,99 @@ async function verifyAgentSuppliers(page, output) {
   await page.getByRole("dialog").getByRole("button", { name: "保存供应商" }).click();
   await page.getByRole("dialog").waitFor({ state: "hidden" });
   assert.equal(Object.hasOwn(writes.findLast(entry => entry.endpoint === "/api").input, "apiKey"), false);
+  catalogMissing = true;
+  await card.getByRole("button", { name: "编辑 / 检测", exact: true }).click();
+  dialog = page.getByRole("dialog");
+  await dialog.getByText("未匹配内置目录", { exact: true }).waitFor();
+  assert.deepEqual(await dialog.locator(".supplier-effort-chips span").allTextContents(), ["low", "medium", "high"], "missing catalog entries preserve the saved snapshot for an unchanged model");
+  assert.equal(await dialog.getByLabel("默认思考强度", { exact: true }).inputValue(), "medium");
+  await page.keyboard.press("Escape"); catalogMissing = false;
+  catalogFailure = true;
+  await card.getByRole("button", { name: "编辑 / 检测", exact: true }).click();
+  dialog = page.getByRole("dialog");
+  await dialog.getByText(/模拟 Codex 内置目录读取失败/).waitFor();
+  await dialog.getByRole("button", { name: "自定义", exact: true }).click();
+  assert.equal(await dialog.getByLabel("支持的思考强度", { exact: true }).inputValue(), "low, medium, high", "saved automatic values remain editable when the catalog is offline");
+  await page.keyboard.press("Escape");
+  await card.getByRole("button", { name: "编辑 / 检测", exact: true }).click();
+  dialog = page.getByRole("dialog");
+  await dialog.getByText(/模拟 Codex 内置目录读取失败/).waitFor();
+  await dialog.getByLabel("模型 ID", { exact: true }).fill("fixture-code-latest");
+  assert.equal(await dialog.getByLabel("支持的思考强度", { exact: true }).inputValue(), "", "changing the model ID clears old automatic metadata even without a catalog");
+  await page.keyboard.press("Escape"); catalogFailure = false;
+  await card.getByRole("button", { name: "编辑 / 检测", exact: true }).click();
+  dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "自定义", exact: true }).click();
+  await dialog.getByLabel("支持的思考强度", { exact: true }).fill("high");
+  await dialog.getByLabel("默认思考强度", { exact: true }).selectOption("high");
+  await dialog.getByRole("button", { name: "保存供应商", exact: true }).click();
+  await dialog.waitFor({ state: "hidden" });
+  assert.deepEqual(writes.findLast(entry => entry.endpoint === "/api").input.models[0].reasoningEfforts, ["high"]);
+  assert.equal(writes.findLast(entry => entry.endpoint === "/api").input.models[0].reasoningSource, "custom");
+  delete rows.find(entry => entry.id === "api").models[0].reasoningSource;
+  await page.reload();
+  await card.waitFor();
+  await card.getByRole("button", { name: "编辑 / 检测", exact: true }).click();
+  await dialog.getByRole("button", { name: "使用内置配置", exact: true }).waitFor();
+  assert.equal(await dialog.getByLabel("支持的思考强度", { exact: true }).inputValue(), "high");
+  assert.equal(await dialog.getByLabel("默认思考强度", { exact: true }).inputValue(), "high");
+  const effortInput = dialog.getByLabel("支持的思考强度", { exact: true });
+  await effortInput.press("End");
+  await effortInput.pressSequentially(", ");
+  assert.equal(await effortInput.inputValue(), "high, ", "typing preserves separators until the next effort is entered");
+  await effortInput.pressSequentially("medium");
+  assert.equal(await dialog.getByLabel("默认思考强度", { exact: true }).inputValue(), "high");
+  await dialog.getByRole("button", { name: "使用内置配置", exact: true }).click();
+  await dialog.getByRole("button", { name: "自定义", exact: true }).click();
+  assert.equal(await effortInput.inputValue(), "low, medium, high", "restoring native configuration clears the custom text draft");
+  await page.keyboard.press("Escape");
   await card.getByRole("button", { name: "复制", exact: true }).click();
   assert.equal(await page.getByRole("dialog").getByLabel("API Key", { exact: true }).inputValue(), "");
   assert.equal(await page.getByRole("dialog").getByLabel("启用供应商", { exact: true }).isChecked(), false);
+  await page.keyboard.press("Escape");
+  await add.click(); dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "手动添加", exact: true }).click();
+  await dialog.getByLabel("模型 ID", { exact: true }).fill("fixture-code");
+  await dialog.locator(".supplier-effort-chips").waitFor();
+  assert.equal(await dialog.getByLabel("默认思考强度", { exact: true }).inputValue(), "medium");
+  await dialog.getByLabel("模型 ID", { exact: true }).fill("fixture-code-latest");
+  await dialog.getByText("未匹配内置目录", { exact: true }).waitFor();
+  assert.equal(await dialog.getByLabel("支持的思考强度", { exact: true }).inputValue(), "", "model aliases must not inherit capabilities by prefix");
+  await page.keyboard.press("Escape");
+
+  holdCatalog = true;
+  await add.click(); dialog = page.getByRole("dialog");
+  await dialog.getByText("正在读取 Codex 内置模型目录…", { exact: true }).waitFor();
+  await dialog.getByRole("button", { name: "手动添加", exact: true }).click();
+  await dialog.getByLabel("模型 ID", { exact: true }).fill("fixture-code");
+  await dialog.getByRole("button", { name: "获取模型", exact: true }).click();
+  await dialog.getByLabel("fixture-code", { exact: true }).waitFor();
+  await dialog.getByLabel("支持的思考强度", { exact: true }).fill("high");
+  await dialog.getByLabel("供应商名称", { exact: true }).click();
+  releaseCatalog();
+  await dialog.getByRole("button", { name: "使用内置配置", exact: true }).waitFor();
+  await dialog.getByLabel("fixture-code", { exact: true }).waitFor();
+  assert.equal(await dialog.getByLabel("支持的思考强度", { exact: true }).inputValue(), "high", "late catalog results preserve manually entered values");
+  await dialog.getByRole("button", { name: "使用内置配置", exact: true }).click();
+  assert.equal(await dialog.getByLabel("默认思考强度", { exact: true }).inputValue(), "medium");
+  await page.keyboard.press("Escape");
+
+  holdCatalog = true;
+  await add.click(); dialog = page.getByRole("dialog");
+  await dialog.getByText("正在读取 Codex 内置模型目录…", { exact: true }).waitFor();
+  await page.keyboard.press("Escape");
+  const releaseOldCatalog = releaseCatalog;
+  catalogFailure = true;
+  await add.click(); dialog = page.getByRole("dialog");
+  await dialog.getByText(/模拟 Codex 内置目录读取失败/).waitFor();
+  catalogFailure = false; releaseOldCatalog();
+  await dialog.getByRole("button", { name: "手动添加", exact: true }).click();
+  await dialog.getByLabel("模型 ID", { exact: true }).fill("fixture-code");
+  await dialog.getByText("目录未加载", { exact: true }).waitFor();
+  assert.equal(await dialog.locator(".supplier-effort-chips").count(), 0);
+  await dialog.getByRole("button", { name: "重试读取内置目录", exact: true }).click();
+  await dialog.getByText("Codex 内置", { exact: true }).waitFor();
+  assert.equal(await dialog.getByLabel("默认思考强度", { exact: true }).inputValue(), "medium");
   await page.keyboard.press("Escape");
   await card.getByRole("button", { name: "编辑 / 检测", exact: true }).click();
   holdModels = true;
@@ -94,5 +193,6 @@ async function verifyAgentSuppliers(page, output) {
   await card.waitFor({ state: "hidden" });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole("button", { name: "个人设置", exact: true }).click();
+  process.stdout.write("Supplier model browser checks passed: native metadata, exact matching, manual overrides, retries and late catalog responses.\n");
 }
 module.exports = { verifyAgentSuppliers };

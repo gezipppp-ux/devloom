@@ -5,6 +5,7 @@ const { fetchSupplierModels, checkSupplier } = require("../../src/codex/supplier
 const { AppServerClient } = require("../../src/codex/app-server-client.cjs");
 const { CodexAgent } = require("../../src/agents/codex-agent.cjs");
 const { FakeClient } = require("../fixtures/web-client.cjs");
+const { readModelCatalog } = require("../../src/codex/model-catalog.cjs");
 
 const input = () => ({ name: "示例", agentType: "codex", baseUrl: "https://example.invalid/v1/", apiKey: "test-only-key", enabled: true,
   models: [{ model: "custom-model", reasoningEfforts: ["low", "high"], defaultReasoningEffort: "low" }], defaultModel: "custom-model" });
@@ -19,6 +20,32 @@ test("supplier validation rejects credentials in URLs, invalid defaults and inco
   assert.deepEqual(supplierSelection(supplier, {}), { model: "", reasoningEffort: "", permissionMode: undefined });
   assert.throws(() => supplierSelection(supplier, { model: "old-model" }), /重新选择/);
   assert.throws(() => supplierSelection(supplier, { model: "custom-model", reasoningEffort: "xhigh" }), /重新选择/);
+  for (const reasoningSource of ["codex", "custom"]) {
+    const value = input(); value.models[0].reasoningSource = reasoningSource;
+    assert.equal(validateSupplier(value).models[0].reasoningSource, reasoningSource);
+  }
+  const invalid = input(); invalid.models[0].reasoningSource = "guessed";
+  assert.throws(() => validateSupplier(invalid), /来源无效/);
+});
+test("native supplier catalog includes hidden models, uses no thread methods and closes discovery after success or failure", async () => {
+  for (const fail of [false, true]) {
+    let closed = false; const methods = [];
+    const client = { async connect() {}, async close() { closed = true; }, async request(method, params) {
+      methods.push(method); assert.equal(params.includeHidden, true);
+      if (fail) throw new Error("fixture catalog unavailable");
+      return { data: [{ model: "fixture-code", hidden: true, displayName: "Fixture", secret: "not-public",
+        supportedReasoningEfforts: [{ reasoningEffort: "low" }, { reasoningEffort: "high" }], defaultReasoningEffort: "high" }] };
+    } };
+    if (fail) await assert.rejects(readModelCatalog({ client }), /fixture catalog unavailable/);
+    else {
+      const models = await readModelCatalog({ client });
+      assert.equal(models[0].model, "fixture-code");
+      assert.deepEqual(models[0].reasoningEfforts, ["low", "high"]);
+      assert.equal(models[0].defaultReasoningEffort, "high");
+      assert.doesNotMatch(JSON.stringify(models), /secret|not-public/);
+    }
+    assert.equal(closed, true); assert.deepEqual(methods, ["model/list"]);
+  }
 });
 test("supplier discovery and manual check enforce Responses results and suppress upstream error bodies", async () => {
   const calls = [];

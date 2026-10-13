@@ -1,6 +1,7 @@
 const { CodexAgent } = require("./codex-agent.cjs");
 const { resolveCodex } = require("../codex/command.cjs");
 const { fetchSupplierModels, checkSupplier } = require("../codex/supplier-api.cjs");
+const { readModelCatalog } = require("../codex/model-catalog.cjs");
 
 const codex = Object.freeze({
   id: "codex",
@@ -8,7 +9,7 @@ const codex = Object.freeze({
   create: options => new CodexAgent(options),
   resolveCommand: resolveCodex,
   capabilities: CodexAgent.capabilities,
-  supplier: { fetchModels: fetchSupplierModels, check: checkSupplier },
+  supplier: { fetchModels: fetchSupplierModels, check: checkSupplier, catalog: readModelCatalog },
 });
 
 // Provider names are data, never module paths. Only implemented providers register here.
