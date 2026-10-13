@@ -592,6 +592,12 @@ async function main() {
           Math.abs(directoryHeading.width - departmentHeading.width) < 1,
         `project directory and scrollable department page keep the same horizontal edges at ${width}px`);
         await capture('18-department-permissions-' + width);
+        const permissionCategories = page.getByRole('navigation', { name: '权限分类' });
+        await permissionCategories.getByRole('button', { name: 'Agent', exact: true }).click();
+        await page.getByRole('checkbox', { name: '认领并启动开发任务', exact: true }).check();
+        await capture('18-department-details-' + width, '.permission-details');
+        await page.getByRole('searchbox', { name: '搜索权限', exact: true }).fill('不存在的权限');
+        await capture('18-department-empty-' + width, '.permission-details');
         if (width === 1440) departmentContentWidth = (await page.locator('.page-heading').boundingBox()).width;
         await page.getByLabel('账号导航').getByRole('button', { name: '全部项目', exact: true }).click();
         await page.locator('.project-card').first().waitFor();

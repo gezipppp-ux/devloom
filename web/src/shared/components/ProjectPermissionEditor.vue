@@ -1,14 +1,40 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, useId } from "vue";
 import catalog from "../../../../shared/project-permissions.json";
 import presets from "../../../../shared/project-permission-presets.json";
-const props = defineProps({ modelValue: { type: Array, default: () => [] }, ceiling: { type: Array, default: () => catalog.map(p => p.id) }, department: Boolean, administratorAccess: Boolean, disabled: Boolean });
+const props = defineProps({ modelValue: { type: Array, default: () => [] }, baseline: { type: Array, default: () => [] }, ceiling: { type: Array, default: () => catalog.map(p => p.id) }, department: Boolean, administratorAccess: Boolean, disabled: Boolean });
 const emit = defineEmits(["update:modelValue"]);
 const preview = ref(presets[0].id);
-const groups = computed(() => [...new Set(catalog.map(p => p.group))]);
+const editorId = useId();
+const search = ref("");
+const onlySelected = ref(false);
+const selectedGroup = ref(catalog[0].group);
+const lastChange = ref("");
 const items = computed(() => catalog.filter(p => props.department || p.scope !== "department"));
+const groups = computed(() => [...new Set(items.value.map(p => p.group))].map(name => {
+  const permissions = items.value.filter(p => p.group === name);
+  return { name, permissions, selected: permissions.filter(p => props.modelValue.includes(p.id)).length, matches: permissions.filter(matches) };
+}));
+const activeGroup = computed(() => groups.value.find(group => group.name === selectedGroup.value && group.matches.length) || groups.value.find(group => group.matches.length));
+const visiblePermissions = computed(() => activeGroup.value?.matches || []);
+const selectable = computed(() => visiblePermissions.value.filter(p => allowed(p.id)));
+const allSelected = computed(() => selectable.value.length > 0 && selectable.value.every(p => props.modelValue.includes(p.id)));
+const partlySelected = computed(() => !allSelected.value && selectable.value.some(p => props.modelValue.includes(p.id)));
+const selectedVisible = computed(() => visiblePermissions.value.filter(p => props.modelValue.includes(p.id)));
+const filtering = computed(() => Boolean(search.value.trim()) || onlySelected.value);
+const changes = computed(() => ({ added: props.modelValue.filter(id => !props.baseline.includes(id)), removed: props.baseline.filter(id => !props.modelValue.includes(id)) }));
+const hasChanges = computed(() => Boolean(changes.value.added.length || changes.value.removed.length));
 const preset = computed(() => presets.find(p => p.id === preview.value));
+function matches(permission) {
+  const query = search.value.trim().toLocaleLowerCase();
+  return (!query || `${permission.group} ${permission.label}`.toLocaleLowerCase().includes(query)) && (!onlySelected.value || props.modelValue.includes(permission.id));
+}
 function allowed(id) { const permission = catalog.find(p => p.id === id); return props.ceiling.includes(id) && permission.requires.every(allowed); }
+function caution(permission) {
+  if (["session.start", "session.continue", "session.approve"].includes(permission.id)) return "允许执行命令及修改代码";
+  if (permission.id.startsWith("asset.secret.")) return "涉及密码、Token 等敏感字段";
+  return "";
+}
 const capabilities = [
   { id: "management", label: "项目管理", description: "允许配置项目、管理成员、归档及申请创建项目", permissions: catalog.filter(p => p.group === "项目" && p.id !== "project.view").map(p => p.id) },
   { id: "collaboration", label: "需求与 Bug 协作", description: "允许维护事项、验收、评论和发布交付", permissions: catalog.filter(p => ["需求与 Bug", "协作"].includes(p.group)).map(p => p.id) },
@@ -31,9 +57,10 @@ const effective = computed(() => {
   return items.value.filter(permission => selected.has(permission.id));
 });
 function labels(ids) { return ids.map(id => catalog.find(p => p.id === id)?.label).join("、"); }
-function apply() { if (coreBlocked.value.length) return; emit("update:modelValue", [...new Set([...props.modelValue, ...available.value])]); }
+function apply() { if (coreBlocked.value.length) return; toggleMany(available.value, true); }
 function toggle(id, checked) { toggleMany([id], checked); }
 function toggleMany(ids, checked) {
+  if (props.disabled) return;
   const selected = new Set(props.modelValue);
   function add(key) { if (!allowed(key)) return; selected.add(key); catalog.find(p => p.id === key)?.requires.forEach(add); }
   if (checked) ids.forEach(add); else {
@@ -41,7 +68,17 @@ function toggleMany(ids, checked) {
     let removed;
     do { removed = false; for (const p of catalog) if (selected.has(p.id) && p.requires.some(key => !selected.has(key))) { selected.delete(p.id); removed = true; } } while (removed);
   }
+  const added = [...selected].filter(id => !props.modelValue.includes(id));
+  const removed = props.modelValue.filter(id => !selected.has(id));
+  const dependencies = (checked ? added : removed).filter(id => !ids.includes(id));
+  lastChange.value = `${checked ? '已选择' : '已取消'} ${checked ? added.length : removed.length} 项。${dependencies.length ? `${checked ? '自动补齐' : '联动关闭'}：${labels(dependencies)}。` : ''}`;
   emit("update:modelValue", [...selected]);
+}
+function resetFilters() { search.value = ""; onlySelected.value = false; }
+function revert() {
+  if (props.disabled) return;
+  emit("update:modelValue", [...props.baseline]);
+  lastChange.value = "已撤销本次权限修改。";
 }
 </script>
 <template>
@@ -61,16 +98,44 @@ function toggleMany(ids, checked) {
       <p v-if="coreBlocked.length" class="field-hint">组合核心功能未开放：{{ labels(coreBlocked) }}。请联系系统管理员调整部门可用功能后再添加此组合。</p>
       <button type="button" :disabled="disabled || !available.length || Boolean(coreBlocked.length)" @click="apply">添加{{ preset.label }}组合</button>
     </div>
-    <p class="field-hint" aria-live="polite">{{ department ? '部门开放功能' : administratorAccess ? '本次项目授权可用功能' : '保存后实际可用功能' }}：{{ effective.map(p => p.label).join('、') || '尚未授权' }}</p>
+    <p class="field-hint" aria-live="polite">{{ department ? '部门开放功能' : administratorAccess ? '本次项目授权可用功能' : '保存后实际可用功能' }}：{{ department ? `${effective.length} / ${items.length} 项，可在下方按分类查看` : effective.map(p => p.label).join('、') || '尚未授权' }}</p>
     <p v-if="!department && !administratorAccess && !modelValue.includes('project.view')" class="field-hint">参与中的成员必须有“查看项目”权限，否则无法进入项目。</p>
-    <details><summary>高级权限细项（{{ modelValue.length }} 项已选）</summary>
-      <p class="field-hint">选中操作会补齐必要查看权限；取消依赖会同时取消相关操作。启动、续聊、审批会允许执行命令及修改代码。</p>
-      <fieldset v-for="group in groups" :key="group" :disabled="disabled"><legend>{{ group }}</legend>
-        <label v-for="permission in items.filter(p => p.group === group)" :key="permission.id" class="permission-choice">
-          <input type="checkbox" :checked="modelValue.includes(permission.id)" :disabled="!allowed(permission.id) && !modelValue.includes(permission.id)" @change="toggle(permission.id, $event.target.checked)" />{{ permission.label }}<small v-if="!allowed(permission.id)">（部门未开放或缺少依赖）</small>
-        </label>
-      </fieldset>
+    <details class="permission-details" :open="department"><summary>高级权限细项（{{ modelValue.length }} 项已选）</summary>
+      <p class="field-hint">选中操作会补齐必要依赖；取消基础权限会同时取消相关操作。</p>
+      <div class="permission-toolbar">
+        <label class="permission-search">搜索权限<input v-model="search" type="search" placeholder="搜索功能或权限名称" @keydown.enter.prevent /></label>
+        <label class="permission-filter"><input v-model="onlySelected" type="checkbox" />{{ department ? '只看已开放' : '只看已选' }}</label>
+      </div>
+      <div class="permission-workbench">
+        <nav class="permission-categories" aria-label="权限分类">
+          <button v-for="group in groups" :key="group.name" type="button" :aria-label="group.name" :aria-pressed="activeGroup?.name === group.name" :disabled="!group.matches.length" @click="selectedGroup = group.name">
+            <span>{{ group.name }}</span><small>{{ group.selected }} / {{ group.permissions.length }}</small>
+          </button>
+        </nav>
+        <section class="permission-pane" :aria-label="activeGroup ? `${activeGroup.name}权限` : '权限搜索结果'">
+          <template v-if="activeGroup">
+            <header class="permission-pane-heading"><h3>{{ activeGroup.name }}</h3><span>{{ activeGroup.selected }} / {{ activeGroup.permissions.length }} 项{{ department ? '已开放' : '已选' }}</span></header>
+            <div class="permission-group-actions">
+              <label class="permission-filter"><input type="checkbox" :checked="allSelected" :indeterminate="partlySelected" :disabled="disabled || !selectable.length" @change="toggleMany(selectable.map(p => p.id), $event.target.checked)" />{{ filtering ? '全选筛选结果' : '本组全选' }}</label>
+              <button type="button" class="permission-quiet" :disabled="disabled || !selectedVisible.length" @click="toggleMany(selectedVisible.map(p => p.id), false)">{{ filtering ? '清空筛选结果' : '清空本组' }}</button>
+            </div>
+            <div class="permission-rows">
+              <label v-for="permission in visiblePermissions" :key="permission.id" class="permission-detail-row">
+                <input type="checkbox" :aria-label="permission.label" :aria-describedby="`${editorId}-${permission.id}`" :checked="modelValue.includes(permission.id)" :disabled="disabled || (!allowed(permission.id) && !modelValue.includes(permission.id))" @change="toggle(permission.id, $event.target.checked)" />
+                <span><span class="permission-label">{{ permission.label }}</span><span :id="`${editorId}-${permission.id}`" class="permission-description">
+                  <small v-if="!allowed(permission.id)" class="permission-caution">部门未开放或缺少依赖</small>
+                  <small>{{ permission.requires.length ? `依赖：${labels(permission.requires)}` : '项目访问的基础权限' }}</small>
+                  <small v-if="caution(permission)" class="permission-caution">{{ caution(permission) }}</small>
+                </span></span>
+              </label>
+            </div>
+          </template>
+          <div v-else class="permission-empty"><p>{{ onlySelected && !modelValue.length ? '尚未选择任何权限' : '没有匹配的权限' }}</p><button type="button" @click="resetFilters">清除筛选</button></div>
+        </section>
+      </div>
+      <p v-if="lastChange" class="permission-change" role="status">{{ lastChange }}</p>
     </details>
+    <div class="permission-changes"><p aria-live="polite">{{ hasChanges ? `待保存：新增 ${changes.added.length} 项 · 取消 ${changes.removed.length} 项` : '当前权限未修改' }}</p><button type="button" class="permission-quiet" :disabled="disabled || !hasChanges" @click="revert">撤销权限修改</button></div>
   </div>
 </template>
 <style scoped>
@@ -84,5 +149,38 @@ function toggleMany(ids, checked) {
 .permission-preset label { display: grid; gap: 8px; }
 .permission-preset p { margin: 0; overflow-wrap: anywhere; }
 .permission-preset button { justify-self: start; }
-summary { cursor: pointer; padding: 12px 0; }
+.permission-details > summary { cursor: pointer; padding: 12px 0; font-weight: 600; }
+.permission-toolbar { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px 20px; margin: 16px 0; }
+.permission-search { flex: 1 1 240px; }
+.project-permission-editor .permission-filter { display: inline-flex; flex-direction: row; align-items: center; gap: 8px; min-height: var(--control-height); font-size: 13px; }
+.project-permission-editor input[type=checkbox] { width: 16px; height: 16px; min-height: 0; flex: 0 0 16px; margin: 0; accent-color: var(--accent); }
+.permission-workbench { display: grid; grid-template-columns: 180px minmax(0, 1fr); min-width: 0; border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; background: var(--surface); }
+.permission-categories { display: flex; flex-direction: column; gap: 4px; padding: 12px; background: var(--sidebar); }
+.permission-categories button { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; min-height: 44px; border-color: transparent; background: transparent; text-align: left; font-size: 13px; }
+.permission-categories button[aria-pressed=true] { background: var(--selected); color: var(--ink); font-weight: 600; }
+.permission-categories small { color: var(--muted); font-size: 12px; font-weight: 400; white-space: nowrap; }
+.permission-pane { min-width: 0; padding: 20px; }
+.permission-pane-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.permission-pane-heading h3 { margin: 0; font-size: 17px; }
+.permission-pane-heading > span { color: var(--muted); font-size: 12px; }
+.permission-group-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 8px 0; }
+.project-permission-editor .permission-detail-row { display: flex; flex-direction: row; align-items: flex-start; gap: 12px; padding: 14px 0; border-top: 1px solid var(--line); min-width: 0; cursor: pointer; }
+.project-permission-editor .permission-detail-row > input { margin-top: 4px; }
+.permission-detail-row > span { min-width: 0; overflow-wrap: anywhere; }
+.permission-label { display: block; font-size: 14px; }
+.permission-description { display: grid; gap: 4px; margin-top: 6px; }
+.permission-description small { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.permission-description .permission-caution { color: var(--warning); }
+.permission-quiet { background: transparent; border-color: transparent; color: var(--accent); font-size: 13px; }
+.permission-empty { display: grid; justify-items: center; align-content: center; gap: 16px; min-height: 200px; color: var(--muted); text-align: center; }
+.permission-change { padding: 12px 16px; margin: 16px 0 0; background: var(--soft); border-radius: var(--radius-control); font-size: 12px; overflow-wrap: anywhere; }
+.permission-changes { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding-top: 12px; }
+.permission-changes p { margin: 0; color: var(--muted); font-size: 12px; }
+@media (max-width: 600px) {
+  .permission-workbench { grid-template-columns: 1fr; }
+  .permission-categories { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 8px; }
+  .permission-categories button { padding: 8px; }
+  .permission-pane { padding: 16px; }
+  .permission-search { flex-basis: 100%; }
+}
 </style>

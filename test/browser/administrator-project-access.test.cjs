@@ -59,6 +59,7 @@ async function verifyAdministratorProjectAccess({ page, origin, projects, accoun
   await page.getByRole("button", { name: "调整无部门管理员（departmentless-admin）权限", exact: true }).click();
   await page.getByText("高级权限细项", { exact: false }).click();
   await page.getByRole("checkbox", { name: "查看项目", exact: true }).uncheck();
+  await page.getByRole("navigation", { name: "权限分类" }).getByRole("button", { name: "代码", exact: true }).click();
   assert.equal(await page.getByRole("checkbox", { name: /^查看代码与差异/ }).isDisabled(), true);
   assert.equal(await page.getByRole("button", { name: "保存成员", exact: true }).isEnabled(), true, "an administrator owner without a department may keep empty project grants");
   const pendingMember = page.waitForResponse(response => response.url() === `${origin}/api/projects/${managed.id}/members/${departmentlessAdmin.id}` && response.request().method() === "POST");
