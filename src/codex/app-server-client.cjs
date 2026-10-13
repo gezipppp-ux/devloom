@@ -7,7 +7,7 @@ const { stopProcessTree } = require('../shared/process-tree.cjs');
 const { childEnvironment } = require('../shared/child-environment.cjs');
 
 class AppServerClient extends EventEmitter {
-  constructor(config = {}, { gitCredentialProvider, gitCredentialRevision } = {}) {
+  constructor(config = {}, { gitCredentialProvider, gitCredentialRevision, supplier } = {}) {
     super();
     this.config = config;
     this.pending = new Map();
@@ -18,6 +18,7 @@ class AppServerClient extends EventEmitter {
     this.gitCredentialProvider = gitCredentialProvider;
     this.gitCredentialRevision = gitCredentialRevision;
     this.gitCredentials = null;
+    this.supplier = supplier;
   }
 
   async connect() {
@@ -38,13 +39,26 @@ class AppServerClient extends EventEmitter {
 
   async open() {
     const { command, args } = this.validateCommand();
+    if (this.supplier?.mode === "api-key" && !(await this.inspectExecutionCapabilities()).supplierConfiguration)
+      throw new Error("当前 Codex 不支持供应商配置覆盖，请更新 Codex 后重试。");
     const credentials = await this.getGitCredentials();
     if (this.closed) throw new Error('Web CLI 服务已关闭。');
     const env = {
       ...childEnvironment(process.env, { stripGit: Boolean(credentials) }),
       ...(credentials?.env || {}),
+      ...(this.supplier?.mode === "api-key" ? { WEB_CODING_AGENT_API_KEY: this.supplier.apiKey } : {}),
     };
-    const child = spawn(command, [...args, 'app-server', '--stdio'], {
+    const overrides = this.supplier?.mode === "api-key" ? {
+      model_provider: "web_coding_supplier",
+      model: this.supplier.defaultModel,
+      "model_providers.web_coding_supplier.name": "Web Coding",
+      "model_providers.web_coding_supplier.base_url": this.supplier.baseUrl,
+      "model_providers.web_coding_supplier.env_key": "WEB_CODING_AGENT_API_KEY",
+      "model_providers.web_coding_supplier.wire_api": "responses",
+      "model_providers.web_coding_supplier.requires_openai_auth": false,
+    } : {};
+    const overrideArgs = Object.entries(overrides).flatMap(([key, value]) => ["-c", `${key}=${JSON.stringify(value)}`]);
+    const child = spawn(command, [...args, ...overrideArgs, 'app-server', '--stdio'], {
       env,
       shell: false,
       windowsHide: true,
@@ -73,13 +87,13 @@ class AppServerClient extends EventEmitter {
       ),
     );
     child.stderr.on('data', (chunk) =>
-      this.emit('diagnostic', chunk.toString().slice(-4000)),
+      this.emit('diagnostic', this.redact(chunk.toString()).slice(-4000)),
     );
     readline.createInterface({ input: child.stdout }).on('line', (line) => {
       if (this.child !== child) return;
       let message;
       try {
-        message = JSON.parse(line);
+        message = this.redact(JSON.parse(line));
       } catch {
         return;
       }
@@ -128,6 +142,15 @@ class AppServerClient extends EventEmitter {
     }
     this.gitCredentials = credentials;
     return credentials;
+  }
+
+  redact(value) {
+    const key = this.supplier?.apiKey;
+    if (!key) return value;
+    if (typeof value === 'string') return value.replaceAll(key, '[redacted]');
+    if (Array.isArray(value)) return value.map(item => this.redact(item));
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([name, item]) => [name, this.redact(item)]));
+    return value;
   }
 
   // The application must first fence active turns, approvals and startup work.

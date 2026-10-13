@@ -25,6 +25,10 @@ class SessionViews {
   }
 
   async history(key, cursor) {
+    return this.agent.withSession ? this.agent.withSession(key, () => this.readHistory(key, cursor)) : this.readHistory(key, cursor);
+  }
+
+  async readHistory(key, cursor) {
     this.assertOpen();
     const state = (await this.store.read(key));
     if (!state.session_id) return { items: [], nextCursor: null };
@@ -45,6 +49,10 @@ class SessionViews {
   }
 
   async synchronizeHistory(key) {
+    return this.agent.withSession ? this.agent.withSession(key, () => this.syncHistory(key)) : this.syncHistory(key);
+  }
+
+  async syncHistory(key) {
     if (!this.store.database) return;
     const state = (await this.store.read(key));
     if (!state.session_id) return;

@@ -1,6 +1,7 @@
 import { onMounted, onUnmounted, ref, toValue, watch } from "vue";
 import { bootstrap, apiPath, expireAuthentication } from "../shared/api/api.js";
 import { revalidateAccountSession } from "../shared/api/account-session.js";
+import { suppliersChanged } from "../shared/api/agent-supplier-events.js";
 import { useTaskList } from "../features/tasks/use-task-list.js";
 import { useSession } from "../features/session/use-session.js";
 
@@ -82,6 +83,7 @@ export function useWorkspaceConsole({
 
   function eventReceived(event) {
     if (disposed) return;
+    if (event.type === "supplier-changed") suppliersChanged();
     if (event.type === "metadata") {
       metadataSaved(event.key, event.metadata);
       return;

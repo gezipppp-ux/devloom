@@ -19,6 +19,7 @@ const { verifySessionArchiveTitle } = require('./session-archive-title.test.cjs'
 const { verifyStartTaskLock } = require('./start-task.test.cjs');
 const { verifySessionMarkdown } = require('./session-markdown.test.cjs');
 const { verifySessionScroll } = require('./session-scroll.test.cjs');
+const { verifySessionSuppliers } = require('./session-suppliers.test.cjs');
 
 async function choosePermission(page, mode) {
   await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
@@ -1281,6 +1282,7 @@ async function main() {
           ?.value === 'pnpm install\npnpm build',
     );
     await verifyExecutionSettings(browser, origin, manager, client, key, errors);
+    await verifySessionSuppliers(browser, origin, manager, client, key, errors, output);
     await verifyPermissionDiscoveryFailures(browser, origin, client, errors);
     await verifySteeringPermissionDiscoveryFailures(browser, origin, manager, client, key, errors);
     await verifyAgentRequests(browser, origin, key, errors);

@@ -82,7 +82,7 @@ test('schema capability inspection requires support on start, resume and turns, 
     if (scenario.malformed || scenario.missing) {
       await assert.rejects(inspectExecutionCapabilities(resolved));
     } else {
-      assert.deepEqual(await inspectExecutionCapabilities(resolved), { autoReview: index === 1 });
+      assert.deepEqual(await inspectExecutionCapabilities(resolved), { autoReview: index === 1, supplierConfiguration: true });
       await inspectExecutionCapabilities(resolved);
       assert.equal(fs.readFileSync(log, 'utf8').trim().split('\n').length, 1,
         'successful capability inspection must be cached per executable identity');
@@ -103,7 +103,7 @@ test('failed capability discovery can retry and never forwards TAPD credentials 
   process.env.CODEX_THREAD_ID = 'fixture-thread';
   try {
     await assert.rejects(inspectExecutionCapabilities(resolved), /fixture schema generation failed/);
-    assert.deepEqual(await inspectExecutionCapabilities(resolved), { autoReview: true });
+    assert.deepEqual(await inspectExecutionCapabilities(resolved), { autoReview: true, supplierConfiguration: true });
   } finally {
     if (previous.cookie === undefined) delete process.env.TAPD_SCHEMA_FIXTURE;
     else process.env.TAPD_SCHEMA_FIXTURE = previous.cookie;
@@ -116,5 +116,16 @@ test('failed capability discovery can retry and never forwards TAPD credentials 
     assert.equal(entry.credentialPresent, false);
     assert.equal(entry.threadPresent, false);
     assert.equal(fs.existsSync(entry.directory), false);
+  }
+});
+
+test('supplier capability requires native overrides on both creation and resume', async t => {
+  const directory = temporary(t);
+  for (const missingSupplier of ['ThreadStartParams', 'ThreadResumeParams']) {
+    const scenarioFile = path.join(directory, `${missingSupplier}.json`);
+    fs.writeFileSync(scenarioFile, JSON.stringify({ missingSupplier, log: path.join(directory, 'log.jsonl') }));
+    const capabilities = await inspectExecutionCapabilities({ command: process.execPath, args: [path.resolve(__dirname, '../fixtures/execution-schema.cjs'), scenarioFile] });
+    assert.equal(capabilities.supplierConfiguration, false);
+    assert.equal(capabilities.autoReview, true);
   }
 });

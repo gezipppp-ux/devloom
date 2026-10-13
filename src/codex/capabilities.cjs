@@ -63,6 +63,7 @@ async function inspect({ command, args }) {
       ),
     );
     return {
+      supplierConfiguration: schemas.slice(0, 2).every(schema => schema.properties?.modelProvider && schema.properties?.config),
       autoReview: schemas.every(
         (schema) =>
           schema.properties?.approvalsReviewer &&

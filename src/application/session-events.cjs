@@ -33,7 +33,7 @@ class SessionEvents {
         finally { this.queuedRequests.delete(request); }
       });
     });
-    agent.on("disconnected", error => this.disconnected(error));
+    agent.on("disconnected", (error, key) => this.disconnected(error, key));
   }
 
   runtimeFor({ sessionId, type, requestId }) {
@@ -49,7 +49,9 @@ class SessionEvents {
 
   enqueue(key, operation) {
     const runtime = this.sessions.get(key);
-    const pending = (this.incoming.get(key) || Promise.resolve()).then(operation).catch(error => {
+    const pending = (this.incoming.get(key) || Promise.resolve()).then(() =>
+      this.agent.withSession ? this.agent.withSession(key, operation) : operation(),
+    ).catch(error => {
       if (runtime && this.sessions.get(key) === runtime && !runtime.deleting) this.fail(runtime, error);
     }).finally(() => {
       if (this.incoming.get(key) === pending) this.incoming.delete(key);
@@ -75,12 +77,12 @@ class SessionEvents {
     if (runtime.turnId) void this.agent.interruptTurn({ sessionId: runtime.sessionId, turnId: runtime.turnId }).catch(() => {});
   }
 
-  disconnected(error) {
+  disconnected(error, key) {
     error = presentError(error);
     // Snapshot the affected runtimes before a new connection creates sessions.
     // Each session orders this after its received events, without waiting for
     // another session's history or persistence to finish.
-    return Promise.all([...this.sessions.values()].map(runtime =>
+    return Promise.all([...this.sessions.values()].filter(runtime => key === undefined || runtime.key === key).map(runtime =>
       this.enqueue(runtime.key, () => this.disconnectRuntime(runtime, error)),
     ));
   }
@@ -174,6 +176,10 @@ class SessionEvents {
     try {
       (await this.store.recordNotification?.(runtime.key, event));
       if (type === "turn-started") {
+        if (runtime.supplier) await this.store.log(runtime.key, {
+          type: "turn-configuration", turnId: event.turn.id, supplier: runtime.supplier,
+          selection: runtime.activeExecutionSettings, at: new Date().toISOString(),
+        });
         runtime.turnId = event.turn.id;
         runtime.status = "running";
         runtime.connected = true;
@@ -315,6 +321,7 @@ class SessionEvents {
       .filter((item) => item.turnId === turn.id && item.type === "agentMessage")
       .at(-1);
     if (lastMessage) (await this.store.writeFinal(runtime.key, lastMessage.text));
+    await this.agent.recordTurnEvent?.(runtime.key, { type: "turn-completed", turn });
     if (initial) clearTimeout(initial.timer);
     runtime.initial = null;
     if (initial) {

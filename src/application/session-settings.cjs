@@ -43,10 +43,14 @@ class SessionSettings {
     const runtime = this.sessions.get(key);
     const running = Boolean(runtime?.turnId || runtime?.requests.size);
     const applied = runtime?.activeExecutionSettings || active;
+    const supplier = await this.agent.describeSupplier?.(key);
+    const activeSupplier = runtime?.supplier || (await this.store.readExecutionSettings(key)).supplier || null;
     return {
+      ...(supplier ? { activeSupplier, nextSupplier: supplier.nextSupplier,
+        supplierPending: Boolean(activeSupplier && (activeSupplier.id !== supplier.nextSupplier.id || activeSupplier.runtimeRevision !== supplier.nextSupplier.runtimeRevision)) } : {}),
       executionSettings: selection,
       activeExecutionSettings: running ? applied : null,
-      settingsPending: running && !sameSettings(selection, applied),
+      settingsPending: running && !sameSettings(selection, runtime?.activeRequestedSettings || applied),
     };
   }
 
@@ -63,16 +67,19 @@ class SessionSettings {
 
   async initialize(key, config) {
     const selection = selectionFromAgent(config);
-    (await this.store.writeExecutionSettings(key, { selection, active: selection }));
+    const supplier = this.sessions.get(key)?.supplier;
+    (await this.store.writeExecutionSettings(key, { selection, active: selection, ...(supplier ? { initialSupplier: supplier, supplier } : {}) }));
   }
 
-  starting(key, selection) {
+  starting(key, selection, requested = selection) {
     this.sessions.get(key).activeExecutionSettings = selection;
+    this.sessions.get(key).activeRequestedSettings = requested;
   }
 
   async applied(key, selection) {
     try {
-      (await this.store.updateExecutionSettings(key, current => ({ ...current, active: selection })));
+      const supplier = this.sessions.get(key)?.supplier;
+      (await this.store.updateExecutionSettings(key, current => ({ ...current, active: selection, ...(supplier ? { supplier } : {}) })));
       (await this.publish(key));
     } catch (error) {
       // Native execution has already started. A local snapshot failure must not

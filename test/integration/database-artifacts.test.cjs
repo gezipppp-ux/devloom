@@ -72,7 +72,9 @@ test("archive and restore persist across database reopen while retaining history
 
 test("permanently deleting a run removes its database documents, history, logs and attachments", async (t) => {
   const fixture = await setup(t);
-  const directory = path.join(fixture.directory, "runs", "1-2");
+  const user = await fixture.database.client.user.create({ data: { username: "delete-owner", displayName: "owner", passwordHash: "fixture" } });
+  const workspace = await fixture.database.client.workspace.create({ data: { ownerUserId: user.id, name: "delete workspace" } });
+  const directory = path.join(fixture.directory, "workspaces", workspace.id, "runs", "1-2");
   const execution = new ExecutionStore(directory);
   (await execution.save({ agent: { provider: "codex" }, session_id: "stable", workitem: { title: "Delete me" }, execution: { status: "completed" } }));
   (await execution.writeTask({ workitem: { title: "snapshot" }, prompt: "prompt", images: [] }));
@@ -80,12 +82,14 @@ test("permanently deleting a run removes its database documents, history, logs a
   const store = new RunStore(path.dirname(directory));
   (await store.saveHistoryItem("1-2", { id: "item", type: "agentMessage", text: "history" }));
   await (await store.messageImages("1-2")).save(png);
+  await fixture.database.client.agentSupplierUse.create({ data: { workspaceId: workspace.id, runKey: "1-2", supplierId: "codex-server-config", token: "fixture-lease", status: "unknown" } });
   (await store.deleteRun("1-2"));
   assert.equal((await store.hasRun("1-2")), false);
   assert.equal(await fixture.database.client.runDocument.count(), 0);
   assert.equal(await fixture.database.client.sessionItem.count(), 0);
   assert.equal(await fixture.database.client.logChunk.count(), 0);
   assert.equal(await fixture.database.client.attachment.count(), 0);
+  assert.equal(await fixture.database.client.agentSupplierUse.count(), 0, "confirmed run deletion atomically releases supplier references");
 });
 
 test("manual and conversation image blobs rebuild deleted caches and remain scoped", async (t) => {

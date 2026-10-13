@@ -1,6 +1,7 @@
 const path = require("node:path");
 const { dataRoot } = require("../config/runtime.cjs");
 const { WorkspaceStore } = require("../storage/workspace-store.cjs");
+const { AgentSupplierStore } = require("../storage/agent-supplier-store.cjs");
 const {
   defaultChannels,
   defaultChannelConfig,
@@ -184,6 +185,8 @@ class WorkspaceManager {
           )).revision
         : undefined;
       const sessions = this.createManager({
+        supplierStore: this.store.database ? new AgentSupplierStore(this.store.database) : undefined,
+        workspaceId: id,
         configFile,
         agentConfig: agentConfig(config),
         channels,
@@ -226,6 +229,15 @@ class WorkspaceManager {
     await Promise.all(
       [...this.contexts.values()].map(({ sessions }) => sessions.close()),
     );
+  }
+
+  async suppliersChanged() {
+    for (const { sessions } of this.contexts.values()) {
+      sessions.emit("event", { type: "supplier-changed" });
+      for (const key of sessions.sessions.keys()) {
+        if (await sessions.store.hasRun(key)) await sessions.settings.publish(key);
+      }
+    }
   }
 }
 

@@ -19,10 +19,11 @@ fs.mkdirSync(path.join(directory, 'v2'));
 for (const name of ['ThreadStartParams', 'ThreadResumeParams', 'TurnStartParams']) {
   if (scenario.missing === name) continue;
   const schema = {
-    properties: { approvalsReviewer: { $ref: '#/definitions/ApprovalsReviewer' } },
+    properties: { approvalsReviewer: { $ref: '#/definitions/ApprovalsReviewer' }, modelProvider: { type: 'string' }, config: { type: 'object' } },
     definitions: { ApprovalsReviewer: { enum: ['user', 'auto_review'] } },
   };
   if (scenario.missingProperty === name) delete schema.properties.approvalsReviewer;
+  if (scenario.missingSupplier === name) delete schema.properties.modelProvider;
   if (scenario.missingReviewer === name) schema.definitions.ApprovalsReviewer.enum = ['user'];
   fs.writeFileSync(path.join(directory, 'v2', name + '.json'),
     scenario.malformed === name ? '{invalid' : JSON.stringify(schema));

@@ -1,6 +1,7 @@
 const { AccountStore } = require("../storage/account-store.cjs");
 const { AuthSessionStore } = require("../storage/auth-session-store.cjs");
-const { createAgent } = require("../agents/registry.cjs");
+const { AgentSessionManager } = require("./agent-session-manager.cjs");
+const { AgentSupplierStore } = require("../storage/agent-supplier-store.cjs");
 const { describeAgent } = require("./agent-presenter.cjs");
 const { initializeDatabase } = require("../storage/database-lifecycle.cjs");
 const {
@@ -19,11 +20,11 @@ const {
 const { publicAccount } = require("./account-presenter.cjs");
 
 class AccountServices {
-  constructor(database, { agent = createAgent() } = {}) {
+  constructor(database, { agent } = {}) {
     this.database = database;
     this.store = new AccountStore(database);
     this.sessions = new AuthSessionStore(database);
-    this.agent = agent;
+    this.agent = agent || new AgentSessionManager({ store: new AgentSupplierStore(database) });
   }
   async actor(session) {
     if (!session?.userId) return null;
@@ -134,7 +135,8 @@ class AccountServices {
     return (await this.agent.listModels());
   }
   async executionOptions() {
-    return { agent: describeAgent(this.agent), permissionModes: await this.agent.permissionOptions() };
+    return { agent: describeAgent(this.agent), permissionModes: await this.agent.permissionOptions(),
+      ...(this.agent.currentSummary ? { nextSupplier: await this.agent.currentSummary() } : {}) };
   }
   async close() {
     return (await this.agent.close());

@@ -10,6 +10,48 @@ datasource db {
   provider = "postgresql"
 }
 
+model AgentSupplier {
+  id              String   @id @default(uuid())
+  agentType       String   @map("agent_type")
+  mode            String
+  name            String
+  baseUrl         String   @default("") @map("base_url")
+  credentials     String   @default("")
+  notes           String   @default("")
+  models          Json     @default("[]")
+  defaultModel    String   @default("") @map("default_model")
+  enabled         Boolean  @default(false)
+  revision        Int      @default(1)
+  runtimeRevision Int      @default(1) @map("runtime_revision")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  selections      AgentSupplierSelection[]
+  uses            AgentSupplierUse[]
+  @@unique([agentType, name])
+  @@map("agent_suppliers")
+}
+
+model AgentSupplierSelection {
+  agentType  String @id @map("agent_type")
+  supplierId String @map("supplier_id")
+  revision   Int    @default(1)
+  supplier   AgentSupplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  @@map("agent_supplier_selections")
+}
+
+model AgentSupplierUse {
+  workspaceId String @map("workspace_id")
+  runKey      String @map("run_key")
+  supplierId  String @map("supplier_id")
+  token       String
+  status      String
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  supplier    AgentSupplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  @@id([workspaceId, runKey])
+  @@index([supplierId, status])
+  @@map("agent_supplier_uses")
+}
+
 // PostgreSQL baseline. New collaboration tables are added by subsequent
 // versioned migrations; existing SQLite migrations are never replayed here.
 model User {

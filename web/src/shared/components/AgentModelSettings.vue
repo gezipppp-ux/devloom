@@ -1,6 +1,6 @@
 <script setup>
 import FeedbackMessage from "./FeedbackMessage.vue";
-import { watchEffect } from "vue";
+import { computed, watchEffect } from "vue";
 import FormSection from "./FormSection.vue";
 import AgentModelControls from "./AgentModelControls.vue";
 import PermissionSelect from "./PermissionSelect.vue";
@@ -26,7 +26,12 @@ const request = url => props.workspaceId
   : api(url);
 const { models, loading, error, refresh } = useModelCatalog(request);
 const permissions = usePermissionModes(request);
-watchEffect(() => emit("validity-change", permissions.isAvailable(props.permissionMode)));
+const modelUnavailable = computed(() => {
+  if (loading.value || error.value || !props.model) return false;
+  const selected = models.value.find(entry => entry.model === props.model);
+  return !selected || Boolean(props.reasoningEffort && !selected.reasoningEfforts.includes(props.reasoningEffort));
+});
+watchEffect(() => emit("validity-change", permissions.isAvailable(props.permissionMode) && !modelUnavailable.value));
 function changeModel(settings) {
   emit("update:model", settings.model);
   emit("update:reasoningEffort", settings.reasoningEffort);
@@ -54,6 +59,8 @@ function changeModel(settings) {
       :disabled="disabled"
       @change="changeModel"
     />
+    <p v-if="permissions.nextSupplier.value" class="field-hint">系统供应商：{{ permissions.nextSupplier.value.name }}</p>
+    <p v-if="modelUnavailable" class="error" role="alert">当前模型或思考强度不受系统供应商支持，请重新选择。</p>
     <p class="field-hint">
       选择具体模型后可设置其支持的思考强度。创建后仍可在会话输入区修改，从下一轮生效。
     </p>

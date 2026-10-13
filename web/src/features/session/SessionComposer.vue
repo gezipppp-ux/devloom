@@ -1,6 +1,6 @@
 <script setup>
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import {
   ArrowUpOutlined,
   CloseOutlined,
@@ -30,6 +30,9 @@ const props = defineProps({
   notice: { type: String, default: "" },
   executionSettings: { type: Object, required: true },
   settingsPending: Boolean,
+  activeSupplier: { type: Object, default: null },
+  nextSupplier: { type: Object, default: null },
+  supplierPending: Boolean,
   settingsBusy: Boolean,
   settingsError: { type: String, default: "" },
   canEditSettings: Boolean,
@@ -50,6 +53,7 @@ const supportsImages = computed(() => props.agent?.capabilities?.images === true
 const canSubmit = computed(
   () =>
     props.canSend &&
+    (props.running || !modelUnavailable.value) &&
     (props.running || permissions.isAvailable(props.executionSettings.permissionMode)) &&
     (supportsImages.value || !props.images.length) &&
     !props.imagesBlocked &&
@@ -58,6 +62,12 @@ const canSubmit = computed(
 const sendLabel = computed(() => (props.running ? "补充指令 ↑" : "发送 ↑"));
 const catalog = useModelCatalog();
 const permissions = usePermissionModes();
+const modelUnavailable = computed(() => {
+  if (catalog.loading.value || catalog.error.value || !props.executionSettings.model) return false;
+  const selected = catalog.models.value.find(entry => entry.model === props.executionSettings.model);
+  return !selected || Boolean(props.executionSettings.reasoningEffort && !selected.reasoningEfforts.includes(props.executionSettings.reasoningEffort));
+});
+watch(() => `${props.nextSupplier?.id}:${props.nextSupplier?.runtimeRevision}`, () => { catalog.refresh(); permissions.refresh(); });
 const agentLabel = computed(() => props.agent?.label || permissions.agent.value?.label || "Agent");
 const permissionUnavailable = computed(() => !permissions.loading.value && !permissions.error.value && !permissions.isAvailable(props.executionSettings.permissionMode));
 
@@ -91,8 +101,13 @@ function send() {
 
 <template>
   <section class="composer-wrap session-composer" aria-label="会话输入区">
+    <p v-if="nextSupplier" class="execution-settings-hint" role="status">
+      <span v-if="running && activeSupplier">本轮供应商：{{ activeSupplier.name }} · </span>
+      {{ running && supplierPending ? '下一轮供应商' : '系统供应商' }}：{{ nextSupplier.name }}
+    </p>
     <FeedbackMessage :message="error" type="error" />
     <FeedbackMessage :message="notice" type="success" />
+    <p v-if="modelUnavailable" class="error" role="alert">当前模型或思考强度不受下一轮供应商支持，请重新选择后发送。{{ running ? '本轮补充指令仍使用原配置。' : '' }}</p>
     <a-form
       ref="formRef"
       class="composer"

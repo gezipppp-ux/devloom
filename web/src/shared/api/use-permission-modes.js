@@ -1,10 +1,13 @@
+/* global window */
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import catalog from "../../../../shared/agent-permissions.json";
 import { api } from "./api.js";
+import { subscribeSuppliers } from "./agent-supplier-events.js";
 
 export function usePermissionModes(request = api) {
   const discovered = ref(null),
     agent = ref(null),
+    nextSupplier = ref(null),
     loading = ref(false),
     error = ref(""),
     errorHint = ref("");
@@ -51,6 +54,7 @@ export function usePermissionModes(request = api) {
       if (current === revision) {
         discovered.value = result.permissionModes;
         agent.value = result.agent || null;
+        nextSupplier.value = result.nextSupplier || null;
       }
     } catch (e) {
       if (current === revision) {
@@ -71,10 +75,12 @@ export function usePermissionModes(request = api) {
       if (current === revision) loading.value = false;
     }
   }
-  onMounted(refresh);
+  const unsubscribe = subscribeSuppliers(refresh);
+  onMounted(() => { refresh(); window.addEventListener("focus", refresh); });
   onUnmounted(() => {
     revision++;
+    unsubscribe(); window.removeEventListener("focus", refresh);
   });
   const isAvailable = (id) => permissionModes.value.some((mode) => mode.id === id && mode.available);
-  return { permissionModes, agent, isAvailable, loading, error, errorHint, refresh };
+  return { permissionModes, agent, nextSupplier, isAvailable, loading, error, errorHint, refresh };
 }

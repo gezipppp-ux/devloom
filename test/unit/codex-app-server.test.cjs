@@ -5,6 +5,30 @@ const { test } = require('node:test');
 const { AppServerClient } = require('../../src/codex/app-server-client.cjs');
 const { temporary } = require('../support/helpers.cjs');
 
+test('supplier credentials reach only the dedicated child environment and native overrides preserve the shared home', async t => {
+  const directory = temporary(t), script = path.join(directory, 'supplier-child.cjs');
+  fs.writeFileSync(script, `require('node:readline').createInterface({input:process.stdin}).on('line', line => {
+    const message = JSON.parse(line);
+    if (message.id) process.stdout.write(JSON.stringify({ id: message.id, result: {
+      keyPresent: process.env.WEB_CODING_AGENT_API_KEY === 'fixture-private-key', args: process.argv.slice(2),
+      home: process.env.CODEX_HOME || null, diagnostic: 'fixture-private-key'
+    } })+'\\n');
+  });`);
+  const supplier = { mode: 'api-key', apiKey: 'fixture-private-key', baseUrl: 'https://fixture.invalid/v1', defaultModel: 'custom-model' };
+  const client = new AppServerClient({ command: process.execPath, command_args: [script] }, { supplier });
+  client.inspectExecutionCapabilities = async () => ({ supplierConfiguration: true });
+  t.after(() => client.close());
+  await client.connect();
+  const probe = await client.request('probe', {});
+  assert.equal(probe.keyPresent, true);
+  assert.equal(probe.home, process.env.CODEX_HOME || null);
+  assert.equal(probe.diagnostic, '[redacted]');
+  assert.doesNotMatch(JSON.stringify(client.child.spawnargs), /fixture-private-key/);
+  assert.ok(probe.args.includes('model_providers.web_coding_supplier.wire_api="responses"'));
+  assert.ok(probe.args.includes('model_providers.web_coding_supplier.env_key="WEB_CODING_AGENT_API_KEY"'));
+  assert.equal(process.env.WEB_CODING_AGENT_API_KEY, undefined);
+});
+
 test('explicit shutdown is terminal and cannot launch another transport', async () => {
   const client = new AppServerClient({ command: process.execPath });
   client.close();

@@ -118,7 +118,9 @@ class ApplicationDatabase extends PostgresDatabase {
   async deleteRunDirectory(directory) {
     const relative = this.relative(directory);
     const prefix = `${relative}/`;
+    const { workspaceId, runKey } = this.scope(relative);
     return (await this.transaction(async () => {
+      if (workspaceId && runKey) await this.client.agentSupplierUse.deleteMany({ where: { workspaceId, runKey } });
       await this.client.sessionItem.deleteMany({ where: { runPath: relative } });
       for (const table of [this.client.runDocument, this.client.attachment, this.client.logChunk])
         await table.deleteMany({ where: { path: prefixFilter(prefix) } });

@@ -66,7 +66,8 @@ class WorkspaceServices {
     return (await this.sessions.agent.listModels());
   }
   async executionOptions() {
-    return { agent: describeAgent(this.sessions.agent), permissionModes: await this.sessions.agent.permissionOptions() };
+    return { agent: describeAgent(this.sessions.agent), permissionModes: await this.sessions.agent.permissionOptions(),
+      ...(this.sessions.agent.currentSummary ? { nextSupplier: await this.sessions.agent.currentSummary() } : {}) };
   }
   async search(channelId, input) {
     const channel = this.channels.get(channelId);

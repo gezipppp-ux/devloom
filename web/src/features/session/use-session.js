@@ -81,6 +81,9 @@ export function useSession({
       "executionSettings",
       "activeExecutionSettings",
       "settingsPending",
+      "activeSupplier",
+      "nextSupplier",
+      "supplierPending",
       "title",
       "requirement",
       "requirementCount",
@@ -148,7 +151,7 @@ export function useSession({
     )
       executionEventRevision++;
     const fields = eventFields(event);
-    if (pendingView?.key === event.key) {
+    if (pendingView && pendingView.key === event.key) {
       Object.assign(pendingView.fields, fields);
       if (event.type === "item")
         pendingView.items.set(event.item.id, event.item);

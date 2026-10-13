@@ -26,6 +26,8 @@ const { serveProjectContent } = require("./project-content-api.cjs");
 const { serveProjectDevelopment } = require("./project-development-api.cjs");
 const { serveProjectLifecycle } = require("./project-lifecycle-api.cjs");
 const { serveSystemWorkflows } = require("./system-workflow-api.cjs");
+const { serveAgentSuppliers } = require("./agent-supplier-api.cjs");
+const { AgentSupplierServices } = require("../application/agent-supplier-services.cjs");
 const { serveProjectBranches } = require("./project-branch-api.cjs");
 const { serveProjectApi } = require("./project-api.cjs");
 const {
@@ -129,6 +131,7 @@ function createWebServer({
   let projectDevelopment;
   let projectLifecycle;
   let systemWorkflows;
+  let agentSuppliers;
   let projectBranches;
   let mcpTokens;
   let mcpProjects;
@@ -151,6 +154,7 @@ function createWebServer({
       projectDevelopment = new ProjectDevelopmentServices(accounts.database, projects, workspaces);
       projectLifecycle = new ProjectLifecycleServices(accounts.database, projects);
       systemWorkflows = new SystemWorkflowServices(accounts.database, accounts, projects);
+      agentSuppliers = new AgentSupplierServices(accounts.database, { accounts, changed: () => workspaces.suppliersChanged?.() });
       projectBranches = new ProjectBranchServices(accounts.database, projects);
       mcpTokens = new McpTokenServices(accounts.database, projects);
       mcpProjects = new McpProjectServices(accounts.database, { tokens: mcpTokens, projects, content: projectContent, lifecycle: projectLifecycle, development: projectDevelopment });
@@ -362,6 +366,7 @@ function createWebServer({
       if (mcpTokens && await serveMcpAccount(request, response, url, { tokens: mcpTokens, actor, input, authorize })) return;
       if (projects && await serveProjectApi(request, response, url, { projects, actor, input })) return;
       if (systemWorkflows && await serveSystemWorkflows(request.raw, response, url, { services: systemWorkflows, actor, input })) return;
+      if (agentSuppliers && await serveAgentSuppliers(request.raw, response, url, { services: agentSuppliers, actor, input, authorize })) return;
       if (projectLifecycle && await serveProjectLifecycle(request.raw, response, url, { services: projectLifecycle, actor, input })) return;
       if (projectBranches && await serveProjectBranches(request.raw, response, url, { services: projectBranches, actor })) return;
       if (projectContent && await serveProjectContent(request.raw, response, url, { services: projectContent, actor, input })) return;

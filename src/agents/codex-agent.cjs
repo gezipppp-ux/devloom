@@ -5,6 +5,7 @@ const { permissionOptions, assertPermissionAvailable, threadPermissionParams, tu
 const { validatePermissionMode } = require("../domain/permissions.cjs");
 const { USER_INPUT_METHOD, validateUserInput, userInputResponse } = require("../codex/user-input.cjs");
 const { normalizeItem } = require("../codex/session-item.cjs");
+const { supplierSelection } = require("../domain/agent-supplier.cjs");
 
 function requestKey(id) { return `${typeof id}:${id}`; }
 function turn(value) {
@@ -29,13 +30,15 @@ class CodexAgent extends EventEmitter {
   #listeners;
   #closed = false;
   #closePromise;
+  #supplier;
 
-  constructor({ config = {}, client, gitCredentialProvider, gitCredentialRevision } = {}) {
+  constructor({ config = {}, client, gitCredentialProvider, gitCredentialRevision, supplier } = {}) {
     super();
     this.id = "codex";
     this.label = "Codex";
     this.capabilities = CodexAgent.capabilities;
-    this.#client = client || new AppServerClient(config, { gitCredentialProvider, gitCredentialRevision });
+    this.#supplier = supplier;
+    this.#client = client || new AppServerClient(config, { gitCredentialProvider, gitCredentialRevision, supplier });
     this.#listeners = {
       notification: message => this.#receive(() => this.#notification(message)),
       request: message => this.#receive(() => this.#request(message)),
@@ -74,11 +77,15 @@ class CodexAgent extends EventEmitter {
   }
   validateCommand() { return this.#client.validateCommand?.(); }
   refreshGitCredentials() { return this.#client.refreshGitCredentials?.(); }
-  listModels() { return listModels(this.#client); }
+  listModels() {
+    if (this.#supplier?.mode === "api-key") return Promise.resolve(this.#supplier.models.map(model => ({ ...model, isDefault: model.model === this.#supplier.defaultModel })));
+    return listModels(this.#client);
+  }
   permissionOptions() { return permissionOptions(this.#client); }
   assertPermissionAvailable(mode) { return assertPermissionAvailable(this.#client, mode); }
 
   async validateSelection(input) {
+    if (this.#supplier?.mode === "api-key") return { ...supplierSelection(this.#supplier, input), permissionMode: validatePermissionMode(input?.permissionMode) };
     const selection = await validateModelSelection(this.#client, input);
     return { model: selection.model, reasoningEffort: selection.reasoning_effort, permissionMode: validatePermissionMode(input?.permissionMode) };
   }
@@ -86,6 +93,22 @@ class CodexAgent extends EventEmitter {
   async prepareTurn(selection, cwd) {
     const permissionMode = validatePermissionMode(selection.permissionMode);
     await this.assertPermissionAvailable(permissionMode);
+    if (this.#supplier?.mode === "api-key") {
+      const requested = supplierSelection(this.#supplier, selection);
+      const model = this.#supplier.models.find(entry => entry.model === (requested.model || this.#supplier.defaultModel));
+      // A null turn effort preserves the previous thread override. Resolve an
+      // actual default; an unknown custom model needs an administrator's value.
+      let reasoningEffort = requested.reasoningEffort || model.defaultReasoningEffort;
+      if (!reasoningEffort) {
+        const native = (await listModels(this.#client)).find(entry => entry.model === model.model);
+        if (native?.reasoningEfforts.includes(native.defaultReasoningEffort)) reasoningEffort = native.defaultReasoningEffort;
+      }
+      if (!reasoningEffort) throw new Error("无法确定该模型的默认思考强度，请管理员配置默认值，或选择具体思考强度后重试。");
+      if (model.reasoningEfforts.length && !model.reasoningEfforts.includes(reasoningEffort))
+        throw new Error("默认思考强度不受当前供应商模型支持，请管理员配置默认值，或重新选择。");
+      return { model: model.model, reasoningEffort, permissionMode };
+    }
+    if (this.#supplier) await validateModelSelection(this.#client, selection);
     const resolved = await resolveTurnModel(this.#client, selection, cwd);
     return { model: resolved.model, reasoningEffort: resolved.effort, permissionMode };
   }
@@ -93,6 +116,7 @@ class CodexAgent extends EventEmitter {
   async createSession({ cwd, selection }) {
     const result = await this.#client.request("thread/start", {
       cwd, ...threadPermissionParams(selection.permissionMode), ephemeral: false, model: selection.model,
+      ...await this.#supplierParams(cwd, selection),
     });
     return { sessionId: result.thread.id };
   }
@@ -109,7 +133,21 @@ class CodexAgent extends EventEmitter {
     await this.#client.request("thread/resume", {
       threadId: sessionId, cwd, ...threadPermissionParams(selection.permissionMode), excludeTurns: true,
       ...(selection.model ? { model: selection.model } : {}),
+      ...await this.#supplierParams(cwd, selection),
     });
+  }
+
+  async #supplierParams(cwd, selection) {
+    if (!this.#supplier) return {};
+    if (this.#supplier.mode === "api-key") {
+      const model = selection.model || this.#supplier.defaultModel;
+      const effort = selection.reasoningEffort || this.#supplier.models.find(entry => entry.model === model)?.defaultReasoningEffort;
+      return { modelProvider: "web_coding_supplier", model, ...(effort ? { config: { model_reasoning_effort: effort } } : {}) };
+    }
+    const result = await this.#client.request("config/read", { cwd, includeLayers: false });
+    const config = result?.config;
+    if (!config || typeof config !== "object") throw new Error("无法读取服务器现有 Codex 配置。");
+    return { modelProvider: config.model_provider || "openai", ...(selection.model || config.model ? { model: selection.model || config.model } : {}) };
   }
 
   async startTurn({ sessionId, input, cwd, selection }) {

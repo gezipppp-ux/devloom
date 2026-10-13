@@ -12,6 +12,7 @@ const { verifyAccountPreferenceRaces } = require("./account-preferences.test.cjs
 const { verifyGitAccounts } = require("./git-accounts.test.cjs");
 const { verifyEnvironment } = require("./environment.test.cjs");
 const { verifyMcpTokens } = require("./mcp-tokens.test.cjs");
+const { verifyAgentSuppliers } = require("./agent-suppliers.test.cjs");
 
 async function main() {
   const staticRoot = path.resolve("web/dist");
@@ -137,6 +138,7 @@ async function main() {
     await verifyGitAccounts(page, output);
     await verifyMcpTokens(page, output);
     await verifyEnvironment(page, output);
+    await verifyAgentSuppliers(page, output);
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 1000 });
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));

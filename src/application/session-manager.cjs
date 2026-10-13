@@ -1,6 +1,7 @@
 const { EventEmitter } = require("node:events");
 const { presentError } = require("./error-presenter.cjs");
-const { createAgent } = require("../agents/registry.cjs");
+const { createAgent, getAgentProvider } = require("../agents/registry.cjs");
+const { AgentSessionManager } = require("./agent-session-manager.cjs");
 const { agentConfig: readAgentConfig, taskPrompt } = require("../domain/agent-config.cjs");
 const { isBlockingRequest, assertCapability, assertAgentIdentity } = require("../domain/agent-contract.cjs");
 const { RunStore } = require("../storage/run-store.cjs");
@@ -32,6 +33,8 @@ class SessionManager extends EventEmitter {
     configFile,
     agentConfig = { provider: "codex", options: {} },
     agent,
+    supplierStore,
+    workspaceId,
     store,
     run = runExecution,
     channels,
@@ -50,10 +53,19 @@ class SessionManager extends EventEmitter {
     this.gitOperationCredentials = gitOperationCredentials;
     /** @type {RunStore} */
     this.store = store || new RunStore(runsDirectory);
-    this.agent = agent || createAgent({
+    this.agent = agent || (supplierStore ? new AgentSessionManager({
+      store: supplierStore, workspaceId, config: agentConfig.options,
+      provider: getAgentProvider(agentConfig.provider),
+      gitCredentialProvider, gitCredentialRevision,
+      idle: key => {
+        const runtime = this.sessions.get(key);
+        return !this.operations.has(key) && !this.events.incoming.has(key) &&
+          !runtime?.pipelineActive && !runtime?.turnId && !runtime?.requests.size;
+      },
+    }) : createAgent({
       provider: agentConfig.provider, config: agentConfig.options,
       gitCredentialProvider, gitCredentialRevision,
-    });
+    }));
     this.channels = channels || defaultChannels(configFile);
     this.run = run;
     this.sessions = new Map();
@@ -159,7 +171,7 @@ class SessionManager extends EventEmitter {
       .then(async () => {
         await this.credentialRefresh;
         this.assertOpen();
-        return operation();
+        return this.agent.withSession ? this.agent.withSession(key, operation) : operation();
       })
       .finally(() => this.operations.delete(key));
     this.operations.set(key, pending);
@@ -264,11 +276,17 @@ class SessionManager extends EventEmitter {
       const state = (await this.store.read(key));
       const selection = (await this.settings.read(key, state)).selection;
       try {
+        if (this.agent.prepare) {
+          await this.events.settle(key);
+          const binding = await this.agent.prepare(key, runtime);
+          runtime.supplier = binding.supplier;
+          if (binding.replaced) { runtime.connected = false; await this.attach(key); }
+        }
         await this.agent.assertPermissionAvailable(selection.permissionMode);
         this.assertOpen();
         const prepared = await this.agent.prepareTurn(selection, state.worktree.path);
         this.assertOpen();
-        this.settings.starting(key, selection);
+        this.settings.starting(key, runtime.supplier ? prepared : selection, selection);
         await this.authorize("session.continue");
         runtime.executionPermission = "session.continue";
         await beforeDispatch?.();
@@ -277,8 +295,9 @@ class SessionManager extends EventEmitter {
           sessionId: runtime.sessionId, input, cwd: state.worktree.path, selection: prepared,
         });
         dispatchedTurnId = result.id;
-        (await this.settings.applied(key, selection));
+        (await this.settings.applied(key, runtime.supplier ? prepared : selection));
       } catch (error) {
+        await this.agent.cancelPreparation?.(key);
         runtime.connected = false;
         runtime.status = "disconnected";
         (await this.publish(runtime, { type: "state", error: presentError(error).message }));
@@ -459,6 +478,9 @@ class SessionManager extends EventEmitter {
     let claimed = false;
     let runtime;
     try {
+      const binding = await this.agent.prepare?.(key);
+      runtime = this.runtime(key);
+      runtime.supplier = binding?.supplier;
       (await this.store.requirements.claim(key, item.sources || [source], { fingerprint: item.request_fingerprint }));
       claimed = true;
       this.assertOpen();
@@ -559,7 +581,7 @@ class SessionManager extends EventEmitter {
                   path: image.path,
                 })),
               ];
-              this.settings.starting(key, selection);
+              this.settings.starting(key, runtime.supplier ? prepared : selection, selection);
               this.agent
                 .startTurn({
                   sessionId: runtime.sessionId, input, cwd: repository, selection: prepared,
@@ -573,7 +595,7 @@ class SessionManager extends EventEmitter {
                   if (
                     !runtime.turnId || runtime.turnId === response.id
                   )
-                    (await this.settings.applied(key, selection));
+                    (await this.settings.applied(key, runtime.supplier ? prepared : selection));
                   if (
                     !runtime.turnId &&
                     response.status === "running"
@@ -586,6 +608,7 @@ class SessionManager extends EventEmitter {
         },
       )
         .then(async (state) => {
+          await this.agent.cancelPreparation?.(key);
           runtime.pipelineActive = false;
           runtime.prepareAbort = null;
           if (runtime.initial && !runtime.initial.started)
@@ -597,6 +620,7 @@ class SessionManager extends EventEmitter {
           (await this.publish(runtime, { type: "state" }));
         })
         .catch(async (error) => {
+          await this.agent.cancelPreparation?.(key);
           error = presentError(error);
           runtime.pipelineActive = false;
           runtime.prepareAbort = null;
@@ -617,6 +641,7 @@ class SessionManager extends EventEmitter {
       return { key, accepted: true };
     } catch (error) {
       try {
+        await this.agent.cancelPreparation?.(key);
         if (claimed) await this.store.requirements.releaseUnstarted(key);
         if (runtime && !(await this.store.hasRun(key))) this.sessions.delete(key);
       } finally {
@@ -711,6 +736,7 @@ class SessionManager extends EventEmitter {
         if (state.worktree?.path && deletion.status !== "deleted")
           throw new Error("请先删除 Worktree 与本地分支，避免遗留无法管理的代码目录。");
         (await this.store.deleteRun(key));
+        await this.agent.forget?.(key);
         this.sessions.delete(key);
         this.emit("event", { key, type: "deleted", at: new Date().toISOString() });
         return { deleted: true };
