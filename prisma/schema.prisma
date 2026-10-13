@@ -382,6 +382,8 @@ model Project {
   description   String   @default("")
   ownerUserId   String   @map("owner_user_id")
   remoteUrl     String   @map("remote_url")
+  directoryName String   @map("directory_name")
+  directoryKey  String   @unique @map("directory_key")
   status        String   @default("active")
   settings      Json     @default("{}")
   revision      Int      @default(1)

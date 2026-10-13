@@ -1,8 +1,19 @@
 const { accountError } = require("../domain/account.cjs");
+const { randomUUID } = require("node:crypto");
+const { projectDirectoryName } = require("../domain/member-project-paths.cjs");
 
 class ProjectStore {
   constructor(database) { this.database = database; }
-  transaction(operation) { return this.database.transaction(operation); }
+  async transaction(operation, { reserveDirectory = false } = {}) {
+    for (let attempt = 0; ; attempt++) {
+      try { return await this.database.transaction(operation); }
+      catch (error) {
+        if (!["P2002", "P2034"].includes(error.code)) throw error;
+        // A concurrent directory reservation must re-read the committed names.
+        if (!reserveDirectory || attempt >= 2) throw accountError("项目资料已变更，请刷新后重试。", 409, "REVISION_CONFLICT");
+      }
+    }
+  }
   async user(id) { return this.database.client.user.findUnique({ where: { id }, include: { department: true } }); }
   async departments() { return this.database.client.department.findMany({ orderBy: { name: "asc" } }); }
   async project(id) { return this.database.client.project.findUnique({ where: { id }, include: { _count: { select: { spaces: true } } } }); }
@@ -18,6 +29,7 @@ class ProjectStore {
       if (!result.count) throw accountError("资料已变更，请刷新后重试。", 409, "REVISION_CONFLICT");
       return this.database.client[model].findUnique({ where: { id } });
     } catch (error) {
+      if (error.code === "P2002" && model === "project") throw error;
       if (error.code === "P2002") throw accountError("名称已存在。", 409);
       throw error;
     }
@@ -31,7 +43,23 @@ class ProjectStore {
     if (!result.count) throw accountError("个人提示词已变更，请保留草稿并加载最新配置。", 409, "REVISION_CONFLICT");
   }
   async saveProject(value, id) {
-    return this.saveCatalog("project", value, id);
+    const data = { ...value };
+    const current = id ? await this.project(id) : null;
+    if (!id) data.id = randomUUID();
+    if (!current || (value.remoteUrl && projectDirectoryName(value.remoteUrl) !== projectDirectoryName(current.remoteUrl))) {
+      const shortId = (id || data.id).slice(0, 8);
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const suffix = attempt ? `${shortId}${attempt > 1 ? `-${attempt}` : ""}` : "";
+        const directoryName = projectDirectoryName(value.remoteUrl, suffix);
+        const directoryKey = directoryName.toLowerCase();
+        const occupant = await this.database.client.project.findUnique({ where: { directoryKey } });
+        if (occupant && occupant.id !== id) continue;
+        Object.assign(data, { directoryName, directoryKey });
+        break;
+      }
+      if (!data.directoryName) throw accountError("无法分配项目目录，请重试。", 409);
+    }
+    return this.saveCatalog("project", data, id);
   }
   async saveMember(projectId, userId, value, updating) {
     const { revision, ...data } = value;

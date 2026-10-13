@@ -13,7 +13,7 @@ async function fixture(t) {
   const permissions = projectPermissionCatalog.filter(entry => entry.scope === "project").map(entry => entry.id);
   const department = await database.client.department.create({ data: { name: "版本测试", permissions } });
   const actor = await database.client.user.create({ data: { username: "lifecycle", displayName: "版本测试", passwordHash: "unused", departmentId: department.id } });
-  const project = await database.client.project.create({ data: { name: "版本项目", ownerUserId: actor.id, remoteUrl: "https://example.test/repo.git" } });
+  const project = await database.client.project.create({ data: { name: "版本项目", directoryName: "repo", directoryKey: "repo", ownerUserId: actor.id, remoteUrl: "https://example.test/repo.git" } });
   await database.client.projectMember.create({ data: { projectId: project.id, userId: actor.id, permissions } });
   const projects = new ProjectServices(database);
   return { database, actor, projectId: project.id, lifecycle: new ProjectLifecycleServices(database, projects), content: new ProjectContentServices(database, projects) };

@@ -1,6 +1,14 @@
 const path = require("node:path");
 const { absolutePath } = require("../shared/paths.cjs");
 const { username } = require("./account.cjs");
+const { projectName } = require("./git-account.cjs");
+
+function projectDirectoryName(remote, suffix = "") {
+  const name = projectName(remote);
+  if (!suffix) return name;
+  if (!/^[a-f0-9]{8}(?:-\d{1,2})?$/.test(suffix)) throw new Error("项目目录后缀无效。");
+  return validateDirectoryName(`${name.slice(0, 119 - suffix.length)}-${suffix}`);
+}
 
 function defaultProjectName(workspaceId) {
   return `w-${workspaceId.slice(0, 8)}`;
@@ -48,6 +56,7 @@ function resolveProjectDirectory(base, directory, platform = process.platform) {
 }
 
 module.exports = {
+  projectDirectoryName,
   defaultProjectName,
   memberDirectoryName,
   validateDirectoryName,

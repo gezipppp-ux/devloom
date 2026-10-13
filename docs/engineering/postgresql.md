@@ -9,6 +9,7 @@
 - `generated/prisma/` 为 Prisma 生成的 TypeScript，`generated/prisma-runtime/` 为编译后的 CommonJS；全部忽略，不编辑、不提交。只有 `src/storage/postgres-database.cjs` 可以导入生成客户端；业务代码不得绕过 storage 直接访问 Prisma。
 - 保留既有 CommonJS 业务模块。`tsconfig.prisma.json` 仅编译生成客户端，不把业务重构隐式扩大成全站 TypeScript 改造。
 - 只支持全新部署，旧 PostgreSQL、SQLite、JSON/JSONL 均不兼容、不转换。旧升级脚本已删除，不导入或自动删除旧数据。
+- `20261013180000_project_directory_names` 新增项目目录名和不区分大小写的唯一键。存在历史项目、工作区或任务时明确拒绝迁移，要求全新数据库，不回填旧 UUID 目录、不移动或删除文件；已发布迁移保持原样。
 
 ## 构建和连接
 

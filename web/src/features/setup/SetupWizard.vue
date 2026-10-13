@@ -17,7 +17,7 @@ const completed = computed(() => state.value?.steps[step.value]?.status === "com
 const selectedStep = computed(() => steps.find(item => item.id === step.value));
 const previewRoot = computed(() => {
   const separator = state.value?.platform === "win32" ? "\\" : "/";
-  return [directory.value.replace(/[\\/]+$/, ""), "projects", "<项目ID>", "members", "<用户ID>"].join(separator);
+  return [directory.value.replace(/[\\/]+$/, ""), "projects", "<仓库名>", "members", "<用户名>"].join(separator);
 });
 const separator = computed(() => state.value?.platform === "win32" ? "\\" : "/");
 const nextLabel = computed(() => {
@@ -62,7 +62,7 @@ watch(step, async () => { await nextTick(); heading.value?.focus({ preventScroll
           <div class="setup-directory-row"><input id="setup-directory" v-model="directory" required :readonly="completed" :disabled="locked" /><slot name="directory-picker" :path="directory" :select="value => directory = value" :disabled="locked || completed" /></div>
           <p class="field-hint">填写服务器上的绝对路径。保存时创建缺失目录并检查写入权限。</p>
           <div class="setup-path-preview"><small>成员项目仓库</small><code>{{ previewRoot }}{{ separator }}repository-&lt;准备修订号&gt;</code><small>任务 Worktree</small><code>{{ previewRoot }}{{ separator }}worktree{{ separator }}&lt;任务目录&gt;</code></div>
-          <p class="field-hint">使用稳定项目和成员 ID。重命名不搬移已有仓库、任务或会话。</p>
+          <p class="field-hint">使用 Git 仓库名和登录用户名，例如 web-coding / admin。同名仓库的后创建项目自动加短后缀；修改显示名称不搬移目录。</p>
         </FormSection>
       </template>
       <template v-else-if="step === 'departments'">

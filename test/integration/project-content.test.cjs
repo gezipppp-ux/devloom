@@ -12,8 +12,8 @@ async function fixture(t) {
   const department = await database.client.department.create({ data: { name: "协作测试", permissions } });
   const actor = await database.client.user.create({ data: { username: "content-owner", displayName: "content-owner", passwordHash: "not-used", role: "member", departmentId: department.id } });
   const outsider = await database.client.user.create({ data: { username: "content-outsider", displayName: "content-outsider", passwordHash: "not-used", role: "member", departmentId: department.id } });
-  const project = await database.client.project.create({ data: { name: "项目甲", ownerUserId: actor.id, remoteUrl: "https://example.test/team/repo.git" } });
-  const other = await database.client.project.create({ data: { name: "项目乙", ownerUserId: actor.id, remoteUrl: "https://example.test/team/repo.git" } });
+  const project = await database.client.project.create({ data: { name: "项目甲", directoryName: "repo", directoryKey: "repo", ownerUserId: actor.id, remoteUrl: "https://example.test/team/repo.git" } });
+  const other = await database.client.project.create({ data: { name: "项目乙", directoryName: "repo-other", directoryKey: "repo-other", ownerUserId: actor.id, remoteUrl: "https://example.test/team/repo.git" } });
   for (const selected of [project, other]) await database.client.projectMember.create({ data: { projectId: selected.id, userId: actor.id, permissions } });
   const projects = new ProjectServices(database);
   const services = new ProjectContentServices(database, projects);

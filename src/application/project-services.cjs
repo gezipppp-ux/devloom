@@ -7,6 +7,7 @@ const { accountError } = require("../domain/account.cjs");
 const { departmentInput, projectInput, projectPromptsInput, memberInput, prepareSpaceInput, projectId, projectRevision } = require("../domain/project-input.cjs");
 const { assertProjectPermission, effectivePermissions, administratorPermissions, grantableProjectPermissions, projectContextPermissions, validatePermissions, canCreateProject, projectCreationReadiness, projectPermissionCatalog, productTemplate, developerTemplate } = require("../domain/project-permissions.cjs");
 const { resolveAccountRemote } = require("../domain/git-account.cjs");
+const { memberDirectoryName, validateDirectoryName } = require("../domain/member-project-paths.cjs");
 const { readSystemSettings } = require("../config/system-settings.cjs");
 const { cloneProject } = require("../git/project-clone.cjs");
 const { testGitConnection } = require("../git/account-credentials.cjs");
@@ -127,7 +128,7 @@ class ProjectServices {
       await this.store.saveMember(project.id, user.id, { permissions, status: "active" }, false);
       await this.store.audit(actor, "project.created", { projectId: project.id });
       return project;
-    });
+    }, { reserveDirectory: true });
     return this.read(row.id, actor);
   }
   async update(id, actor, input) {
@@ -149,7 +150,7 @@ class ProjectServices {
       const saved = await this.store.saveProject(value, id);
       await this.syncSpaces(saved);
       await this.store.audit(actor, "project.updated", { projectId: id, revision: saved.revision });
-    });
+    }, { reserveDirectory: true });
     return this.read(id, actor);
   }
   async members(id, actor) {
@@ -252,14 +253,15 @@ class ProjectServices {
       const { memberStorageRoot } = await readSystemSettings(this.store.database.dataRoot);
       // The persisted preparation revision gives each accepted attempt its own
       // short path while failed checkouts remain available for inspection.
-      const target = path.join(memberStorageRoot, "projects", space.projectId, "members", space.userId, `repository-${space.revision}`);
+      const target = path.join(memberStorageRoot, "projects", validateDirectoryName(context.project.directoryName),
+        "members", memberDirectoryName(context.user.username), `repository-${space.revision}`);
       await this.clone({ account, remote, target, memberStorageRoot, signal, preserveOnFailure: true,
         publish: () => this.store.transaction(async () => {
           const latest = await authorize();
           const saved = await this.store.space(space.projectId, space.userId);
           if (saved.status !== "preparing" || saved.requestId !== space.requestId || saved.revision !== space.revision) throw accountError("空间准备请求已失效。", 409);
           const workspaceId = saved.workspaceId || randomUUID();
-          await this.store.writeWorkspace(workspaceId, this.workspaceConfig(workspaceId, latest.project, space, account.id, remote, target));
+          await this.store.writeWorkspace(workspaceId, this.workspaceConfig(workspaceId, latest.project, space, latest.user.username, account.id, remote, target));
           await this.store.updateSpace(saved.id, saved.revision, { workspaceId, status: "ready", error: null, workerPid: null });
           await this.store.audit(actor, "project.space.ready", { projectId: space.projectId, spaceId: space.id });
           return workspaceId;
@@ -270,10 +272,10 @@ class ProjectServices {
         await this.store.updateSpace(saved.id, saved.revision, { status: "failed", error: presentError(error).message, workerPid: null });
     }
   }
-  workspaceConfig(workspaceId, project, space, accountId, remote, target, previous = {}) {
-    return { version: 5,
-      workspace: { ...previous.workspace, id: workspaceId, name: `project-${project.id}`, owner_user_id: space.userId, project_id: project.id },
-      execution: { ...executionOptions(previous), repository: target, projectName: project.id, gitAccountId: accountId, remoteUrl: remote,
+  workspaceConfig(workspaceId, project, space, username, accountId, remote, target, previous = {}) {
+    return { version: 6,
+      workspace: { ...previous.workspace, id: workspaceId, name: `project-${project.id}`, owner_user_id: space.userId, owner_username: username, project_id: project.id },
+      execution: { ...executionOptions(previous), repository: target, projectName: project.directoryName, gitAccountId: accountId, remoteUrl: remote,
         baseBranch: "", initCommands: project.settings.initCommands || [] },
       agent: previous.agent || { provider: "codex", model: "", reasoningEffort: "", permissionMode: "ask", options: {} },
       prompt_templates: storedPromptOverrides(project.settings.prompts) };
@@ -283,7 +285,7 @@ class ProjectServices {
       if (!space.workspaceId) continue;
       const previous = await this.store.readWorkspace(space.workspaceId, space.userId);
       // Project settings updates preserve the transport address of the prepared checkout.
-      await this.store.writeWorkspace(space.workspaceId, this.workspaceConfig(space.workspaceId, project, space, space.gitAccountId, previous.execution.remoteUrl, previous.execution.repository, previous));
+      await this.store.writeWorkspace(space.workspaceId, this.workspaceConfig(space.workspaceId, project, space, previous.workspace.owner_username, space.gitAccountId, previous.execution.remoteUrl, previous.execution.repository, previous));
     }
   }
   async enforce() {

@@ -1,6 +1,17 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { memberDirectoryName, validateDirectoryName, resolveProjectDirectory } = require("../../src/domain/member-project-paths.cjs");
+const { projectDirectoryName, memberDirectoryName, validateDirectoryName, resolveProjectDirectory } = require("../../src/domain/member-project-paths.cjs");
+
+test("project directories use portable Git basenames and bounded collision suffixes", () => {
+  for (const remote of ["https://gitee.com/____gezi/web-coding.git", "git@gitee.com:____gezi/web-coding.git", "ssh://git@gitee.com/____gezi/web-coding.git", "https://git.example/team/web-coding.git/"])
+    assert.equal(projectDirectoryName(remote), "web-coding");
+  assert.equal(projectDirectoryName("https://git.example/team/Web-Coding.git", "a1b2c3d4"), "Web-Coding-a1b2c3d4");
+  assert.equal(projectDirectoryName("https://git.example/team/repo.git", "a1b2c3d4-2"), "repo-a1b2c3d4-2");
+  assert.equal(projectDirectoryName(`https://git.example/${"r".repeat(120)}.git`, "a1b2c3d4").length, 120);
+  for (const name of ["CON", "nul.txt", "repo.", "%2fescape", "..", "r".repeat(121)])
+    assert.throws(() => projectDirectoryName(`https://git.example/team/${name}.git`), /目录/);
+  assert.throws(() => projectDirectoryName("https://git.example/repo.git", "../bad"), /后缀/);
+});
 
 test("member worktree directories use canonical account names without exposing path syntax", () => {
   for (const name of ["alice", "bob", "team.member-01", "member_name", "u-alice", "x".repeat(64)])

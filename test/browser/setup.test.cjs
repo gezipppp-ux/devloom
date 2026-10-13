@@ -83,6 +83,8 @@ test("initialization UI creates admin, installs missing tools, resumes drafts an
   await capture(page, "environment-ready");
   await page.getByRole("button", { name: "稍后登录，继续配置", exact: true }).click();
   await page.getByLabel("成员目录基础路径", { exact: true }).fill(path.join(f.directory, "members"));
+  const preview = await page.locator(".setup-path-preview").textContent();
+  assert.ok(preview.includes(["projects", "<仓库名>", "members", "<用户名>"].join(path.sep)));
   await capture(page, "directory");
   await page.getByRole("button", { name: "保存并继续", exact: true }).click();
   await page.getByRole("button", { name: "创建默认部门并继续", exact: true }).waitFor();

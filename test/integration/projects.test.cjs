@@ -12,6 +12,7 @@ const { administratorPermissions, projectPermissionCatalog, productTemplate, dev
 const { saveSystemSettings } = require("../../src/config/system-settings.cjs");
 const { cloneProject } = require("../../src/git/project-clone.cjs");
 const { gitRemote } = require("../support/git-remote.cjs");
+const { executionConfig } = require("../../src/config/execution-settings.cjs");
 
 const { getPromptTemplates } = require("../../src/domain/prompt-templates.cjs");
 const all = projectPermissionCatalog.map(permission => permission.id);
@@ -33,6 +34,37 @@ async function fixture(t, options = {}) {
   await saveSystemSettings({ memberStorageRoot: path.join(directory, "members") }, directory);
   return { projects, accounts, admin, member, analyst, database, department, product, project, calls };
 }
+
+test("repository directories reserve names case-insensitively and retain suffixes across updates and reopening", async t => {
+  const f = await fixture(t);
+  assert.equal(f.project.directoryName, "repo");
+  const second = (await f.projects.create(f.admin, { name: "另一个项目", remoteUrl: "git@gitee.com:other/Repo.git" })).project;
+  assert.match(second.directoryName, /^Repo-[a-f0-9]{8}$/);
+  const updated = (await f.projects.update(second.id, f.admin, { revision: second.revision, name: "显示名称", remoteUrl: "https://gitee.com/other/Repo.git" })).project;
+  assert.equal(updated.directoryName, second.directoryName);
+  const reopened = new ProjectServices(f.database);
+  t.after(() => reopened.close());
+  assert.equal((await reopened.read(second.id, f.admin)).project.directoryName, second.directoryName);
+  const changed = (await f.projects.update(second.id, f.admin, { revision: updated.revision, remoteUrl: "https://gitee.com/other/new-repo.git" })).project;
+  assert.equal(changed.directoryName, "new-repo");
+  await f.projects.archive(f.project.id, f.admin, { revision: f.project.revision });
+  const third = (await f.projects.create(f.admin, { name: "第三个项目", remoteUrl: f.project.remoteUrl })).project;
+  assert.match(third.directoryName, /^repo-[a-f0-9]{8}$/);
+  for (const remoteUrl of ["https://git.example/team/CON.git", "https://git.example/team/%2frepo.git"])
+    await assert.rejects(f.projects.create(f.admin, { name: "非法目录", remoteUrl }), { statusCode: 400 });
+  assert.equal(await f.database.client.project.count(), 3);
+});
+
+test("concurrent project creation reserves separate directories without duplicate projects or memberships", async t => {
+  const f = await fixture(t);
+  const created = await Promise.all(["first", "second"].map(owner => f.projects.create(f.admin, { name: owner, remoteUrl: `https://git.example/${owner}/web-coding.git` })));
+  const names = created.map(result => result.project.directoryName);
+  assert.ok(names.includes("web-coding"));
+  assert.equal(new Set(names.map(name => name.toLowerCase())).size, 2);
+  assert.match(names.find(name => name !== "web-coding"), /^web-coding-[a-f0-9]{8}$/);
+  assert.equal(await f.database.client.project.count(), 3);
+  assert.equal(await f.database.client.projectMember.count(), 3);
+});
 
 test("project prompt defaults and member overrides isolate types, accounts and projects with revision checks", async t => {
   const f = await fixture(t);
@@ -132,15 +164,30 @@ test("space preparation checks the actual repository, publishes once and never a
   assert.equal(ready.status, "ready", ready.error);
   assert.equal(f.calls.filter(([name]) => name === "clone").length, 1);
   assert.equal(f.calls[0][1], f.project.remoteUrl);
-  assert.ok(f.calls[1][1].includes(path.join(f.project.id, "members", f.member.id)));
+  assert.ok(f.calls[1][1].includes(path.join(f.project.directoryName, "members", f.member.username)));
+  const config = await f.database.readWorkspace(ready.workspaceId, f.member.id);
+  assert.equal(config.workspace.owner_username, "member");
+  const configFile = path.join(f.database.dataRoot, "workspaces", ready.workspaceId, "config.json");
+  const execution = (await executionConfig(config, configFile)).execution;
+  assert.equal(path.dirname(execution.repository), execution.memberRoot);
+  assert.equal(execution.worktreeRoot, path.join(execution.memberRoot, "worktree"));
+  await f.accounts.update(f.member.id, { displayName: "新的显示名称" }, f.admin);
+  await f.projects.update(f.project.id, f.admin, { revision: 1, name: "新项目显示名称" });
+  const synced = await f.database.readWorkspace(ready.workspaceId, f.member.id);
+  assert.equal(synced.execution.repository, config.execution.repository);
+  assert.equal(synced.execution.projectName, config.execution.projectName);
+  assert.equal(synced.workspace.owner_username, "member");
+  assert.equal((await executionConfig(synced, configFile)).execution.worktreeRoot, execution.worktreeRoot);
+  await assert.rejects(executionConfig({ ...config, version: 5 }, configFile), /旧项目目录配置不兼容/);
+  await assert.rejects(executionConfig({ ...config, workspace: { ...config.workspace, owner_username: undefined } }, configFile), /账号/);
   assert.equal((await f.projects.workspaceAuthorization(ready.workspaceId, f.member, "session.start")).space.id, ready.id);
   await assert.rejects(f.projects.workspaceAuthorization(ready.workspaceId, f.admin, "session.view"), /不存在/);
   await assert.rejects(git.remove(f.member, account.id), /使用/);
   const checker = new GitAccountServices(f.database, { projects: f.projects, checkConnection: async () => {
-    await f.projects.update(f.project.id, f.admin, { revision: 1, description: "Changed during check" });
+    await f.projects.update(f.project.id, f.admin, { revision: 2, description: "Changed during check" });
   } });
   await assert.rejects(checker.check(f.member, { projectId: f.project.id }, account.id), /检测期间已变更/);
-  await assert.rejects(f.projects.update(f.project.id, f.admin, { revision: 2, remoteUrl: "https://git.example/other.git" }), /不能更换/);
+  await assert.rejects(f.projects.update(f.project.id, f.admin, { revision: 3, remoteUrl: "https://git.example/other.git" }), /不能更换/);
 });
 
 test("code operators can prepare their repository without any Codex permission", async t => {

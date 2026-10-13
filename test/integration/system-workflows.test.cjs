@@ -16,7 +16,7 @@ async function fixture(t) {
   const admin = await database.client.user.create({ data: { username: "workflow-admin", displayName: "系统管理员", passwordHash: "unused", role: "admin" } });
   const projects = [];
   for (const name of ["甲项目", "乙项目"]) {
-    const project = await database.client.project.create({ data: { name, ownerUserId: actor.id, remoteUrl: "https://example.test/repo.git" } });
+    const project = await database.client.project.create({ data: { name, directoryName: name, directoryKey: name.toLowerCase(), ownerUserId: actor.id, remoteUrl: "https://example.test/repo.git" } });
     await database.client.projectMember.create({ data: { projectId: project.id, userId: actor.id, permissions } });
     projects.push(project);
   }

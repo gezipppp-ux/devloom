@@ -27,7 +27,7 @@ async function fixture(t) {
   const department = await database.client.department.create({ data: { name: "开发测试", permissions } });
   const actor = await database.client.user.create({ data: { username: "developer", displayName: "developer", passwordHash: "unused", departmentId: department.id } });
   const other = await database.client.user.create({ data: { username: "other-dev", displayName: "other-dev", passwordHash: "unused", departmentId: department.id } });
-  const project = await database.client.project.create({ data: { name: "开发项目", ownerUserId: actor.id, remoteUrl: "https://example.test/team/repo.git" } });
+  const project = await database.client.project.create({ data: { name: "开发项目", directoryName: "repo", directoryKey: "repo", ownerUserId: actor.id, remoteUrl: "https://example.test/team/repo.git" } });
   for (const user of [actor, other]) await database.client.projectMember.create({ data: { projectId: project.id, userId: user.id, permissions } });
   const account = await database.client.gitAccount.create({ data: { name: "开发凭据", userId: actor.id, authType: "http", remoteUrl: project.remoteUrl, host: "example.test", credentials: "not-read-by-fake-session" } });
   const workspace = await database.client.workspace.create({ data: { name: "开发空间", ownerUserId: actor.id } });
@@ -95,8 +95,8 @@ test("project tasks and image additions use the real session manager with tempor
   workspaces.authorizeProject = (id, user, permission) => projects.workspaceAuthorization(id, user, permission);
   const space = await database.client.developmentSpace.findUnique({ where: { projectId_userId: { projectId: project.id, userId: actor.id } } });
   await database.writeDocument(path.join(root, "system-settings.json"), { memberStorageRoot: path.join(root, "trees") });
-  await database.writeWorkspace(space.workspaceId, { workspace: { id: space.workspaceId, name: "真实引擎开发空间", owner_user_id: actor.id, project_id: project.id },
-    agent: { provider: "codex" }, execution: { repository, projectName: project.id, baseBranch: "main", initCommands: [] } });
+  await database.writeWorkspace(space.workspaceId, { version: 6, workspace: { id: space.workspaceId, name: "真实引擎开发空间", owner_user_id: actor.id, owner_username: actor.username, project_id: project.id },
+    agent: { provider: "codex" }, execution: { repository, projectName: project.directoryName, baseBranch: "main", initCommands: [] } });
   const services = new ProjectDevelopmentServices(database, projects, workspaces);
   const first = await issue("图示需求"), added = await issue("追加图示");
   const personalTemplate = "个人需求模板 {{title}}\n{{content}}\n{{images}}";
@@ -117,7 +117,7 @@ test("project tasks and image additions use the real session manager with tempor
   await sessions.events.drain();
   await runtime.operation;
   const state = await sessions.store.read(task.runKey);
-  assert.ok(state.worktree.path.startsWith(path.join(root, "trees", "projects", project.id, "members", actor.id)));
+  assert.ok(state.worktree.path.startsWith(path.join(root, "trees", "projects", project.directoryName, "members", actor.username)));
   assert.equal(fs.readFileSync(path.join(repository, "tracked.txt"), "utf8"), "preserve dirty root");
   await database.client.projectIssue.update({ where: { id: first.id }, data: { status: "pending_verification" } });
   const requestId = randomUUID();
@@ -272,8 +272,8 @@ test("start supplements use executor templates, freeze at dispatch and fence cha
   const selected = await issue("启动补充要求");
   const task = (await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [selected.id] })).tasks[0];
   const space = await database.client.developmentSpace.findUnique({ where: { projectId_userId: { projectId: project.id, userId: actor.id } } });
-  await database.writeWorkspace(space.workspaceId, { workspace: { id: space.workspaceId, name: "补充提示词测试空间", owner_user_id: actor.id, project_id: project.id },
-    agent: { provider: "codex" }, execution: { repository: database.dataRoot, baseBranch: "main", initCommands: [] } });
+  await database.writeWorkspace(space.workspaceId, { version: 6, workspace: { id: space.workspaceId, name: "补充提示词测试空间", owner_user_id: actor.id, owner_username: actor.username, project_id: project.id },
+    agent: { provider: "codex" }, execution: { repository: database.dataRoot, projectName: project.directoryName, baseBranch: "main", initCommands: [] } });
   const projects = services.projects;
   await projects.savePrompts(project.id, actor, { scope: "project", revision: project.revision, templates: { supplement: "项目补充 {{content}}" } });
   await projects.savePrompts(project.id, actor, { scope: "personal", revision: 1, templates: { supplement: "{{content}}{{content}}{{content}}{{content}}" } });
@@ -530,7 +530,7 @@ test("global workflow publication preserves planned task issue versions and appl
   await workflows.saveWorkflow("requirement", admin, { revision: workflow.revision }, true);
   assert.equal((await services.start(project.id, beforeTask.id, actor, { requestId: randomUUID(), revision: beforeTask.revision, baseBranch: "main" })).task.status, "started");
   assert.equal((await content.readIssue(project.id, before.id, actor)).status, "planned");
-  const nextProject = await database.client.project.create({ data: { name: "统一流程项目", ownerUserId: actor.id, remoteUrl: project.remoteUrl } });
+  const nextProject = await database.client.project.create({ data: { name: "统一流程项目", directoryName: "repo-other", directoryKey: "repo-other", ownerUserId: actor.id, remoteUrl: project.remoteUrl } });
   const permissions = projectPermissionCatalog.filter(entry => entry.scope === "project").map(entry => entry.id);
   await database.client.projectMember.create({ data: { projectId: nextProject.id, userId: actor.id, permissions } });
   const firstNew = await content.createIssue(project.id, actor, { type: "requirement", title: "原项目新流程事项" });

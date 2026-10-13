@@ -306,7 +306,7 @@ Codex 需要由服务账号访问自己的认证与配置；systemd 不会自动
   workspaces/              # Codex 图片缓存及必要执行锁
 
 <成员目录基础路径>/
-  projects/<项目ID>/members/<用户ID>/
+  projects/web-coding/members/admin/  # Git 仓库名 / 登录用户名
     repository-<准备修订号>/  # 克隆得到的项目仓库
     worktree/<任务前缀>-<12位任务标识>/  # 各任务的独立 worktree
 ```

@@ -96,7 +96,7 @@
   }
   function directoryStep() {
     return top("选择成员目录", "项目仓库和任务目录统一保存在这里。") +
-      `<div class="card"><div class="card-heading"><h3>成员项目与任务目录</h3>${badge(state.directorySaved ? "已保存" : "必填", state.directorySaved ? "success" : "")}</div><div class="field"><label for="directory">成员目录基础路径</label><div class="field-row"><input id="directory" data-field="directory" value="${escape(state.directory)}" ${state.directorySaved ? "readonly" : ""} ${errors.directory ? 'aria-invalid="true" aria-describedby="directory-error"' : ""}><button data-action="choose-directory" ${state.directorySaved ? "disabled" : ""}>${icon("folder")}浏览服务器目录</button></div><p class="hint">填写服务器上的绝对路径。建议使用短路径，例如 Windows 的 D:\\wt 或 Linux 的 /srv/wt。</p>${errors.directory ? `<p id="directory-error" class="hint error">${escape(errors.directory)}</p>` : ""}</div><h3>目录预览</h3><div id="path-preview" class="path-preview">${pathPreview()}</div><p class="hint">目录中的项目和成员使用稳定 ID。重命名不会搬移仓库或已有任务。</p></div>` +
+      `<div class="card"><div class="card-heading"><h3>成员项目与任务目录</h3>${badge(state.directorySaved ? "已保存" : "必填", state.directorySaved ? "success" : "")}</div><div class="field"><label for="directory">成员目录基础路径</label><div class="field-row"><input id="directory" data-field="directory" value="${escape(state.directory)}" ${state.directorySaved ? "readonly" : ""} ${errors.directory ? 'aria-invalid="true" aria-describedby="directory-error"' : ""}><button data-action="choose-directory" ${state.directorySaved ? "disabled" : ""}>${icon("folder")}浏览服务器目录</button></div><p class="hint">填写服务器上的绝对路径。建议使用短路径，例如 Windows 的 D:\\wt 或 Linux 的 /srv/wt。</p>${errors.directory ? `<p id="directory-error" class="hint error">${escape(errors.directory)}</p>` : ""}</div><h3>目录预览</h3><div id="path-preview" class="path-preview">${pathPreview()}</div><p class="hint">目录使用 Git 仓库名和登录用户名，例如 web-coding / admin。同名仓库的后创建项目自动加短后缀；修改显示名称不搬移目录。</p></div>` +
       notice("保存时检查写入权限", "目录不存在时会创建；无权限时保留输入并提示处理。项目文件会在成员准备开发空间时生成。") +
       `<label class="check-label"><input type="checkbox" id="directory-denied" ${state.directoryDenied ? "checked" : ""} ${state.directorySaved ? "disabled" : ""}><span class="hint">原型状态：模拟目录不可写</span></label>` +
       footer(state.directorySaved ? "继续配置" : "保存并继续");
@@ -104,7 +104,7 @@
   function pathPreview() {
     const separator = state.directory.startsWith("/") ? "/" : "\\";
     const root = state.directory.replace(/[\\/]+$/, "") || "<基础目录>";
-    const member = [root, "projects", "<项目ID>", "members", "<用户ID>"].join(separator);
+    const member = [root, "projects", "<仓库名>", "members", "<用户名>"].join(separator);
     return `<div class="path-line"><small>成员项目仓库</small><code>${escape(member + separator + "repository-<准备修订号>")}</code></div><div class="path-line"><small>任务 Worktree</small><code>${escape(member + separator + "worktree" + separator + "<任务目录>")}</code></div>`;
   }
   function departmentsStep() {

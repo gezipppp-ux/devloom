@@ -34,13 +34,15 @@ async function executionConfig(config, configFile, { baseBranch } = {}) {
   const execution = executionOptions(config);
   if (settings.repository) execution.repository = settings.repository;
   if (config.workspace) {
+    if (config.workspace.project_id && config.version !== 6)
+      throw new Error("旧项目目录配置不兼容，请使用全新项目数据。");
     execution.projectName = validateDirectoryName(execution.projectName);
     const dataDirectory = path.dirname(path.dirname(path.dirname(configFile)));
     execution.memberStorageRoot =
       (await readSystemSettings(dataDirectory)).memberStorageRoot;
-    execution.memberRoot = config.workspace.project_id && config.workspace.owner_user_id
-      ? path.join(execution.memberStorageRoot, "projects", validateDirectoryName(config.workspace.project_id),
-          "members", validateDirectoryName(config.workspace.owner_user_id))
+    execution.memberRoot = config.workspace.project_id
+      ? path.join(execution.memberStorageRoot, "projects", execution.projectName,
+          "members", memberDirectoryName(config.workspace.owner_username))
       : config.workspace.owner_user_id
       ? path.join(
           execution.memberStorageRoot,
@@ -48,8 +50,7 @@ async function executionConfig(config, configFile, { baseBranch } = {}) {
         )
       : undefined;
     const memberRoot = execution.memberRoot || execution.memberStorageRoot;
-    // Project identity is already present in the stable member root. Repeating
-    // a full UUID below it can exceed Git for Windows' worktree path limit.
+    // The assigned project directory is already present in the member root.
     execution.worktreeRoot = config.workspace.project_id
       ? resolveProjectDirectory(memberRoot, "worktree")
       : resolveProjectDirectory(path.join(memberRoot, "worktree"), execution.projectName);

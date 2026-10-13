@@ -92,7 +92,7 @@ onUnmounted(() => {
         </button>
       </div>
       <p class="field-hint">
-        填写运行服务主机上的绝对路径，也可浏览并选择已有目录。成员项目和任务按稳定项目 ID、用户 ID 分隔。
+        填写运行服务主机上的绝对路径，也可浏览并选择已有目录。成员项目和任务按 Git 仓库名、登录用户名分隔，同名仓库的后创建项目自动加短后缀。
       </p>
       <p class="field-hint">
         建议使用较短路径{{
@@ -101,12 +101,12 @@ onUnmounted(() => {
       </p>
       <div class="storage-path-example">
         <strong
-          >基础目录 / projects / 项目 ID / members / 用户 ID</strong
+          >基础目录 / projects / 仓库目录名 / members / 登录用户名</strong
         >
         <code>{{
           platform === "win32"
-            ? "D:\\wt\\projects\\<项目ID>\\members\\<用户ID>"
-            : "/srv/wt/projects/<项目ID>/members/<用户ID>"
+            ? "D:\\wt\\projects\\web-coding\\members\\admin"
+            : "/srv/wt/projects/web-coding/members/admin"
         }}</code>
         <p>
           仓库保存在 repository-&lt;准备修订号&gt;，任务保存在 worktree/&lt;任务目录&gt;。重命名不会搬移目录。

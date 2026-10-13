@@ -5,7 +5,7 @@ function presentDepartment(row) { return { id: row.id, name: row.name, status: r
 function presentProject(row, permissions = []) {
   const settings = row.settings || {};
   return { id: row.id, name: row.name, description: row.description, ownerUserId: row.ownerUserId,
-    remoteUrl: row.remoteUrl, repositoryEditable: row._count?.spaces === 0, status: row.status, revision: row.revision,
+    remoteUrl: row.remoteUrl, directoryName: row.directoryName, repositoryEditable: row._count?.spaces === 0, status: row.status, revision: row.revision,
     settings: permissions.includes("project.configure") ? { initCommands: settings.initCommands || [], prompts: getPromptTemplates({ prompt_templates: settings.prompts || {} }) } : undefined,
     ...dates(row) };
 }
