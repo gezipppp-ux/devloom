@@ -1,0 +1,7 @@
+[
+  { "id": "read", "label": "读取项目、版本、成员和事项" },
+  { "id": "issues.write", "label": "创建和编辑需求／Bug" },
+  { "id": "issues.assign", "label": "指派负责人和设置参与人" },
+  { "id": "releases.write", "label": "新建版本" },
+  { "id": "files.upload", "label": "上传图片附件" }
+]

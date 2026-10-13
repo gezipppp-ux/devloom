@@ -19,6 +19,9 @@ const { ProjectDevelopmentServices } = require("../application/project-developme
 const { ProjectLifecycleServices } = require("../application/project-lifecycle-services.cjs");
 const { SystemWorkflowServices } = require("../application/system-workflow-services.cjs");
 const { ProjectBranchServices } = require("../application/project-branch-services.cjs");
+const { McpTokenServices } = require("../application/mcp-token-services.cjs");
+const { McpProjectServices } = require("../application/mcp-project-services.cjs");
+const { isMcpRequest, registerMcpRoutes, serveMcpAccount } = require("./mcp-api.cjs");
 const { serveProjectContent } = require("./project-content-api.cjs");
 const { serveProjectDevelopment } = require("./project-development-api.cjs");
 const { serveProjectLifecycle } = require("./project-lifecycle-api.cjs");
@@ -127,6 +130,8 @@ function createWebServer({
   let projectLifecycle;
   let systemWorkflows;
   let projectBranches;
+  let mcpTokens;
+  let mcpProjects;
   let closing = false, closePromise;
   const ownedDatabase = !testIdentity && !database;
 
@@ -147,6 +152,8 @@ function createWebServer({
       projectLifecycle = new ProjectLifecycleServices(accounts.database, projects);
       systemWorkflows = new SystemWorkflowServices(accounts.database, accounts, projects);
       projectBranches = new ProjectBranchServices(accounts.database, projects);
+      mcpTokens = new McpTokenServices(accounts.database, projects);
+      mcpProjects = new McpProjectServices(accounts.database, { tokens: mcpTokens, projects, content: projectContent, lifecycle: projectLifecycle, development: projectDevelopment });
       await projects.initialize();
       workspaces.authorizeProject = (id, actor, permission) => projects.workspaceAuthorization(id, actor, permission);
       gitAccounts = new GitAccountServices(accounts.database, { projects });
@@ -201,12 +208,12 @@ function createWebServer({
       // Fastify matches the raw path. Do not let URL normalization dispatch an
       // API route with another route's security hooks (notably login limits).
       if (
-        url.pathname.startsWith("/api/") &&
+        (url.pathname.startsWith("/api/") || url.pathname === "/mcp") &&
         request.raw.url.split("?", 1)[0] !== url.pathname
       )
         return reply.code(400).send({ error: "接口地址必须使用规范路径。" });
       request.applicationUrl = url;
-      if (request.method === "POST") {
+      if (request.method === "POST" && !(!testIdentity && isMcpRequest(url.pathname))) {
         if (testIdentity) {
           if (request.headers["x-csrf-token"] !== token)
             return reply
@@ -234,6 +241,7 @@ function createWebServer({
           request.applicationWorkspace,
         ));
     });
+    if (mcpTokens) registerMcpRoutes(instance, { tokens: mcpTokens, services: mcpProjects, isBusy: () => environment.status().busy });
     const dispatch = async (request, reply) => {
       await handle(request, reply);
       return reply;
@@ -351,6 +359,7 @@ function createWebServer({
         );
       if (request.method === "POST" && environment.status().busy && !url.pathname.startsWith("/api/auth/"))
         throw accountError("环境工具正在更新，请完成后再提交操作。", 409);
+      if (mcpTokens && await serveMcpAccount(request, response, url, { tokens: mcpTokens, actor, input, authorize })) return;
       if (projects && await serveProjectApi(request, response, url, { projects, actor, input })) return;
       if (systemWorkflows && await serveSystemWorkflows(request.raw, response, url, { services: systemWorkflows, actor, input })) return;
       if (projectLifecycle && await serveProjectLifecycle(request.raw, response, url, { services: projectLifecycle, actor, input })) return;

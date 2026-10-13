@@ -11,6 +11,7 @@ const { verifyAccountProfileRaces } = require("./account-profile.test.cjs");
 const { verifyAccountPreferenceRaces } = require("./account-preferences.test.cjs");
 const { verifyGitAccounts } = require("./git-accounts.test.cjs");
 const { verifyEnvironment } = require("./environment.test.cjs");
+const { verifyMcpTokens } = require("./mcp-tokens.test.cjs");
 
 async function main() {
   const staticRoot = path.resolve("web/dist");
@@ -134,6 +135,7 @@ async function main() {
     await page.getByText("个人设置已保存。", { exact: true }).waitFor();
     assert.equal(savedSettings.get("admin").model, "fixture-model");
     await verifyGitAccounts(page, output);
+    await verifyMcpTokens(page, output);
     await verifyEnvironment(page, output);
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 1000 });

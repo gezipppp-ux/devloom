@@ -1,0 +1,116 @@
+/* global document, window */
+const assert = require("node:assert/strict");
+const path = require("node:path");
+const scopes = require("../../shared/mcp-scopes.json");
+
+async function verifyMcpTokens(page, output) {
+  const tokens = [], writes = [];
+  const tokenId = "00000000-0000-4000-8000-000000000001";
+  const secret = "wc_mcp_fixture_once_only";
+  let fail = true, hold, resume;
+  await page.route("**/api/account/mcp-tokens**", async route => {
+    const request = route.request(), endpoint = new URL(request.url()).pathname;
+    if (request.method() === "GET") return route.fulfill({ json: { tokens, scopes, projects: [{ id: tokenId, name: "测试项目" }] } });
+    if (endpoint.endsWith("/revoke")) {
+      tokens[0].revokedAt = new Date().toISOString(); tokens[0].status = "revoked";
+      return route.fulfill({ json: { ok: true } });
+    }
+    const input = request.postDataJSON();
+    writes.push(input);
+    if (hold) { const started = hold; hold = null; await new Promise(resolve => { resume = resolve; started(); }); }
+    if (fail) return route.fulfill({ status: 400, json: { error: "模拟 Token 创建失败" } });
+    const token = { ...input, id: tokenId, prefix: "wc_mcp_fixture", status: "active", expiresAt: "2027-01-01T00:00:00Z", lastUsedAt: null };
+    tokens.push(token, { ...token, id: "fixture-second", name: "开发电脑 · Claude Code" }, { ...token, id: "fixture-third", name: "临时调试设备与自动化访问凭证的长名称展示", status: "expired" });
+    return route.fulfill({ status: 201, json: { token, secret } });
+  });
+  await page.getByRole("button", { name: "管理 MCP Token", exact: true }).click();
+  const section = page.locator(".mcp-settings");
+  const access = page.locator(".mcp-access");
+  await section.getByText("尚未创建 Token", { exact: true }).waitFor();
+  assert.equal(await section.getByLabel("Token 名称").count(), 0, "Creation must not crowd the overview");
+  await section.getByRole("button", { name: "Claude Code", exact: true }).click();
+  assert.match(await section.locator(".mcp-code").first().innerText(), /mcpServers/);
+  await section.getByRole("button", { name: "Pi", exact: true }).click();
+  await section.getByText("在 Pi 使用的 MCP 扩展中配置以上连接参数", { exact: false }).waitFor();
+  await section.getByRole("button", { name: "Codex", exact: true }).click();
+  await access.getByRole("button", { name: "创建 Token", exact: true }).click();
+  await section.getByRole("radio", { name: "指定项目", exact: true }).check();
+  await section.getByLabel("Token 名称").fill("工作电脑 CLI");
+  assert.equal(await section.getByRole("button", { name: "创建 MCP Token", exact: true }).isDisabled(), true);
+  await section.getByRole("checkbox", { name: "测试项目", exact: true }).check();
+  await section.getByText("查看 HTTP 上传示例", { exact: true }).click();
+  const creationHelp = section.getByRole("region", { name: "HTTP 上传说明" });
+  assert.match(await creationHelp.innerText(), /attachmentIds/);
+  assert.match(await creationHelp.innerText(), /Idempotency-Key/);
+  await section.getByRole("button", { name: "创建 MCP Token", exact: true }).click();
+  await page.getByRole("alert").filter({ hasText: "模拟 Token 创建失败" }).waitFor();
+  assert.equal(await section.getByLabel("Token 名称").inputValue(), "工作电脑 CLI");
+  assert.equal(tokens.length, 0);
+  fail = false;
+  const blocked = new Promise(resolve => { hold = resolve; });
+  await section.getByRole("button", { name: "创建 MCP Token", exact: true }).click();
+  await blocked;
+  assert.equal(await section.getByLabel("Token 名称").isDisabled(), true);
+  assert.equal(await access.getByRole("button", { name: "收起 MCP 接入" }).isDisabled(), true);
+  assert.equal(await section.getByRole("button", { name: "返回 MCP 接入" }).isDisabled(), true);
+  resume();
+  await section.getByLabel("新建 Token", { exact: true }).waitFor();
+  assert.equal(await section.getByLabel("新建 Token", { exact: true }).inputValue(), secret);
+  assert.equal(writes.length, 2);
+  assert.equal(writes[1].scopes.includes("files.upload"), true);
+  assert.equal(writes[1].allProjects, false);
+  assert.deepEqual(writes[1].projectIds, [tokenId]);
+  assert.equal((await section.locator(".mcp-connection").innerText()).includes(secret), false);
+  await section.getByRole("button", { name: "清除显示", exact: true }).click();
+  assert.equal(await section.getByLabel("新建 Token", { exact: true }).count(), 0);
+  assert.equal(await section.locator(".mcp-token").count(), 2);
+  await section.getByRole("button", { name: "查看全部", exact: true }).click();
+  assert.equal(await section.locator(".mcp-token").count(), 3);
+  await section.getByRole("button", { name: "查看用法", exact: true }).click();
+  const help = section.getByRole("region", { name: "HTTP 上传说明" });
+  assert.match(await help.innerText(), /attachmentIds/);
+  assert.match(await help.innerText(), /Idempotency-Key/);
+  assert.equal((await help.innerText()).includes(secret), false);
+  await help.getByRole("button", { name: "PowerShell", exact: true }).click();
+  assert.match(await help.innerText(), /Invoke-RestMethod/);
+  const closeMessages = page.getByRole("button", { name: "关闭提示", exact: true });
+  while (await closeMessages.count()) await closeMessages.first().click();
+  for (const width of [1440, 768, 390, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await section.scrollIntoViewIfNeeded();
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), "MCP examples must scroll within their code blocks");
+    await access.screenshot({ path: path.join(output, "mcp-upload-" + width + ".png") });
+  }
+  await section.getByRole("button", { name: "返回 MCP 接入", exact: true }).click();
+  for (const width of [1440, 768, 390, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await access.scrollIntoViewIfNeeded();
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+    await access.screenshot({ path: path.join(output, "mcp-" + width + ".png") });
+  }
+  await section.locator(".mcp-token > summary").first().click();
+  await section.getByRole("button", { name: "撤销 工作电脑 CLI", exact: true }).click();
+  await page.getByRole("dialog", { name: "撤销 MCP Token" }).waitFor();
+  await page.screenshot({ path: path.join(output, "mcp-revoke-320.png") });
+  await page.keyboard.press("Escape");
+  assert.equal(await section.getByRole("button", { name: "撤销 工作电脑 CLI", exact: true }).evaluate(element => element === document.activeElement), true);
+  await section.getByRole("button", { name: "撤销 工作电脑 CLI", exact: true }).click();
+  await page.getByRole("button", { name: "确认撤销", exact: true }).click();
+  await section.locator(".mcp-token").first().getByText("已撤销", { exact: true }).waitFor();
+  await access.getByRole("button", { name: "收起 MCP 接入", exact: true }).click();
+  await page.getByRole("button", { name: "管理 MCP Token", exact: true }).click();
+  assert.equal(await section.getByLabel("新建 Token", { exact: true }).count(), 0);
+  await access.getByRole("button", { name: "创建 Token", exact: true }).click();
+  await section.getByLabel("Token 名称").fill("窄屏创建表单");
+  while (await closeMessages.count()) await closeMessages.first().click();
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await access.screenshot({ path: path.join(output, "mcp-create-" + width + ".png") });
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+    const radioSize = await section.getByRole("radio", { name: "指定项目", exact: true }).boundingBox();
+    assert.ok(radioSize.width <= 24 && radioSize.height <= 24, "Project radios must not inherit text-input sizing");
+  }
+  await access.getByRole("button", { name: "收起 MCP 接入", exact: true }).click();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+}
+module.exports = { verifyMcpTokens };

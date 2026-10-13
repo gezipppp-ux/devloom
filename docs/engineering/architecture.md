@@ -65,6 +65,9 @@ docs/engineering/  # 行为契约与架构规则
 
 | 位置 | 拥有的职责 |
 | --- | --- |
+| application/mcp-token-services.cjs、mcp-project-services.cjs、mcp-presenter.cjs | 外部 Agent Token 生命周期、按当前授权查询和原子发布；公开结构不暴露凭据、私人会话或配置 |
+| storage/mcp-store.cjs、domain/mcp-access.cjs | 前者拥有 Token 摘要、图片暂存、幂等操作与审计，后者拥有纯输入及 scope 校验 |
+| http/mcp-api.cjs、mcp-tools.cjs | Bearer HTTP 上传、无状态 Streamable HTTP MCP、工具 schema；复用应用用例，不直接操作存储 |
 | `cli/arguments.cjs` | Web 与开发服务的命令参数校验 |
 | `cli/init-admin.cjs`、`cli/web.cjs` | 管理员初始化和 Web 服务进程入口；导出 main，以主模块保护执行 |
 | `channels/manual/adapter.cjs` | 手动输入校验与渠道组合 |

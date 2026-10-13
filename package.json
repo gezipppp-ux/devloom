@@ -21,6 +21,7 @@
     "@fastify/csrf-protection": "8.0.1",
     "@fastify/rate-limit": "11.2.0",
     "@fastify/session": "11.1.3",
+    "@modelcontextprotocol/sdk": "1.32.1",
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
     "@tiptap/extension-image": "3.31.4",
@@ -39,7 +40,8 @@
     "pinyin-pro": "3.29.4",
     "playwright": "1.59.1",
     "vue": "^3.5.32",
-    "vue-router": "4.6.4"
+    "vue-router": "4.6.4",
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/node": "22.19.15",

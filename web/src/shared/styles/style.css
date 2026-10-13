@@ -2881,6 +2881,84 @@ main {
   .development-start-actions .new-task { grid-column: auto; }
 }
 
+.mcp-access-expanded { background: var(--canvas); }
+.mcp-settings { display: grid; gap: 24px; min-width: 0; overflow-wrap: anywhere; }
+.mcp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-width: 0; }
+.mcp-between { justify-content: space-between; }
+.mcp-back { justify-self: start; }
+.mcp-card { min-width: 0; padding: 24px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); }
+.mcp-settings h3 { margin: 0; font-size: 16px; }
+.mcp-settings .field-hint { margin: 0; }
+.mcp-connection, .mcp-upload-help, .mcp-secret { display: grid; gap: 16px; min-width: 0; }
+.mcp-settings summary { cursor: pointer; padding-block: 8px; font-size: 12px; }
+.mcp-settings details > .field-hint, .mcp-settings details > .mcp-code { margin-top: 12px; }
+.mcp-code { margin: 0; max-width: 100%; overflow: auto; white-space: pre; overflow-wrap: normal; padding: 16px; background: var(--soft); border-radius: var(--radius-control); font: 12px/1.75 var(--font-code); }
+.mcp-endpoint { display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 14px; border: 1px solid var(--field-border); border-radius: var(--radius-control); }
+.mcp-endpoint input[readonly] { min-width: 0; flex: 1; border: 0; background: transparent; font: 13px var(--font-code); padding-inline: 4px; }
+.mcp-endpoint > button { flex: 0 0 40px; padding: 8px; }
+.mcp-segments { display: flex; flex-wrap: wrap; gap: 4px; }
+.mcp-segments button { border-color: transparent; background: transparent; color: var(--muted); font-size: 12px; padding: 6px 10px; }
+.mcp-segments button[aria-pressed="true"] { background: var(--selected); color: var(--accent); }
+.mcp-count { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 4px; }
+.mcp-empty { display: grid; justify-items: center; gap: 12px; padding: 24px 0 8px; text-align: center; }
+.mcp-empty > .anticon { font-size: 24px; color: var(--muted); }
+.mcp-empty p { margin: 0; font-size: 12px; color: var(--muted); }
+.mcp-token-list { list-style: none; padding: 0; margin: 8px 0 0; }
+.mcp-token-list > li + li { border-top: 1px solid var(--line); }
+.mcp-token > summary { display: flex; align-items: center; gap: 12px; padding-block: 20px; list-style: none; }
+.mcp-token > summary::-webkit-details-marker { display: none; }
+.mcp-key { display: grid; place-items: center; width: 36px; height: 36px; flex: 0 0 36px; background: var(--sidebar); border: 1px solid var(--line); border-radius: 10px; }
+.mcp-token-identity { display: grid; gap: 4px; min-width: 0; flex: 1; }
+.mcp-token-identity strong { font-size: 14px; }
+.mcp-detail-label { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; color: var(--accent); }
+.mcp-token[open] .mcp-detail-label > .anticon { transform: rotate(180deg); }
+.mcp-status { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); }
+.mcp-status::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.mcp-status.is-active { color: var(--success); }
+.mcp-token-details { display: grid; justify-items: start; gap: 12px; padding: 0 0 20px 48px; }
+.mcp-scope-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.mcp-scope-tags > span { padding: 3px 8px; border: 1px solid var(--line); border-radius: 5px; font-size: 12px; }
+.mcp-upload-entry { display: flex; align-items: center; gap: 14px; padding: 20px 24px; border: 1px solid var(--line); border-radius: var(--radius-card); }
+.mcp-upload-entry > div { flex: 1; min-width: 0; }
+.mcp-upload-entry p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+.mcp-create-form { display: grid; gap: 24px; }
+.mcp-form-fields { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 20px; }
+.mcp-form-fields > label, .mcp-secret > label { display: grid; gap: 8px; min-width: 0; font-size: 13px; }
+.mcp-create-form fieldset { padding: 0; margin: 0; min-width: 0; border: 0; }
+.mcp-create-form legend { padding: 0; margin-bottom: 12px; font-size: 13px; }
+.mcp-permissions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; }
+.mcp-choice { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; }
+.mcp-choice input { width: 16px; height: 16px; margin: 0; flex-shrink: 0; accent-color: var(--accent); }
+.mcp-choice input[type="radio"] { width: 16px; min-height: 16px; height: 16px; padding: 0; flex: 0 0 16px; }
+.mcp-choice > .muted { white-space: nowrap; }
+.mcp-create-form fieldset > .field-hint { margin-top: 12px; }
+.mcp-project-choices { display: grid; gap: 12px; margin-top: 12px; padding: 16px; background: var(--soft); border-radius: var(--radius-control); }
+.mcp-upload-hint { padding: 16px; border-radius: var(--radius-control); background: var(--sidebar); }
+.mcp-upload-hint h3 { font-size: 14px; }
+.mcp-upload-hint > p { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+.mcp-upload-hint .mcp-upload-help { margin-top: 16px; }
+.mcp-upload-hint .mcp-code { background: var(--surface); }
+.mcp-form-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-top: 20px; border-top: 1px solid var(--line); }
+.mcp-warning { margin: 0; padding: 14px 16px; background: var(--warning-soft); color: var(--warning); border-radius: var(--radius-control); font-size: 13px; }
+@media (max-width: 768px) {
+  .mcp-card { padding: 20px; }
+  .mcp-form-fields, .mcp-permissions { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 480px) {
+  .mcp-settings { gap: 20px; }
+  .mcp-card { padding: 16px; }
+  .mcp-access .section-action { flex-shrink: 1; }
+  .mcp-token > summary { flex-wrap: wrap; }
+  .mcp-token-identity { flex-basis: calc(100% - 48px); }
+  .mcp-detail-label { margin-left: 48px; }
+  .mcp-token-details { padding-left: 0; }
+  .mcp-upload-entry { flex-wrap: wrap; align-items: flex-start; padding: 16px; }
+  .mcp-upload-entry > div { flex-basis: calc(100% - 32px); }
+  .mcp-upload-entry > button { margin-left: 30px; }
+  .mcp-segments { gap: 0; }
+  .mcp-segments button { padding-inline: 7px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     scroll-behavior: auto !important;

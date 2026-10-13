@@ -6,6 +6,8 @@ Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install
 
 ## Before development
 
+- 外部 Agent 的 MCP 接入、个人 Token 和受鉴权 HTTP 图片上传遵循 [MCP 契约](./mcp.md)；不复用浏览器 CSRF token，也不自动启动开发。
+
 - 当前版本仅支持全新部署，不兼容或迁移旧数据。数据库使用单一安装基线，旧 PostgreSQL 迁移链及 SQLite 脚本已删除；运行时不推断旧来源或回退旧任务文件。以 [PostgreSQL 接入](./postgresql.md) 为准。
 
 - 发布版本、可编排事项流程和先认领后启动的开发任务以[生命周期 PRD](../prd/project-lifecycle.md)为准，取代历史固定状态和从事项直接执行的交互。流程归属系统设置，管理员统一发布，项目只使用已发布版本；最新验收见[系统流程记录](../reviews/system-workflows-2026-10-12.md)。

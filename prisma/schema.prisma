@@ -40,8 +40,64 @@ model User {
   gitAccounts        GitAccount[]
   gitKeyDrafts       GitKeyDraft[]
   workspaceClones    WorkspaceClone[]
+  mcpTokens          McpToken[]
+  mcpUploads         McpUpload[]
+  mcpOperations      McpOperation[]
 
   @@map("users")
+}
+
+model McpToken {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  tokenHash   String    @unique @map("token_hash")
+  prefix      String
+  authVersion Int       @map("auth_version")
+  scopes      String[]
+  allProjects Boolean   @default(false) @map("all_projects")
+  projectIds  String[]  @map("project_ids")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz(3)
+  lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz(3)
+
+  @@index([userId, createdAt])
+  @@map("mcp_tokens")
+}
+
+model McpUpload {
+  id          String   @id
+  userId      String   @map("user_id")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId   String   @map("project_id")
+  name        String
+  mimeType    String   @map("mime_type")
+  size        Int
+  sha256      String
+  data        Bytes?
+  issueId     String?  @map("issue_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(3)
+
+  @@index([userId, projectId])
+  @@index([expiresAt])
+  @@map("mcp_uploads")
+}
+
+model McpOperation {
+  userId      String   @map("user_id")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestId   String   @map("request_id")
+  projectId   String   @map("project_id")
+  kind        String
+  inputHash   String   @map("input_hash")
+  result      Json
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@id([userId, requestId])
+  @@map("mcp_operations")
 }
 
 model AuthSession {

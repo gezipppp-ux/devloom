@@ -51,6 +51,14 @@ CLI Agent 已通过独立适配层接入，目前仅支持 Codex。项目协作�
 
 项目不设置默认开发分支，需求／Bug 也不单独设置基线。任务开始前从 Git 实时远端分支列表搜索选择本次分支；创建 worktree 前再次获取该分支的最新提交并记录 SHA，失败时停止。已有会话不会自动切换基线。版本、流程、认领与启动规则见[生命周期 PRD](docs/prd/project-lifecycle.md)。
 
+### CLI Agent 通过 MCP 发布需求
+
+在「个人设置 → MCP 接入 → 管理 MCP Token」创建个人 Token，复制统一 MCP 地址并配置到 Codex、Claude Code 或 Pi。支持查询项目、版本和成员、新建版本、发布／编辑需求与 Bug、指派负责人，以及查重和发布结果核验。Token 可限定项目、操作权限和有效期，并可随时撤销。
+
+图片通过带 Bearer Token 的 HTTP POST 上传，正文使用附件 ID 引用；Token 页面提供 curl、PowerShell、客户端配置和发布参数示例。单张最多 10 MiB、每次最多 20 张且合计 20 MiB；暂存有效期为 24 小时。发布与指派不会自动启动开发。
+
+完整接口、权限和重试规则见 [MCP 接入与图文发布](docs/engineering/mcp.md)。已有当前基线部署升级时，先运行 npm run build、npm run db:deploy，再重启服务。
+
 ## 环境要求
 
 以下软件需要安装在**运行 Web Coding 服务的机器上**；仅通过浏览器访问的成员不需要在自己电脑上安装这些运行依赖。

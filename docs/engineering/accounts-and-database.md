@@ -106,6 +106,10 @@ npm start -- --host 127.0.0.1 --port 4317
 
 ## HTTP 和部署
 
+### 外部 Agent 接入
+
+个人 MCP Token、受鉴权 HTTP 上传、原子图文发布和幂等重试见 [MCP 契约](./mcp.md)。MCP Token 仅用于 /mcp 及明确的 /api/mcp/ 端点；账号管理与浏览器业务接口继续使用 Cookie/Session/CSRF。Token 摘要、暂存 BLOB 和请求结果通过当前基线后的版本化迁移保存于 PostgreSQL，不改动已有账号、事项或会话身份。
+
 ### 项目生命周期
 
 - 发布版本使用项目权限 `release.manage`，部门限定上限，项目分配授权。需求／Bug 流程是系统设置，仅当前有效系统管理员可以修改和发布；删除项目权限 `workflow.manage`，不允许项目覆盖系统流程。

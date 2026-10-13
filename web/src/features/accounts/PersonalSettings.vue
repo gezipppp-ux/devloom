@@ -12,6 +12,7 @@ import PermissionSelect from "../../shared/components/PermissionSelect.vue";
 import AccountProfile from "./AccountProfile.vue";
 import PasswordForm from "./PasswordForm.vue";
 import GitAccountSettings from "./GitAccountSettings.vue";
+import McpTokenSettings from "./McpTokenSettings.vue";
 defineProps({ notifications: { type: Object, required: true } });
 const form = reactive({ model: accountSession.settings.model || "", reasoningEffort: accountSession.settings.reasoningEffort || "", permissionMode: accountSession.settings.permissionMode || "ask", grouping: accountSession.settings.grouping || "type" });
 const models = useModelCatalog((url) => appApi(`/account${url}`));
@@ -50,6 +51,7 @@ async function save() {
       <p v-if="notifications.permission.value === 'denied'" class="field-hint">浏览器已拦截通知，请在网站权限中允许后重试。</p>
       <FeedbackMessage :message="notifications.error.value" type="error" />
     </FormSection>
+    <McpTokenSettings />
     <GitAccountSettings />
     <FormSection title="账号安全" description="修改登录密码。"><PasswordForm /></FormSection>
   </section>

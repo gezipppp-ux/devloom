@@ -16,7 +16,7 @@ test("fresh baseline matches Prisma, preserves database constraints and publishe
   await fixture.deploy();
   await fixture.deploy();
   const database = await fixture.open();
-  assert.equal(readPostgresMigrations().length, 1);
+  assert.deepEqual(readPostgresMigrations().map(row => row.name), ["20261012200000_baseline", "20261013070000_mcp_access"]);
   const workflows = await database.client.systemWorkflow.findMany({ include: { versions: true }, orderBy: { type: "asc" } });
   assert.deepEqual(workflows.map(row => row.type), ["bug", "requirement"]);
   for (const row of workflows) {

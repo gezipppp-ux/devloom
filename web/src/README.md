@@ -1,5 +1,7 @@
 # 前端模块边界
 
+个人设置的 MCP 接入由 features/accounts/McpTokenSettings.vue 管理，按需读取 Token 和项目范围。采用极简接入布局：连接配置、最近两枚 Token 和图片上传入口；完整列表与 Token 详情按需展开，创建表单和上传说明单独显示。创建时仅在当前组件内存展示一次明文，返回、关闭或卸载即清除。McpConnectionHelp.vue 提供客户端切换与身份验证，McpUploadHelp.vue 提供 HTTP 二进制上传和附件 ID 引用，创建表单保留可展开的上传示例。代码始终使用凭据占位符，不插入真实 Token；Pi 仅提供通用连接参数，不假定具体 MCP 扩展的配置格式。请求使用 useResource 的账号／卸载隔离；桌面和窄屏代码片段在本身区域滚动。
+
 `main.js` 是唯一入口，负责挂载 Vue、注册表单组件，并从共享样式读取主题变量。
 
 会话文件查看归 `features/session/`：`file-reference.js` 解析本地链接，`SessionItem` 发出文件请求，app 仅协调侧栏开关；`use-session-files.js` 拥有文件/列表请求与代际隔离，`SessionFilePanel`、`SessionChangedFiles` 呈现预览和 Git 列表，`code-content.js` 处理高亮与差异行。高亮库仅在打开文件侧栏时加载。文件内容始终由后端按会话的 Worktree 校验，前端不拼接服务器磁盘路径。
