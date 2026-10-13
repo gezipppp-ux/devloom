@@ -64,7 +64,7 @@ async function verifyPromptSettings(browser, { origin, output, errors, workspace
     const manualDraft = `{{image_count}}${custom}`;
     assert.equal(await editor.inputValue(), manualDraft);
     assert.equal(await editor.evaluate((field) => field.selectionStart), "{{image_count}}".length);
-    assert.deepEqual(Object.keys(initial.catalog), ["bug", "requirement"]);
+    assert.deepEqual(Object.keys(initial.catalog), ["bug", "requirement", "supplement"]);
     const request = page.waitForRequest((entry) => entry.url() === endpoint && entry.method() === "POST");
     await save.click();
     assert.deepEqual((await request).postDataJSON(), { requirement: manualDraft });

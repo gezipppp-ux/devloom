@@ -39,11 +39,11 @@ export function useDevelopmentTask(projectId, taskId, changed) {
       message,
     );
   }
-  async function start(baseBranch) {
+  async function start(baseBranch, supplementaryPrompt = "") {
     if (resource.loading.value || resource.saving.value) return;
     const result = await mutate(
       "start",
-      { requestId: startRequestId, baseBranch },
+      { requestId: startRequestId, baseBranch, supplementaryPrompt },
       "已提交开发启动请求，请在会话中跟进。",
     );
     // A failed response may follow accepted dispatch. Read the recorded result,

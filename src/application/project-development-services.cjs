@@ -129,7 +129,9 @@ class ProjectDevelopmentServices {
       const space = await this.store.space(projectId, actor.id);
       const issues = await this.store.issues(projectId, current.snapshot.issues.map(issue => issue.id));
       this.assertIssues(issues, current.releaseId, true);
-      const prompt = developmentPrompt(issues, false, await this.projects.effectivePrompts(projectId, actor));
+      const prompt = developmentPrompt(issues, false, await this.projects.effectivePrompts(projectId, actor), {
+        title: current.snapshot.title, content: request.supplementaryPrompt,
+      });
       const defaults = await this.accounts.settings(actor.id);
       const selection = Object.fromEntries(["model", "reasoningEffort", "permissionMode"].map(field => [field,
         Object.hasOwn(request, field) ? request[field] : defaults[field] ?? ""]));

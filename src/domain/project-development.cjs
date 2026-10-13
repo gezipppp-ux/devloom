@@ -26,9 +26,10 @@ function developmentMergeInput(input) {
   return { requestId: input.requestId, tasks, title: text(input.title, "合并后的任务标题", 200, { required: true }) };
 }
 function developmentStartInput(input) {
-  object(input, ["requestId", "revision", "baseBranch", "model", "reasoningEffort", "permissionMode"]);
+  object(input, ["requestId", "revision", "baseBranch", "model", "reasoningEffort", "permissionMode", "supplementaryPrompt"]);
   if (!UUID.test(input.requestId || "")) throw accountError("开发请求标识无效。", 400);
   const result = { requestId: input.requestId, revision: revision(input.revision), baseBranch: validateBaseBranch(input.baseBranch) };
+  if (Object.hasOwn(input, "supplementaryPrompt")) result.supplementaryPrompt = text(input.supplementaryPrompt, "补充提示词", 20000);
   for (const field of ["model", "reasoningEffort", "permissionMode"]) if (Object.hasOwn(input, field)) result[field] = text(input[field], "执行设置", 200);
   return result;
 }
@@ -43,7 +44,7 @@ function developmentEditInput(input) {
   }
   return result;
 }
-function developmentPrompt(issues, addition = false, templates = getPromptTemplates()) {
+function developmentPrompt(issues, addition = false, templates = getPromptTemplates(), supplement = {}) {
   let imageOffset = 0;
   const content = [addition ? "以下是本轮明确追加的项目事项快照。请结合已有实现处理，不自动更改事项业务状态。" : "请实现以下项目事项，结合每条事项的验收要求与复现信息开展开发。事项业务状态由成员单独维护。",
     ...issues.map(issue => {
@@ -65,8 +66,11 @@ function developmentPrompt(issues, addition = false, templates = getPromptTempla
         image_count: files.length, image_list: imageList,
       });
     }),
+    ...(supplement.content ? [renderPromptTemplate("supplement", templates.supplement, {
+      title: supplement.title, content: supplement.content,
+    })] : []),
   ].join("\n\n");
-  if (content.length > 60000) throw accountError("所选事项合计超过 60000 字，请拆分开发任务。", 400);
+  if (content.length > 60000) throw accountError("所选事项与补充提示词合计超过 60000 字，请拆分开发任务。", 400);
   return content;
 }
 

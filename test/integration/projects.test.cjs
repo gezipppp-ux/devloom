@@ -58,8 +58,8 @@ test("project prompt defaults and member overrides isolate types, accounts and p
   await assert.rejects(f.projects.savePrompts(f.project.id, f.member, { scope: "personal", revision: saved.personalRevision, templates: { bug: personal }, userId: f.analyst.id }), { statusCode: 400 });
   const changed = await f.projects.savePrompts(f.project.id, f.admin, { scope: "project", revision: 1, templates: { requirement: shared, bug: shared } });
   const effective = await f.projects.effectivePrompts(f.project.id, f.member);
-  assert.deepEqual(effective, { bug: personal, requirement: shared });
-  assert.deepEqual(await f.projects.effectivePrompts(f.project.id, f.analyst), { bug: shared, requirement: shared });
+  assert.deepEqual(effective, { ...defaults, bug: personal, requirement: shared });
+  assert.deepEqual(await f.projects.effectivePrompts(f.project.id, f.analyst), { ...defaults, bug: shared, requirement: shared });
   const another = (await f.projects.create(f.admin, { name: "独立项目", remoteUrl: f.project.remoteUrl })).project;
   await f.projects.saveMember(another.id, f.admin, { userId: f.member.id, permissions: ["project.view"] });
   assert.deepEqual(await f.projects.effectivePrompts(another.id, f.member), defaults);

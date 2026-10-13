@@ -46,13 +46,13 @@ function resolve(merged) {
 }
 </script>
 <template>
-  <FormSection title="提示词模板" description="按事项类型生成开发指令。混合任务逐条使用对应模板，已保存的任务资料不受后续修改影响。">
+  <FormSection title="提示词模板" description="Bug 和需求按事项类型生成开发指令；任务补充提示词使用补充模板。已保存的执行快照不受后续修改影响。">
     <FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="notice" type="success" />
     <p v-if="loading" role="status">正在加载提示词模板…</p>
     <button v-if="!data && !loading" @click="reload">重新加载提示词模板</button>
     <template v-if="data">
       <div class="page-tabs" role="group" aria-label="提示词作用域"><button :disabled="busy || Boolean(latest)" :class="{ active: scope === 'project' }" :aria-pressed="scope === 'project'" @click="scope = 'project'">项目默认</button><button v-if="data.personalRevision" :disabled="busy || Boolean(latest)" :class="{ active: scope === 'personal' }" :aria-pressed="scope === 'personal'" @click="scope = 'personal'">我的配置</button></div>
-      <p class="field-hint">{{ scope === 'personal' ? '仅用于你在此项目执行的任务，不影响其他成员。未自定义的类型始终跟随项目默认。' : '项目新建时已提供 Bug 和需求默认模板。修改后供未自定义该类型的成员使用。' }}</p>
+      <p class="field-hint">{{ scope === 'personal' ? '仅用于你在此项目执行的任务，不影响其他成员。未自定义的类型始终跟随项目默认。' : '项目提供 Bug、需求和补充默认模板。修改后供未自定义该类型的成员使用。' }}</p>
       <p v-if="!editable" class="field-hint">当前配置只读。</p>
       <div class="page-tabs" role="group" aria-label="提示词类型"><button v-for="(definition, name) in data.catalog" :key="name" :class="{ active: type === name }" :aria-pressed="type === name" @click="type = name">{{ definition.label }}提示词{{ drafts[scope][name] !== baselines[scope][name] ? ' · 未保存' : '' }}</button></div>
       <EditConflict v-if="latest" :key="`${scope}-${latest.revision}`" :base="baselines[scope]" :draft="drafts[scope]" :latest="latestFields" @resolve="resolve" @discard="resolve(latestFields)" />

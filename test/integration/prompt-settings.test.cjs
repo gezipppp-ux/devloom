@@ -109,7 +109,7 @@ test("workspace prompt settings guard writes, isolate credentials and persist te
   const { app, origin, get, post, token } = await httpFixture(t, workspaces);
   const defaults = await (await get(a.id)).json();
   assert.deepEqual(Object.keys(defaults).sort(), ["catalog", "maxLength", "templates"]);
-  assert.deepEqual(Object.keys(defaults.templates).sort(), ["bug", "requirement"]);
+  assert.deepEqual(Object.keys(defaults.templates).sort(), ["bug", "requirement", "supplement"]);
   assert.equal(defaults.maxLength, 20000);
   assert.doesNotMatch(JSON.stringify(defaults), /private-template-secret|private-session|cookie_header|dsc_token/);
   assert.deepEqual((await (await get(b.id)).json()).templates, defaults.templates);

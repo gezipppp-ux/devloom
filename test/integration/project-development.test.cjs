@@ -99,9 +99,9 @@ test("project tasks and image additions use the real session manager with tempor
   const services = new ProjectDevelopmentServices(database, projects, workspaces);
   const first = await issue("图示需求"), added = await issue("追加图示");
   const personalTemplate = "个人需求模板 {{title}}\n{{content}}\n{{images}}";
-  await projects.savePrompts(project.id, actor, { scope: "personal", revision: 1, templates: { requirement: personalTemplate } });
+  await projects.savePrompts(project.id, actor, { scope: "personal", revision: 1, templates: { requirement: personalTemplate, supplement: "本轮补充 {{title}}\n{{content}}" } });
   for (const selected of [first, added]) await content.updateIssue(project.id, selected.id, actor, { revision: 1, attachments: [{ id: randomUUID(), name: "资料.png", mimeType: "image/png", data: png.toString("base64") }] });
-  const { task } = await launch(services, project.id, actor, { requestId: randomUUID(), issueIds: [first.id] });
+  const { task } = await launch(services, project.id, actor, { requestId: randomUUID(), issueIds: [first.id] }, { supplementaryPrompt: "验证首轮补充 $& {{content}}" });
   const { sessions } = await workspaces.get(space.workspaceId, actor);
   const runtime = sessions.sessions.get(task.runKey);
   const deadline = Date.now() + 10000;
@@ -111,6 +111,7 @@ test("project tasks and image additions use the real session manager with tempor
   const firstText = client.calls.find(call => call.method === "turn/start").params.input[0].text;
   assert.match(firstText, /个人需求模板 图示需求/);
   assert.equal(firstText.match(/个人需求模板/g).length, 1, "project prompts are not wrapped in a second template");
+  assert.ok(firstText.includes("本轮补充 图示需求\n验证首轮补充 $& {{content}}"));
   client.notify("turn/completed", { turn: { id: runtime.turnId, status: "completed" } });
   await sessions.events.drain();
   await runtime.operation;
@@ -125,6 +126,7 @@ test("project tasks and image additions use the real session manager with tempor
   assert.equal((await sessions.store.readTask(task.runKey)).prompt, firstText, "settings never rewrite a started task snapshot");
   const sent = await services.continueAddition(project.id, task.id, actor, requestId);
   assert.match(client.calls.filter(call => call.method === "turn/start").at(-1).params.input[0].text, /追加模板 追加图示/);
+  assert.doesNotMatch(client.calls.filter(call => call.method === "turn/start").at(-1).params.input[0].text, /验证首轮补充/);
   await sessions.events.drain();
   assert.equal(sent.task.additions[0].status, "sent");
   assert.equal(client.calls.filter(call => call.method === "turn/start").length, 2);
@@ -199,9 +201,40 @@ test("project additions persist ready snapshots without sending and fence unknow
 });
 
 
-async function launch(services, projectId, actor, input) {
+test("start supplements use executor templates, freeze at dispatch and fence changed retries", async t => {
+  const { database, actor, other, project, services, calls, issue } = await fixture(t);
+  const selected = await issue("启动补充要求");
+  const task = (await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [selected.id] })).tasks[0];
+  const space = await database.client.developmentSpace.findUnique({ where: { projectId_userId: { projectId: project.id, userId: actor.id } } });
+  await database.writeWorkspace(space.workspaceId, { workspace: { id: space.workspaceId, name: "补充提示词测试空间", owner_user_id: actor.id, project_id: project.id },
+    agent: { provider: "codex" }, execution: { repository: database.dataRoot, baseBranch: "main", initCommands: [] } });
+  const projects = services.projects;
+  await projects.savePrompts(project.id, actor, { scope: "project", revision: project.revision, templates: { supplement: "项目补充 {{content}}" } });
+  await projects.savePrompts(project.id, actor, { scope: "personal", revision: 1, templates: { supplement: "{{content}}{{content}}{{content}}{{content}}" } });
+  const request = { requestId: randomUUID(), revision: task.revision, baseBranch: "main", supplementaryPrompt: "保留字面内容 $& {{title}}\n验证移动端" };
+  await assert.rejects(services.start(project.id, task.id, other, request), { statusCode: 403 });
+  await assert.rejects(services.start(project.id, task.id, actor, { ...request, supplementaryPrompt: "a".repeat(20000) }), /超过 60000/);
+  assert.equal((await services.read(project.id, task.id, actor)).task.status, "planned");
+  assert.equal(calls.starts.length, 0, "invalid rendered content is rejected before recording or dispatch");
+  await projects.savePrompts(project.id, actor, { scope: "personal", revision: 2, templates: { supplement: "个人补充 {{title}}\n{{content}}" } });
+  await services.start(project.id, task.id, actor, request);
+  const prompt = calls.starts[0].content;
+  assert.ok(prompt.endsWith(`个人补充 启动补充要求\n${request.supplementaryPrompt}`));
+  assert.equal(prompt.match(/个人补充/g).length, 1);
+  assert.doesNotMatch(prompt, /项目补充/);
+  const snapshot = (await database.client.developmentTask.findUnique({ where: { id: task.id } })).snapshot;
+  assert.equal(snapshot.supplementaryPrompt, request.supplementaryPrompt);
+  assert.equal(snapshot.startRequest.supplementaryPrompt, request.supplementaryPrompt);
+  await projects.savePrompts(project.id, actor, { scope: "personal", revision: 3, templates: { supplement: "后续模板 {{content}}" } });
+  assert.equal((await services.start(project.id, task.id, actor, request)).reused, true);
+  await assert.rejects(services.start(project.id, task.id, actor, { ...request, supplementaryPrompt: "改动请求" }), { statusCode: 409 });
+  assert.equal(calls.starts.length, 1);
+  assert.equal((await database.client.developmentTask.findUnique({ where: { id: task.id } })).snapshot.prompt, prompt);
+});
+
+async function launch(services, projectId, actor, input, startInput = {}) {
   const planned = await services.create(projectId, actor, input);
-  return services.start(projectId, planned.tasks[0].id, actor, { requestId: randomUUID(), revision: planned.tasks[0].revision, baseBranch: "main" });
+  return services.start(projectId, planned.tasks[0].id, actor, { requestId: randomUUID(), revision: planned.tasks[0].revision, baseBranch: "main", ...startInput });
 }
 
 test("assigning separate issues and merging my plans preserves sources and starts exactly one session", async t => {

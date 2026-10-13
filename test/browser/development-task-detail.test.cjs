@@ -12,7 +12,7 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
   const taskUrl = `${origin}${base}?tab=tasks&task=search-task&taskScope=all&taskOffset=30`;
   const apiTask = `/api${base}/tasks/search-task`;
   const initial = structuredClone(fixture.response(new URL(origin + apiTask)).task);
-  let task, spaceReady = false, readonly = false, failBranches = false, failStart = false;
+  let task, spaceReady = false, readonly = false, failBranches = false, failStart = false, rejectStart = false;
   const writes = [], errors = [];
   const planned = () => ({ ...structuredClone(initial), revision: 1, status: "planned", execution: null, runKey: null, baseBranch: "", baseCommit: null, fetchedAt: null, additions: [], canStart: true, canEdit: true, canComplete: false, canCancel: true, canOpenSession: false });
   const started = (status = "completed") => ({ ...structuredClone(initial), execution: { status, sessionId: "fixture-session" }, canComplete: status === "completed", canCancel: status === "completed" });
@@ -39,6 +39,7 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
           if (input.revision !== task.revision) return send({ error: "任务已变更，请刷新后重试。" }, 409);
           task = { ...task, ...input, revision: task.revision + 1 };
         } else if (endpoint.endsWith("/start")) {
+          if (rejectStart) return send({ error: "启动前校验失败，请修正后重试。" }, 400);
           if (failStart) { task = { ...task, status: "unknown", canStart: false, canEdit: false, canComplete: false, canCancel: false, error: "启动响应中断，请确认原会话。" }; return send({ error: task.error }, 502); }
           task = { ...started("running"), baseBranch: input.baseBranch, additions: [] };
         } else if (endpoint.endsWith("/complete") || endpoint.endsWith("/cancel")) {
@@ -99,6 +100,10 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     await branch.locator('option[value="main"]').waitFor({ state: "attached" });
     assert.equal(await button("启动 Codex 开发").isDisabled(), true);
     await branch.selectOption("main");
+    const supplement = "本轮补充要求\n验证移动端，保留 {{title}} 与 $&";
+    const supplementInput = page.getByLabel("补充提示词", { exact: true });
+    await supplementInput.fill(supplement);
+    assert.equal(writes.length, 0, "supplement entry is a local start draft");
     failBranches = true;
     await button("刷新远端分支").click();
     await page.getByText("远端暂不可用，请刷新重试。", { exact: true }).waitFor();
@@ -111,6 +116,7 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     await branch.selectOption("main");
 
     await button("编辑任务信息").click();
+    assert.equal(await page.getByRole("form", { name: "编辑任务信息", exact: true }).getByLabel("补充提示词", { exact: true }).count(), 0);
     await page.getByLabel("任务标题", { exact: true }).fill("保留编辑中的任务标题");
     assert.equal(await button("启动 Codex 开发").isDisabled(), true);
     await button("添加关联事项").click();
@@ -120,10 +126,12 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     await button("刷新状态").click();
     await button("刷新状态").waitFor();
     assert.equal(await page.getByLabel("任务标题", { exact: true }).inputValue(), "保留编辑中的任务标题");
+    assert.equal(await supplementInput.inputValue(), supplement);
     assert.equal(await page.getByRole("checkbox", { name: /修复导出/ }).isChecked(), true);
     await button("保存任务信息").click();
     await page.getByRole("heading", { name: "保留编辑中的任务标题", exact: true }).waitFor();
     assert.equal(Object.hasOwn(writes.at(-1).input, "issueIds"), false, "saving information cannot save checked issues");
+    assert.equal(Object.hasOwn(writes.at(-1).input, "supplementaryPrompt"), false, "information saves cannot submit the start supplement");
     await button("保存关联事项").click();
     await page.getByText("关联事项已保存，不会启动开发。", { exact: true }).waitFor();
     assert.equal(Object.hasOwn(writes.at(-1).input, "title"), false, "saving issues cannot save information drafts");
@@ -134,6 +142,8 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     assert.equal(await button("标记开发任务完成").count(), 0);
     assert.equal(await button("取消任务并释放认领").count(), 0);
     assert.equal(writes.filter(write => write.endpoint.endsWith("/start")).length, 1);
+    assert.equal(writes.at(-1).input.supplementaryPrompt, supplement);
+    assert.equal(await supplementInput.count(), 0, "the input belongs to the pre-start form");
     await capture("running");
 
     task = { ...started(), additions: [] };
@@ -186,6 +196,23 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     await capture("readonly");
     readonly = false;
 
+    task = planned(); rejectStart = true;
+    await page.reload();
+    await branch.locator('option[value="main"]').waitFor({ state: "attached" });
+    await branch.selectOption("main");
+    assert.equal(await supplementInput.inputValue(), "", "newly opened task starts with an empty local draft");
+    const longSupplement = supplement.repeat(30);
+    await supplementInput.fill(longSupplement);
+    await button("启动 Codex 开发").click();
+    await page.getByRole("alert").filter({ hasText: "启动前校验失败" }).waitFor();
+    await page.waitForFunction(() => !document.querySelector('[aria-label="补充提示词"]').disabled);
+    assert.equal(await supplementInput.inputValue(), longSupplement, "pre-dispatch failure preserves the start draft");
+    await capture("start-rejected");
+    rejectStart = false;
+    await button("启动 Codex 开发").click();
+    await button("进入 Codex 会话").waitFor();
+    assert.equal(writes.at(-1).input.supplementaryPrompt, longSupplement);
+
     task = { ...planned(), title: "很长的开发任务名称：".repeat(14) };
     await page.reload();
     await button("编辑任务信息").waitFor();
@@ -197,6 +224,7 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
 
     task = planned();
     await page.reload();
+    await supplementInput.fill("旧任务的启动草稿");
     await button("编辑任务信息").click();
     await page.getByLabel("任务标题", { exact: true }).fill("旧任务的迟到保存");
     let releaseSave, saveStarted;
@@ -210,6 +238,7 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     await saving;
     await page.goto(`${origin}${base}?tab=tasks&task=other-task`);
     await page.getByRole("heading", { name: "切换后的另一任务", exact: true }).waitFor();
+    assert.equal(await supplementInput.inputValue(), "", "task changes cannot inherit another start supplement");
     releaseSave();
     await page.getByRole("heading", { name: "切换后的另一任务", exact: true }).waitFor();
     assert.equal(await page.getByRole("heading", { name: "旧任务的迟到保存", exact: true }).count(), 0);

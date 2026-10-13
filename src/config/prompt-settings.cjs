@@ -19,7 +19,7 @@ async function savePromptSettings(configFile, input) {
       (type) => !Object.hasOwn(promptTemplateCatalog, type),
     )
   )
-    throw new Error("仅允许修改 Bug 和需求提示词模板。");
+    throw new Error("仅允许修改 Bug、需求和补充提示词模板。");
   for (const [type, template] of Object.entries(input)) {
     if (template !== null) validatePromptTemplate(type, template);
   }

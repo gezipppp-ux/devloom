@@ -99,7 +99,7 @@ class ProjectDevelopmentStore {
   async acceptStart(task, space, request, issues, prompt, selection) {
     for (const issue of issues) await this.database.client.taskIssueLink.update({ where: { taskId_issueId: { taskId: task.id, issueId: issue.id } }, data: { snapshot: issue } });
     return this.update(task, { spaceId: space.id, workspaceId: space.workspaceId, runKey: runKey({ channel: "manual", scope: "local", id: task.id }), status: "unknown",
-      snapshot: json({ ...task.snapshot, issues, prompt, selection, baseBranch: request.baseBranch, startRequest: request }) });
+      snapshot: json({ ...task.snapshot, issues, prompt, selection, supplementaryPrompt: request.supplementaryPrompt || "", baseBranch: request.baseBranch, startRequest: request }) });
   }
   async finish(task, status, actorId) {
     if (status === "cancelled") await this.assignIssues(task.projectId, await this.issues(task.projectId, [...task.snapshot.issues.map(issue => issue.id), ...task.snapshot.additions.flatMap(batch => batch.issueIds)]), null, actorId);

@@ -53,6 +53,7 @@ const editing = ref(false),
   executorId = ref(""),
   editRevision = ref(0),
   baseBranch = ref(""),
+  supplementaryPrompt = ref(""),
   checked = ref([]),
   confirmation = ref(null);
 const titleInput = ref(),
@@ -368,13 +369,26 @@ async function submitConfirmation() {
           <form
             v-else
             class="project-form development-start-form"
-            @submit.prevent="start(baseBranch)"
+            @submit.prevent="start(baseBranch, supplementaryPrompt)"
           >
             <RemoteBranchSelect
               :project-id="projectId"
               v-model="baseBranch"
               :disabled="busy || editing"
-            /><button
+            />
+            <label>
+              补充提示词（可选）
+              <textarea
+                v-model="supplementaryPrompt"
+                aria-label="补充提示词"
+                rows="5"
+                maxlength="20000"
+                :disabled="busy || editing"
+                placeholder="填写本次开发的额外要求、实现约束或验证重点"
+              />
+              <small class="field-hint">最多 20000 字，点击启动时按补充模板一并发送给 Codex。</small>
+            </label>
+            <button
               class="primary"
               :disabled="busy || editing || !baseBranch"
             >

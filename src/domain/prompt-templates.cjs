@@ -5,7 +5,7 @@ const MAX_PROMPT_TEMPLATE_LENGTH = 20000;
 function storedPromptOverrides(value = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value) ||
       Object.keys(value).some(type => !Object.hasOwn(promptTemplateCatalog, type)))
-    throw new Error("提示词配置仅支持 Bug 和需求模板。");
+    throw new Error("提示词配置仅支持 Bug、需求和补充提示词模板。");
   return Object.fromEntries(Object.entries(value).map(([type, template]) => [type, validatePromptTemplate(type, template)]));
 }
 const PLACEHOLDER = /\{\{([\s\S]*?)\}\}/g;

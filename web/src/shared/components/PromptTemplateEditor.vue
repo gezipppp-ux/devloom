@@ -17,12 +17,12 @@ async function insert(name) {
     <label>{{ definition.label }}提示词
       <textarea ref="editor" :value="modelValue" :aria-label="`${definition.label}提示词`" :disabled="disabled" :maxlength="maxLength" rows="15" spellcheck="false" @input="emit('update:modelValue', $event.target.value)" />
     </label>
-    <div class="prompt-editor-hints"><p class="field-hint">保留必填占位符，运行时会填入该事项的完整资料及图片说明。</p><span>{{ modelValue.length }} / {{ maxLength }}</span></div>
+    <div class="prompt-editor-hints"><p class="field-hint">保留必填占位符，运行时会填入对应的事项资料或任务补充要求。</p><span>{{ modelValue.length }} / {{ maxLength }}</span></div>
     <details class="prompt-placeholders" open>
       <summary>可用占位符 · 点击插入</summary>
       <ul><li v-for="item in definition.placeholders" :key="item.name"><button type="button" :disabled="disabled" :aria-label="`插入占位符 ${item.name}`" @mousedown.prevent @click="insert(item.name)"><code>{{ token(item.name) }}</code></button><span>{{ item.label }}</span><span v-if="item.required" class="prompt-required">必填</span></li></ul>
     </details>
-    <details class="prompt-preview"><summary>示例预览</summary><p class="field-hint">以下使用示例资料；实际执行时按每条事项的类型填充。</p><pre aria-label="提示词示例预览">{{ preview }}</pre></details>
+    <details class="prompt-preview"><summary>示例预览</summary><p class="field-hint">以下使用示例资料；实际执行时填入对应事项或任务的内容。</p><pre aria-label="提示词示例预览">{{ preview }}</pre></details>
   </div>
 </template>
 <style scoped>

@@ -70,5 +70,13 @@
         "example": "图片 1：筛选结果.png"
       }
     ]
+  },
+  "supplement": {
+    "label": "补充",
+    "defaultTemplate": "请在完成上述项目事项时，同时遵循以下补充要求。结合事项资料和现有实现处理，遵守目标仓库的 AGENTS.md 与工程规范。\n\n--- 任务补充要求开始 ---\n任务：{{title}}\n{{content}}\n--- 任务补充要求结束 ---",
+    "placeholders": [
+      { "name": "title", "label": "开发任务标题", "required": false, "example": "完善筛选功能" },
+      { "name": "content", "label": "任务补充提示词", "required": true, "example": "复用已有筛选组件，并验证移动端布局。" }
+    ]
   }
 }

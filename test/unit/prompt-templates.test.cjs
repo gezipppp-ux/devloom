@@ -23,7 +23,25 @@ const {
 } = require("../support/helpers.cjs");
 
 const manualTemplate = "自定义手动需求：{{title}}\n{{content}}\n{{images}}";
-const { developmentPrompt } = require("../../src/domain/project-development.cjs");
+const { developmentPrompt, developmentStartInput, developmentEditInput } = require("../../src/domain/project-development.cjs");
+
+test("start supplements are optional, validated and rendered once without expanding user placeholders", () => {
+  const request = { requestId: randomUUID(), revision: 1, baseBranch: "main" };
+  assert.equal(Object.hasOwn(developmentStartInput(request), "supplementaryPrompt"), false);
+  assert.equal(developmentStartInput({ ...request, supplementaryPrompt: "  " }).supplementaryPrompt, "");
+  for (const supplementaryPrompt of [null, 1, {}, "a".repeat(20001)])
+    assert.throws(() => developmentStartInput({ ...request, supplementaryPrompt }));
+  assert.throws(() => developmentEditInput({ revision: 1, supplementaryPrompt: "不是任务信息字段" }));
+  const issues = [{ type: "requirement", number: 1, revision: 1, title: "需求", description: "完整资料" }];
+  const templates = { ...getPromptTemplates(), supplement: "任务 {{title}} 的额外要求：\n{{content}}" };
+  const content = "保留 $& 和 {{title}} 字面内容";
+  const result = developmentPrompt(issues, false, templates, { title: "任务标题", content });
+  assert.ok(result.endsWith(`任务 任务标题 的额外要求：\n${content}`));
+  assert.equal(result.split(content).length, 2);
+  assert.equal(developmentPrompt(issues, false, templates, { content: "" }), developmentPrompt(issues, false, templates));
+  assert.throws(() => validatePromptTemplate("supplement", "仅有标题 {{title}}"), /缺少必填占位符/);
+  assert.throws(() => developmentPrompt(issues, false, templates, { title: "任务", content: "a".repeat(60000) }), /超过 60000/);
+});
 
 test("mixed project issues use their own templates and preserve literal text and global image order", () => {
   const issues = [
@@ -43,6 +61,7 @@ test("prompt templates reject missing, unknown, malformed and oversized placehol
   assert.deepEqual(getPromptTemplates(), {
     bug: promptTemplateCatalog.bug.defaultTemplate,
     requirement: promptTemplateCatalog.requirement.defaultTemplate,
+    supplement: promptTemplateCatalog.supplement.defaultTemplate,
   });
   for (const invalid of [
     null,

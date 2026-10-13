@@ -52,7 +52,7 @@ test("retired source and manual templates are rejected without compatibility con
   const context = services.workspaceConfig("workspace", project, { userId: "owner" }, "account", "https://example.test/repo.git", "/recorded/repository", { tapd: legacy.tapd });
   assert.equal(Object.hasOwn(context, "tapd"), false);
   assert.deepEqual(context.prompt_templates, settings.prompts);
-  assert.deepEqual(Object.keys(promptTemplateCatalog), ["bug", "requirement"]);
+  assert.deepEqual(Object.keys(promptTemplateCatalog), ["bug", "requirement", "supplement"]);
   const before = fs.readFileSync(file, "utf8");
   for (const channel of ["manual", "tapd", "tapd_fusion"])
     await assert.rejects(savePromptSettings(file, { [channel]: null }), /仅允许/);
