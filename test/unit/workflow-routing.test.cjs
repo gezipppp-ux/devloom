@@ -50,9 +50,30 @@ test('overlapping, missing and negative coordinates get a separated view without
   const original = structuredClone(definition);
   const nodes = workflowNodes(definition);
   assert.deepEqual(definition, original);
+  assert.deepEqual({ x: nodes[0].x, y: nodes[0].y }, { x: -100, y: -100 }, 'negative canvas coordinates must survive rendering');
   for (const node of nodes) for (const other of nodes) if (other !== node) assert.equal(nodesOverlap(node, other), false);
   const addition = freeNodePosition(nodes[0], nodes);
   assert.equal(nodes.some(node => nodesOverlap(node, addition)), false);
+});
+
+test('clear facing sides use straight lines in all directions and with unequal port counts', async () => {
+  const { workflowRoutes, NODE_WIDTH, NODE_HEIGHT } = await import('../../web/src/shared/components/workflow-routing.js');
+  for (const [x, y, axis] of [[40, 320, 'x'], [40, -280, 'x'], [360, 40, 'y'], [-280, 40, 'y']]) {
+    const nodes = [{ id: 'a', x: 40, y: 40 }, { id: 'b', x, y }];
+    const edges = [{ id: 'forward', from: 'a', to: 'b', name: '前进' }, { id: 'reverse', from: 'b', to: 'a', name: '返回' }];
+    for (const edge of workflowRoutes(nodes, edges)) {
+      assert.equal(new Set(edge.points.map(point => point[axis])).size, 1, `${edge.id} must be straight along ${axis}`);
+      assertAvoidsNodes(edge.path, nodes, NODE_WIDTH, NODE_HEIGHT, edge.id);
+    }
+  }
+  const definition = defaultWorkflow('requirement');
+  Object.assign(definition.nodes.find(node => node.id === 'rejected'), { x: 56, y: 360 });
+  const routes = workflowRoutes(definition.nodes, definition.transitions);
+  for (const id of ['planned_rejected', 'rejected_planned']) {
+    const edge = routes.find(edge => edge.id === id);
+    assert.equal(new Set(edge.points.map(point => point.x)).size, 1, `${id}: unequal fan-in and a small node offset must not introduce a dogleg`);
+  }
+  assert.notEqual(routes.find(edge => edge.id === 'planned_rejected').points[0].x, routes.find(edge => edge.id === 'rejected_planned').points[0].x, 'opposite transitions remain distinguishable');
 });
 
 test('drawing previews avoid intermediate cards and stop at hovered node boundaries', async () => {

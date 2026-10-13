@@ -70,6 +70,76 @@ async function verifyWorkflowCanvas({ page, origin, output }) {
   };
   await verifyPreview('规划中', '已实现');
   await verifyPreview('已实现', '规划中');
+  const zoomLabel = page.getByLabel('画布缩放比例', { exact: true });
+  const initialZoom = await zoomLabel.textContent();
+  const canvas = page.locator('.workflow-scroll');
+  await canvas.scrollIntoViewIfNeeded();
+  const clip = await canvas.boundingBox();
+  const rejected = page.getByRole('button', { name: '已拒绝', exact: true });
+  const rejectedBox = await rejected.boundingBox();
+  await page.mouse.move(rejectedBox.x + 30, rejectedBox.y + 20); await page.mouse.down();
+  await page.mouse.move(clip.x + clip.width - 220, clip.y + clip.height - 115, { steps: 16 });
+  const visibleDuringDrag = await rejected.evaluate(node => {
+    const card = node.querySelector('.node-card'), box = card.getBoundingClientRect(), viewport = node.closest('svg').getBoundingClientRect();
+    return box.right < viewport.right && box.bottom < viewport.bottom && node.contains(document.elementFromPoint(box.right - 8, box.bottom - 8));
+  });
+  assert.ok(visibleDuringDrag, 'the whole node stays painted beyond the previous content bounds while the pointer is held');
+  const heldView = await graph.getAttribute('viewBox'), heldPosition = await rejected.getAttribute('transform');
+  await page.mouse.up();
+  assert.equal(await graph.getAttribute('viewBox'), heldView, 'release must not refit or jump the view');
+  assert.equal(await rejected.getAttribute('transform'), heldPosition);
+  assert.equal(await zoomLabel.textContent(), initialZoom);
+  await page.screenshot({ path: path.join(output, 'workflow-drag-beyond-bounds.png'), fullPage: true });
+  // Holding at an edge keeps extending the world, without waiting for pointerup.
+  const movedBox = await rejected.boundingBox();
+  await page.mouse.move(movedBox.x + 30, movedBox.y + 20); await page.mouse.down();
+  await page.mouse.move(clip.x + clip.width - 25, clip.y + clip.height - 60, { steps: 12 });
+  const edgeView = (await graph.getAttribute('viewBox')).split(' ').map(Number);
+  await page.waitForFunction(previous => {
+    const box = document.querySelector('svg[aria-label="事项流程图"]').viewBox.baseVal;
+    return box.x > previous[0] + 40 && box.y > previous[1] + 40;
+  }, edgeView);
+  await page.mouse.up();
+  assert.equal(await zoomLabel.textContent(), initialZoom, 'edge panning keeps the scale');
+  const savedPositions = await graph.locator('.workflow-node').evaluateAll(nodes => nodes.map(node => node.getAttribute('transform')));
+  // Blank-space panning and pointer-centred zoom change only the viewport.
+  const blank = await graph.evaluate(svg => {
+    const rect = svg.getBoundingClientRect();
+    for (let y = rect.top + 50; y < rect.bottom - 50; y += 30) for (let x = rect.left + 50; x < rect.right - 50; x += 30) if (document.elementFromPoint(x, y) === svg) return { x, y };
+    throw new Error('No blank canvas point for panning');
+  });
+  const beforePan = await graph.getAttribute('viewBox');
+  await page.mouse.move(blank.x, blank.y); await page.mouse.down();
+  await page.mouse.move(blank.x + 60, blank.y + 40, { steps: 8 }); await page.mouse.up();
+  assert.notEqual(await graph.getAttribute('viewBox'), beforePan);
+  await page.keyboard.down('Control'); await page.mouse.wheel(0, -100); await page.keyboard.up('Control');
+  await page.waitForFunction(before => document.querySelector('[aria-label="画布缩放比例"]').textContent !== before, initialZoom);
+  assert.deepEqual(await graph.locator('.workflow-node').evaluateAll(nodes => nodes.map(node => node.getAttribute('transform'))), savedPositions);
+  await page.getByRole('button', { name: '适应画布', exact: true }).click();
+  await verifyCurves();
+  Object.assign(workflows.requirement.draft.nodes.find(node => node.id === 'rejected'), { x: 56, y: 360 });
+  await page.goto(origin + '/system?tab=workflows'); await graph.waitFor();
+  for (const name of ['连线：重新规划，已拒绝 → 规划中', '连线：拒绝，规划中 → 已拒绝']) {
+    const xs = await page.getByRole('button', { name, exact: true }).locator('.edge-line').evaluate(path => {
+      const length = path.getTotalLength();
+      return Array.from({ length: 21 }, (_, i) => path.getPointAtLength(length * i / 20).x);
+    });
+    assert.ok(Math.max(...xs) - Math.min(...xs) < .01, 'vertical transitions with different port counts stay straight');
+  }
+  await page.screenshot({ path: path.join(output, 'workflow-straight-vertical.png'), fullPage: true });
+  // Negative world positions are editable and persist without the renderer moving them back to zero.
+  const negativeNode = page.getByRole('button', { name: '规划中', exact: true });
+  await negativeNode.focus();
+  for (let i = 0; i < 3; i++) await negativeNode.press('Shift+ArrowLeft');
+  assert.match(await negativeNode.getAttribute('transform'), /translate\(-56,/);
+  await page.getByRole('button', { name: '保存流程草稿', exact: true }).click();
+  await page.getByRole('button', { name: '保存流程草稿', exact: true, disabled: false }).waitFor();
+  assert.equal(workflows.requirement.draft.nodes.find(node => node.id === 'planned').x, -56);
+  await page.goto(origin + '/system?tab=workflows'); await graph.waitFor();
+  assert.match(await negativeNode.getAttribute('transform'), /translate\(-56,/);
+  // Restore the unsaved fixture so the existing editing and persistence checks start from its original layout.
+  workflows.requirement.draft = defaultWorkflow('requirement');
+  await page.goto(origin + '/system?tab=workflows'); await graph.waitFor();
   const planned = page.getByRole('button', { name: '规划中', exact: true });
   await planned.click();
   await page.getByLabel('状态名称', { exact: true }).fill('画布内规划');

@@ -1,34 +1,52 @@
 <script setup>
-/* global document, ResizeObserver */
+/* global document, ResizeObserver, requestAnimationFrame, cancelAnimationFrame */
 import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from "vue";
 import { FullscreenOutlined, FullscreenExitOutlined, ZoomInOutlined, ZoomOutOutlined } from "@antdv-next/icons";
 import { NODE_WIDTH, NODE_HEIGHT, nodesOverlap, workflowConnection, workflowNodes, workflowRoutes } from "./workflow-routing.js";
 
 const props = defineProps({ definition: { type: Object, required: true }, current: { type: String, default: "" }, selected: { type: String, default: "" }, selectedEdge: { type: String, default: "" }, editable: Boolean });
 const emit = defineEmits(["select", "select-edge", "move", "add", "connect", "clear", "delete"]);
-const svg = ref(), scroll = ref(), markerId = useId(), connection = ref(null), gestureBounds = ref(null);
+const svg = ref(), scroll = ref(), markerId = useId(), connection = ref(null);
+const viewport = ref({ width: 760, height: 460 }), camera = ref({ x: 0, y: 0 }), panning = ref(false);
 const frame = ref(), fullscreenButton = ref(), fullscreen = ref(false), fallbackFullscreen = ref(false), zoom = ref(1), fitting = ref(true);
 const fullscreenChanging = ref(false);
-let resizeObserver, previousOverflow = '', alive = true;
+let resizeObserver, previousOverflow = '', alive = true, drag = null, panFrame = 0;
 const kinds = { initial: '初始', normal: '普通', completed: '完成', cancelled: '取消' };
 const nodes = computed(() => workflowNodes(props.definition));
 const routes = computed(() => workflowRoutes(nodes.value, props.definition.transitions));
 const bounds = computed(() => {
-  if (gestureBounds.value) return gestureBounds.value;
   const points = routes.value.flatMap(edge => edge.points).concat(nodes.value.flatMap(node => [node, { x: node.x + NODE_WIDTH, y: node.y + NODE_HEIGHT }]));
-  const x = Math.min(0, ...points.map(point => point.x - 32)), y = Math.min(0, ...points.map(point => point.y - 32));
-  return { x, y, width: Math.max(760, ...points.map(point => point.x + 64)) - x, height: Math.max(400, ...points.map(point => point.y + 80)) - y };
+  if (!points.length) return { x: 0, y: 0, width: 760, height: 400 };
+  const x = Math.min(...points.map(point => point.x)) - 32, y = Math.min(...points.map(point => point.y)) - 32;
+  return { x, y, width: Math.max(...points.map(point => point.x)) + 32 - x, height: Math.max(...points.map(point => point.y)) + 32 - y };
 });
+const viewBox = computed(() => `${camera.value.x} ${camera.value.y} ${viewport.value.width / zoom.value} ${viewport.value.height / zoom.value}`);
+const gridSize = computed(() => 16 * zoom.value * 2 ** Math.max(0, Math.ceil(Math.log2(.75 / zoom.value))));
 const point = id => nodes.value.find(node => node.id === id);
 const tone = edge => point(edge.to)?.kind || 'normal';
 defineExpose({ focusCanvas: () => scroll.value?.focus() });
 async function fit() {
   fitting.value = true;
   await nextTick();
-  if (!scroll.value) return;
-  zoom.value = Math.max(.15, Math.min(1, (scroll.value.clientWidth - 24) / bounds.value.width, (scroll.value.clientHeight - 24) / bounds.value.height));
+  if (!alive || !scroll.value) return;
+  zoom.value = Math.max(.15, Math.min(1, viewport.value.width / bounds.value.width, viewport.value.height / bounds.value.height));
+  camera.value = { x: bounds.value.x - (viewport.value.width / zoom.value - bounds.value.width) / 2, y: bounds.value.y - (viewport.value.height / zoom.value - bounds.value.height) / 2 };
 }
-function changeZoom(amount) { fitting.value = false; zoom.value = Math.max(.15, Math.min(2, Math.round((zoom.value + amount) * 100) / 100)); }
+function changeZoom(amount, anchor = { x: viewport.value.width / 2, y: viewport.value.height / 2 }) {
+  fitting.value = false;
+  const next = Math.max(.15, Math.min(2, Math.round((zoom.value + amount) * 100) / 100));
+  camera.value = { x: camera.value.x + anchor.x / zoom.value - anchor.x / next, y: camera.value.y + anchor.y / zoom.value - anchor.y / next };
+  zoom.value = next;
+}
+function wheel(event) {
+  const rect = svg.value.getBoundingClientRect();
+  if (event.ctrlKey || event.metaKey) changeZoom(event.deltaY > 0 ? -.1 : .1, { x: event.clientX - rect.left, y: event.clientY - rect.top });
+  else {
+    fitting.value = false;
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewport.value.height : 1;
+    camera.value = { x: camera.value.x + (event.shiftKey ? event.deltaY : event.deltaX) * unit / zoom.value, y: camera.value.y + (event.shiftKey ? 0 : event.deltaY) * unit / zoom.value };
+  }
+}
 function fullscreenChanged() { fullscreen.value = document.fullscreenElement === frame.value || fallbackFullscreen.value; if (fitting.value) void fit(); }
 async function exitNativeFullscreen(element) {
   if (document.fullscreenElement !== element) return;
@@ -59,25 +77,39 @@ async function toggleFullscreen() {
   } finally { fullscreenChanging.value = false; }
 }
 onMounted(() => {
-  resizeObserver = new ResizeObserver(() => { if (fitting.value && !drag) void fit(); });
+  resizeObserver = new ResizeObserver(() => {
+    viewport.value = { width: scroll.value.clientWidth, height: scroll.value.clientHeight };
+    if (fitting.value && !drag) void fit();
+  });
   resizeObserver.observe(scroll.value);
   document.addEventListener('fullscreenchange', fullscreenChanged);
   void fit();
 });
 onUnmounted(() => {
   alive = false;
+  cancelGesture();
   resizeObserver?.disconnect(); document.removeEventListener('fullscreenchange', fullscreenChanged);
   if (fallbackFullscreen.value) document.body.style.overflow = previousOverflow;
   void exitNativeFullscreen(frame.value);
 });
-watch(bounds, () => { if (fitting.value && !drag) void fit(); });
-let drag = null;
 function coordinates(event) {
-  const position = svg.value.createSVGPoint(); position.x = event.clientX; position.y = event.clientY;
-  return position.matrixTransform(svg.value.getScreenCTM().inverse());
+  const rect = svg.value.getBoundingClientRect();
+  return { x: camera.value.x + (event.clientX - rect.left) / zoom.value, y: camera.value.y + (event.clientY - rect.top) / zoom.value };
 }
-function cancelGesture() { drag = null; gestureBounds.value = null; }
+function cancelGesture() {
+  const pointerId = drag?.pointerId;
+  drag = null; panning.value = false;
+  cancelAnimationFrame(panFrame); panFrame = 0;
+  if (pointerId !== undefined && svg.value?.hasPointerCapture(pointerId)) svg.value.releasePointerCapture(pointerId);
+}
 function clear() { cancelGesture(); connection.value = null; emit('clear'); }
+function pan(event) {
+  if (event.button !== 0 || connection.value) return;
+  clear(); fitting.value = false; panning.value = true;
+  scroll.value.focus({ preventScroll: true });
+  drag = { pointerId: event.pointerId, pan: true, start: { x: event.clientX, y: event.clientY }, camera: { ...camera.value } };
+  svg.value.setPointerCapture(event.pointerId);
+}
 watch(() => props.editable, editable => { if (!editable) { cancelGesture(); connection.value = null; } });
 function select(node) {
   if (connection.value && props.editable) {
@@ -87,21 +119,42 @@ function select(node) {
 function down(event, node) {
   if (!props.editable || event.button !== 0 || connection.value) return;
   const position = coordinates(event);
-  gestureBounds.value = { ...bounds.value };
-  drag = { id: node.id, start: position, x: node.x, y: node.y, moved: false };
+  drag = { id: node.id, pointerId: event.pointerId, start: position, x: node.x, y: node.y, moved: false };
   svg.value.setPointerCapture(event.pointerId);
 }
 function moveNode(node, x, y) {
-  const next = { id: node.id, x: Math.min(100000, Math.max(32, Math.round(x / 8) * 8)), y: Math.min(100000, Math.max(32, Math.round(y / 8) * 8)) };
+  fitting.value = false;
+  const next = { id: node.id, x: Math.min(100000, Math.max(-100000, Math.round(x / 8) * 8)), y: Math.min(100000, Math.max(-100000, Math.round(y / 8) * 8)) };
   if (!nodes.value.some(other => other.id !== node.id && nodesOverlap(next, other))) emit('move', next);
 }
+function updateDrag() {
+  const position = coordinates(drag.pointer);
+  moveNode(drag, drag.x + position.x - drag.start.x, drag.y + position.y - drag.start.y);
+}
+function autoPan() {
+  panFrame = 0;
+  if (!drag?.moved || !drag.pointer) return;
+  const rect = svg.value.getBoundingClientRect(), margin = Math.min(100, rect.width / 4, rect.height / 4);
+  const speed = (value, min, max) => value < min + margin ? -Math.min(12, (min + margin - value) / 5) : value > max - margin ? Math.min(12, (value - max + margin) / 5) : 0;
+  const x = speed(drag.pointer.clientX, rect.left, rect.right), y = speed(drag.pointer.clientY, rect.top, rect.bottom);
+  if (x || y) { camera.value = { x: camera.value.x + x / zoom.value, y: camera.value.y + y / zoom.value }; updateDrag(); }
+  panFrame = requestAnimationFrame(autoPan);
+}
 function move(event) {
+  if (drag?.pan) {
+    camera.value = { x: drag.camera.x - (event.clientX - drag.start.x) / zoom.value, y: drag.camera.y - (event.clientY - drag.start.y) / zoom.value };
+    return;
+  }
   if (!props.editable) return;
   const position = coordinates(event);
   if (connection.value) connection.value = { ...connection.value, x: position.x, y: position.y };
   if (!drag) return;
   if (Math.hypot(position.x - drag.start.x, position.y - drag.start.y) > 4) drag.moved = true;
-  if (drag.moved) moveNode(drag, drag.x + position.x - drag.start.x, drag.y + position.y - drag.start.y);
+  if (drag.moved) {
+    drag.pointer = { clientX: event.clientX, clientY: event.clientY };
+    updateDrag();
+    if (!panFrame) panFrame = requestAnimationFrame(autoPan);
+  }
 }
 function up(event) {
   if (connection.value && props.editable) {
@@ -109,7 +162,7 @@ function up(event) {
     const target = nodes.value.find(node => position.x >= node.x - 10 && position.x <= node.x + NODE_WIDTH + 16 && position.y >= node.y && position.y <= node.y + NODE_HEIGHT);
     if (target && target.id !== connection.value.from) select(target);
   }
-  if (drag && !drag.moved) select(drag);
+  if (drag && !drag.pan && !drag.moved) select(drag);
   cancelGesture();
 }
 function connect(event, node) {
@@ -129,6 +182,11 @@ function key(event, node) {
     event.preventDefault();
     const step = event.shiftKey ? 32 : 8;
     moveNode(node, node.x + ({ ArrowLeft: -step, ArrowRight: step }[event.key] || 0), node.y + ({ ArrowUp: -step, ArrowDown: step }[event.key] || 0));
+    void nextTick(() => {
+      const moved = point(node.id), width = viewport.value.width / zoom.value, height = viewport.value.height / zoom.value;
+      if (!alive || !moved) return;
+      camera.value = { x: Math.min(moved.x - 24, Math.max(camera.value.x, moved.x + NODE_WIDTH + 24 - width)), y: Math.min(moved.y - 24, Math.max(camera.value.y, moved.y + NODE_HEIGHT + 24 - height)) };
+    });
   }
 }
 function canvasKey(event) {
@@ -140,11 +198,15 @@ function canvasKey(event) {
   }
   if (event.target.closest('input, select, textarea, button')) return;
   if (event.key === 'Escape') { event.preventDefault(); clear(); scroll.value.focus(); }
+  if (event.target === scroll.value && event.key.startsWith('Arrow')) {
+    event.preventDefault(); fitting.value = false;
+    camera.value = { x: camera.value.x + ({ ArrowLeft: -40, ArrowRight: 40 }[event.key] || 0) / zoom.value, y: camera.value.y + ({ ArrowUp: -40, ArrowDown: 40 }[event.key] || 0) / zoom.value };
+  }
   if (!props.editable) return;
   if (event.key === 'Delete' && (props.selected || props.selectedEdge)) { event.preventDefault(); emit('delete'); }
   if (event.key === 'Insert') {
     event.preventDefault();
-    emit('add', { x: scroll.value.scrollLeft + bounds.value.x + 80, y: scroll.value.scrollTop + bounds.value.y + 100 });
+    emit('add', { x: camera.value.x + 80 / zoom.value, y: camera.value.y + 100 / zoom.value });
   }
 }
 function fullscreenKey(event) {
@@ -164,10 +226,10 @@ const preview = computed(() => workflowConnection(nodes.value, connection.value?
       <span v-for="(name, kind) in kinds" :key="kind" :class="`tone-${kind}`"><i />{{ name }}</span>
       <span class="workflow-count">{{ nodes.length }} 个状态 · {{ definition.transitions.length }} 条连线</span>
     </div>
-    <p v-if="editable" class="workflow-guide">双击空白新增状态 · 拖动节点调整位置 · 拖动或依次点击连接点连线 · 点击节点／连线直接编辑</p>
+    <p v-if="editable" class="workflow-guide">拖动空白平移 · 滚轮平移，Ctrl／⌘ + 滚轮缩放 · 双击空白新增状态 · 拖动节点调整位置 · 拖动或依次点击连接点连线 · 点击节点／连线编辑</p>
     <div class="workflow-body">
-      <div ref="scroll" class="workflow-scroll" tabindex="0" aria-label="流程图，可横向滚动；Insert 新增状态，Delete 删除选中项" @dblclick.self="add" @pointerdown.self="clear">
-        <svg ref="svg" :width="bounds.width * zoom" :height="bounds.height * zoom" :viewBox="`${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}`" role="group" aria-label="事项流程图" @dblclick="add" @pointerdown.self="clear" @pointermove="move" @pointerup="up" @pointercancel="cancelGesture(); connection = null" @lostpointercapture="cancelGesture">
+      <div ref="scroll" class="workflow-scroll" :class="{ 'is-panning': panning }" :style="{ backgroundPosition: `${-camera.x * zoom}px ${-camera.y * zoom}px`, backgroundSize: `${gridSize}px ${gridSize}px` }" tabindex="0" aria-label="流程图，拖动空白或方向键平移；Insert 新增状态，Delete 删除选中项" @wheel.prevent="wheel">
+        <svg ref="svg" width="100%" height="100%" :viewBox="viewBox" role="group" aria-label="事项流程图" @dblclick="add" @pointerdown.self="pan" @pointermove="move" @pointerup="up" @pointercancel="cancelGesture(); connection = null" @lostpointercapture="cancelGesture">
           <defs><marker :id="markerId" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke" /></marker></defs>
           <g v-for="edge in routes" :key="edge.id" class="workflow-edge" :class="[`tone-${tone(edge)}`, { selected: edge.id === selectedEdge, highlighted: edge.from === (selected || current) }]" :tabindex="editable ? 0 : undefined" :role="editable ? 'button' : undefined" :aria-label="`连线：${edge.name}，${point(edge.from)?.name} → ${point(edge.to)?.name}`" @click.stop="editable && emit('select-edge', edge.id)" @keydown.enter.prevent="editable && emit('select-edge', edge.id)" @keydown.space.prevent="editable && emit('select-edge', edge.id)">
             <title>{{ point(edge.from)?.name }} → {{ point(edge.to)?.name }}：{{ edge.name }}</title>
@@ -218,7 +280,8 @@ const preview = computed(() => workflowConnection(nodes.value, connection.value?
 .tone-cancelled { --node-color: var(--danger); --node-soft: var(--danger-soft); }
 .workflow-guide { padding: 12px 16px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.8; }
 .workflow-body { display: flex; min-width: 0; }
-.workflow-scroll { width: 100%; min-width: 0; height: 460px; max-height: 560px; overflow: auto; background-image: radial-gradient(var(--field-border) .7px, transparent .7px); background-size: 16px 16px; }
+.workflow-scroll { width: 100%; min-width: 0; height: 460px; max-height: 560px; overflow: hidden; cursor: grab; touch-action: none; background-image: radial-gradient(var(--field-border) .7px, transparent .7px); background-size: 16px 16px; }
+.workflow-scroll.is-panning { cursor: grabbing; }
 .workflow-scroll:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 svg { display: block; }
 .workflow-edge path { fill: none; stroke-linecap: round; stroke-linejoin: round; }

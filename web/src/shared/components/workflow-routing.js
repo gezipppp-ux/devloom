@@ -10,19 +10,19 @@ export function nodesOverlap(a, b, gap = 64) {
 }
 
 export function freeNodePosition(position, nodes) {
-  const start = { x: Math.max(32, position.x), y: Math.max(32, position.y) };
+  const start = { x: Math.max(-100000, Math.min(100000, position.x)), y: Math.max(-100000, Math.min(100000, position.y)) };
   // Keep recorded coordinates when possible; resolve collisions only in the view.
   for (let radius = 0; ; radius += 32) {
     for (let dx = -radius; dx <= radius; dx += 32) {
       for (const dy of radius ? [-radius, radius] : [0]) {
         const point = { x: start.x + dx, y: start.y + dy };
-        if (point.x >= 32 && point.y >= 32 && !nodes.some(node => nodesOverlap(point, node))) return point;
+        if (Math.abs(point.x) <= 100000 && Math.abs(point.y) <= 100000 && !nodes.some(node => nodesOverlap(point, node))) return point;
       }
     }
     for (let dy = -radius + 32; dy < radius; dy += 32) {
       for (const dx of [-radius, radius]) {
         const point = { x: start.x + dx, y: start.y + dy };
-        if (point.x >= 32 && point.y >= 32 && !nodes.some(node => nodesOverlap(point, node))) return point;
+        if (Math.abs(point.x) <= 100000 && Math.abs(point.y) <= 100000 && !nodes.some(node => nodesOverlap(point, node))) return point;
       }
     }
   }
@@ -37,6 +37,7 @@ export function workflowNodes(definition) {
 
 function sides(from, to) {
   if (to.x >= from.x + NODE_WIDTH + 32 && Math.abs(to.y - from.y) < NODE_HEIGHT) return ['right', 'left'];
+  if (to.x + NODE_WIDTH + 32 <= from.x && Math.abs(to.y - from.y) < NODE_HEIGHT) return ['left', 'right'];
   if (to.y >= from.y + NODE_HEIGHT + 32) return ['bottom', 'top'];
   if (to.y + NODE_HEIGHT + 32 <= from.y) return ['top', 'bottom'];
   return ['top', 'top'];
@@ -49,6 +50,50 @@ function port(node, side, index, total, inset = 0) {
     x: node.x + (horizontal ? offset : side === 'right' ? NODE_WIDTH + inset : -inset),
     y: node.y + (!horizontal ? offset : side === 'bottom' ? NODE_HEIGHT + inset : -inset),
   };
+}
+
+function edgePorts(edges, lookup, boxes) {
+  const groups = new Map(), endpoints = new Map();
+  for (const edge of edges) {
+    endpoints.set(edge.id, [edge.from, edge.to].map((id, end) => {
+      const node = lookup.get(id), side = edge.sides[end], key = `${id}:${side}`;
+      const horizontal = side === 'top' || side === 'bottom', axis = horizontal ? 'x' : 'y';
+      if (!groups.has(key)) groups.set(key, { min: node[axis] + 16, max: node[axis] + (horizontal ? NODE_WIDTH : NODE_HEIGHT) - 16, entries: [], used: [] });
+      const group = groups.get(key), entry = { node, side, axis, group, end, other: lookup.get(end ? edge.from : edge.to) };
+      group.entries.push(entry);
+      return entry;
+    }));
+  }
+  for (const group of groups.values()) {
+    group.entries.sort((a, b) => a.other[a.axis] - b.other[b.axis]);
+    group.gap = Math.min(12, (group.max - group.min) / (group.entries.length + 1));
+    group.entries.forEach((entry, index) => { entry.preferred = port(entry.node, entry.side, index, group.entries.length)[entry.axis]; });
+  }
+  const available = (group, value) => group.used.every(used => Math.abs(used - value) >= group.gap - .01);
+  const assign = (entry, value) => { entry.value = value; entry.group.used.push(value); };
+  const position = (entry, inset, value = entry.value) => ({ ...port(entry.node, entry.side, 0, 1, inset), [entry.axis]: value });
+  // Share a coordinate on facing sides before assigning the remaining ports.
+  // Different fan-in/fan-out counts must not force a tiny bend in a clear lane.
+  for (const edge of edges) {
+    const [a, b] = endpoints.get(edge.id);
+    if (a.axis !== b.axis || a.side === b.side) continue;
+    const min = Math.max(a.group.min, b.group.min), max = Math.min(a.group.max, b.group.max);
+    if (min > max) continue;
+    const preferred = Math.max(min, Math.min(max, (a.preferred + b.preferred) / 2));
+    const candidates = [preferred, ...Array.from({ length: 33 }, (_, i) => min + (max - min) * i / 32)].sort((x, y) => Math.abs(x - preferred) - Math.abs(y - preferred));
+    const value = candidates.find(value => available(a.group, value) && available(b.group, value) && !blocked(position(a, CLEARANCE, value), position(b, CLEARANCE, value), boxes));
+    if (value !== undefined) { assign(a, value); assign(b, value); }
+  }
+  for (const group of groups.values()) for (const entry of group.entries) {
+    if (entry.value !== undefined) continue;
+    const used = [group.min - group.gap, ...group.used.toSorted((a, b) => a - b), group.max + group.gap];
+    const candidates = [entry.preferred, ...used.slice(1).flatMap((value, i) => [used[i] + group.gap, value - group.gap, (used[i] + value) / 2])]
+      .filter(value => value >= group.min && value <= group.max).sort((a, b) => Math.abs(a - entry.preferred) - Math.abs(b - entry.preferred));
+    // Very crowded sides can use tighter spacing, but never reuse a port.
+    const value = candidates.find(value => available(group, value)) ?? used.slice(1).map((value, i) => ({ size: value - used[i], value: (value + used[i]) / 2 })).sort((a, b) => b.size - a.size)[0].value;
+    assign(entry, value);
+  }
+  return new Map([...endpoints].map(([id, entries]) => [id, entries.map(entry => ({ anchor: position(entry, entry.end ? 5 : 0), outer: position(entry, CLEARANCE) }))]));
 }
 
 function blocked(a, b, boxes) {
@@ -196,19 +241,11 @@ export function workflowRoutes(nodes, transitions) {
   const lookup = new Map(nodes.map(node => [node.id, node]));
   const edges = transitions.filter(edge => lookup.has(edge.from) && lookup.has(edge.to) && edge.from !== edge.to)
     .map(edge => ({ ...edge, sides: sides(lookup.get(edge.from), lookup.get(edge.to)) }));
-  const ports = new Map();
-  edges.forEach(edge => [edge.from, edge.to].forEach((id, index) => {
-    const key = `${id}:${edge.sides[index]}`;
-    if (!ports.has(key)) ports.set(key, []);
-    ports.get(key).push(`${edge.id}:${index}`);
-  }));
   const boxes = nodes.map(nodeBox);
+  const ports = edgePorts(edges, lookup, boxes);
   const occupied = [], labels = [];
   return edges.map((edge, index) => {
-    const endpoints = [edge.from, edge.to].map((id, end) => {
-      const side = edge.sides[end], list = ports.get(`${id}:${side}`), slot = list.indexOf(`${edge.id}:${end}`), node = lookup.get(id);
-      return { anchor: port(node, side, slot, list.length, end ? 5 : 0), outer: port(node, side, slot, list.length, CLEARANCE) };
-    });
+    const endpoints = ports.get(edge.id);
     const middle = route(endpoints[0].outer, endpoints[1].outer, boxes, occupied, 24 + index * 12);
     if (!middle) return { ...edge, path: '', points: [], label: null };
     const points = simplify([endpoints[0].anchor, ...middle, endpoints[1].anchor]);
