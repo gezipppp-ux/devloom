@@ -12,10 +12,31 @@ const catalog = useSupplierModelCatalog(form);
 const effortDrafts = reactive(new WeakMap());
 const dialog = ref(), saving = ref(false), fetching = ref(false), checking = ref(false);
 const error = ref(""), result = ref(""), fetched = ref([]), selected = ref([]), checkModel = ref("");
+const modelSearch = ref("");
+const modelOrder = new Intl.Collator("en", { sensitivity: "base", numeric: true });
+const modelInitial = model => /^[a-z]/i.test(model) ? model[0].toUpperCase() : "#";
+const sortedModels = computed(() => [...fetched.value].sort((left, right) => {
+  const a = modelInitial(left.model), b = modelInitial(right.model);
+  if (a !== b) return a === "#" ? 1 : b === "#" ? -1 : modelOrder.compare(a, b);
+  return modelOrder.compare(left.model, right.model) || left.model.localeCompare(right.model, "en");
+}));
+const matchingModels = computed(() => {
+  const query = modelSearch.value.trim().toLowerCase();
+  return sortedModels.value.filter(entry => !query || [entry.model, entry.label].some(value => value?.toLowerCase().includes(query)));
+});
+const modelGroups = computed(() => {
+  const groups = new Map();
+  for (const entry of matchingModels.value) {
+    const initial = modelInitial(entry.model);
+    if (!groups.has(initial)) groups.set(initial, { initial, models: [] });
+    groups.get(initial).models.push(entry);
+  }
+  return [...groups.values()];
+});
 let disposed = false, generation = 0;
 const busy = computed(() => saving.value || fetching.value || checking.value);
 watch(form, () => { generation++; result.value = ""; }, { deep: true, flush: "sync" });
-watch(connection, () => { fetched.value = []; selected.value = []; }, { flush: "sync" });
+watch(connection, () => { fetched.value = []; selected.value = []; modelSearch.value = ""; }, { flush: "sync" });
 watch(checkModel, () => { generation++; result.value = ""; });
 onMounted(() => dialog.value.showModal());
 onBeforeUnmount(() => dialog.value?.close());
@@ -23,7 +44,7 @@ onUnmounted(() => { disposed = true; generation++; });
 function close() { if (!saving.value) { dialog.value.close(); emit("close"); } }
 function add(model = "", label = model) { form.value.models.push({ model, label, reasoningEfforts: [], defaultReasoningEffort: "" }); }
 function addFetched() {
-  const entries = fetched.value.filter(entry => selected.value.includes(entry.model));
+  const entries = sortedModels.value.filter(entry => selected.value.includes(entry.model));
   for (const entry of entries) if (!form.value.models.some(model => model.model === entry.model)) add(entry.model, entry.label);
   if (!form.value.defaultModel) form.value.defaultModel = form.value.models[0]?.model || "";
 }
@@ -82,7 +103,18 @@ async function save() {
         <p class="field-hint">匹配 Codex 内置目录的模型自动加载思考强度和默认值，也可自定义。内置标记表示模型 ID 匹配，具体能力以上游实际支持为准。</p>
         <p v-if="catalog.loading.value" class="muted" role="status">正在读取 Codex 内置模型目录…</p>
         <div v-if="catalog.error.value" class="supplier-catalog-error" role="alert"><span>{{ catalog.error.value }} 获取上游模型和手动配置仍可使用。</span><button type="button" :disabled="catalog.loading.value" @click="catalog.refresh">重试读取内置目录</button></div>
-        <div v-if="fetched.length" class="supplier-fetched"><label v-for="entry in fetched" :key="entry.model" class="supplier-checkbox"><input v-model="selected" type="checkbox" :value="entry.model" :aria-label="entry.model" /><span class="supplier-model-id">{{ entry.model }}</span><span class="supplier-tag" :class="{ 'supplier-disabled': !catalog.match(entry.model) }">{{ catalog.status(entry.model) }}</span></label><button type="button" :disabled="!selected.length" @click="addFetched">添加所选模型</button></div>
+        <section v-if="fetched.length" class="supplier-fetched" aria-label="模型候选列表">
+          <div class="supplier-model-search"><label>搜索模型<input v-model="modelSearch" type="search" placeholder="模型 ID 或显示名称" @keydown.enter.prevent /></label><button type="button" :disabled="!modelSearch" @click="modelSearch = ''">清空搜索</button></div>
+          <div class="supplier-toolbar supplier-model-summary"><span role="status">{{ matchingModels.length }} / {{ fetched.length }} 个模型 · A–Z</span><span>已选 {{ selected.length }} 个</span></div>
+          <div class="supplier-model-results" tabindex="0" role="region" aria-label="按首字母分组的模型">
+            <section v-for="group in modelGroups" :key="group.initial" class="supplier-model-group" :aria-label="group.initial === '#' ? '其他模型' : `${group.initial} 开头的模型`">
+              <h4 class="supplier-group-heading"><span>{{ group.initial === '#' ? '其他' : group.initial }}</span><span>{{ group.models.length }}</span></h4>
+              <label v-for="entry in group.models" :key="entry.model" class="supplier-checkbox"><input v-model="selected" type="checkbox" :value="entry.model" :aria-label="entry.model" /><span class="supplier-model-info"><span class="supplier-model-id">{{ entry.model }}</span><span v-if="entry.label && entry.label !== entry.model" class="supplier-model-label">{{ entry.label }}</span></span><span class="supplier-tag" :class="{ 'supplier-disabled': !catalog.match(entry.model) }">{{ catalog.status(entry.model) }}</span></label>
+            </section>
+            <p v-if="!matchingModels.length" class="supplier-model-empty" role="status">没有匹配的模型，请调整搜索条件。</p>
+          </div>
+          <div class="supplier-picker-footer"><span class="field-hint">搜索只筛选显示，已勾选项会保留。</span><button type="button" :disabled="!selected.length" @click="addFetched">添加所选模型</button></div>
+        </section>
         <p v-if="!form.models.length" class="muted">尚未添加模型，可手动填写或从接口获取。</p>
         <section v-for="(entry, index) in form.models" :key="index" class="supplier-model">
           <div class="supplier-toolbar"><div class="supplier-model-heading"><strong>模型 {{ index + 1 }}</strong><span v-if="entry.model" class="supplier-tag" :class="{ 'supplier-disabled': !catalog.match(entry.model) }">{{ catalog.status(entry.model) }}</span></div><button type="button" :aria-label="`删除模型 ${index + 1}`" @click="form.models.splice(index, 1)"><DeleteOutlined aria-hidden="true" /></button></div>

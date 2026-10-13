@@ -45,3 +45,13 @@
 本轮在 Windows、Edge 和隔离 PostgreSQL 17 环境验证：lint 通过；架构／单元／集成测试 **541 通过、0 失败、0 跳过**；构建通过（仍有已有的大产物提示）；Jenkins 的八个浏览器入口全部通过。补充配置保留保护后重新构建并通过 accounts 浏览器回归。日志为 `state/supplier-models-lint.log`、`state/supplier-models-tests.log`、`state/supplier-models-build.log` 和 `state/supplier-models-browser-*.log`。
 
 统一视觉回归生成 215 张截图；检查本次供应商编辑器的 1440／768／390／320px 截图，以及统一系统设置的桌面与手机截图，未发现横向溢出、说明重叠或底部操作不可达。截图目录与前述保持一致。测试全部使用 fake Codex、模拟供应商接口及临时环境；Linux 验证仍按用户要求跳过，未连接真实上游进行生成。
+
+## 模型分组排序与搜索（2026-10-13）
+
+用户确认 C 方案：候选列表按模型 ID 的首字母分组，默认 A–Z 排序，非英文字母放在末尾“其他”组。搜索框位于列表上方，支持 ID／显示名称搜索、清空、结果数和已选数；滚动区域只包含分组结果，搜索和添加按钮位于区域外。
+
+浏览器回归覆盖大小写与两端空白、显示名称查询、自然数字顺序、非字母分组、无结果、筛选隐藏勾选项后仍可添加、清空后恢复勾选，以及搜索框 Enter 不保存供应商。已检查 `state/browser/accounts/agent-supplier-model-search-{1440,768,390,320}.png` 和手机无结果截图，控件可达、分组和说明没有溢出。
+
+本轮基于 `3934f11` 验证：lint、构建通过；架构／单元／集成测试 **556 通过、0 失败、0 跳过**。Jenkins 九个浏览器入口中，accounts（包含本次搜索回归）、session、workspaces、dev、setup、project-collaboration、project-editing、visual 八项通过；visual 生成 215 张截图。`development-flows` 在 `workflow-canvas.test.cjs:158` 的鼠标拖拽断言失败，单独复跑仍失败，在未加入本次修改的 `D:/Projects/web-coding` 基线 `3934f11` 也复现相同断言；本次未修改流程画布或其测试。
+
+本轮日志为 `state/model-search-*.log`，基线对照保存在 `state/model-search-baseline-development-flows.log`。环境仍为 Windows、Edge、隔离 PostgreSQL 17 和模拟接口，未执行真实任务；Linux 按用户要求跳过。

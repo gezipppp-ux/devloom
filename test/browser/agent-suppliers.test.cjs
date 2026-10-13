@@ -7,6 +7,12 @@ async function verifyAgentSuppliers(page, output) {
   const rows = [builtin]; let currentId = "server", revision = 1, checks = 0, holdModels = false, releaseModels;
   let catalogFailure = false, catalogMissing = false, holdCatalog = false, releaseCatalog;
   const nativeModels = [{ model: "fixture-code", label: "Fixture Codex", reasoningEfforts: ["low", "medium", "high"], defaultReasoningEffort: "medium" }];
+  const upstreamModels = [
+    { model: "zeta-code", label: "Zeta Text" }, { model: "fixture-code-latest", label: "Fixture alias" },
+    { model: "Bravo-10", label: "编程模型" }, { model: "fixture-code", label: "fixture-code" },
+    { model: "alpha-code", label: "Alpha reasoning" }, { model: "bravo-2", label: "小型编程" },
+    { model: "1-local-model", label: "Numeric fixture" },
+  ];
   const writes = [];
   await page.route("**/api/system/agent-suppliers**", async route => {
     const request = route.request(), endpoint = new URL(request.url()).pathname.split("/agent-suppliers")[1];
@@ -18,7 +24,7 @@ async function verifyAgentSuppliers(page, output) {
     }
     if (endpoint === "/models") {
       if (holdModels) { holdModels = false; await new Promise(resolve => { releaseModels = resolve; }); }
-      return route.fulfill({ json: { models: [{ model: "fixture-code", label: "fixture-code" }, { model: "fixture-code-latest", label: "Fixture alias" }] } });
+      return route.fulfill({ json: { models: upstreamModels } });
     }
     if (endpoint === "/check") { checks++; return route.fulfill({ json: { ok: true, elapsedMs: 12 } }); }
     if (!endpoint && !input) return route.fulfill({ json: { suppliers: rows, currentId, selectionRevision: revision } });
@@ -40,12 +46,33 @@ async function verifyAgentSuppliers(page, output) {
   await dialog.getByLabel("API Key", { exact: true }).fill("fixture-key-only");
   await dialog.getByRole("button", { name: "获取模型", exact: true }).click();
   await dialog.locator(".supplier-fetched label").filter({ hasText: "fixture-code-latest" }).getByText("未匹配内置目录", { exact: true }).waitFor();
+  const search = dialog.getByRole("searchbox", { name: "搜索模型", exact: true });
+  assert.deepEqual(await dialog.locator(".supplier-group-heading span:first-child").allTextContents(), ["A", "B", "F", "Z", "其他"]);
+  assert.deepEqual(await dialog.locator(".supplier-model-id").allTextContents(), ["alpha-code", "bravo-2", "Bravo-10", "fixture-code", "fixture-code-latest", "zeta-code", "1-local-model"]);
   await dialog.getByLabel("fixture-code", { exact: true }).check();
+  await search.fill(" ALPHA ");
+  assert.deepEqual(await dialog.locator(".supplier-model-id").allTextContents(), ["alpha-code"]);
+  await dialog.getByLabel("alpha-code", { exact: true }).check();
+  await search.fill(" 编程 ");
+  assert.deepEqual(await dialog.locator(".supplier-model-id").allTextContents(), ["bravo-2", "Bravo-10"], "search also matches display names");
+  await search.fill("missing-model");
+  await dialog.getByText("没有匹配的模型，请调整搜索条件。", { exact: true }).waitFor();
+  await dialog.getByText("已选 2 个", { exact: true }).waitFor();
+  assert.equal(await dialog.getByRole("button", { name: "添加所选模型", exact: true }).isEnabled(), true);
+  await dialog.getByRole("button", { name: "清空搜索", exact: true }).click();
+  assert.equal(await dialog.getByLabel("fixture-code", { exact: true }).isChecked(), true);
+  assert.equal(await dialog.getByLabel("alpha-code", { exact: true }).isChecked(), true);
+  await dialog.getByLabel("alpha-code", { exact: true }).uncheck();
+  await search.fill("ALIAS");
+  assert.deepEqual(await dialog.locator(".supplier-model-id").allTextContents(), ["fixture-code-latest"]);
   await dialog.getByRole("button", { name: "添加所选模型" }).click();
   await dialog.locator(".supplier-model").getByText("Codex 内置", { exact: true }).waitFor();
   assert.deepEqual(await dialog.locator(".supplier-effort-chips span").allTextContents(), ["low", "medium", "high"]);
   assert.equal(await dialog.getByLabel("默认思考强度", { exact: true }).inputValue(), "medium");
   assert.equal(await dialog.getByLabel("显示名称", { exact: true }).inputValue(), "Fixture Codex");
+  await search.press("Enter");
+  assert.equal(await dialog.isVisible(), true, "search Enter must not submit the supplier form");
+  assert.equal(writes.filter(entry => entry.endpoint === "").length, 0);
   assert.equal(checks, 0);
   await dialog.getByRole("button", { name: "发送检测请求" }).click();
   await dialog.getByText("生成检测成功，耗时 12 ms。", { exact: true }).waitFor();
@@ -67,6 +94,15 @@ async function verifyAgentSuppliers(page, output) {
     await card.getByRole("button", { name: "编辑 / 检测", exact: true }).click();
     dialog = page.getByRole("dialog");
     assert.equal(await dialog.getByLabel("API Key", { exact: true }).inputValue(), "");
+    await dialog.getByRole("button", { name: "获取模型", exact: true }).click();
+    await dialog.locator(".supplier-group-heading").first().waitFor();
+    await dialog.locator(".supplier-fetched").scrollIntoViewIfNeeded();
+    assert.ok(await dialog.locator(".supplier-fetched").evaluate(element => element.scrollWidth <= element.clientWidth + 1));
+    await page.screenshot({ path: path.join(output, `agent-supplier-model-search-${width}.png`) });
+    await dialog.getByRole("searchbox", { name: "搜索模型", exact: true }).fill("missing-model");
+    await dialog.getByText("没有匹配的模型，请调整搜索条件。", { exact: true }).waitFor();
+    if (width === 320) await page.screenshot({ path: path.join(output, "agent-supplier-model-search-empty-320.png") });
+    await dialog.getByRole("button", { name: "清空搜索", exact: true }).click();
     await dialog.getByRole("button", { name: "保存供应商" }).scrollIntoViewIfNeeded();
     assert.ok(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1));
     await page.screenshot({ path: path.join(output, `agent-supplier-editor-${width}.png`) });
@@ -193,6 +229,6 @@ async function verifyAgentSuppliers(page, output) {
   await card.waitFor({ state: "hidden" });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole("button", { name: "个人设置", exact: true }).click();
-  process.stdout.write("Supplier model browser checks passed: native metadata, exact matching, manual overrides, retries and late catalog responses.\n");
+  process.stdout.write("Supplier model browser checks passed: grouped sorting, search, preserved selections, native metadata, manual overrides, retries and late catalog responses.\n");
 }
 module.exports = { verifyAgentSuppliers };
