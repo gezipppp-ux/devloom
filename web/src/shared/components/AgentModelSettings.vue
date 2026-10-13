@@ -1,17 +1,19 @@
 <script setup>
-import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
+import FeedbackMessage from "./FeedbackMessage.vue";
 import { watchEffect } from "vue";
-import FormSection from "../../shared/components/FormSection.vue";
-import AgentModelControls from "../../shared/components/AgentModelControls.vue";
-import PermissionSelect from "../../shared/components/PermissionSelect.vue";
-import { useModelCatalog } from "../../shared/api/use-model-catalog.js";
-import { usePermissionModes } from "../../shared/api/use-permission-modes.js";
+import FormSection from "./FormSection.vue";
+import AgentModelControls from "./AgentModelControls.vue";
+import PermissionSelect from "./PermissionSelect.vue";
+import { api, appApi } from "../api/api.js";
+import { useModelCatalog } from "../api/use-model-catalog.js";
+import { usePermissionModes } from "../api/use-permission-modes.js";
 import { ReloadOutlined } from "@antdv-next/icons";
 const props = defineProps({
   model: { type: String, default: "" },
   reasoningEffort: { type: String, default: "" },
   permissionMode: { type: String, default: "ask" },
   disabled: Boolean,
+  workspaceId: { type: String, default: "" },
 });
 const emit = defineEmits([
   "update:model",
@@ -19,8 +21,11 @@ const emit = defineEmits([
   "update:permissionMode",
   "validity-change",
 ]);
-const { models, loading, error, refresh } = useModelCatalog();
-const permissions = usePermissionModes();
+const request = url => props.workspaceId
+  ? appApi(`/workspaces/${encodeURIComponent(props.workspaceId)}${url}`)
+  : api(url);
+const { models, loading, error, refresh } = useModelCatalog(request);
+const permissions = usePermissionModes(request);
 watchEffect(() => emit("validity-change", permissions.isAvailable(props.permissionMode)));
 function changeModel(settings) {
   emit("update:model", settings.model);
@@ -52,7 +57,7 @@ function changeModel(settings) {
     <p class="field-hint">
       选择具体模型后可设置其支持的思考强度。创建后仍可在会话输入区修改，从下一轮生效。
     </p>
-    <a-form-item label="执行权限">
+    <a-form-item label="执行权限" layout="vertical">
       <PermissionSelect
         refreshable
         :refreshing="permissions.loading.value"

@@ -12,6 +12,7 @@ const props = defineProps({
   issueId: { type: String, default: "" },
   canContinue: Boolean,
   spaceReady: Boolean,
+  workspaceId: { type: String, default: "" },
   canAssign: Boolean,
   readOnlyReason: { type: String, default: "" },
 });
@@ -102,6 +103,7 @@ function refresh() {
     :project-id="projectId"
     :task-id="taskId"
     :space-ready="spaceReady"
+    :workspace-id="workspaceId"
     :can-assign="canAssign"
     :can-continue="canContinue"
     :read-only-reason="readOnlyReason"
@@ -174,7 +176,7 @@ function refresh() {
             >{{ task.executor?.displayName || "未分配" }} ·
             {{ task.release?.name || "未排期" }} ·
             {{ task.baseBranch || "基线未记录" }} ·
-            {{ task.issueIds.length }} 条事项<span v-if="task.execution">
+            {{ task.kind === 'manual' ? '独立开发' : `${task.issueIds.length} 条事项` }}<span v-if="task.execution">
               · Codex：{{ statusLabel(task.execution.status) }}</span
             ></small
           >

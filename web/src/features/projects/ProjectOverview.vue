@@ -91,7 +91,7 @@ function returnToIssue() {
         </div>
       </template>
       <ProjectIssues v-else-if="currentTab === 'issues' || currentTab === 'bugs'" :key="currentTab" :project-id="projectId" :type="currentTab === 'bugs' ? 'bug' : 'requirement'" :permissions="contentPermissions" @open-task="task => task.runKey ? emit('open-workspace', task.workspaceId, task.runKey) : router.push({ query: { tab: 'tasks', task: task.id } })" />
-      <ProjectTasks v-else-if="currentTab === 'tasks'" :project-id="projectId" :space-ready="data.space?.status === 'ready'" :can-assign="contentPermissions.includes('issue.assign')" :can-continue="contentPermissions.includes('session.continue')" :read-only-reason="archived ? '项目已归档，开发任务只读。' : ''" @prepare-development="prepareDevelopment" @open-workspace="(id, key) => emit('open-workspace', id, key)" />
+      <ProjectTasks v-else-if="currentTab === 'tasks'" :project-id="projectId" :workspace-id="data.space?.workspaceId || ''" :space-ready="data.space?.status === 'ready'" :can-assign="contentPermissions.includes('issue.assign')" :can-continue="contentPermissions.includes('session.continue')" :read-only-reason="archived ? '项目已归档，开发任务只读。' : ''" @prepare-development="prepareDevelopment" @open-workspace="(id, key) => emit('open-workspace', id, key)" />
       <ProjectReleases v-else-if="currentTab === 'releases'" :project-id="projectId" :can-manage="contentPermissions.includes('release.manage')" />
       <ProjectAssets v-else-if="currentTab === 'assets'" :project-id="projectId" :permissions="contentPermissions" />
       <ProjectMembers v-else-if="currentTab === 'members'" :project-id="projectId" :can-manage="can('project.members.manage') && !archived" @saved="reload" />

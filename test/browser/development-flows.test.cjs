@@ -8,6 +8,7 @@ const { projectVisual } = require('../../test/fixtures/project-visual.cjs');
 const { verifyReleaseNameForm } = require('./project-releases.test.cjs');
 const { verifyWorkflowCanvas } = require('./workflow-canvas.test.cjs');
 const { verifyDevelopmentTaskDetail } = require('./development-task-detail.test.cjs');
+const { verifyManualDevelopment } = require('./manual-development.test.cjs');
 
 async function main() {
   const fixture = projectVisual('ux-workspace');
@@ -186,6 +187,7 @@ async function main() {
     await page.goBack(); await page.waitForURL('**task=1-1');
     releaseInitialTask();
     await page.getByRole('heading',{name:'不应被替代打开的任务 A',exact:true}).waitFor();
+    await verifyManualDevelopment({ page, origin, projectId: fixture.projectId, output });
     await verifyWorkflowCanvas({ page, origin, output });
     await verifyDevelopmentTaskDetail({ browser, output });
     assert.deepEqual(errors,[]);

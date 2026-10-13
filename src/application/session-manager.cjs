@@ -379,14 +379,20 @@ class SessionManager extends EventEmitter {
     }
   }
 
-  async resolveAndLaunch(input) {
+  async validateStartSelection(input) {
     this.assertOpen();
-    validateTaskMetadata(input.metadata === undefined ? {} : input.metadata);
-    const channel = this.channels.get(input.channel || "manual");
     const selection = await this.agent.validateSelection(input);
     this.assertOpen();
     await this.agent.assertPermissionAvailable(selection.permissionMode);
     this.assertOpen();
+    return selection;
+  }
+
+  async resolveAndLaunch(input) {
+    this.assertOpen();
+    validateTaskMetadata(input.metadata === undefined ? {} : input.metadata);
+    const channel = this.channels.get(input.channel || "manual");
+    const selection = await this.validateStartSelection(input);
     const sourceInput = { ...input };
     sourceInput.taskType = input.metadata?.type;
     delete sourceInput.model;

@@ -1,10 +1,12 @@
 <script setup>
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, reactive, ref } from "vue";
 import { ArrowLeftOutlined, ReloadOutlined } from "@antdv-next/icons";
 import { statusLabel, appApi } from "../../shared/api/api.js";
 import { useResource } from "../../shared/api/use-resource.js";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import MarkdownContent from "../../shared/components/MarkdownContent.vue";
+import AgentModelSettings from "../../shared/components/AgentModelSettings.vue";
+import { accountSession } from "../../shared/api/account-session.js";
 import RemoteBranchSelect from "./RemoteBranchSelect.vue";
 import DevelopmentTaskConfirmation from "./DevelopmentTaskConfirmation.vue";
 import { useDevelopmentTask } from "./use-development-task.js";
@@ -18,6 +20,7 @@ const props = defineProps({
   projectId: { type: String, required: true },
   taskId: { type: String, required: true },
   spaceReady: Boolean,
+  workspaceId: { type: String, default: "" },
   canAssign: Boolean,
   canContinue: Boolean,
   readOnlyReason: { type: String, default: "" },
@@ -72,6 +75,7 @@ const canAppend = computed(
   () =>
     !readOnly.value &&
     props.canContinue &&
+    task.value?.kind !== "manual" &&
     task.value?.canOpenSession &&
     task.value.status === "started" &&
     task.value.execution?.sessionId,
@@ -80,6 +84,12 @@ const view = computed(() =>
   task.value ? developmentTaskView(task.value, props) : null,
 );
 const steps = ["准备环境", "选择起始分支", "Codex 开发", "人工确认完成"];
+const selection = reactive({ model: accountSession.settings.model || "", reasoningEffort: accountSession.settings.reasoningEffort || "", permissionMode: accountSession.settings.permissionMode || "ask" });
+const permissionsReady = ref(false);
+function startDevelopment() {
+  if (!permissionsReady.value || !props.workspaceId || !canStart.value || busy.value || editing.value || !baseBranch.value) return;
+  return start(baseBranch.value, supplementaryPrompt.value, { ...selection });
+}
 const eligibleMembers = computed(
   () =>
     members.data.value?.members?.filter(
@@ -369,7 +379,7 @@ async function submitConfirmation() {
           <form
             v-else
             class="project-form development-start-form"
-            @submit.prevent="start(baseBranch, supplementaryPrompt)"
+            @submit.prevent="startDevelopment"
           >
             <RemoteBranchSelect
               :project-id="projectId"
@@ -388,9 +398,13 @@ async function submitConfirmation() {
               />
               <small class="field-hint">最多 20000 字，点击启动时按补充模板一并发送给 Codex。</small>
             </label>
+            <AgentModelSettings :key="workspaceId" :workspace-id="workspaceId"
+              v-model:model="selection.model" v-model:reasoning-effort="selection.reasoningEffort"
+              v-model:permission-mode="selection.permissionMode" :disabled="busy || editing"
+              @validity-change="permissionsReady = $event" />
             <button
               class="primary"
-              :disabled="busy || editing || !baseBranch"
+              :disabled="busy || editing || !baseBranch || !workspaceId || !permissionsReady"
             >
               {{ saving ? "正在提交…" : "启动 Codex 开发" }}
             </button>
@@ -433,7 +447,7 @@ async function submitConfirmation() {
           <h3 id="development-scope-title">
             本次开发范围
             <span class="development-count"
-              >{{ task.issueIds.length }} 条事项</span
+              >{{ task.kind === 'manual' ? '独立开发' : `${task.issueIds.length} 条事项` }}</span
             >
           </h3>
           <button
@@ -454,9 +468,10 @@ async function submitConfirmation() {
             }}
           </button>
         </header>
-        <p class="field-hint">
+        <p v-if="task.kind !== 'manual'" class="field-hint">
           以下为纳入任务时保存的事项内容；后续资料按批次单独保存和发送。
         </p>
+        <template v-else><p class="field-hint">此任务独立开发，不关联项目事项。后续目标在原会话中补充。</p><MarkdownContent :content="task.manualContent || '开发目标见原会话参考图片。'" /></template>
         <section
           v-if="adding && (canEdit || canAppend)"
           id="development-add-issues"

@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { projectVisual } = require("../fixtures/project-visual.cjs");
+const { selectRemoteBranch } = require("../support/remote-branch-select.cjs");
 
 async function verifyDevelopmentTaskDetail({ browser, output }) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
@@ -13,6 +14,7 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
   const apiTask = `/api${base}/tasks/search-task`;
   const initial = structuredClone(fixture.response(new URL(origin + apiTask)).task);
   let task, spaceReady = false, readonly = false, failBranches = false, failStart = false, rejectStart = false;
+  let permissionsAvailable = false;
   const writes = [], errors = [];
   const planned = () => ({ ...structuredClone(initial), revision: 1, status: "planned", execution: null, runKey: null, baseBranch: "", baseCommit: null, fetchedAt: null, additions: [], canStart: true, canEdit: true, canComplete: false, canCancel: true, canOpenSession: false });
   const started = (status = "completed") => ({ ...structuredClone(initial), execution: { status, sessionId: "fixture-session" }, canComplete: status === "completed", canCancel: status === "completed" });
@@ -24,6 +26,8 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     if (endpoint.startsWith("/api/")) {
       if (endpoint === "/api/auth/session") return send({ user: { id: "visual-admin", username: "visual-admin", displayName: "演示管理员", role: "admin", status: "active", mustChangePassword: false }, token: "fixture", settings: {} });
       if (endpoint === "/api/account/git-accounts") return send({ accounts: [] });
+      if (endpoint === '/api/workspaces/fixture-workspace/models') return send({ models: [{ model: 'fixture-model', label: '测试模型', reasoningEfforts: ['low', 'high'] }] });
+      if (endpoint === '/api/workspaces/fixture-workspace/execution-options') return send({ permissionModes: require('../../shared/agent-permissions.json').map(mode => ({ ...mode, available: permissionsAvailable })) });
       if (endpoint === `/api${base}`) {
         const result = fixture.response(url);
         return send({ ...result, project: { ...result.project, status: readonly ? "archived" : "active" }, space: { ...result.space, status: spaceReady ? "ready" : "awaiting_credentials" } });
@@ -32,6 +36,7 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
       if (endpoint === `/api${base}/tasks/other-task`) return send({ task: { ...planned(), id: "other-task", title: "切换后的另一任务" } });
       if (endpoint === `/api${base}/tasks`) return send({ tasks: [task], nextOffset: null });
       if (endpoint === `/api${base}/branches` && failBranches) return send({ error: "远端暂不可用，请刷新重试。" }, 502);
+      if (endpoint === `/api${base}/branches`) return send({ branches: [{ name: 'main', commit: 'a'.repeat(40) }, { name: 'feature/' + 'long-branch-name-'.repeat(12), commit: 'b'.repeat(40) }], fetchedAt: '2026-10-12T08:00:00Z' });
       if (endpoint.startsWith(apiTask) && request.method() === "POST") {
         const input = request.postDataJSON();
         writes.push({ endpoint, input });
@@ -67,6 +72,8 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     await page.locator(".operation-message-close").evaluateAll(buttons => buttons.forEach(button => button.click()));
     for (const width of [1440, 768, 390, 320]) {
       await page.setViewportSize({ width, height: 1000 });
+      // The dropdown portal follows its trigger through ResizeObserver alignment.
+      await page.waitForFunction(() => document.documentElement.scrollWidth <= window.innerWidth, null, { timeout: 5000 });
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${name}: overflow at ${width}`);
       const nav = page.getByRole("navigation", { name: "项目功能" });
       assert.equal(await nav.locator('[aria-current="page"]').textContent(), "开发任务");
@@ -97,9 +104,36 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     spaceReady = true;
     await page.reload();
     const branch = page.getByLabel("起始分支", { exact: true });
-    await branch.locator('option[value="main"]').waitFor({ state: "attached" });
+    assert.equal(await page.getByText("搜索远端分支", { exact: true }).count(), 0, 'search and selection use one field');
     assert.equal(await button("启动 Codex 开发").isDisabled(), true);
-    await branch.selectOption("main");
+    await branch.click();
+    await branch.fill('missing-branch');
+    await page.getByText('没有匹配的远端分支。', { exact: true }).waitFor();
+    assert.equal(await page.locator('.development-branch-select .ant-select-content-has-value').count(), 0, 'search text alone is not a branch selection');
+    assert.equal(await button('启动 Codex 开发').isDisabled(), true, 'typing an unknown branch never selects or creates it');
+    await capture('branch-search-empty');
+    await branch.fill('feature/');
+    await page.locator('.ant-select-dropdown:visible .ant-select-item-option').getByText('feature/' + 'long-branch-name-'.repeat(12), { exact: true }).waitFor();
+    await capture('branch-search-long');
+    await branch.fill('MAIN');
+    await page.locator('.ant-select-dropdown:visible .ant-select-item-option').getByText('main', { exact: true }).waitFor();
+    await branch.press('ArrowDown');
+    await branch.press('Enter');
+    await page.locator('.development-branch-select .ant-select-content-has-value').filter({ hasText: /^main$/ }).waitFor();
+    await page.getByText('当前权限模式不可用，请选择可用的权限模式。', { exact: true }).waitFor();
+    assert.equal(await button('启动 Codex 开发').isDisabled(), true, 'unsupported execution permissions block startup');
+    permissionsAvailable = true;
+    await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
+    await button('刷新权限选项').click();
+    await page.keyboard.press('Escape');
+    await page.getByRole('combobox', { name: 'Agent 模型', exact: true }).selectOption('fixture-model');
+    await page.getByRole('combobox', { name: '思考强度', exact: true }).selectOption('high');
+    await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
+    await page.locator('[role="option"][data-value="auto"]').click();
+    await page.locator('.development-branch-select .ant-select').hover();
+    await page.locator('.development-branch-select .ant-select-clear').click();
+    assert.equal(await button('启动 Codex 开发').isDisabled(), true, 'clearing a selected branch blocks startup');
+    await selectRemoteBranch(page);
     const supplement = "本轮补充要求\n验证移动端，保留 {{title}} 与 $&";
     const supplementInput = page.getByLabel("补充提示词", { exact: true });
     await supplementInput.fill(supplement);
@@ -112,8 +146,7 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     await capture("branch-error");
     failBranches = false;
     await button("刷新远端分支").click();
-    await branch.locator('option[value="main"]').waitFor({ state: "attached" });
-    await branch.selectOption("main");
+    await selectRemoteBranch(page);
 
     await button("编辑任务信息").click();
     assert.equal(await page.getByRole("form", { name: "编辑任务信息", exact: true }).getByLabel("补充提示词", { exact: true }).count(), 0);
@@ -127,6 +160,7 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     await button("刷新状态").waitFor();
     assert.equal(await page.getByLabel("任务标题", { exact: true }).inputValue(), "保留编辑中的任务标题");
     assert.equal(await supplementInput.inputValue(), supplement);
+    assert.equal(await page.getByRole('combobox', { name: '思考强度', exact: true }).inputValue(), 'high', 'refresh retains execution preference draft');
     assert.equal(await page.getByRole("checkbox", { name: /修复导出/ }).isChecked(), true);
     await button("保存任务信息").click();
     await page.getByRole("heading", { name: "保留编辑中的任务标题", exact: true }).waitFor();
@@ -143,6 +177,9 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     assert.equal(await button("取消任务并释放认领").count(), 0);
     assert.equal(writes.filter(write => write.endpoint.endsWith("/start")).length, 1);
     assert.equal(writes.at(-1).input.supplementaryPrompt, supplement);
+    assert.equal(writes.at(-1).input.model, 'fixture-model');
+    assert.equal(writes.at(-1).input.reasoningEffort, 'high');
+    assert.equal(writes.at(-1).input.permissionMode, 'auto');
     assert.equal(await supplementInput.count(), 0, "the input belongs to the pre-start form");
     await capture("running");
 
@@ -180,8 +217,7 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
 
     task = planned(); failStart = true;
     await page.reload();
-    await branch.locator('option[value="main"]').waitFor({ state: "attached" });
-    await branch.selectOption("main");
+    await selectRemoteBranch(page);
     await button("启动 Codex 开发").click();
     await page.getByText("任务：执行结果待确认", { exact: true }).waitFor();
     assert.equal(await button("启动 Codex 开发").count(), 0, "ambiguous dispatch cannot be blindly retried");
@@ -198,20 +234,23 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
 
     task = planned(); rejectStart = true;
     await page.reload();
-    await branch.locator('option[value="main"]').waitFor({ state: "attached" });
-    await branch.selectOption("main");
+    await selectRemoteBranch(page);
     assert.equal(await supplementInput.inputValue(), "", "newly opened task starts with an empty local draft");
     const longSupplement = supplement.repeat(30);
     await supplementInput.fill(longSupplement);
+    await page.getByRole('combobox', { name: 'Agent 模型', exact: true }).selectOption('fixture-model');
+    await page.getByRole('combobox', { name: '思考强度', exact: true }).selectOption('low');
     await button("启动 Codex 开发").click();
     await page.getByRole("alert").filter({ hasText: "启动前校验失败" }).waitFor();
     await page.waitForFunction(() => !document.querySelector('[aria-label="补充提示词"]').disabled);
     assert.equal(await supplementInput.inputValue(), longSupplement, "pre-dispatch failure preserves the start draft");
+    assert.equal(await page.getByRole('combobox', { name: '思考强度', exact: true }).inputValue(), 'low', 'pre-dispatch failure preserves execution preferences');
     await capture("start-rejected");
     rejectStart = false;
     await button("启动 Codex 开发").click();
     await button("进入 Codex 会话").waitFor();
     assert.equal(writes.at(-1).input.supplementaryPrompt, longSupplement);
+    assert.equal(writes.at(-1).input.reasoningEffort, 'low');
 
     task = { ...planned(), title: "很长的开发任务名称：".repeat(14) };
     await page.reload();
@@ -239,6 +278,7 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     await page.goto(`${origin}${base}?tab=tasks&task=other-task`);
     await page.getByRole("heading", { name: "切换后的另一任务", exact: true }).waitFor();
     assert.equal(await supplementInput.inputValue(), "", "task changes cannot inherit another start supplement");
+    assert.equal(await page.getByRole('combobox', { name: 'Agent 模型', exact: true }).inputValue(), '', 'task changes cannot inherit execution preferences');
     releaseSave();
     await page.getByRole("heading", { name: "切换后的另一任务", exact: true }).waitFor();
     assert.equal(await page.getByRole("heading", { name: "旧任务的迟到保存", exact: true }).count(), 0);

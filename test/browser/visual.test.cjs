@@ -602,6 +602,9 @@ async function main() {
         await load('project-session');
         await page.getByRole('button', { name: '返回项目协作', exact: true }).waitFor();
         await capture('19-project-session-' + width);
+        await page.getByRole('button', { name: '手动开启', exact: true }).click();
+        await page.getByRole('heading', { name: '手动开启开发', exact: true }).waitFor();
+        await capture('20-manual-development-' + width);
       }
     }
     await captureProjects();

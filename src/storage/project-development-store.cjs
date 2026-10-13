@@ -101,6 +101,16 @@ class ProjectDevelopmentStore {
     return this.update(task, { spaceId: space.id, workspaceId: space.workspaceId, runKey: runKey({ channel: "manual", scope: "local", id: task.id }), status: "unknown",
       snapshot: json({ ...task.snapshot, issues, prompt, selection, supplementaryPrompt: request.supplementaryPrompt || "", baseBranch: request.baseBranch, startRequest: request }) });
   }
+  async acceptManual(projectId, actorId, space, request, prompt, selection) {
+    const id = randomUUID();
+    await this.database.client.developmentTask.create({ data: { id, projectId, creatorId: actorId, executorId: actorId,
+      spaceId: space.id, workspaceId: space.workspaceId, requestId: request.requestId,
+      runKey: runKey({ channel: "manual", scope: "local", id }), status: "unknown",
+      snapshot: json({ kind: "manual", request, title: request.title, manual: { content: request.content, images: request.images, taskType: request.taskType },
+        issues: [], additions: [], prompt, selection, baseBranch: request.baseBranch, startRequest: request }) } });
+    await this.audit(actorId, "development.manual.accepted", projectId, id);
+    return this.task(projectId, id);
+  }
   async finish(task, status, actorId) {
     if (status === "cancelled") await this.assignIssues(task.projectId, await this.issues(task.projectId, [...task.snapshot.issues.map(issue => issue.id), ...task.snapshot.additions.flatMap(batch => batch.issueIds)]), null, actorId);
     const updated = await this.update(task, { status });

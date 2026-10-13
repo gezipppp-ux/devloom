@@ -38,11 +38,12 @@ async function fixture(t) {
   const sessions = {
     git: { activeReason() { return sessions.active ? "active" : null; }, async assertIdle() {} },
     store: { async read() { return {}; } },
+    async validateStartSelection(selection) { return selection; },
     async start(input) {
       calls.starts.push(input);
       const recorded = await database.client.developmentTask.findUnique({ where: { id: input.requestId } });
       assert.equal(recorded.status, "unknown", "durable task intent precedes Codex dispatch");
-      assert.equal(await database.client.taskIssueLink.count({ where: { taskId: input.requestId } }), input.content.match(/--- 项目事项/g).length);
+      assert.equal(await database.client.taskIssueLink.count({ where: { taskId: input.requestId } }), (input.content.match(/--- 项目事项/g) || []).length);
       return { key: runKey({ channel: "manual", scope: "local", id: input.requestId }), accepted: true };
     },
     async exclusive(_key, operation) { return operation(); },
@@ -59,7 +60,7 @@ async function fixture(t) {
   const workspaces = { async get(id, selected) {
     assert.equal(id, workspace.id);
     assert.equal(selected.id, actor.id);
-    return { sessions, channels: { get: () => ({ async uploadImage(bytes) { calls.images.push(bytes); return { id: randomUUID() }; } }) } };
+    return { sessions, channels: { get: () => ({ async resolve() {}, async uploadImage(bytes) { calls.images.push(bytes); return { id: randomUUID() }; } }) } };
   } };
   const services = new ProjectDevelopmentServices(database, projects, workspaces);
   const issue = async title => {
@@ -161,6 +162,41 @@ test("project tasks and image additions use the real session manager with tempor
     assert.equal(denied.status, 409, JSON.stringify(denied));
   }
   assert.equal(client.calls.filter(call => call.method === "turn/start").length, 2);
+  const manualImage = await (await workspaces.get(space.workspaceId, actor)).channels.get("manual").uploadImage(png);
+  const manualInput = { requestId: randomUUID(), title: "独立重构", content: `## 开发目标\n\n不关联事项，验证接口与响应式布局。\n\n![参考图片](manual-image:${manualImage.id})`, taskType: "other", baseBranch: "main", images: [manualImage.id] };
+  const manualResponse = await http(`/api/projects/${project.id}/tasks/manual`, manualInput);
+  assert.equal(manualResponse.status, 202, JSON.stringify(manualResponse));
+  const manualTask = manualResponse.data.task;
+  assert.equal(manualTask.status, "started");
+  assert.equal(manualTask.kind, "manual");
+  assert.deepEqual(manualTask.issueIds, []);
+  assert.equal(await database.client.taskIssueLink.count({ where: { taskId: manualTask.id } }), 0);
+  assert.equal(await database.client.issueDevelopmentClaim.count({ where: { taskId: manualTask.id } }), 0);
+  const manualRuntime = sessions.sessions.get(manualTask.runKey);
+  const manualDeadline = Date.now() + 10000;
+  while (!manualRuntime.turnId && !manualRuntime.error && Date.now() < manualDeadline) await immediate();
+  assert.ok(manualRuntime.turnId, manualRuntime.error || "independent fake turn did not start");
+  const manualTurn = client.calls.filter(call => call.method === "turn/start").at(-1);
+  assert.match(manualTurn.params.input[0].text, /独立重构/);
+  assert.equal(manualTurn.params.input.filter(part => part.type === "localImage").length, 1);
+  assert.equal((await sessions.store.readTaskMetadata(manualTask.runKey)).type, "other");
+  assert.equal((await http(`/api/projects/${project.id}/tasks/manual`, manualInput)).data.reused, true);
+  assert.equal((await http(`/api/projects/${project.id}/tasks/manual`, { ...manualInput, content: "不能改写已启动目标" })).status, 409);
+  assert.equal((await http(`/api/projects/${project.id}/tasks/manual?requestId=${manualInput.requestId}`)).data.task.id, manualTask.id);
+  await assert.rejects(services.append(project.id, manualTask.id, actor, { requestId: randomUUID(), issueIds: [first.id] }), /独立开发任务不关联/);
+  client.notify("turn/completed", { threadId: manualRuntime.sessionId, turn: { id: manualRuntime.turnId, status: "completed" } });
+  await sessions.events.drain();
+  await manualRuntime.operation;
+  const manualDetail = await http(`/api/workspaces/${space.workspaceId}/runs/${manualTask.runKey}`);
+  assert.equal(manualDetail.status, 200);
+  assert.ok(manualDetail.data.requirement.markdown.includes(manualInput.content), "session reload preserves the original Markdown image reference inside the rendered prompt");
+  assert.equal(manualDetail.data.requirement.images[0].source, `manual-image:${manualImage.id}`);
+  assert.equal(manualDetail.data.requirement.images[0].url, `/api/workspaces/${space.workspaceId}/runs/${manualTask.runKey}/images/0`);
+  assert.equal(client.calls.filter(call => call.method === "turn/start").length, 3);
+  const beforeInvalid = await database.client.developmentTask.count();
+  const missingImage = await http(`/api/projects/${project.id}/tasks/manual`, { ...manualInput, requestId: randomUUID(), images: [randomUUID()] });
+  assert.ok(missingImage.status >= 400);
+  assert.equal(await database.client.developmentTask.count(), beforeInvalid, "missing images fail before accepting dispatch");
   const changedIssue = await issue("等待期间业务状态改变");
   const prepareTurn = sessions.agent.prepareTurn.bind(sessions.agent);
   sessions.agent.prepareTurn = async (...args) => {
@@ -170,8 +206,38 @@ test("project tasks and image additions use the real session manager with tempor
   };
   const changedTask = (await launch(services, project.id, actor, { requestId: randomUUID(), issueIds: [changedIssue.id] })).task;
   await sessions.sessions.get(changedTask.runKey).operation;
-  assert.equal(client.calls.filter(call => call.method === "turn/start").length, 2, "workflow is checked again after waiting for Agent preparation");
+  assert.equal(client.calls.filter(call => call.method === "turn/start").length, 3, "workflow is checked again after waiting for Agent preparation");
   assert.equal((await services.read(project.id, changedTask.id, actor)).task.execution.status, "failed");
+});
+
+test("independent dispatch records no planned task or claim, freezes retries and preserves uncertain results", async t => {
+  const { database, actor, other, project, services, sessions, calls } = await fixture(t);
+  const input = { requestId: randomUUID(), title: "独立开发", content: "目标与验收标准", baseBranch: "main", images: [] };
+  const result = await services.startManual(project.id, actor, input);
+  assert.equal(result.task.status, "started");
+  assert.equal(result.task.kind, "manual");
+  assert.equal(result.task.releaseId, null);
+  assert.deepEqual(result.task.issueIds, []);
+  assert.equal(await database.client.projectIssue.count(), 0);
+  assert.equal(await database.client.issueDevelopmentClaim.count(), 0);
+  assert.equal(await database.client.developmentTask.count({ where: { status: "planned" } }), 0);
+  assert.equal(calls.starts.length, 1);
+  assert.equal(calls.starts[0].metadata.type, "other");
+  assert.equal((await services.startManual(project.id, actor, input)).reused, true);
+  await assert.rejects(services.startManual(project.id, actor, { ...input, baseBranch: "release/1" }), { statusCode: 409 });
+  assert.equal((await services.readManual(project.id, other, { requestId: input.requestId })).task, null, "another developer cannot recover a private request");
+  const execute = sessions.start;
+  sessions.start = async request => { await execute(request); throw new Error("lost dispatch acknowledgement"); };
+  const unknownInput = { ...input, requestId: randomUUID() };
+  const unknown = await services.startManual(project.id, actor, unknownInput);
+  assert.equal(unknown.task.status, "unknown");
+  assert.match(unknown.task.error, /lost dispatch acknowledgement/);
+  assert.equal((await services.startManual(project.id, actor, unknownInput)).reused, true);
+  assert.equal(calls.starts.length, 2, "uncertain starts never replay");
+  assert.equal((await services.readManual(project.id, actor, { requestId: unknownInput.requestId })).task.id, unknown.task.id);
+  await database.client.projectMember.update({ where: { projectId_userId: { projectId: project.id, userId: actor.id } }, data: { permissions: ["project.view", "issue.view"] } });
+  await assert.rejects(services.startManual(project.id, actor, input), { statusCode: 403 });
+  assert.equal(calls.starts.length, 2);
 });
 
 test("project additions persist ready snapshots without sending and fence unknown outcomes against replay", async t => {

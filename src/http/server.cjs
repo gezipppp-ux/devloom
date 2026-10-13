@@ -533,7 +533,7 @@ function createWebServer({
           const permission = workspacePermission(scoped[2] || "/bootstrap", request.method);
           await projects.workspaceAuthorization(id, actor, permission);
           if (request.method === "POST" && scoped[2] === "/runs")
-            throw accountError("请从项目事项显式创建开发任务。", 403);
+            throw accountError("请从项目开发入口启动事项任务或独立开发。", 403);
           if (request.method === "POST" && (!scoped[2] || scoped[2].startsWith("/settings")))
             throw accountError("请通过项目设置更新共享配置。", 403);
         }

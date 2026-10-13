@@ -80,7 +80,7 @@
 .project-empty { border: 1px dashed var(--line); border-radius: var(--radius-card); text-align: center; padding: 48px 20px; margin: 24px 0; color: var(--muted); }
 .project-form { display: flex; flex-direction: column; gap: 20px; }
 .project-form .form-columns { row-gap: 20px; }
-.project-form label { display: flex; flex-direction: column; align-items: stretch; gap: 8px; font-size: 13px; min-width: 0; }
+.project-form label:not(.ant-form-item-label > label) { display: flex; flex-direction: column; align-items: stretch; gap: 8px; font-size: 13px; min-width: 0; }
 .project-form input:not([type=checkbox]), .project-form select, .project-form textarea { width: 100%; box-sizing: border-box; }
 .project-form textarea { min-height: 88px; }
 .project-form select[multiple] { min-height: 120px; }
@@ -176,7 +176,6 @@
 .project-records li { padding: 16px 0; border-bottom: 1px solid var(--line); }
 .project-file-upload { display: flex; flex-direction: column; gap: 12px; margin: 20px 0; }
 .project-file-upload input { height: auto; padding: 12px; max-width: 100%; }
-.project-back { padding: 16px; display: flex; align-items: center; background: var(--sidebar); border-bottom: 1px solid var(--line); }
 .project-setup-callout { padding: 24px; margin-bottom: 24px; background: var(--selected); border: 1px solid var(--line); border-radius: var(--radius-card); }
 .project-setup-callout h2 { margin-top: 0; font-size: 20px; }
 .project-setup-callout p { line-height: 1.8; }

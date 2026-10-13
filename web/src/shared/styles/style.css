@@ -605,6 +605,19 @@ pre {
   color: var(--muted);
   font-size: 18px;
 }
+.workspace-project-return {
+  flex-shrink: 0;
+  padding: 6px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.development-start-actions {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 24px;
+}
+.development-start-actions .new-task { margin: 0; }
+.manual-development-start > form > .form-section > label { display: grid; gap: 8px; margin-bottom: 20px; }
 .workspace-settings-button.active {
   color: var(--accent);
   background: var(--selected);
@@ -2761,6 +2774,44 @@ main {
     font-size: 10px;
   }
 }
+/* The execution workspace fills the space below the actual account navigation. */
+.authenticated-app.workspace-app {
+  height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.workspace-app > .account-bar { flex-shrink: 0; }
+.authenticated-app.workspace-app > .workspace {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+.workspace-app > .workspace > .sidebar { overflow-y: auto; }
+.workspace-app .timeline { min-height: 0; max-height: none; }
+@media (max-width: 600px) {
+  .authenticated-app.workspace-app > .workspace { display: flex; flex-direction: column; }
+  .workspace-app > .workspace > .sidebar { flex-shrink: 0; max-height: min(28dvh, 260px); grid-auto-rows: max-content; }
+  .workspace-app > .project-workspace > .sidebar .brand { display: none; }
+  .workspace-app > .project-workspace > .sidebar:has(.task-list) {
+    height: clamp(232px, 32dvh, 280px);
+    max-height: none;
+    overflow: visible;
+    grid-template-rows: auto auto auto auto minmax(0, 1fr);
+    gap: 8px;
+  }
+  .project-workspace .workspace-heading { grid-row: 1; }
+  .project-workspace .repository-link { grid-row: 2; grid-column: 1; }
+  .project-workspace .archived-sessions-trigger { grid-row: 2; grid-column: 2; margin: 0; }
+  .project-workspace .development-start-actions { grid-row: 3; }
+  .project-workspace .task-list-toolbar { grid-row: 4; }
+  .project-workspace .task-list { grid-row: 5; max-height: none; }
+  .workspace-app .timeline { padding-block: 12px; }
+  .workspace-app > .workspace > main { flex: 1; min-height: 0; }
+  .development-start-actions { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); margin: 0; }
+  .development-start-actions .new-task { grid-column: auto; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     scroll-behavior: auto !important;

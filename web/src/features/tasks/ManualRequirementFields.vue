@@ -6,6 +6,8 @@ import { uploadManualImage } from "../../shared/api/api.js";
 const props = defineProps({
   form: { type: Object, required: true },
   disabled: Boolean,
+  independent: Boolean,
+  showWorktreeName: { type: Boolean, default: true },
 });
 const emit = defineEmits(["uploading", "change"]);
 const uploading = ref(false);
@@ -60,32 +62,32 @@ function remove(index) {
 
 <template>
   <div class="manual-fields">
-    <a-form-item label="需求标题" name="title">
+    <a-form-item :label="independent ? '任务标题' : '需求标题'" name="title">
       <input
         :value="form.title"
         @input="emit('change', { title: $event.target.value })"
-        aria-label="需求标题"
+        :aria-label="independent ? '任务标题' : '需求标题'"
         maxlength="200"
         :disabled="disabled"
         required
         placeholder="例如：新增登录入口"
       />
     </a-form-item>
-    <a-form-item label="需求内容" name="content">
+    <a-form-item :label="independent ? '开发目标与验收条件' : '需求内容'" name="content">
       <textarea
         :value="form.content"
         @input="emit('change', { content: $event.target.value })"
-        aria-label="需求内容"
+        :aria-label="independent ? '开发目标与验收条件' : '需求内容'"
         rows="5"
         maxlength="60000"
         :disabled="disabled"
         placeholder="描述目标、交互和验收标准，支持 Markdown；也可仅上传图片。"
       />
     </a-form-item>
-    <a-form-item label="需求图片" name="images">
+    <a-form-item :label="independent ? '参考图片' : '需求图片'" name="images">
       <input
         type="file"
-        aria-label="需求图片"
+        :aria-label="independent ? '参考图片' : '需求图片'"
         accept="image/png,image/jpeg,image/webp"
         multiple
         :disabled="disabled || uploading"
@@ -109,7 +111,7 @@ function remove(index) {
         </figure>
       </div>
     </a-form-item>
-    <a-form-item label="Worktree 目录前缀（可选）" name="worktreeName">
+    <a-form-item v-if="showWorktreeName" label="Worktree 目录前缀（可选）" name="worktreeName">
       <input
         :value="form.worktreeName"
         @input="emit('change', { worktreeName: $event.target.value })"

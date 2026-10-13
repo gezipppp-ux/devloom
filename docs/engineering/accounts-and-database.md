@@ -152,6 +152,10 @@ Jenkinsfile 运行 eslint、Node 测试、`npm run build` 和浏览器脚本。�
 
 ### 开发任务分配与合并接口
 
+- `POST /api/projects/:id/tasks/manual` 接受 `requestId`、`title`、`content`、`images`、`taskType`、`baseBranch` 和可选执行设置，直接受理本人独立开发。要求有效开发成员、启动权限和已准备的个人空间；不接受事项、执行人、版本或保存待开发参数。标题必填，内容与图片至少一项，最多 20 张本人当前空间的有效暂存图片。起始分支沿用实时远端选择与执行前固定 SHA 的规则。
+- 独立启动在短事务内直接保存 `unknown` 派发意图（`snapshot.kind = manual`），不创建 planned 任务或事项认领；网络、图片校验、模型能力发现及执行位于事务外。受理时冻结开发目标、当前生效类型提示词、个人默认执行设置、分支及图片 ID；相同标识参数相同只读返回原任务，参数变化返回 409，未知结果不重放。`GET .../tasks/manual?requestId=` 仅查询当前账号发起的请求，用于响应丢失后确认结果。
+- 独立任务通过现有会话与执行记录查看，项目任务列表标注「独立开发」；任务详情展示初始目标，不提供追加项目事项。会话所有者、完成／取消、归档权限及现有路径规则继续适用。
+
 - POST /api/projects/:id/tasks 接受 requestId、issueIds 和可选 executorId，返回 { tasks, reused }。一条事项对应一个初始待开发任务；整批原子提交，可跨版本，不再接受合并标题。省略 executorId 为认领本人，指派他人要求 issue.assign；执行人仍须有效成员且具备 session.start。
 - 事项创建／编辑不接受 assigneeId；负责人由任务认领、指派、转派和释放维护，事项参与人仍可独立编辑。事项 DTO 的 development 只含当前任务 ID、开发负责人 ID 和显示名称。
 - 事项列表同时返回本页负责人对应的 people，姓名按 assigneeId 展示；development 只表示活跃开发任务。完成任务后仍展示保留的负责人，并注明无进行中的开发任务，不能将其误标为待认领。

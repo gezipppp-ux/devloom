@@ -1,6 +1,7 @@
 /* global document, window */
 const assert = require("node:assert/strict");
 const path = require("node:path");
+const { selectRemoteBranch } = require("../support/remote-branch-select.cjs");
 
 async function verifyProjectTaskMerging({ page, origin, project, database, content, admin, output, clients }) {
   const issues = [];
@@ -53,7 +54,7 @@ async function verifyProjectTaskMerging({ page, origin, project, database, conte
   await taskLink.click();
   assert.equal(new URL(page.url()).searchParams.get("task"), id);
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.getByLabel("起始分支", { exact: true }).selectOption("main");
+  await selectRemoteBranch(page);
   await page.getByRole("button", { name: "启动 Codex 开发", exact: true }).click();
   await page.getByRole("button", { name: "进入 Codex 会话", exact: true }).click();
   await page.getByRole("button", { name: "■ 停止", exact: true }).waitFor();

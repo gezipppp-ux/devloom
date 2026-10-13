@@ -22,6 +22,7 @@ const { verifyAdministratorProjectAccess } = require("./administrator-project-ac
 const { verifyProjectReleases } = require("./project-releases.test.cjs");
 const { verifyProjectPermissions, verifyDepartmentCapabilities } = require("./project-permissions.test.cjs");
 const { markdown, editor, setMarkdown, markdownValue, visual, pasteImage, verifyVisualWriting, captureEditor } = require("../support/issue-markdown.cjs");
+const { selectRemoteBranch } = require("../support/remote-branch-select.cjs");
 
 async function main() {
   const cleanup = [], t = { after: callback => cleanup.push(callback) };
@@ -355,8 +356,8 @@ async function main() {
     assert.equal(new URL(page.url()).searchParams.get("task"), planned.id);
     await page.goto(sourceTaskUrl);
     const branch = page.getByLabel("起始分支", { exact: true });
-    await branch.locator('option[value="main"]').waitFor({ state: "attached", timeout: 10000 }).catch(async error => { console.error('Branch context', page.url(), await page.locator('.project-page').innerText()); await page.screenshot({ path: path.join(output, 'branch-failure.png'), fullPage: true }); throw error; });
-    assert.equal(await page.locator('input[aria-label="起始分支"]').count(), 0, "branch accepts remote options only");
+    await selectRemoteBranch(page);
+    assert.equal(await page.locator('.development-branch-select input[type="search"]').count(), 0, "branch search belongs to the dropdown");
     await page.route(`${origin}/api/projects/${project.id}/branches`, route => route.fulfill({ status: 502, json: { error: "模拟远端暂不可用，请刷新重试。" } }), { times: 1 });
     await page.getByRole("button", { name: "刷新远端分支", exact: true }).click();
     await page.getByText("模拟远端暂不可用，请刷新重试。", { exact: true }).waitFor();
@@ -364,13 +365,13 @@ async function main() {
     assert.equal(await page.getByRole("button", { name: "启动 Codex 开发", exact: true }).isDisabled(), true);
     for (const width of [1440, 768, 390, 320]) {
       await page.setViewportSize({ width, height: 1000 });
+      await page.waitForFunction(() => document.documentElement.scrollWidth <= window.innerWidth, null, { timeout: 5000 });
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `branch failure overflow at ${width}`);
       await page.screenshot({ path: path.join(output, `remote-branch-failure-${width}.png`), fullPage: true });
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.getByRole("button", { name: "刷新远端分支", exact: true }).click();
-    await branch.locator('option[value="main"]').waitFor({ state: "attached" });
-    await branch.selectOption("main");
+    await selectRemoteBranch(page);
     await page.getByRole("button", { name: "启动 Codex 开发", exact: true }).click();
     await page.getByRole("button", { name: "进入 Codex 会话", exact: true }).click();
     await page.getByRole("button", { name: "返回项目协作", exact: true }).waitFor();

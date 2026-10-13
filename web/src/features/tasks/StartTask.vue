@@ -3,7 +3,7 @@ import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, onUnmounted, reactive, ref, watch } from "vue";
 import UserSearchSelect from "./UserSearchSelect.vue";
 import ManualRequirementFields from "./ManualRequirementFields.vue";
-import AgentModelSettings from "./AgentModelSettings.vue";
+import AgentModelSettings from "../../shared/components/AgentModelSettings.vue";
 import FormSection from "../../shared/components/FormSection.vue";
 import { taskTypes } from "./task-metadata.js";
 import { api } from "../../shared/api/api.js";

@@ -305,7 +305,7 @@ onUnmounted(() => {
     </div>
   </div>
   <div v-else class="model-controls form-columns">
-    <a-form-item :label="`${agentLabel} 模型（可选）`" class="model-control">
+    <a-form-item :label="`${agentLabel} 模型（可选）`" class="model-control" layout="vertical">
       <select
         :aria-label="`${agentLabel} 模型`"
         :value="model"
@@ -321,7 +321,7 @@ onUnmounted(() => {
         </option>
       </select>
     </a-form-item>
-    <a-form-item label="思考强度（可选）" class="effort-control">
+    <a-form-item label="思考强度（可选）" class="effort-control" layout="vertical">
       <select
         aria-label="思考强度"
         :value="reasoningEffort"
