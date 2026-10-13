@@ -69,3 +69,13 @@ test("updates pin an allowlisted package version and enforce engine compatibilit
   for (const [id, version] of [["git", "1.2.3"], ["npm", "latest"], ["npm", "1.2.3 && evil"]])
     await assert.rejects(installTool(id, version, plan, async () => assert.fail("must not execute")));
 });
+
+test("missing Codex can use npm for first install but existing hidden packages are protected", async () => {
+  const adapters = { npm: () => ({ command: "node", args: ["npm-cli.js"] }), run: async () => path.resolve("global-root"), same: () => false };
+  const plan = await updatePlan("codex", { missing: true }, adapters);
+  assert.equal(plan.available, true);
+  assert.equal(plan.operation, "install");
+  assert.equal((await updatePlan("codex", { missing: true }, { ...adapters, same: () => true })).available, false);
+  assert.equal((await updatePlan("codex", { missing: true }, { ...adapters, npm: () => { throw new Error("missing npm"); } })).available, false);
+  assert.equal((await updatePlan("npm", { missing: true }, adapters)).available, false);
+});

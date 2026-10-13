@@ -18,7 +18,7 @@ async function inspectTool(id, { run = runTool, codex = () => getAgentProvider("
   else if (id === "codex") launch = codex();
   else if (id === "npm") launch = npm();
   else launch = { command: executable(process.platform === "win32" ? "git.exe" : "git"), args: [] };
-  if (!launch.command) throw new Error("服务进程的 PATH 中未找到该工具。");
+  if (!launch.command) throw Object.assign(new Error("服务进程的 PATH 中未找到该工具。"), { code: "TOOL_NOT_FOUND" });
   const raw = await run(launch.command, [...launch.args, "--version"]);
   const version = toolVersion(raw);
   if (!version) throw new Error("工具返回了无法识别的版本号。");
@@ -66,6 +66,18 @@ async function remoteJson(url) {
 }
 
 async function updatePlan(id, inspected, { npm = npmCommand, run = runTool, same = sameFile, system = systemUpdatePlan } = {}) {
+  if (inspected.missing) {
+    if (id === "npm") return { available: false, reason: "npm 随 Node.js 提供，请使用当前 Node.js 的安装工具修复 npm 后重新检测。" };
+    if (id !== "codex") return system(id, inspected);
+    try {
+      const launch = npm();
+      const globalRoot = await run(launch.command, [...launch.args, "root", "--global"]);
+      if (!path.isAbsolute(globalRoot)) throw new Error("无效的全局目录");
+      const entry = path.join(globalRoot, "@openai/codex/bin/codex.js");
+      if (same(entry, entry)) return { available: false, reason: "npm 全局目录已有 Codex，请先修复服务 PATH 或现有安装后重新检测。" };
+      return { available: true, operation: "install", method: "npm", command: launch.command, args: launch.args, description: "使用当前服务账号通过 npm 全局安装 Codex CLI；安装后需在服务账号下完成登录。" };
+    } catch { return { available: false, reason: "自动安装 Codex CLI 需要可用的 npm，请先安装或修复 npm 后重新检测。" }; }
+  }
   if (id === "codex" || id === "npm") {
     try {
       const launch = npm();

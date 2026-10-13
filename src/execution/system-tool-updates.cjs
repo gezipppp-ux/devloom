@@ -1,13 +1,15 @@
 const path = require("node:path");
 const { runTool, findExecutable, sameFile } = require("../shared/tool-process.cjs");
 const { toolVersion } = require("../domain/tool-version.cjs");
+const { linuxGitInstallPlan, installLinuxGit } = require("./linux-tool-installs.cjs");
 
 async function systemUpdatePlan(id, inspected, {
   platform = process.platform, node = process.execPath, run = runTool,
-  executable = findExecutable, same = sameFile,
+  executable = findExecutable, same = sameFile, uid,
 } = {}) {
+  if (platform === "linux" && id === "git" && inspected.missing) return linuxGitInstallPlan({ run, executable, uid });
   if (platform !== "win32")
-    return { available: false, reason: "当前系统未接入受支持的自动安装器，无法直接更新此工具。" };
+    return { available: false, reason: "当前系统未接入受支持的自动安装器，请使用系统包管理器安装或更新此工具。" };
   const paths = path.win32;
   if (id === "node") {
     const nvm = executable("nvm.exe");
@@ -37,6 +39,19 @@ async function systemUpdatePlan(id, inspected, {
   // Match the active executable, not simply a package with the same name.
   const base = process.env.ProgramFiles || "C:\\Program Files";
   const expected = paths.join(base, id === "git" ? "Git\\cmd\\git.exe" : "nodejs\\node.exe");
+  if (id === "git" && inspected.missing) {
+    if (same(expected, expected)) return { available: false, reason: "默认目录已有 Git，请修复服务 PATH 后重新检测，避免重复安装。" };
+    try {
+      const listing = await run(winget, ["list", "--id", "Git.Git", "--exact", "--source", "winget", "--disable-interactivity"]);
+      if (listing.split(/\r?\n/).some(line => line.split(/\s+/).includes("Git.Git")))
+        return { available: false, reason: "Windows 包管理器已登记 Git，请修复服务 PATH 或现有安装后重新检测。" };
+    } catch (error) {
+      // winget uses this HRESULT when no package matches, rather than exit 0.
+      if ((error.exitCode >>> 0) !== 0x8A150014) return { available: false, reason: "Windows 包管理器无法确认 Git 安装状态，请检查软件源与服务账号权限。" };
+    }
+    return { available: true, operation: "install", method: "winget", command: winget, packageId: "Git.Git", installedCommand: expected,
+      description: "通过 Windows 包管理器安装确切版本的 Git；安装后可能需要重启服务以刷新 PATH。" };
+  }
   if (!same(inspected.launch?.command || node, expected))
     return { available: false, reason: "当前工具的安装位置与受支持的 Windows 安装器不匹配，已禁用更新。" };
   const packageIds = id === "git" ? ["Git.Git"] : ["OpenJS.NodeJS.LTS", "OpenJS.NodeJS"];
@@ -51,6 +66,7 @@ async function systemUpdatePlan(id, inspected, {
 }
 
 async function installSystemTool(id, version, plan, run = runTool) {
+  if (id === "git" && ["apt", "dnf"].includes(plan.method)) return installLinuxGit(version, plan, run);
   if (!["node", "git"].includes(id) || !plan.available ||
       !(id === "git" ? /^\d+\.\d+\.\d+\.windows\.\d+$/ : /^\d+\.\d+\.\d+$/).test(version))
     throw new Error("系统工具更新参数无效。");
@@ -76,8 +92,13 @@ async function installSystemTool(id, version, plan, run = runTool) {
   const candidates = id === "git" ? (build[1] === "1" ? [build[0], `${build[0]}.1`] : [`${build[0]}.${build[1]}`]) : [version];
   const target = candidates.find(candidate => available.includes(candidate));
   if (!target) throw new Error("所选版本尚未发布到 Windows 包管理器，未执行安装，请稍后重新检查。");
-  await run(plan.command, ["upgrade", "--id", plan.packageId, "--exact", "--source", "winget", "--version", target,
+  await run(plan.command, [plan.operation === "install" ? "install" : "upgrade", "--id", plan.packageId, "--exact", "--source", "winget", "--version", target,
     "--silent", "--disable-interactivity", "--accept-source-agreements", "--accept-package-agreements"], options);
+  if (plan.operation === "install" && id === "git") {
+    const command = findExecutable("git.exe") || plan.installedCommand;
+    if (toolVersion(await run(command, ["--version"])) !== version) throw new Error("Git 安装结束，但目标版本未通过验证。");
+    return { installedVersion: version, restartRequired: !findExecutable("git.exe") };
+  }
   return { restartRequired: id === "node" };
 }
 

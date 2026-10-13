@@ -45,7 +45,7 @@ Vue 组件使用 PascalCase 文件名；JavaScript 辅助模块使用 kebab-case
 - `app/SystemSettings.vue` 组合管理员的目录设置、环境检测和系统流程编排；账号业务页面属于 `features/accounts/`：`LoginPage.vue` 负责登录，`PasswordPage.vue` 组合首次改密入口，两类改密入口复用 `PasswordForm.vue`；`PersonalSettings.vue` 管理账号默认模型、强度、权限、分组、通知和改密；`AccountManagement.vue` 管理账号身份，不提供读取他人工作区的入口。工作区配置仍由所有者在 `features/settings` 管理。
 - `features/accounts/use-desktop-notifications.js` 拥有浏览器通知授权、个人通知偏好保存与通知投递；应用壳层将其设置状态传给个人设置页，并把投递回调传给工作区。账号功能不反向依赖应用壳层或其他功能目录。
 - `features/settings/MemberStorageSettings.vue` 使用全局 `appApi` 独立加载和保存成员目录基础路径，并展示 Git 环境检测；`ServerDirectoryPicker.vue` 仅浏览服务器目录并返回选择，表单保存才生效。工作区设置只读展示服务端生成的项目与任务路径。
-- `features/settings/EnvironmentPage.vue` 由系统设置内的「环境检测」分类组合，展示工具、最新版本、目录检查和直接更新、安装器不可用原因与待重启状态。`use-environment.js` 拥有检测、版本查询、更新与轮询生命周期；卸载清理计时器并丢弃迟到响应。更新确认展示确切版本，失败和未知状态独立呈现，不将网络错误视为已经最新。
+- `features/settings/EnvironmentPage.vue` 由系统设置内的「环境检测」分类组合，展示工具、最新版本、目录检查和自动安装／更新、安装器不可用原因与待重启状态。明确缺失时显示安装按钮，Linux Git 单独展示发行版软件源候选版本与来源。`use-environment.js` 拥有检测、版本查询、安装／更新与轮询生命周期；卸载清理计时器并丢弃迟到响应。确认展示确切版本，失败和未知状态独立呈现，不将网络错误视为已经最新。
 - 项目开发空间按稳定项目／用户 ID 定位，新仓库目录为「基础目录 / projects / 项目 ID / members / 用户 ID / repository-准备修订号」，任务使用同根的「worktree / 任务」。失败目录保留，明确重试使用新的准备修订号目录，已就绪空间沿用记录路径。GitAccountSettings 维护主机凭据和独立提交作者；可在保存前直接验证 Git 主机登录，无需项目，验证服务类型仅用于本次请求。验证、保存与实际项目仓库检测分开，私钥和密码不回显。个人空间创建组件只用于明确的文件测试夹具，不作为生产导航入口。
 - `app/use-workspace-console.js` 负责渠道 bootstrap、SSE 建连/关闭与防抖刷新，将事件分发给任务列表和会话状态，不处理 DOM 或表单草稿。
 - `features/tasks/use-task-list.js` 负责列表刷新、请求乱序保护和请求期间的人工进度覆盖。

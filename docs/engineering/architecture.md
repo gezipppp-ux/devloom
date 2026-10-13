@@ -110,6 +110,7 @@ docs/engineering/  # 行为契约与架构规则
 | `application/environment-services.cjs`、`environment-presenter.cjs` | 组合环境探测、官方版本查询、管理员更新门禁、进程内更新状态及公开响应；原始启动命令不进入 DTO |
 | `execution/environment-tools.cjs`、`shared/tool-process.cjs` | 前者拥有工具探测、固定版本来源及受限 npm 更新流程；后者提供无 shell 的限时进程执行、PATH 与 npm 启动器定位 |
 | `execution/system-tool-updates.cjs` | 校验 Windows 工具安装归属、nvm 1/2 与 winget 固定版本安装；安装完成验证与当前服务运行版本分开呈现 |
+| `execution/linux-tool-installs.cjs` | Linux Git 缺失时查询 APT/DNF 稳定候选版本、既有安装与账号权限，执行固定版本安装并验证 |
 | `storage/environment-checks.cjs`、`domain/tool-version.cjs` | 分别负责目录写权限探测和不含 I/O 的版本比较 |
 | `config/system-settings.cjs`、`worktree-location.cjs` | 成员存储根目录配置与写权限校验、自动生成任务路径的实际落盘边界校验 |
 | `storage/directories.cjs`、`domain/member-project-paths.cjs` | 分别负责服务端目录枚举及不含 I/O 的单目录名称校验、成员目录名称和路径拼接 |

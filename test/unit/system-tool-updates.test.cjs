@@ -39,3 +39,16 @@ test("winget pins the matching Windows build and refuses absent versions or fore
     await assert.rejects(installSystemTool("git", version, plan, async () => assert.fail("must not execute")));
   await assert.rejects(installSystemTool("git", "2.55.0.windows.5", { ...plan, packageId: "Other.Package" }, async () => assert.fail("must not execute")));
 });
+
+test("Windows first Git install requires absent package identity and never overwrites a hidden installation", async () => {
+  const adapters = { platform: "win32", executable: () => "winget.exe", same: () => false,
+    run: async () => { throw Object.assign(new Error("no matches"), { exitCode: -1978335212 }); } };
+  const plan = await systemUpdatePlan("git", { missing: true }, adapters);
+  assert.equal(plan.operation, "install");
+  const calls = [];
+  await installSystemTool("git", "2.55.0.windows.1", plan, async (_command, args) => { calls.push(args); return args[0] === "show" ? "2.55.0" : args[0] === "--version" ? "git version 2.55.0.windows.1" : ""; });
+  assert.equal(calls[1][0], "install");
+  assert.equal((await systemUpdatePlan("git", { missing: true }, { ...adapters, same: () => true })).available, false);
+  assert.equal((await systemUpdatePlan("git", { missing: true }, { ...adapters, run: async () => "Git Git.Git 2.55.0" })).available, false);
+  assert.equal((await systemUpdatePlan("git", { missing: true }, { ...adapters, run: async () => { throw new Error("source offline"); } })).available, false);
+});
