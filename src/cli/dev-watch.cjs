@@ -27,6 +27,7 @@ async function main(
 
   function stopWatching() {
     clearTimeout(timer);
+    timer = undefined;
     for (const watcher of watchers) watcher.close();
     watchers.length = 0;
   }
@@ -116,6 +117,14 @@ async function main(
     if (message?.type === "dev:shutdown") onSignal();
   }
 
+  async function waitForPendingChanges() {
+    // A save may produce more than one Windows watch event. If another event
+    // arrives while the old child is closing, wait for its debounce window
+    // before creating a replacement that would immediately be closed again.
+    while (timer && !closing)
+      await new Promise((resolve) => setTimeout(resolve, debounceMs));
+  }
+
   async function restart() {
     if (closing || restarting) return;
     restarting = true;
@@ -125,6 +134,11 @@ async function main(
         process.stdout.write("后端代码已修改，正在关闭并重新启动开发服务……\n");
         await stopChild();
         if (closing) break;
+        await waitForPendingChanges();
+        if (closing) break;
+        // Coalesce changes received while shutdown was in progress. Starting
+        // Vite only to close it on the next loop cancels its dependency scan.
+        if (restartRequested) continue;
         try {
           await startChild();
         } catch (error) {
@@ -145,6 +159,7 @@ async function main(
       return;
     clearTimeout(timer);
     timer = setTimeout(() => {
+      timer = undefined;
       restartRequested = true;
       void restart().catch(report);
     }, debounceMs);
