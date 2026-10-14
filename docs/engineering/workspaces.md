@@ -87,12 +87,10 @@ Session archive is independent of Worktree deletion: archived sessions are exclu
 
 The Web app has no merge or conflict-resolution button. Users instruct Codex in the existing task session when they want merge/conflict work.
 
-## Local task classification and human progress
+## Development state and deliveries
 
-`shared/task-metadata.json` defines local task types (requirement/bug/other) and human progress (in_progress/review/merge/done/on_hold). These are separate from Codex execution and channel workflow states. New Web tasks default to in_progress; subsequent completion, interruption, failure and continuation never mutate the human choice.
+Personal sessions have execution state and a display title; they do not store manual type/progress metadata or grouping preferences. The metadata endpoint, SSE event and catalog have been removed without compatibility readers. Development task lifecycle and issue workflow stay independent of Agent execution.
 
-Optional `metadata:{type?,progress?}` on internal execution input is validated before resolving the source and removed from channel input. After ownership is claimed it is saved before asynchronous preparation. Each run stores classification in `task-metadata.json`, separately from execution-owned run.json and web-session.json, using atomic PostgreSQL document updates (file fixtures use atomic writes). Existing records read default requirement/in_progress (bug if the original item type is bug) without migration writes or inference from execution results.
+The development entry offers independent development and issue development. Session switching uses a picker; context starts closed. Code changes open a full workspace with a file list, cumulative/uncommitted comparison and return to the unchanged conversation draft.
 
-`POST .../runs/:key/metadata {type?,progress?}` updates existing records with whitelisted enums, preserving omitted fields. Token/origin checks and workspace scoping apply. Missing run returns 404; invalid fields return 400 without writes. Local labels remain editable even when the original worktree is unavailable; updating them does not resume Codex, claim execution ownership, move files or change the upstream source. Lists and details return a metadata object. A scoped SSE event `{type:"metadata",key,metadata,at}` updates classification without overwriting runtime status, turn IDs or messages.
-
-The sidebar offers type/progress/no grouping, collapsible groups with counts, and separate type/progress badges plus Codex execution text. Browser storage remembers grouping per workspace. Only user-selected metadata is persisted; grouping does not change task ownership or identity. Verify rejection, source isolation, defaults, full-pipeline completion/continuation preserving human progress, HTTP scope and SSE, both start channels, grouping, cross-tab updates, reload and mobile layout.
+Project deliveries use POST /api/projects/:projectId/deliveries. Supply an issueId or a taskId for an owned, started independent task. Task references must match project, owner and issue scope. Read/review paths remain /deliveries/:id and /deliveries/:id/review. Review requires deliverable.review; an optional issue transition is authorized separately. Private completion uses the existing task complete action, with revision and execution-idle checks.

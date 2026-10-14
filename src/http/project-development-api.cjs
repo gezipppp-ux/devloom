@@ -10,6 +10,7 @@ async function serveProjectDevelopment(request, response, url, { services, actor
   if (id === "manual" && !action && request.method === "POST") return send(202, await services.startManual(projectId, actor, input));
   if (id === "manual" && !action && request.method === "GET") return send(200, await services.readManual(projectId, actor, Object.fromEntries(url.searchParams)));
   if (id === "merge" && !action && request.method === "POST") return send(201, await services.merge(projectId, actor, input));
+  if (id === "session" && !action && request.method === "GET") return send(200, await services.readSession(projectId, actor, Object.fromEntries(url.searchParams)));
   if (id && !action && request.method === "GET") return send(200, await services.read(projectId, id, actor));
   if (id && !action && request.method === "POST") return send(200, await services.update(projectId, id, actor, input));
   if (id && action === "start" && request.method === "POST") return send(202, await services.start(projectId, id, actor, input));

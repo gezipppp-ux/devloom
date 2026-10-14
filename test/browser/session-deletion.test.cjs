@@ -1,3 +1,4 @@
+const { openSessionList, openSessionContext } = require("../support/browser-navigation.cjs");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -37,8 +38,9 @@ async function verifySessionDeletion(browser, origin, manager, directory, errors
       await page.getByRole("button", { name: "已归档会话", exact: true }).click();
       await page.getByRole("button", { name: `永久删除会话：${title}`, exact: true }).click();
     } else {
+      await openSessionList(page);
       await page.locator(".session-link").filter({ hasText: title }).click();
-      await page.getByRole("button", { name: "会话信息", exact: true }).click();
+      await openSessionContext(page, '会话信息');
       await page.getByRole("button", { name: "永久删除会话", exact: true }).click();
     }
     const dialog = page.getByRole("dialog", { name: "永久删除会话", exact: true });

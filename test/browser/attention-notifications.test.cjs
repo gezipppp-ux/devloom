@@ -9,7 +9,7 @@ async function verifyAttentionNotifications(browser, origin) {
   const project = projectVisual(workspace.id), errors = [];
   const user = { id: "visual-admin", username: "visual-admin", displayName: "演示管理员", role: "admin", status: "active", mustChangePassword: false };
   let items = [{ id: "initial", kind: "approval", projectId: project.projectId, projectName: "客户管理系统", workspaceId: workspace.id, runKey: "manual-attention", title: "初始执行审批" }], fail = false;
-  const settings = { notificationsEnabled: true, model: null, reasoningEffort: null, permissionMode: "ask", grouping: "type" };
+  const settings = { notificationsEnabled: true, model: null, reasoningEffort: null, permissionMode: "ask" };
   await context.addInitScript(() => {
     window.attentionFixture = { notifications: [] };
     window.Notification = class {
@@ -34,7 +34,7 @@ async function verifyAttentionNotifications(browser, origin) {
     if (endpoint.endsWith("/bootstrap")) return send({ token: "fixture-token", channels: [{ id: "manual", label: "手动输入", capabilities: { manualInput: true } }] });
     if (endpoint.endsWith("/models")) return send({ models: [] });
     if (endpoint.endsWith("/execution-options")) return send({ agent: agentDescriptor, permissionModes: [{ id: "ask", available: true }] });
-    if (endpoint.endsWith("/runs")) return send({ runs: [{ key: "manual-attention", title: "初始执行审批", metadata: { type: "requirement", progress: "in_progress" }, status: "running" }] });
+    if (endpoint.endsWith("/runs")) return send({ runs: [{ key: "manual-attention", title: "初始执行审批", status: "running" }] });
     if (endpoint.endsWith("/runs/manual-attention")) return send({ key: "manual-attention", title: "初始执行审批", agent: agentDescriptor, sessionId: "attention-session", status: "running", items: [], requests: [{ id: "approval", kind: "approval", action: "command", reason: "模拟审批", command: "npm run build" }], executionSettings: { model: "", reasoningEffort: "", permissionMode: "ask" } });
     const result = project.response(url);
     if (result) return send(result);

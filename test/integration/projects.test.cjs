@@ -475,7 +475,7 @@ test("administrators manage all collaboration without membership or department a
   await f.accounts.store.update(observer.id, { departmentId: null });
   const issue = await content.createIssue(f.project.id, f.member, { type: "bug", title: "Visible bug" });
   await content.addComment(f.project.id, issue.id, f.member, { body: "Visible comment" });
-  await content.addDeliverable(f.project.id, issue.id, f.member, { body: "Visible delivery" });
+  await content.addDeliverable(f.project.id, f.member, { issueId: issue.id, body: "Visible delivery" });
   const asset = await content.saveAsset(f.project.id, null, f.member, { type: "credential", title: "Credential metadata", secret: "hidden-secret" });
   const file = await content.uploadFile(f.project.id, "issues", issue.id, f.member, { name: "note.txt", mimeType: "text/plain", data: Buffer.from("visible attachment") });
   const read = await f.projects.read(f.project.id, observer);

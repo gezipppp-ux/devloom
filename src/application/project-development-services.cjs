@@ -39,6 +39,13 @@ class ProjectDevelopmentServices {
     await this.authorize(projectId, actor, "issue.view");
     return { task };
   }
+  async readSession(projectId, actor, input) {
+    await this.authorize(projectId, actor, "session.view");
+    if (typeof input.runKey !== "string" || !input.runKey || input.runKey.length > 200) throw accountError("会话标识无效。", 400);
+    const task = await this.present(await this.store.taskForSession(projectId, actor.id, input.runKey), actor, true);
+    await this.authorize(projectId, actor, "session.view");
+    return { task };
+  }
   async images(projectId, issues) {
     const images = issues.flatMap(issue => (issue.files || []).filter(file => ["image/png", "image/jpeg", "image/webp"].includes(file.mimeType)).map(file => ({ ...file, issueId: issue.id })));
     if (images.length > 20) throw accountError("所选事项图片合计超过 20 张，请拆分开发任务。", 400);
@@ -188,7 +195,7 @@ class ProjectDevelopmentServices {
       await this.store.space(projectId, actor.id);
       const started = await context.sessions.start({ channel: "manual", requestId: task.id,
         baseBranch: task.snapshot.baseBranch, title: task.snapshot.title, content: task.snapshot.prompt, renderedPrompt: true,
-        metadata: { type: task.snapshot.manual?.taskType || (task.snapshot.issues.every(issue => issue.type === "bug") ? "bug" : "requirement") }, images: imageIds, ...task.snapshot.selection });
+        images: imageIds, ...task.snapshot.selection });
       if (started.key !== task.runKey) throw new Error("开发任务与会话身份不一致，请检查已记录任务。");
       task = await this.store.transaction(async () => this.store.update(await this.store.task(projectId, task.id), { status: "started" }));
     } catch (error) {

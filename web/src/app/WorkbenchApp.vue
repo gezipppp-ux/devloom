@@ -50,7 +50,7 @@ const createProjects = computed(() => projects.value.filter(project => {
 function selectTask(task) { if (route.query.task !== task) void router[route.query.task ? "push" : "replace"]({ query: { ...route.query, task, view: undefined } }); }
 function page(name) { menuOpen.value = false; void router.push({ name, query: ["issues", "development", "deliveries"].includes(name) && contextId.value ? { projectId: contextId.value } : {} }); }
 function project(id, tab = "overview", task) { void router.push({ name: "project", params: { projectId: id }, query: { tab, ...(task ? { task } : {}) } }); }
-function openProject(value) { project(current.value.projectId, typeof value === "object" ? value.tab : value || "issues", value?.task); }
+function openProject(value) { if (value?.delivery) { void router.push({ name: "deliveries", query: { projectId: current.value.projectId, delivery: value.delivery } }); return; } project(current.value.projectId, typeof value === "object" ? value.tab : value || "issues", value?.task); }
 function tab(value) { void router.push({ query: { tab: value } }); }
 function contextChange(value) { if (route.name === "project" || inWorkspace.value) { value ? project(value) : page("projects"); return; } void router.push({ query: { ...route.query, projectId: value || undefined, delivery: undefined, offset: undefined } }); }
 function returnToProject() { const target = typeof route.query.returnTo === "string" ? router.resolve(route.query.returnTo) : null; if (target?.name === "project" && target.params.projectId === current.value?.projectId) void router.push(target.fullPath); else project(current.value.projectId); }

@@ -1,3 +1,4 @@
+const { openSessionList } = require("../support/browser-navigation.cjs");
 /* global window, document */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -35,7 +36,7 @@ async function main() {
       if (endpoint.startsWith('/api/')) {
         requests.push({ endpoint, method: request.method(), input: request.postDataJSON() });
         const send = (json, status = 200) => route.fulfill({ status, json });
-        if (endpoint === '/api/auth/session') return send({ user: { id:'visual-admin', username:'visual-admin', displayName: '交互审查夹具', role:'admin', status:'active', mustChangePassword:false }, token:'fixture', settings:{ permissionMode:'ask', grouping:'type', notificationsEnabled:false } });
+        if (endpoint === '/api/auth/session') return send({ user: { id:'visual-admin', username:'visual-admin', displayName: '交互审查夹具', role:'admin', status:'active', mustChangePassword:false }, token:'fixture', settings:{ permissionMode:'ask', notificationsEnabled:false } });
         if (endpoint === '/api/bootstrap') return send({token:'fixture',workspaces:[{id:'ux-workspace',name:'交互审查空间',projectId:fixture.projectId,permissions:fixture.permissions}]});
         if (endpoint.endsWith('/events')) return route.fulfill({ status:204, body:'' });
         if (endpoint.endsWith('/account/preferences')) return send({preferences:{unreadRunKeys:[]}});
@@ -54,9 +55,9 @@ async function main() {
         const scoped=endpoint.replace('/api/workspaces/ux-workspace','');
         if(scoped==='/bootstrap')return send({token:'fixture',channels:[{id:'manual',label:'手动输入',capabilities:{manualInput:true}}]});
         if(scoped==='/runs')return send({runs});
-        if(scoped==='/runs/archived-task-b')return send({key:'archived-task-b',title:'指定的归档任务 B',status:'completed',archivedAt:'2026-10-10T00:00:00Z',readOnlyReason:'会话已归档，只能查看历史。',source:{channel:'manual'},agent:agentDescriptor,sessionId:'archived-session',items:[],requests:[],metadata:{type:'requirement',progress:'in_progress'},executionSettings:{model:'',reasoningEffort:'',permissionMode:'ask'},nextCursor:null});
-        if(scoped==='/runs/1-1')return send({key:'1-1',title:'不应被替代打开的任务 A',status:'completed',source:{channel:'manual',scope:'fixture',id:'one'},agent:agentDescriptor,sessionId:'fixture-session',items:[],requests:[],pendingRequests:[],execution:{status:'completed'},metadata:{type:'requirement',progress:'in_progress'},executionSettings:{model:'',reasoningEffort:'',permissionMode:'ask'},nextCursor:null});
-        if(scoped==='/runs/2-2')return send({key:'2-2',title:'侧栏切换任务 B',status:'completed',source:{channel:'manual'},agent:agentDescriptor,sessionId:'fixture-session-b',items:[],requests:[],metadata:{type:'requirement',progress:'in_progress'},executionSettings:{model:'',reasoningEffort:'',permissionMode:'ask'},nextCursor:null});
+        if(scoped==='/runs/archived-task-b')return send({key:'archived-task-b',title:'指定的归档任务 B',status:'completed',archivedAt:'2026-10-10T00:00:00Z',readOnlyReason:'会话已归档，只能查看历史。',source:{channel:'manual'},agent:agentDescriptor,sessionId:'archived-session',items:[],requests:[],executionSettings:{model:'',reasoningEffort:'',permissionMode:'ask'},nextCursor:null});
+        if(scoped==='/runs/1-1')return send({key:'1-1',title:'不应被替代打开的任务 A',status:'completed',source:{channel:'manual',scope:'fixture',id:'one'},agent:agentDescriptor,sessionId:'fixture-session',items:[],requests:[],pendingRequests:[],execution:{status:'completed'},executionSettings:{model:'',reasoningEffort:'',permissionMode:'ask'},nextCursor:null});
+        if(scoped==='/runs/2-2')return send({key:'2-2',title:'侧栏切换任务 B',status:'completed',source:{channel:'manual'},agent:agentDescriptor,sessionId:'fixture-session-b',items:[],requests:[],executionSettings:{model:'',reasoningEffort:'',permissionMode:'ask'},nextCursor:null});
         if(scoped==='/settings')return send({repository:'C:/fixture/repository',worktreeRoot:'C:/fixture/worktree',baseBranch:'main',initCommands:[],platform:'win32'});
         if(scoped==='/settings/branches')return send({branches:[{value:'main',label:'main'}]});
         if(scoped==='/models')return send({models:[]});
@@ -92,7 +93,7 @@ async function main() {
     await page.getByRole('button', { name: '独立开发', exact: true }).click();
     chooser = page.getByRole('dialog', { name: '选择独立开发项目', exact: true });
     await chooser.getByRole('button').filter({ hasText: projectName }).click();
-    await page.getByRole('heading', { name: '手动开启开发', exact: true }).waitFor();
+    await page.getByRole('heading', { name: '独立开发', exact: true }).waitFor();
     assert.equal(requests.filter(request => request.method === 'POST' && (request.endpoint.endsWith('/start') || request.endpoint.endsWith('/manual-development'))).length, 0, 'development shortcuts only open existing views');
     await page.goto(origin + projectPath + '?tab=releases');
     await page.getByRole('button', { name: '新建版本', exact: true }).click();
@@ -170,7 +171,7 @@ async function main() {
       await page.setViewportSize({width,height:900});
       await page.screenshot({path:path.join(output,`empty-${width}.png`),fullPage:true});
     }
-    runs=[{key:'1-1',title:'不应被替代打开的任务 A',status:'completed',metadata:{type:'requirement',progress:'in_progress'}}];
+    runs=[{key:'1-1',title:'不应被替代打开的任务 A',status:'completed'}];
     for (const key of ['missing-task-b']) {
       await page.goto(origin+'/?workspace=ux-workspace&task='+key);
       await page.getByRole('heading',{name:'指定会话暂时无法打开',exact:true}).waitFor();
@@ -182,10 +183,11 @@ async function main() {
     await page.getByRole('heading',{name:'指定的归档任务 B',exact:true}).waitFor();
     assert.equal(requests.filter(r=>r.endpoint.endsWith('/runs/1-1')).length,0);
     await page.getByText('会话已归档，只能查看历史。',{exact:true}).first().waitFor();
-    runs.push({key:'2-2',title:'侧栏切换任务 B',status:'completed',metadata:{type:'requirement',progress:'in_progress'}});
+    runs.push({key:'2-2',title:'侧栏切换任务 B',status:'completed'});
     await page.goto(origin+'/?workspace=ux-workspace&task=1-1');
     await page.getByRole('heading',{name:'不应被替代打开的任务 A',exact:true}).waitFor();
     const bootstrapCount = requests.filter(r => r.endpoint.endsWith('/bootstrap')).length;
+    await openSessionList(page);
     await page.getByRole('navigation',{name:'会话列表'}).getByRole('button',{name:/侧栏切换任务 B/}).click();
     await page.getByRole('heading',{name:'侧栏切换任务 B',exact:true}).waitFor();
     await page.waitForURL('**task=2-2');
@@ -211,6 +213,7 @@ async function main() {
     releaseInitialTask();
     await page.getByRole('heading',{name:'不应被替代打开的任务 A',exact:true}).waitFor();
     await verifyManualDevelopment({ page, origin, projectId: fixture.projectId, output });
+    await require("./independent-delivery.test.cjs").verifyIndependentDelivery({ page, origin, projectId: fixture.projectId, output });
     await verifyWorkflowCanvas({ page, origin, output });
     await verifyDevelopmentTaskDetail({ browser, output });
     assert.deepEqual(errors,[]);

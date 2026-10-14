@@ -8,7 +8,7 @@ async function verifyAccountProfileRaces(browser, origin) {
   const page = await context.newPage();
   const gates = new Map(), requests = [], errors = [];
   let actor = { id: "alice", username: "alice", displayName: "Alice", role: "member", status: "active" };
-  const settings = { model: "fixture-model", grouping: "none" };
+  const settings = { model: "fixture-model" };
   const hold = (endpoint) => new Promise(resolve => gates.set(endpoint, resolve));
   page.on("pageerror", error => errors.push(error.message));
   // Import the real browser modules in an isolated page so generation and token

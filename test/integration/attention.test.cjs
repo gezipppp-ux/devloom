@@ -17,7 +17,7 @@ test("attention aggregates only own actionable session requests and deliveries t
   for (const user of [actor, outsider]) await database.client.projectMember.create({ data: { projectId: project.id, userId: user.id, permissions } });
   const projects = new ProjectServices(database), content = new ProjectContentServices(database, projects);
   const issue = await content.createIssue(project.id, actor, { type: "requirement", title: "UI review" });
-  const delivery = await content.addDeliverable(project.id, issue.id, outsider, { body: "Check UI" });
+  const delivery = await content.addDeliverable(project.id, outsider, { issueId: issue.id, body: "Check UI" });
   const workspace = await database.client.workspace.create({ data: { ownerUserId: actor.id, name: "Own space" } });
   const foreignWorkspace = await database.client.workspace.create({ data: { ownerUserId: outsider.id, name: "Other space" } });
   for (const [user, row] of [[actor, workspace], [outsider, foreignWorkspace]]) await database.client.developmentSpace.create({ data: { projectId: project.id, userId: user.id, workspaceId: row.id, status: "ready" } });
@@ -34,7 +34,7 @@ test("attention aggregates only own actionable session requests and deliveries t
   assert.equal(result.items.find(row => row.kind === "delivery").deliveryId, delivery.id);
   assert.equal(JSON.stringify(result).includes("Check UI"), false, "notification DTO excludes delivery body");
   const membership = { projectId_userId: { projectId: project.id, userId: actor.id } };
-  await database.client.projectMember.update({ where: membership, data: { permissions: permissions.filter(permission => permission !== "issue.accept") } });
+  await database.client.projectMember.update({ where: membership, data: { permissions: permissions.filter(permission => permission !== "deliverable.review") } });
   assert.equal((await attention.list(actor)).items.some(row => row.kind === "delivery"), false);
   await database.client.projectMember.update({ where: membership, data: { permissions } });
   await database.client.developmentTask.update({ where: { projectId_id: { projectId: project.id, id: task.id } }, data: { status: "completed" } });

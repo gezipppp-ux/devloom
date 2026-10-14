@@ -35,7 +35,6 @@ export const enParameters = {
   "加载失败：{p0}": "Load failed: {p0}",
   "恢复会话：{p0}": "Restore session: {p0}",
   "永久删除会话：{p0}": "Permanently delete session: {p0}",
-  "分组保存失败：{p0}": "Could not save grouping: {p0}",
   "{p0}分组，{p1}个任务": "{p0} group, {p1} tasks",
   "有未读 {p0} 回复": "Unread reply from {p0}",
   "克隆任务{p0}": "Clone tasks{p0}",

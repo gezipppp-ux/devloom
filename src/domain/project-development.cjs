@@ -34,19 +34,18 @@ function developmentStartInput(input) {
   return result;
 }
 function manualDevelopmentInput(input) {
-  object(input, ["requestId", "title", "content", "images", "taskType", "baseBranch", "model", "reasoningEffort", "permissionMode"]);
+  object(input, ["requestId", "title", "content", "images", "baseBranch", "model", "reasoningEffort", "permissionMode"]);
   if (!UUID.test(input.requestId || "")) throw accountError("开发请求标识无效，请重新打开表单。", 400);
   const result = { requestId: input.requestId, title: text(input.title, "任务标题", 200, { required: true }),
     content: text(input.content === undefined ? "" : input.content, "开发目标", 60000), images: identifiers(input.images === undefined ? [] : input.images, "图片", 20),
-    taskType: input.taskType === undefined ? "other" : input.taskType, baseBranch: validateBaseBranch(input.baseBranch) };
-  if (!["requirement", "bug", "other"].includes(result.taskType)) throw accountError("任务类型无效。", 400);
+    baseBranch: validateBaseBranch(input.baseBranch) };
   if (result.images.some(id => !UUID.test(id))) throw accountError("图片标识无效。", 400);
   if (!result.content && !result.images.length) throw accountError("请填写开发目标或上传图片。", 400);
   for (const field of ["model", "reasoningEffort", "permissionMode"]) if (Object.hasOwn(input, field)) result[field] = text(input[field], "执行设置", 200);
   return result;
 }
 function manualDevelopmentPrompt(request, templates) {
-  const type = request.taskType === "bug" ? "bug" : "requirement";
+  const type = "requirement";
   const prompt = renderPromptTemplate(type, templates[type], { title: request.title, content: request.content,
     images: `本次独立开发附带 ${request.images.length} 张图片，顺序与上传顺序一致。`,
     image_count: request.images.length, image_list: request.images.map((_, index) => `图片 ${index + 1}`).join("\n") });

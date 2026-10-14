@@ -3,7 +3,6 @@ const DEFAULT_ACCOUNT_SETTINGS = Object.freeze({
   reasoningEffort: null,
   permissionMode: "ask",
   notificationsEnabled: true,
-  grouping: "type",
 });
 
 function accountError(message, statusCode = 400, code) {
@@ -56,10 +55,6 @@ function accountSettings(input, previous = DEFAULT_ACCOUNT_SETTINGS) {
     } else if (key === "permissionMode") {
       if (!["ask", "auto", "full"].includes(value))
         throw accountError("权限模式无效。");
-      next[key] = value;
-    } else if (key === "grouping") {
-      if (!["type", "progress", "none"].includes(value))
-        throw accountError("分组方式无效。");
       next[key] = value;
     } else {
       if (typeof value !== "boolean")

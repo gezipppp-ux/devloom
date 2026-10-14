@@ -60,7 +60,7 @@ test("release archive gates unfinished work and protects all issue write paths u
     () => content.updateIssue(projectId, issue.id, actor, { revision: issue.revision, releaseId: null }),
     () => content.transitionIssue(projectId, issue.id, actor, { revision: issue.revision, status: "pending", reason: "重开" }),
     () => content.addComment(projectId, issue.id, actor, { body: "评论" }),
-    () => content.addDeliverable(projectId, issue.id, actor, { body: "交付" }),
+    () => content.addDeliverable(projectId, actor, { issueId: issue.id, body: "交付" }),
     () => content.uploadFile(projectId, "issues", issue.id, actor, { name: "readme.txt", mimeType: "text/plain", data: Buffer.from("data") }),
     () => content.createIssue(projectId, actor, { type: "bug", title: "新事项", releaseId: release.id }),
     () => content.saveAsset(projectId, asset.id, actor, { revision: asset.revision, issueIds: [] }),

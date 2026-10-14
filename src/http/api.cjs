@@ -166,8 +166,6 @@ async function serveApi(
         await sessions.send(key, input.text, input.images),
       );
     }
-    if (request.method === "POST" && action === "metadata")
-      return json(response, 200, (await sessions.updateTaskMetadata(key, input)));
     if (request.method === "POST" && action === "title")
       return json(response, 200, (await sessions.updateTitle(key, input.title)));
     if (request.method === "POST" && action === "archive")

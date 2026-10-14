@@ -61,8 +61,8 @@ test("project issues enforce membership, assignment, versioned acceptance and re
   await assert.rejects(services.transitionIssue(project.id, issue.id, actor, { status: "planned", revision: current.revision }), /原因/);
   current = await services.transitionIssue(project.id, issue.id, actor, { status: "planned", revision: current.revision, reason: "再次打开" });
   await services.addComment(project.id, issue.id, actor, { body: "评审说明" });
-  await services.addDeliverable(project.id, issue.id, actor, { body: "完成交付", commit: "abc123" });
-  await assert.rejects(services.addDeliverable(project.id, issue.id, actor, { body: "非法任务", taskId: "foreign-task" }), /不属于/);
+  await services.addDeliverable(project.id, actor, { issueId: issue.id, body: "完成交付", commit: "abc123" });
+  await assert.rejects(services.addDeliverable(project.id, actor, { issueId: issue.id, body: "非法任务", taskId: "foreign-task" }), /本人已启动/);
   assert.equal((await services.children(project.id, issue.id, actor, "comments", {})).items[0].body, "评审说明");
   const history = await services.children(project.id, issue.id, actor, "history", { limit: 2 });
   assert.equal(history.items.length, 2);

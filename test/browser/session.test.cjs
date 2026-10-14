@@ -1,3 +1,4 @@
+const { openSessionList, openSessionContext } = require("../support/browser-navigation.cjs");
 /* global document, window */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -87,7 +88,7 @@ async function verifyLanManualCreation(browser, directory, errors) {
       getRandomValues: typeof window.crypto.getRandomValues,
     })), { secure: false, randomUUID: 'undefined', getRandomValues: 'function' });
     async function openManual() {
-      await page.getByRole('button', { name: '＋ 从需求启动', exact: true }).click();
+      await page.getByRole('button', { name: '独立开发', exact: true }).click();
       await page.getByLabel('需求渠道', { exact: true }).selectOption('manual');
       await page.getByLabel('需求标题', { exact: true }).fill('LAN HTTP 手动需求');
       await page.getByLabel('需求内容', { exact: true }).fill('仅校验请求标识，不启动真实任务。');
@@ -152,7 +153,7 @@ async function verifyPermissionDiscoveryFailures(browser, origin, client, errors
       await page.goto(origin);
       await page.getByText('历史回复', { exact: true }).waitFor();
       if (surface === 'create') {
-        await page.getByRole('button', { name: '＋ 从需求启动', exact: true }).click();
+        await page.getByRole('button', { name: '独立开发', exact: true }).click();
         await page.getByLabel('需求渠道', { exact: true }).selectOption('manual');
         await page.getByLabel('需求标题', { exact: true }).fill('权限发现失败时保留草稿');
       }
@@ -371,8 +372,8 @@ async function verifyExecutionSettings(browser, origin, manager, client, key, er
 async function verifyInitialListRefresh(browser, origin, manager, key, errors) {
   const page = await browser.newPage();
   page.on('pageerror', (error) => errors.push(error.message));
-  const previousMetadata = (await manager.store.readTaskMetadata(key));
-  const progress = previousMetadata.progress === 'review' ? 'merge' : 'review';
+  const previousTitle = (await manager.list()).find(run => run.key === key).title;
+  const title = "列表请求期间更新的标题";
   const snapshots = [];
   let captureFirst, captureSecond;
   const firstCaptured = new Promise((resolve) => { captureFirst = resolve; });
@@ -389,8 +390,8 @@ async function verifyInitialListRefresh(browser, origin, manager, key, errors) {
     await page.goto(origin);
     const first = await firstCaptured;
     await page.waitForFunction(() =>
-      document.querySelector('.sidebar-footer')?.textContent.includes('服务已连接'));
-    (await manager.updateTaskMetadata(key, { progress }));
+      document.querySelector('.development-connection')?.textContent.includes('服务已连接'));
+    (await manager.updateTitle(key, title));
     // Keep the first list pending beyond the 400 ms SSE refresh debounce. The
     // connection stays subscribed, but cannot invalidate the startup decision.
     await page.waitForTimeout(650);
@@ -401,16 +402,14 @@ async function verifyInitialListRefresh(browser, origin, manager, key, errors) {
     await first.route.fulfill({ response: first.response });
     await page.getByText('历史回复', { exact: true }).waitFor();
     assert.equal(await page.locator('.session-header').count(), 1);
-    assert.equal(await page.getByLabel('任务进度', { exact: true }).inputValue(), progress);
-    assert.equal(await page.locator('.session-link.active .task-progress-tag')
-      .getAttribute('data-progress'), progress);
+    assert.equal(await page.locator(".session-heading").textContent(), title);
     await queuedRequest;
     const second = await secondCaptured;
     await second.route.fulfill({ response: second.response });
     assert.equal(snapshots.length, 2, 'refresh queued during startup must still run');
   } finally {
     await page.close();
-    (await manager.updateTaskMetadata(key, previousMetadata));
+    (await manager.updateTitle(key, previousTitle));
   }
 }
 
@@ -422,12 +421,12 @@ async function verifyUnreadResults(browser, origin, manager, key, errors) {
     await page.goto(origin);
     await page.getByText('历史回复', { exact: true }).waitFor();
 
+    await openSessionList(page);
     await page.locator('.session-link').filter({
       hasText: '修复登录异常',
     }).click();
-    await page.locator('.session-link.active').filter({
-      hasText: '修复登录异常',
-    }).waitFor();
+    await page.locator('.session-header').filter({ hasText: '修复登录异常' }).waitFor();
+    await openSessionList(page);
     const runtime = manager.runtime(key, 'original');
     runtime.status = 'completed';
     runtime.turnId = null;
@@ -440,7 +439,7 @@ async function verifyUnreadResults(browser, origin, manager, key, errors) {
 
     await completedTask.click();
     await page.getByText('历史回复', { exact: true }).waitFor();
-    await completedTask.locator('.unread-result').waitFor({ state: 'hidden' });
+    await completedTask.locator('.unread-result').waitFor({ state: 'detached' });
   } finally {
     await page.close();
   }
@@ -476,6 +475,7 @@ async function verifyActionSelection(browser, origin, key, errors) {
   async function reopen() {
     // A real selection starts a new view generation; refreshing the current
     // snapshot intentionally preserves its draft and in-flight action lock.
+    await openSessionList(page);
     await page.locator('.session-link.active').click();
     await page.waitForFunction(() => {
       const input = document.querySelector('textarea[aria-label="发送给 Codex 的指令"]');
@@ -607,15 +607,15 @@ async function verifyRefreshConsistency(browser, origin, manager, client, key, e
     client.notify('item/agentMessage/delta', {
       turnId: 'refresh-race', itemId: 'refresh-new', delta: '请求期间新增的消息',
     });
-    (await manager.updateTaskMetadata(key, { progress: 'review' }));
+    (await manager.updateTitle(key, '刷新期间更新标题'));
     await page.getByText('旧流式消息，保留最新内容', { exact: true }).waitFor();
     await page.waitForFunction(() =>
-      document.querySelector('select[aria-label="任务进度"]').value === 'review');
+      document.querySelector('.session-heading').textContent === '刷新期间更新标题');
     await release(streamSnapshot, 'stream-overlay');
     assert.equal(await page.locator('.session-header .session-heading').textContent(), (await manager.list()).find((run) => run.key === key).title);
     assert.equal(await page.getByText('旧流式消息，保留最新内容', { exact: true }).count(), 1);
     assert.equal(await page.getByText('请求期间新增的消息', { exact: true }).count(), 1);
-    assert.equal(await page.getByLabel('任务进度', { exact: true }).inputValue(), 'review');
+    assert.equal(await page.locator('.session-heading').textContent(), '刷新期间更新标题');
     assert.equal(await page.getByText('更早的分页记录', { exact: true }).count(), 1);
     await page.getByRole('button', { name: '加载更早记录 ↑', exact: true }).click();
     await page.getByRole('button', { name: '加载更早记录 ↑', exact: true }).waitFor({ state: 'hidden' });
@@ -645,25 +645,6 @@ async function verifyRefreshConsistency(browser, origin, manager, client, key, e
     await release(settingsSnapshot, 'settings-overlay');
     assert.equal(await sessionModel(page), 'fixture-model-b');
     assert.equal(await sessionEffort(page), 'medium');
-    const previousMetadata = (await manager.store.readTaskMetadata(key));
-    const requestedType = previousMetadata.type === 'bug' ? 'other' : 'bug';
-    let captureMetadata;
-    const metadataCaptured = new Promise((resolve) => { captureMetadata = resolve; });
-    await page.route(`**/api/runs/${key}/metadata`, async (route) => {
-      const response = await route.fetch();
-      captureMetadata({ route, response, body: await response.json() });
-    });
-    await page.getByRole('button', { name: '会话信息', exact: true }).click();
-    await page.getByLabel('任务类型', { exact: true }).selectOption(requestedType);
-    const metadataSnapshot = await metadataCaptured;
-    (await manager.updateTaskMetadata(key, { type: 'requirement', progress: 'merge' }));
-    await page.waitForFunction(() =>
-      document.querySelector('select[aria-label="任务进度"]')?.value === 'merge');
-    await release(metadataSnapshot, 'older-metadata-save');
-    assert.equal(await page.getByLabel('任务类型', { exact: true }).inputValue(), 'requirement');
-    assert.equal(await page.getByLabel('任务进度', { exact: true }).inputValue(), 'merge');
-    assert.equal(await page.locator('.session-link.active .task-type-tag').getAttribute('data-type'), 'requirement');
-    (await manager.updateTaskMetadata(key, previousMetadata));
   } finally {
     await page.close();
   }
@@ -727,7 +708,7 @@ async function main() {
       transition: { status: 'succeeded' },
     }),
   );
-  for (const [otherKey, title, type, progress] of [
+  for (const [otherKey, title] of [
     ['1-3', '修复登录异常', 'bug', 'review'],
     ['1-4', '整理项目文档', 'other', 'merge'],
   ]) {
@@ -739,7 +720,6 @@ async function main() {
       execution: { status: 'completed' },
       updated_at: '2025-01-01T00:00:00Z',
     }));
-    (await store.writeTaskMetadata(otherKey, { type, progress }));
   }
   const client = new FakeClient(),
     manager = new SessionManager({ store, client, worktreeReason: () => null });
@@ -828,59 +808,24 @@ async function main() {
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(origin);
     await page.getByText('历史回复', { exact: true }).waitFor();
-    assert.equal(await page.getByLabel('任务类型', { exact: true }).inputValue(), 'requirement');
-    assert.equal(await page.getByLabel('任务进度', { exact: true }).inputValue(), 'in_progress');
-    assert.equal(await page.locator('.task-group > summary').count(), 3);
-    await page.getByLabel('任务分组方式').selectOption('progress');
-    await page.getByRole('button', { name: '会话信息', exact: true }).click();
-    await page.getByLabel('任务类型', { exact: true }).selectOption('bug');
-    await page.waitForFunction(() => document.querySelector('select[aria-label="任务类型"]').value === 'bug');
-    const peer = await page.context().newPage();
-    await peer.goto(origin);
-    await peer.getByText('历史回复', { exact: true }).waitFor();
-    await page.getByLabel('任务进度', { exact: true }).selectOption('review');
-    await peer.waitForFunction(() => document.querySelector('select[aria-label="任务进度"]').value === 'review');
-    assert.equal(await page.locator('.session-header .status').textContent(), 'Codex · 本轮结束');
-    assert.equal(await page.locator('.task-group > summary').count(), 2);
-    await page.route('**/runs/1-2/metadata', route => route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({error:'模拟进度保存失败'})}));
-    await page.getByLabel('任务进度', { exact: true }).selectOption('done');
-    await page.getByText('模拟进度保存失败', {exact:true}).waitFor();
-    assert.equal(await page.getByLabel('任务进度', {exact:true}).inputValue(), 'review');
-    assert.equal((await store.readTaskMetadata(key)).progress, 'review');
-    await page.unroute('**/runs/1-2/metadata');
-    for (const value of ['merge', 'done', 'on_hold']) {
-      await page.getByLabel('任务进度', { exact: true }).selectOption(value);
-      await page.waitForFunction(value => document.querySelector('select[aria-label="任务进度"]').value === value, value);
-    }
-    await peer.close();
-    await page.reload();
-    await page.getByText('历史回复', { exact: true }).waitFor();
-    assert.equal(await page.getByLabel('任务进度', { exact: true }).inputValue(), 'on_hold');
-    assert.equal(await page.getByLabel('任务分组方式').inputValue(), 'progress');
-    await page.getByLabel('任务分组方式').selectOption('type');
-    const bugSummary = page.locator('.task-group > summary').filter({hasText:'Bug'});
-    await bugSummary.click();
-    assert.equal(await page.locator('.session-link').filter({hasText:'【演示】套餐充值入口'}).isVisible(), false);
-    await bugSummary.click();
-    assert.equal(await page.locator('.session-link').filter({hasText:'【演示】套餐充值入口'}).isVisible(), true);
-    await page.getByLabel('任务分组方式').selectOption('none');
+    assert.equal(await page.getByLabel('任务类型', { exact: true }).count(), 0);
+    assert.equal(await page.getByLabel('任务进度', { exact: true }).count(), 0);
+    assert.equal(await page.locator('.session-drawer').isVisible(), false);
+    await openSessionList(page);
     assert.equal(await page.locator('.session-link:visible').count(), 3);
-    await page.getByLabel('任务分组方式').selectOption('progress');
-    fs.mkdirSync(path.resolve('state/browser'), {recursive:true});
-    await page.screenshot({path:path.resolve('state/browser/task-progress-groups.png'),fullPage:true});
-
+    await page.keyboard.press('Escape');
     await page.getByRole('button', { name: '修改会话标题', exact: true }).click();
     await page.getByLabel('会话标题', { exact: true }).fill('套餐充值入口（已重命名）');
     await page.getByRole('button', { name: '保存', exact: true }).click();
     await page.locator('.session-header .session-heading').getByText('套餐充值入口（已重命名）', { exact: true }).waitFor();
-    await page.locator('.session-link.active').getByText('套餐充值入口（已重命名）', { exact: true }).waitFor();
+    assert.equal(await page.locator('.session-link.active').getByText('套餐充值入口（已重命名）', { exact: true }).count(), 1);
     await page.reload();
     await page.locator('.session-header .session-heading').getByText('套餐充值入口（已重命名）', { exact: true }).waitFor();
     assert.equal((await store.read('1-2')).workitem.title, '【演示】套餐充值入口');
-    await page.getByRole('button', { name: '会话信息', exact: true }).click();
+    await openSessionContext(page, '会话信息');
     await page.getByRole('button', { name: '归档会话', exact: true }).click();
     await page.getByRole('heading', { name: '归档会话', exact: true }).waitFor();
-    await page.getByText('归档后会话不再显示在左侧列表中，可从「已归档会话」恢复。历史、需求资料和 Worktree 保留。', { exact: true }).waitFor();
+    await page.getByText('归档后会话不再显示在会话列表中，可从「已归档会话」恢复。历史、需求资料和 Worktree 保留。', { exact: true }).waitFor();
     await page.getByRole('button', { name: '取消', exact: true }).click();
     await page.getByRole('button', { name: '永久删除会话', exact: true }).click();
     await page.getByText('此会话仍有关联代码。可先在 Git 面板清理，或在下方选择强制删除。', { exact: true }).waitFor();
@@ -890,7 +835,7 @@ async function main() {
     await page.getByRole('button', { name: '保存', exact: true }).click();
     await page.locator('.session-header .session-heading').getByText('【演示】套餐充值入口', { exact: true }).waitFor();
 
-    await page.getByRole('button', { name: '需求资料', exact: true }).click();
+    await openSessionContext(page, '需求资料');
     await page
       .getByRole('heading', { name: '完整需求标题', exact: true })
       .waitFor();
@@ -931,7 +876,7 @@ async function main() {
       }),
     );
     await page.reload();
-    await page.getByRole('button', { name: '需求资料', exact: true }).click();
+    await openSessionContext(page, '需求资料');
     await page
       .getByRole('heading', { name: 'Markdown 需求', exact: true })
       .waitFor();
@@ -945,7 +890,7 @@ async function main() {
       '/api/runs/1-2/images/0',
     );
     assert.deepEqual(externalRequests, []);
-    await page.getByRole('button', { name: '需求资料', exact: true }).click();
+    await openSessionContext(page, '需求资料');
     await page.getByText('工作区初始化', { exact: true }).click();
     await page.getByText('初始化依赖安装完成', { exact: true }).waitFor();
     const input = page.getByRole('textbox', { name: '发送给 Codex 的指令' });
@@ -1121,7 +1066,7 @@ async function main() {
       ),
     );
     await page
-      .getByRole('button', { name: '＋ 从需求启动', exact: true })
+      .getByRole('button', { name: '独立开发', exact: true })
       .click();
     await page.getByRole('textbox', { name: '需求 ID', exact: true }).waitFor();
     assert.equal(await page.getByRole('combobox', { name: '开发人员', exact: true }).count(), 0);
@@ -1143,13 +1088,13 @@ async function main() {
     assert.equal(submitted.developer, undefined);
     assert.equal(submitted.tester, undefined);
     assert.equal(submitted.channel, 'tracker');
-    assert.equal(submitted.metadata.type, 'requirement');
+    assert.equal(Object.hasOwn(submitted, "metadata"), false);
     assert.equal(submitted.model, 'fixture-model-a');
     assert.equal(submitted.reasoningEffort, 'high');
     assert.equal(submitted.permissionMode, 'auto');
     assert.deepEqual(searches, []);
     await page
-      .getByRole('button', { name: '＋ 从需求启动', exact: true })
+      .getByRole('button', { name: '独立开发', exact: true })
       .click();
     await page.getByRole('textbox', { name: '需求 ID', exact: true }).fill('2');
     await page
@@ -1158,7 +1103,7 @@ async function main() {
     await page.getByRole('textbox', { name: '发送给 Codex 的指令' }).waitFor();
     assert.equal(submitted.channel, 'tracker');
     await page
-      .getByRole('button', { name: '＋ 从需求启动', exact: true })
+      .getByRole('button', { name: '独立开发', exact: true })
       .click();
     await page.getByLabel('需求渠道', { exact: true }).selectOption('manual');
     await page
@@ -1210,7 +1155,6 @@ async function main() {
     await page.setViewportSize({ width: 1440, height: 1000 });
     assert.equal(await page.getByLabel('Codex 模型', { exact: true }).inputValue(), '');
     assert.equal(await page.getByLabel('思考强度', { exact: true }).inputValue(), '');
-    await page.getByLabel('任务类型', { exact: true }).selectOption('other');
     await page.getByLabel('Codex 模型', { exact: true }).selectOption('fixture-model-b');
     await page.getByLabel('思考强度', { exact: true }).selectOption('medium');
     await choosePermission(page, 'full');
@@ -1221,7 +1165,7 @@ async function main() {
     await page.getByRole('textbox', { name: '发送给 Codex 的指令' }).waitFor();
     assert.equal(submitted.channel, 'manual');
     assert.equal(Object.hasOwn(submitted, 'supplementaryInstructions'), false);
-    assert.equal(submitted.metadata.type, 'other');
+    assert.equal(Object.hasOwn(submitted, "metadata"), false);
     assert.equal(submitted.model, 'fixture-model-b');
     assert.equal(submitted.reasoningEffort, 'medium');
     assert.equal(submitted.permissionMode, 'full');

@@ -30,7 +30,7 @@
 | `features/accounts/` | 登录、首次改密、账号管理、个人设置和成员桌面通知偏好。 |
 | `features/projects/` | 部门、项目及仓库地址、权限与成员、需求／Bug、资产、开发空间及事项与执行任务关联。 |
 | `features/workspaces/` | 工作区创建、编辑、切换入口和图标目录。 |
-| `features/tasks/` | 需求启动表单、人员选择、任务列表快照、类型及人工进度。共享执行偏好控件位于 `shared/components/AgentModelSettings.vue`。 |
+| `features/tasks/` | 需求启动表单、人员选择、任务列表快照和未读状态。共享执行偏好控件位于 `shared/components/AgentModelSettings.vue`。 |
 | `features/session/` | 会话详情状态、历史分页、输入卡片和下一轮设置；消息、工具输出、审批与澄清、需求快照的安全渲染。 |
 | `features/settings/` | 系统成员项目与任务目录、服务器目录选择、自动生成目录的项目执行设置、基准引用选择、独立保存的提示词模板。 |
 | `shared/components/` | 不依赖具体功能的界面组件，例如表单分区、模型/强度控件与权限选择器。 |
@@ -53,28 +53,28 @@
 
 账号展示使用 `displayName`，登录仍使用 `username`；成员选择与账号管理显示双名。`AccountProfile.vue` 维护个人显示名称，`saveAccountProfile` 保存时保持账号代际、令牌、设置和当前页面，迟到响应只合并当前账号的显示名称，不覆盖重检后的角色或部门，不写入已切换的账号。
 
-仓库根目录的 `shared/task-metadata.json`、`shared/workspace-icons.json` 和 `shared/agent-permissions.json` 是前后端共用契约；功能模块只读取它们，不复制枚举或图标目录。这里的 `shared/` 仅存放前端共享实现。
+仓库根目录的 `shared/workspace-icons.json` 和 `shared/agent-permissions.json` 是前后端共用契约；功能模块只读取它们，不复制枚举或图标目录。这里的 `shared/` 仅存放前端共享实现。
 
 操作结果统一由 `shared/components/FeedbackMessage.vue` 连接响应式提示状态，`OperationMessages.vue` 在应用根部显示浮动消息；不在页面重复渲染成功或失败段落。消息支持自动关闭、手动关闭、悬停与焦点暂停及相同内容合并，账号代际变化清空。原生模态框打开时消息挂入当前模态框，再用手动 popover 保持可见和可操作；不改变焦点或遮挡整页操作。保存后马上导航或卸载的操作在确认请求仍有效后直接调用 `showMessage`，`useResource.perform` 已包含此处理。字段校验、危险操作确认、持续进度、历史错误和业务状态仍保留在所属界面。
 
-Vue 组件使用 PascalCase 文件名；JavaScript 辅助模块使用 kebab-case，例如 `workspace-icons.js`、`task-metadata.js`、`requirement-content.js`。入口 `main.js` 与请求模块 `api.js` 保持简短命名。
+Vue 组件使用 PascalCase 文件名；JavaScript 辅助模块使用 kebab-case，例如 `workspace-icons.js`、`requirement-content.js`。入口 `main.js` 与请求模块 `api.js` 保持简短命名。
 
 应用组件只组合界面和处理界面状态：`App.vue` 控制受保护页面的渲染边界；`WorkbenchApp.vue` 组合账号导航、设置页面与工作区，并持有工作区弹窗引用；`WorkspaceConsole.vue` 持有页面切换、输入草稿和滚动位置。数据生命周期按职责分离：
 
 - `app/use-workspace-selection.js` 负责首次 bootstrap、工作区选择和 Vue Router query 更新；默认选择使用 replace 固定，页内切换使用 push，浏览器前进和后退同步恢复选择。`WorkbenchApp.vue` 按工作区 UUID 重建 console，隔离草稿及异步生命周期；重命名仅更新目录和标题，不重建 console。
 - `app/router.js` 使用 Vue Router 管理登录、首次改密、工作台、个人设置、系统设置和账号管理；工作区仍由 query 参数选择。`App.vue` 在账号身份变化时重建整个受保护页面，`WorkbenchApp.vue` 在工作区变化时重建 console。导航保留其他 query、hash 和用户 history state。
 - `shared/api/account-session.js` 保存当前账号和个人设置的内存投影，数据由数据库 API 持久化。401、SSE 身份失效以及跨标签退出清空投影；HTTP 请求带账号代际，迟到响应不能进入新账号。LocalStorage 只用作无业务内容的身份变化通知。
-- `app/SystemSettings.vue` 组合管理员的目录设置、环境检测和系统流程编排；账号业务页面属于 `features/accounts/`：`LoginPage.vue` 负责登录，`PasswordPage.vue` 组合首次改密入口，两类改密入口复用 `PasswordForm.vue`；`PersonalSettings.vue` 管理账号默认模型、强度、权限、分组、通知和改密；`AccountManagement.vue` 管理账号身份，不提供读取他人工作区的入口。工作区配置仍由所有者在 `features/settings` 管理。
+- `app/SystemSettings.vue` 组合管理员的目录设置、环境检测和系统流程编排；账号业务页面属于 `features/accounts/`：`LoginPage.vue` 负责登录，`PasswordPage.vue` 组合首次改密入口，两类改密入口复用 `PasswordForm.vue`；`PersonalSettings.vue` 管理账号默认模型、强度、权限、通知和改密；`AccountManagement.vue` 管理账号身份，不提供读取他人工作区的入口。工作区配置仍由所有者在 `features/settings` 管理。
 - `features/accounts/use-desktop-notifications.js` 拥有浏览器通知授权、个人通知偏好保存与通知投递；应用壳层将其设置状态传给个人设置页，并把投递回调传给工作区。账号功能不反向依赖应用壳层或其他功能目录。
 - `features/settings/MemberStorageSettings.vue` 使用全局 `appApi` 独立加载和保存成员目录基础路径，并展示 Git 环境检测；`ServerDirectoryPicker.vue` 仅浏览服务器目录并返回选择，表单保存才生效。工作区设置只读展示服务端生成的项目与任务路径。
 - `features/settings/EnvironmentPage.vue` 由系统设置内的「环境检测」分类组合，展示工具、最新版本、目录检查和自动安装／更新、安装器不可用原因与待重启状态。明确缺失时显示安装按钮，Linux Git 单独展示发行版软件源候选版本与来源。`use-environment.js` 拥有检测、版本查询、安装／更新与轮询生命周期；卸载清理计时器并丢弃迟到响应。确认展示确切版本，失败和未知状态独立呈现，不将网络错误视为已经最新。
 - 项目开发空间以项目／用户 ID 鉴权，新仓库目录为「基础目录 / projects / 仓库目录名 / members / 登录用户名 / repository-准备修订号」。仓库目录名从 Git 地址取名并去掉 `.git`；同名仓库的后创建项目加短后缀并持久化，修改显示名称不改变目录，任务使用同根的「worktree / 任务」。失败目录保留，明确重试使用新的准备修订号目录，已就绪空间沿用记录路径。GitAccountSettings 维护主机凭据和独立提交作者；可在保存前直接验证 Git 主机登录，无需项目，验证服务类型仅用于本次请求。验证、保存与实际项目仓库检测分开，私钥和密码不回显。个人空间创建组件只用于明确的文件测试夹具，不作为生产导航入口。
 - `app/use-workspace-console.js` 负责渠道 bootstrap、SSE 建连/关闭与防抖刷新，将事件分发给任务列表和会话状态，不处理 DOM 或表单草稿。
-- `features/tasks/use-task-list.js` 负责列表刷新、请求乱序保护和请求期间的人工进度覆盖。
+- `features/tasks/use-task-list.js` 负责列表刷新、请求乱序保护和请求期间的标题覆盖。
 - 新建任务只提供手动图文输入，项目需求／Bug 页不提供外部导入。原始与历史追加资料由 session 的 `RequirementDetails.vue` 安全渲染；已保存资料可在原会话明确继续，读取历史不触发外部抓取。
-- 生产开发空间的「手动开启」由 `features/tasks/ManualDevelopmentStart.vue` 提交项目独立启动接口，不关联事项、不保存待开发。app 通过插槽组合项目功能的 `RemoteBranchSelect`，避免跨 feature 导入；启动后进入原空间会话。响应丢失先查询当前账号的原请求，未知结果锁定表单并提供检查／任务记录入口。返回项目协作位于侧栏项目名旁；工作台通过 flex 使用账号栏实际剩余高度，消息与长表单局部滚动。
-- `features/tasks/ArchivedSessions.vue` 提供侧栏归档入口、名称搜索、恢复和删除交互；`use-archived-sessions.js` 拥有归档请求、恢复状态与卸载/乱序保护。壳层通过归档、删除、恢复与重连事件通知刷新，并通过插槽组合 session 功能的删除确认窗口，功能之间不互相导入。删除目标独立于列表快照保存，刷新或提前到达的 SSE 不卸载正在提交的确认窗口；恢复后不自动启动任务或切换当前草稿。
-- 会话名称由 `SessionTitleEditor.vue` 呈现，长名称换行，编辑图标紧随标题。编辑区最大 1040px，字数说明位于标签旁，取消/保存在宽屏时紧邻输入区、窄屏时移到下方，并保留输入法处理。壳层将面包屑并入会话标题区，执行状态与刷新在宽屏时对齐标题行，编辑时位于表单上方；`SessionDetailsDrawer.vue` 拥有右侧信息、Git、需求抽屉的呈现状态、键盘关闭及焦点恢复。会话正文实际可用宽度达到 1000px 时，默认展开占据独立列的 320px 执行上下文；中小屏默认折叠，按需打开覆盖抽屉。右栏与抽屉均独立滚动；切换资料保留草稿、滚动位置与子组件状态，切换会话重建抽屉。任务元数据控件由 app 通过插槽组合，不跨功能导入。
+- 生产开发空间的「独立开发」由 `features/tasks/ManualDevelopmentStart.vue` 提交项目独立启动接口，不关联事项、不保存待开发。app 通过插槽组合项目功能的 `RemoteBranchSelect`，避免跨 feature 导入；启动后进入原空间会话。响应丢失先查询当前账号的原请求，未知结果锁定表单并提供检查／任务记录入口。返回任务与切换会话位于顶部导航；工作台通过 flex 使用账号栏实际剩余高度，消息与长表单局部滚动。
+- `features/tasks/ArchivedSessions.vue` 提供顶部归档入口、名称搜索、恢复和删除交互；`use-archived-sessions.js` 拥有归档请求、恢复状态与卸载/乱序保护。壳层通过归档、删除、恢复与重连事件通知刷新，并通过插槽组合 session 功能的删除确认窗口，功能之间不互相导入。删除目标独立于列表快照保存，刷新或提前到达的 SSE 不卸载正在提交的确认窗口；恢复后不自动启动任务或切换当前草稿。
+- 会话名称由 `SessionTitleEditor.vue` 呈现，长名称换行，编辑图标紧随标题。编辑区最大 1040px，字数说明位于标签旁，取消/保存在宽屏时紧邻输入区、窄屏时移到下方，并保留输入法处理。壳层将面包屑并入会话标题区，执行状态与刷新在宽屏时对齐标题行，编辑时位于表单上方；`SessionDetailsDrawer.vue` 拥有右侧信息、Git、需求抽屉的呈现状态、键盘关闭及焦点恢复。会话上下文在所有宽度默认折叠，点击顶部「上下文」展开；宽屏独立列，窄屏覆盖抽屉。右栏与抽屉均独立滚动；切换资料保留草稿、滚动位置与子组件状态，切换会话重建抽屉。人工类型、人工进度与分组已删除，真实开发任务与 Agent 执行状态独立呈现。
 - `features/session/use-session.js` 负责详情快照、请求期间的 SSE 覆盖、会话动作和历史分页；执行偏好拥有独立保存状态和错误反馈，迟到响应不能覆盖较新的设置/当前轮状态。打开会话、收到消息和完成动作通过回调交给应用/界面层处理，不导入任务列表或界面组件。
 - `features/session/SessionComposer.vue` 只组合输入、模型/权限控件和提示，通过事件提交消息与设置修改，不直接管理持久化。
 - 会话的 `agent` 元数据提供执行引擎名称和能力；界面不解析原生 RPC 方法。交互请求使用 `kind`、`action`、`blocking` 和 `questions` 等通用字段；未知请求默认阻塞且不展示批准按钮。图片、续聊和执行中补充指令按引擎能力开放，缺少能力声明时不可操作。模拟数据也必须提供当前协议的引擎元数据。

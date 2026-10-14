@@ -50,7 +50,7 @@ async function verifyWorkbench(browser) {
         const second=url.searchParams.get('offset')==='30';
         return send({items:[second ? {...issue,id:'issue-31',number:31,title:'第二页的事项'} : issue],nextOffset:second?null:30});
       }
-      if (endpoint.endsWith('/deliverables') && input) { assert.equal(endpoint,base+'/issues/issue-31/deliverables'); return send({...delivery,id:'delivery-1',...input}); }
+      if (endpoint.endsWith('/deliveries') && input) { assert.equal(endpoint,base+'/deliveries'); return send({...delivery,id:'delivery-1',...input}); }
       if (endpoint === base + '/deliveries/delivery-1') return send({delivery,issue,permissions:fixture.permissions,people:issue.people});
       if (endpoint === base + '/deliveries/delivery-1/review') {
         if (reviewForbidden) return send({error:'Review permission revoked'},403);
@@ -140,7 +140,6 @@ async function verifyWorkbench(browser) {
     const dialog=page.getByRole('dialog');
     await dialog.getByRole('button',{name:'Next',exact:true}).click();
     await dialog.getByLabel('Related issue',{exact:true}).selectOption('issue-31');
-    await dialog.getByRole('button',{name:'Markdown source',exact:true}).click();
     await dialog.getByLabel('Delivery notes',{exact:true}).fill('发布内容保留原文 @ {name}');
     const publish=dialog.getByRole('button',{name:'Publish delivery',exact:true});
     assert.equal(await publish.isEnabled(),false,'sharing requires explicit confirmation');

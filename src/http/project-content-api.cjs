@@ -1,6 +1,8 @@
 const { json } = require("./messages.cjs");
 
 async function serveProjectContent(request, response, url, { services, actor, input }) {
+  const collection = /^\/api\/projects\/([^/]+)\/deliveries$/.exec(url.pathname);
+  if (collection && request.method === "POST") { json(response, 201, await services.addDeliverable(collection[1], actor, input)); return true; }
   const delivery = /^\/api\/projects\/([^/]+)\/deliveries\/([^/]+)(\/review)?$/.exec(url.pathname);
   if (delivery) {
     if (request.method === "GET" && !delivery[3]) { json(response, 200, await services.readDeliverable(delivery[1], delivery[2], actor)); return true; }
@@ -37,7 +39,6 @@ async function serveProjectContent(request, response, url, { services, actor, in
   if (resource === "issues" && id) {
     if (request.method === "GET" && ["comments", "deliverables", "history"].includes(action)) return send(200, await services.children(projectId, id, actor, action, query));
     if (request.method === "POST" && action === "comments") return send(201, await services.addComment(projectId, id, actor, input));
-    if (request.method === "POST" && action === "deliverables") return send(201, await services.addDeliverable(projectId, id, actor, input));
     if (request.method === "POST" && action === "transition") return send(200, await services.transitionIssue(projectId, id, actor, input));
   }
   if (resource === "assets" && id) {

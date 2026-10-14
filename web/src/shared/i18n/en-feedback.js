@@ -24,7 +24,6 @@ export const enFeedback = {
   "包含未知的个人设置。": "Unknown personal setting.",
   "模型或思考强度无效。": "Invalid model or reasoning level.",
   "权限模式无效。": "Invalid permission mode.",
-  "分组方式无效。": "Invalid grouping option.",
   "通知开关必须为布尔值。": "Notification preference must be a boolean.",
   "包含未知账号字段。": "Unknown account field.",
   "账号角色无效。": "Invalid account role.",

@@ -168,7 +168,6 @@ model UserSetting {
   reasoningEffort      String?  @map("reasoning_effort")
   permissionMode       String   @default("ask") @map("permission_mode")
   notificationsEnabled Boolean  @default(true) @map("notifications_enabled")
-  grouping             String   @default("type")
   updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
   user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -398,6 +397,7 @@ model Project {
   assets        ProjectAsset[]
   files         ProjectFile[]
   tasks         DevelopmentTask[]
+  deliverables  ProjectDeliverable[]
   developmentClaims IssueDevelopmentClaim[]
   visits        UserProjectVisit[]
 
@@ -489,7 +489,7 @@ model ProjectIssue {
   project            Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
   source             IssueSource?
   comments           IssueComment[]
-  deliverables       IssueDeliverable[]
+  deliverables       ProjectDeliverable[]
   history            IssueHistory[]
   files              ProjectFile[]
   assetLinks         AssetIssueLink[]
@@ -534,10 +534,10 @@ model IssueComment {
   @@map("issue_comments")
 }
 
-model IssueDeliverable {
+model ProjectDeliverable {
   id        String   @id @default(uuid())
   projectId String   @map("project_id")
-  issueId   String   @map("issue_id")
+  issueId   String?  @map("issue_id")
   authorId  String   @map("author_id")
   taskId    String?  @map("task_id")
   body      String
@@ -551,12 +551,13 @@ model IssueDeliverable {
   reviewedAt DateTime? @map("reviewed_at") @db.Timestamptz(3)
   revision Int @default(1)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  issue     ProjectIssue @relation(fields: [projectId, issueId], references: [projectId, id], onDelete: Restrict)
+  issue     ProjectIssue? @relation(fields: [projectId, issueId], references: [projectId, id], onDelete: Restrict)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
   task      DevelopmentTask? @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
 
   @@index([projectId, issueId, createdAt])
-  @@map("issue_deliverables")
-  @@index([projectId, status, createdAt(sort: Desc)], map: "issue_deliverables_project_status")
+  @@map("project_deliverables")
+  @@index([projectId, status, createdAt(sort: Desc)], map: "project_deliverables_project_status")
 }
 
 model IssueHistory {
@@ -673,7 +674,7 @@ model DevelopmentTask {
   release     ProjectRelease? @relation(fields: [projectId, releaseId], references: [projectId, id], onDelete: Restrict)
   claims      IssueDevelopmentClaim[]
   issueLinks  TaskIssueLink[]
-  deliverables IssueDeliverable[]
+  deliverables ProjectDeliverable[]
 
   @@unique([projectId, id])
   @@unique([projectId, creatorId, requestId])

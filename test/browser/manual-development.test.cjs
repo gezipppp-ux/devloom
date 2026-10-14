@@ -20,7 +20,7 @@ async function verifyManualDevelopment({ page, origin, projectId, output }) {
   };
   await page.route(routePattern, handler);
   const runHandler = route => route.fulfill({ json: { key: "manual-run", title: "独立开发测试", status: "completed", source: { channel: "manual" }, agent: agentDescriptor,
-    sessionId: "fixture-manual-session", items: [], requests: [], metadata: { type: "other", progress: "in_progress" }, executionSettings: { model: "", reasoningEffort: "", permissionMode: "ask" } } });
+    sessionId: "fixture-manual-session", items: [], requests: [], executionSettings: { model: "", reasoningEffort: "", permissionMode: "ask" } } });
   await page.route("**/api/workspaces/ux-workspace/runs/manual-run", runHandler);
   let uploadCount = 10;
   let failUpload = false;
@@ -31,13 +31,13 @@ async function verifyManualDevelopment({ page, origin, projectId, output }) {
     const location = origin + `/?workspace=ux-workspace&task=1-1&returnTo=${encodeURIComponent(returnTo)}`;
     await page.goto(location);
     await page.locator('.session-header').waitFor();
-    assert.equal(await page.locator('.workspace-heading').getByRole('button', { name: '返回项目协作', exact: true }).count(), 1);
+    assert.equal(await page.locator('.development-navigation').getByRole('button', { name: '返回项目协作', exact: true }).count(), 1);
     assert.equal(await page.locator('.project-back').count(), 0);
     for (const width of [1440, 768, 390, 320]) {
       await page.setViewportSize({ width, height: 900 });
       const bounds = await page.evaluate(() => {
         const composer = document.querySelector('.session-composer').getBoundingClientRect();
-        const back = document.querySelector('.workspace-project-return').getBoundingClientRect();
+        const back = document.querySelector('.development-navigation .ui-back').getBoundingClientRect();
         return { scroll: document.documentElement.scrollHeight, height: window.innerHeight, horizontal: document.documentElement.scrollWidth > window.innerWidth,
           composerBottom: composer.bottom, backRight: back.right };
       });
@@ -51,7 +51,7 @@ async function verifyManualDevelopment({ page, origin, projectId, output }) {
     await page.waitForURL(origin + returnTo);
     await page.goto(location);
     await page.setViewportSize({ width: 1440, height: 1000 });
-    const enter = () => page.getByRole('button', { name: '手动开启', exact: true }).click();
+    const enter = () => page.getByRole('button', { name: '独立开发', exact: true }).click();
     const fill = async () => {
       await page.getByRole('textbox', { name: '任务标题', exact: true }).fill('独立开发测试');
       await setMarkdown(page, '开发目标与验收条件', '## 开发目标\n\n- 保留会话身份，验证独立开发。');
@@ -59,7 +59,7 @@ async function verifyManualDevelopment({ page, origin, projectId, output }) {
       await page.getByRole('button', { name: '启动独立开发', exact: true }).waitFor();
     };
     await enter();
-    await page.getByRole('heading', { name: '手动开启开发', exact: true }).waitFor();
+    await page.getByRole('heading', { name: '独立开发', exact: true }).waitFor();
     assert.equal(inputs.length, 0, 'opening a form never starts development');
     assert.equal(await page.getByRole('button', { name: /保存/ }).count(), 0);
     await fill();
@@ -98,7 +98,7 @@ async function verifyManualDevelopment({ page, origin, projectId, output }) {
     await page.getByRole('button', { name: '启动独立开发', exact: true }).click();
     await page.getByRole('heading', { name: '独立开发测试', exact: true }).waitFor();
     assert.equal(inputs.length, 1);
-    assert.equal(inputs[0].taskType, 'other');
+    assert.equal(Object.hasOwn(inputs[0], "taskType"), false);
     assert.equal(inputs[0].images.length, 2);
     assert.equal(inputs[0].content, content);
     assert.equal(inputs[0].baseBranch, 'main');

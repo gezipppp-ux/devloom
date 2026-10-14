@@ -46,29 +46,26 @@ const closeButton = ref();
 const id = useId();
 let trigger;
 let resizeObserver;
-let collapsed = false;
 
 async function toggle(key, event) {
   if (panel.value === key) return close();
-  collapsed = false;
-  trigger = event.currentTarget;
+  if (!root.value?.contains(event.currentTarget)) trigger = event.currentTarget;
   panel.value = key;
   emit("opened");
   await nextTick();
   closeButton.value?.focus({ preventScroll: true });
 }
 function close(restoreFocus = true) {
-  collapsed = true;
   panel.value = "";
   if (restoreFocus && trigger?.isConnected)
     trigger.focus({ preventScroll: true });
 }
-defineExpose({ close, focusTrigger: () => trigger?.focus({ preventScroll: true }) });
+defineExpose({ close, toggle, focusTrigger: () => trigger?.focus({ preventScroll: true }) });
 function openFile(request) { close(false); emit("open-file", request); }
 function outside(event) {
   if (
     panel.value && !inline.value &&
-    !root.value?.contains(event.target) &&
+    !root.value?.contains(event.target) && !trigger?.contains(event.target) &&
     !document.querySelector("dialog:modal")
   )
     close(false);
@@ -92,8 +89,6 @@ onMounted(() => {
     const wide = root.value?.parentElement?.clientWidth >= 1000;
     if (wide === inline.value) return;
     inline.value = wide;
-    if (wide && !collapsed && !panel.value) panel.value = "info";
-    else if (!wide) panel.value = "";
   };
   resize();
   resizeObserver = new globalThis.ResizeObserver(resize);
@@ -109,7 +104,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="root" class="session-details" :class="{ 'context-inline': inline && panel }">
+  <div v-show="panel" ref="root" class="session-details" :class="{ 'context-inline': inline && panel }">
     <nav class="session-details-nav" :aria-label="$t('会话资料')">
       <button
         v-for="entry in panels"
@@ -159,12 +154,7 @@ onUnmounted(() => {
             <p class="context-privacy">{{ $t("此会话仅你可见。需要协作验收时，发布项目可见的交付。") }}</p>
             <slot name="context-actions" />
           </section>
-          <section class="session-info-section">
-            <h3>{{ $t("任务管理") }}</h3>
-            <slot name="metadata" />
-          </section>
-          <section class="session-info-section">
-            <h3>{{ $t("执行信息") }}</h3>
+          <details class="session-info-section"><summary>{{ $t("执行信息") }}</summary>
             <dl>
               <dt>Session</dt>
               <dd>{{ session.sessionId || $t("创建中") }}</dd>
@@ -172,17 +162,8 @@ onUnmounted(() => {
               <dd>{{ session.agent?.model || $t('{agent} 默认配置', { agent: session.agent?.label || 'Agent' }) }}</dd>
               <dt>{{ $t("创建时思考强度") }}</dt>
               <dd>{{ session.agent?.reasoningEffort || $t("默认思考强度") }}</dd>
-              <dt>{{ $t("渠道同步") }}</dt>
-              <dd>
-                {{
-                  session.transition?.status === "skipped"
-                    ? $t("无需同步")
-                    : session.transition?.status || $t("暂无记录")
-                }}
-                {{ session.transition?.error }}
-              </dd>
             </dl>
-          </section>
+          </details>
           <SessionLifecycleControls
             v-if="canManage"
             :can-delete="canOperate"
@@ -222,28 +203,18 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.session-details { flex: 0 0 56px; border: 1px solid var(--line); border-radius: var(--radius-card); min-width: 0; min-height: 0; }
-.session-details-nav { padding: 8px 5px; }
-.session-details-nav button[aria-expanded="true"] { color: var(--highlight); }
-.session-drawer { right: 56px; border: 1px solid var(--line); border-radius: var(--radius-card); box-shadow: var(--shadow-sm); }
+.session-details { position: absolute; inset: 0 0 0 auto; width: min(380px, 100%); display: flex; flex-direction: column; z-index: 5; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); box-shadow: var(--shadow-sm); min-width: 0; min-height: 0; }
+.session-details-nav { display: flex; position: static; padding: 8px; gap: 4px; border-bottom: 1px solid var(--line); }
+.session-details-nav button { flex: 1; flex-direction: row; min-height: 44px; gap: 6px; }
+.session-details-nav button[aria-expanded="true"] { color: var(--highlight); background: var(--selected); }
+.session-drawer { position: static; width: 100%; flex: 1; min-height: 0; border: 0; box-shadow: none; }
 .session-drawer-heading { padding: 16px 20px; }
-.session-drawer-heading h2 { font-size: 14px; font-weight: 600; }
+.session-drawer-heading h2 { font-size: 16px; font-weight: 600; }
 .session-drawer-content { padding: 22px; }
-.session-info-section h3 { font-size: 13px; margin-bottom: 18px; }
-.execution-context-facts { display: grid; grid-template-columns: minmax(75px, auto) minmax(0, 1fr); gap: 14px 16px; margin: 0; font-size: 12px; }
+.session-info-section h3, .session-info-section summary { font-size: 14px; margin-bottom: 18px; }
+.execution-context-facts { display: grid; grid-template-columns: minmax(75px, auto) minmax(0, 1fr); gap: 14px 16px; margin: 0; font-size: 13px; }
 .execution-context-facts dt { color: var(--muted); }
 .execution-context-facts dd { margin: 0; overflow-wrap: anywhere; }
 .context-privacy { margin: 20px 0 16px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; line-height: 1.8; }
-.context-inline { flex-basis: 320px; width: 320px; display: flex; flex-direction: column; }
-.context-inline .session-details-nav { position: static; display: flex; padding: 8px; gap: 4px; border-bottom: 1px solid var(--line); }
-.context-inline .session-details-nav button { flex: 1; flex-direction: row; min-height: 40px; gap: 6px; }
-.context-inline .session-details-nav .anticon { font-size: 14px; }
-.context-inline .session-drawer { position: static; width: 100%; flex: 1; min-height: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
-.context-inline .session-drawer-content { padding: 20px; }
-@media (max-width: 767px) {
-  .session-details { border-radius: 0 var(--radius-card) var(--radius-card) 0; }
-  .session-details-nav button { min-height: 56px; }
-  .session-drawer { right: 56px; width: min(420px, calc(100% - 56px)); }
-  .session-drawer-heading, .session-drawer-content { padding: 16px; }
-}
+.context-inline { position: relative; inset: auto; flex: 0 0 320px; width: 320px; box-shadow: none; }
 </style>

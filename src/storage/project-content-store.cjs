@@ -85,7 +85,7 @@ class ProjectContentStore {
   }
   async childList(kind, projectId, issueId, { limit, offset }) {
     await this.issue(projectId, issueId);
-    const table = { comments: this.database.client.issueComment, deliverables: this.database.client.issueDeliverable, history: this.database.client.issueHistory }[kind];
+    const table = { comments: this.database.client.issueComment, deliverables: this.database.client.projectDeliverable, history: this.database.client.issueHistory }[kind];
     if (!table) throw missing();
     const rows = await table.findMany({ where: { projectId, issueId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: offset, take: limit + 1 });
     return { items: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
@@ -95,23 +95,28 @@ class ProjectContentStore {
     return this.database.client.issueComment.create({ data: { projectId, issueId, authorId, body } });
   }
   async deliverable(projectId, issueId, authorId, data) {
-    assertIssueWritable(await this.issue(projectId, issueId));
-    if (data.taskId && !await this.database.client.developmentTask.findFirst({ where: { projectId, id: data.taskId } }))
-      throw accountError("开发任务不属于当前项目。", 400);
-    return this.database.client.issueDeliverable.create({ data: { projectId, issueId, authorId, ...data } });
+    if (issueId) assertIssueWritable(await this.issue(projectId, issueId));
+    if (data.taskId) {
+      const task = await this.database.client.developmentTask.findFirst({ where: { projectId, id: data.taskId, executorId: authorId }, include: { release: true, issueLinks: true } });
+      if (!task || !task.runKey || !["started", "completed"].includes(task.status)) throw accountError("只能发布本人已启动的开发任务成果。", 400);
+      if (task.release?.status === "archived") throw accountError("已归档版本不能发布交付。", 409);
+      if (issueId ? !task.issueLinks.some(link => link.issueId === issueId) : task.snapshot.kind !== "manual") throw accountError("交付来源与开发任务范围不一致。", 400);
+    }
+    return this.database.client.projectDeliverable.create({ data: { projectId, issueId, authorId, ...data } });
   }
   async readDeliverable(projectId, id) {
-    const row = await this.database.client.issueDeliverable.findFirst({ where: { projectId, id } });
+    const row = await this.database.client.projectDeliverable.findFirst({ where: { projectId, id } });
     if (!row) throw missing();
     return row;
   }
   async reviewDeliverable(projectId, id, actorId, revision, input) {
     const before = await this.readDeliverable(projectId, id);
-    assertIssueWritable(await this.issue(projectId, before.issueId));
-    const updated = await this.database.client.issueDeliverable.updateMany({ where: { projectId, id, revision, status: "pending" },
+    if (before.issueId) assertIssueWritable(await this.issue(projectId, before.issueId));
+    const updated = await this.database.client.projectDeliverable.updateMany({ where: { projectId, id, revision, status: "pending" },
       data: { ...input, reviewedById: actorId, reviewedAt: new Date(), revision: { increment: 1 } } });
     if (!updated.count) throw conflict();
-    await this.issueHistory(projectId, before.issueId, actorId, "delivery.reviewed", { deliveryId: id, ...input });
+    if (before.issueId) await this.issueHistory(projectId, before.issueId, actorId, "delivery.reviewed", { deliveryId: id, ...input });
+    await this.audit(actorId, "delivery.reviewed", projectId, id);
     return this.readDeliverable(projectId, id);
   }
   async asset(projectId, id) {

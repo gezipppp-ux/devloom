@@ -1,3 +1,4 @@
+const { openSessionList, openSessionContext } = require("../support/browser-navigation.cjs");
 /* global document, window, KeyboardEvent */
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -38,6 +39,7 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
       };
     });
     await page.goto(origin);
+    await openSessionList(page);
     await page.locator(".session-link").filter({ hasText: original }).click();
     await page.getByRole("heading", { name: original, exact: true }).waitFor();
     assert.ok((await page.locator(".session-heading").boundingBox()).width > 300);
@@ -93,7 +95,7 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
       await page.screenshot({ path: path.join(output, `session-title-display-${width}.png`), fullPage: true });
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.getByRole("button", { name: "会话信息", exact: true }).click();
+    await openSessionContext(page, '会话信息');
     await page.getByRole("button", { name: "归档会话", exact: true }).click();
     const confirmation = page.getByRole("dialog", { name: "归档会话", exact: true });
     await confirmation.getByLabel("我确认归档此会话。", { exact: true }).check();
@@ -129,7 +131,7 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
     await dialog.getByRole("status").filter({ hasText: "已恢复" }).waitFor();
     assert.equal((await manager.store.isArchived(key)), false);
     await dismissOperationMessages(page);
-    await peer.locator(".session-link").filter({ hasText: title }).waitFor();
+    await peer.locator(".session-link").filter({ hasText: title }).waitFor({ state: "attached" });
     await search.fill("");
     await dialog.getByText("暂无已归档会话。", { exact: true }).waitFor();
 
@@ -157,11 +159,12 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
     await page.waitForFunction(() => window.archiveSnapshotApplied);
     assert.equal((await manager.store.isArchived(key)), false);
     assert.equal(await recover.count(), 0);
-    await peer.locator(".session-link").filter({ hasText: title }).waitFor();
+    await peer.locator(".session-link").filter({ hasText: title }).waitFor({ state: "attached" });
     await search.fill("");
     await dialog.getByText("暂无已归档会话。", { exact: true }).waitFor();
     await page.keyboard.press("Escape");
     assert.equal(await trigger.evaluate((el) => el === document.activeElement), true);
+    await openSessionList(page);
     await page.locator(".session-link").filter({ hasText: title }).click();
     await page.getByRole("heading", { name: title, exact: true }).waitFor();
     assert.equal((await manager.store.read(key)).session_id, "archive-fixture");

@@ -24,7 +24,7 @@ async function verifyPromptSettings(browser, { origin, output, errors, workspace
     await page.getByRole("heading", { name: `${workspace.name} · 工作区设置`, exact: true }).waitFor();
     await editor.waitFor();
   };
-  const leaveSettings = () => page.getByRole("button", { name: "＋ 从需求启动", exact: true }).click();
+  const leaveSettings = () => page.getByRole("button", { name: "独立开发", exact: true }).click();
   const openSettings = () => page.getByRole("button", { name: "工作区设置", exact: true }).click();
   try {
     await page.route(pattern, (route) => route.fulfill({

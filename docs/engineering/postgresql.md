@@ -45,3 +45,5 @@ AsyncLocalStorage 使同一事务中的多个 store 使用同一客户端，并�
 使用 `TEST_DATABASE_URL` 指向专用测试数据库。测试为每例创建随机 schema 并只清理自己创建的 schema，不能对普通 `DATABASE_URL` 执行清理。CI 需提供专用 PostgreSQL，不能把未运行真实数据库测试描述为通过。
 
 Jenkins 的 Windows／Linux 节点都需由节点环境或受控凭据注入 `TEST_DATABASE_URL`；账号只需要专用测试数据库内的 schema 创建与清理权限。流水线在测试前生成客户端；`CI=true` 时缺少连接配置会使 PostgreSQL 集成测试失败。完整测试套件要求配置 `TEST_DATABASE_URL`；个别 PostgreSQL 专项测试在本地缺少配置时可标为 skipped，但不能据此交付。
+
+项目交付使用 `ProjectDeliverable` / `project_deliverables`，可关联事项或本人已启动的独立任务；不再维护 IssueDeliverable 模型。独立交付无事项外键，必须有任务来源和项目外键。验收权限为 `deliverable.review`，验收写入审计；事项流转单独授权。个人设置的 grouping 字段已删除，无历史字段读取或兼容接口。

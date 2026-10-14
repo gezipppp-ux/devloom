@@ -416,7 +416,6 @@ test("tasks in one workspace select independent models and resume their snapshot
     channel: "manual",
     title: "模型隔离",
     content: "模拟需求",
-    metadata: { type: "bug" },
   };
   for (const selection of [
     { model: "missing" },
@@ -451,10 +450,6 @@ test("tasks in one workspace select independent models and resume their snapshot
     )
       await new Promise((resolve) => setTimeout(resolve, 10));
     assert.ok(manager.sessions.get(key).turnId);
-    assert.deepEqual((await manager.store.readTaskMetadata(key)), {
-      type: "bug",
-      progress: "in_progress",
-    });
     assert.deepEqual((await manager.store.read(key)).agent, {
       provider: "codex",
       model: selection.model || "",
@@ -485,7 +480,6 @@ test("tasks in one workspace select independent models and resume their snapshot
   assert.deepEqual(manager.client.calls.filter((call) => call.method === "turn/start")
     .map((call) => [call.params.approvalPolicy, call.params.approvalsReviewer, call.params.sandboxPolicy.type]),
   [["never", "user", "dangerFullAccess"], ["on-request", "auto_review", "workspaceWrite"], ["on-request", "user", "workspaceWrite"]]);
-  await manager.updateTaskMetadata(keys[0], { progress: "merge" });
   for (const key of keys) {
     await manager.interrupt(key);
     await manager.sessions.get(key).operation;
@@ -502,10 +496,6 @@ test("tasks in one workspace select independent models and resume their snapshot
     );
     assert.equal(call.params.effort, ["high", "medium", "low"][index]);
     await manager.interrupt(key);
-    assert.equal(
-      (await manager.store.readTaskMetadata(key)).progress,
-      index === 0 ? "merge" : "in_progress",
-    );
   }
   (await saveSettings(settings, context.configFile));
   assert.equal((await readOptional(context.configFile)).agent.model, "obsolete-workspace-model");

@@ -53,11 +53,6 @@ export function useWorkspaceConsole({
     );
   }
 
-  function metadataSaved(key, metadata) {
-    tasks.updateMetadata(key, metadata);
-    conversation.updateMetadata(key, metadata);
-  }
-
   function titleSaved(key, title) {
     tasks.updateTitle(key, title);
     conversation.updateTitle(key, title);
@@ -84,10 +79,6 @@ export function useWorkspaceConsole({
   function eventReceived(event) {
     if (disposed) return;
     if (event.type === "supplier-changed") suppliersChanged();
-    if (event.type === "metadata") {
-      metadataSaved(event.key, event.metadata);
-      return;
-    }
     if (event.type === "title") {
       titleSaved(event.key, event.title);
       return;
@@ -223,7 +214,6 @@ export function useWorkspaceConsole({
     refreshList: tasks.refresh,
     refreshSession: conversation.refresh,
     reloadChannels,
-    metadataSaved,
     titleSaved,
     archiveRevision,
     archiveRestored,

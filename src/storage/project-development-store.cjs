@@ -37,6 +37,11 @@ class ProjectDevelopmentStore {
     if (!task) throw missing();
     return task;
   }
+  async taskForSession(projectId, executorId, runKey) {
+    const task = await this.database.client.developmentTask.findFirst({ where: { projectId, executorId, runKey } });
+    if (!task) throw missing();
+    return this.task(projectId, task.id);
+  }
   async existing(projectId, creatorId, requestId) {
     return this.database.client.developmentTask.findUnique({ where: { projectId_creatorId_requestId: { projectId, creatorId, requestId } }, include: { executor: { select: { id: true, displayName: true } }, release: true } });
   }
@@ -106,7 +111,7 @@ class ProjectDevelopmentStore {
     await this.database.client.developmentTask.create({ data: { id, projectId, creatorId: actorId, executorId: actorId,
       spaceId: space.id, workspaceId: space.workspaceId, requestId: request.requestId,
       runKey: runKey({ channel: "manual", scope: "local", id }), status: "unknown",
-      snapshot: json({ kind: "manual", request, title: request.title, manual: { content: request.content, images: request.images, taskType: request.taskType },
+      snapshot: json({ kind: "manual", request, title: request.title, manual: { content: request.content, images: request.images },
         issues: [], additions: [], prompt, selection, baseBranch: request.baseBranch, startRequest: request }) } });
     await this.audit(actorId, "development.manual.accepted", projectId, id);
     return this.task(projectId, id);

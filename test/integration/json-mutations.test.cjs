@@ -7,10 +7,10 @@ const { temporary } = require('../support/helpers.cjs');
 const { RunStore } = require('../../src/storage/run-store.cjs');
 const { writeConfig, updateConfig, readOptional } = require('../../src/storage/json-files.cjs');
 
-test('concurrent task metadata updates preserve the other process field', { timeout: 15000 }, async (t) => {
+test('concurrent execution settings updates preserve the other process field', { timeout: 15000 }, async (t) => {
   const directory = temporary(t);
   const store = new RunStore(directory);
-  (await store.writeTaskMetadata('1-2', { type: 'requirement', progress: 'in_progress' }));
+  (await store.writeExecutionSettings('1-2', { model: 'first', permissionMode: 'ask' }));
   const gate = new SharedArrayBuffer(4);
   const workers = [];
   t.after(async () => { await Promise.all(workers.map((worker) => worker.terminate())); });
@@ -21,7 +21,7 @@ test('concurrent task metadata updates preserve the other process field', { time
       const { workerData, parentPort } = require('node:worker_threads');
       const { RunStore } = require(workerData.storeModule);
       const store = new RunStore(workerData.directory);
-      const file = path.join(store.dir('1-2'), 'task-metadata.json');
+      const file = path.join(store.dir('1-2'), 'execution-settings.json');
       const read = fs.readFileSync;
       const mkdir = fs.mkdirSync;
       let signalled = false;
@@ -31,7 +31,7 @@ test('concurrent task metadata updates preserve the other process field', { time
           signalled = true;
           parentPort.postMessage('paused');
           if (Atomics.wait(new Int32Array(workerData.gate), 0, 0, 5000) === 'timed-out')
-            throw new Error('Metadata writer barrier timed out');
+            throw new Error('Settings writer barrier timed out');
         }
         return data;
       };
@@ -45,7 +45,7 @@ test('concurrent task metadata updates preserve the other process field', { time
           throw error;
         }
       };
-      store.writeTaskMetadata('1-2', workerData.role === 'first' ? {type:'bug'} : {progress:'done'});
+      store.updateExecutionSettings('1-2', previous => ({ ...previous, ...(workerData.role === 'first' ? {model:'second'} : {permissionMode:'full'}) }));
       parentPort.postMessage('done');
     `, { eval: true, workerData: { directory, gate, role, storeModule: require.resolve('../../src/storage/run-store.cjs') } });
     workers.push(worker);
@@ -70,8 +70,8 @@ test('concurrent task metadata updates preserve the other process field', { time
     Atomics.notify(new Int32Array(gate), 0);
   }
   await Promise.all([first.finished, second.finished]);
-  assert.deepEqual((await store.readTaskMetadata('1-2')), { type: 'bug', progress: 'done' });
-  assert.deepEqual(fs.readdirSync(store.dir('1-2')), ['task-metadata.json']);
+  assert.deepEqual((await store.readExecutionSettings('1-2')), { model: 'second', permissionMode: 'full' });
+  assert.deepEqual(fs.readdirSync(store.dir('1-2')), ['execution-settings.json']);
 });
 
 test('configuration updates keep workspace version and atomically preserves the previous config on write failure', async (t) => {

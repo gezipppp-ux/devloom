@@ -30,4 +30,12 @@ async function openProjectTab(page, name) {
   if (await more.getAttribute("open") === null) await more.locator("summary").click();
   return more.getByRole("button", { name: label, exact: true }).click();
 }
-module.exports = { navigateWorkspace, openProjectTab };
+async function openSessionList(page) {
+  if (!await page.getByRole('dialog', { name: '会话列表', exact: true }).isVisible()) await page.getByRole('button', { name: '切换会话', exact: false }).click();
+}
+async function openSessionContext(page, name = '会话信息') {
+  if (!await page.locator('.session-drawer').isVisible()) await page.getByRole('button', { name: '上下文', exact: true }).click();
+  const button = page.getByRole('button', { name, exact: true });
+  if (await button.getAttribute('aria-expanded') !== 'true') await button.click();
+}
+module.exports = { navigateWorkspace, openProjectTab, openSessionList, openSessionContext };

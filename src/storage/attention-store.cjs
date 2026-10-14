@@ -7,8 +7,8 @@ class AttentionStore {
     });
   }
   async pendingDeliveries(projectIds) {
-    return this.database.client.issueDeliverable.findMany({
-      where: { projectId: { in: projectIds }, status: "pending", issue: { OR: [{ releaseId: null }, { release: { status: { not: "archived" } } }] } },
+    return this.database.client.projectDeliverable.findMany({
+      where: { projectId: { in: projectIds }, status: "pending", OR: [{ issueId: null }, { issue: { OR: [{ releaseId: null }, { release: { status: { not: "archived" } } }] } }] },
       select: { id: true, projectId: true, title: true, createdAt: true, revision: true, issue: { select: { id: true, title: true } } },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     });

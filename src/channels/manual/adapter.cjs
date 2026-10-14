@@ -32,11 +32,10 @@ function createManualChannel(configFile, { uploadDirectory } = {}) {
       content = '',
       images = [],
       worktreeName = '',
-      taskType = 'requirement',
       renderedPrompt = false,
     }) {
-      if (!['bug', 'requirement', 'other'].includes(taskType) || typeof renderedPrompt !== 'boolean')
-        throw new Error('无效的任务类型或提示词格式。');
+      if (typeof renderedPrompt !== 'boolean')
+        throw new Error('无效的提示词格式。');
       if (typeof requestId !== 'string' || !REQUEST_ID.test(requestId))
         throw new Error('无效的手动需求标识，请重新打开表单。');
       if (typeof title !== 'string' || !title.trim() || title.length > 200)
@@ -58,7 +57,7 @@ function createManualChannel(configFile, { uploadDirectory } = {}) {
         item: {
           id: requestId,
           workspace_id: 'local',
-          type: taskType === 'bug' ? 'bug' : 'requirement',
+          type: 'requirement',
           title: title.trim(),
           markdown_description: content,
           image_ids: images,

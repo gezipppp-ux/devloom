@@ -99,28 +99,32 @@ class ProjectContentServices {
     const body = text(input.body, "评论", 60000, { required: true });
     return this.mutate(projectId, actor, ["comment.create"], async () => (await this.store.comment(projectId, id, actor.id, body)));
   }
-  async addDeliverable(projectId, id, actor, input) {
-    object(input, ["body", "taskId", "commit", "title"]);
+  async addDeliverable(projectId, actor, input) {
+    object(input, ["body", "taskId", "issueId", "commit", "title"]);
+    const issueId = input.issueId ? identifier(input.issueId, "事项") : null;
     const data = { body: text(input.body, "交付内容", 60000, { required: true }), taskId: input.taskId ? identifier(input.taskId, "开发任务") : null,
       commit: input.commit ? text(input.commit, "提交信息", 2000) : null };
-    return this.mutate(projectId, actor, ["deliverable.create"], async () => {
-      const issue = await this.store.issue(projectId, id);
-      return presentDeliverable(await this.store.deliverable(projectId, id, actor.id, { ...data, title: input.title !== undefined ? text(input.title, "交付标题", 200, { required: true }) : issue.title, checklist: deliveryChecklist(issue) }));
+    if (!issueId && !data.taskId) throw accountError("请选择交付事项或本人独立开发任务。", 400);
+    return this.mutate(projectId, actor, ["deliverable.create", ...(data.taskId ? ["session.view"] : [])], async () => {
+      const issue = issueId ? await this.store.issue(projectId, issueId) : null;
+      const title = text(input.title ?? issue?.title, "交付标题", 200, { required: true });
+      return presentDeliverable(await this.store.deliverable(projectId, issueId, actor.id, { ...data, title, checklist: deliveryChecklist(issue) }));
     });
   }
   async readDeliverable(projectId, id, actor) {
     return this.read(projectId, actor, ["collaboration.view", "issue.view"], async () => {
       const delivery = await this.store.readDeliverable(projectId, id);
-      const issue = await this.store.issue(projectId, delivery.issueId);
+      const issue = delivery.issueId ? await this.store.issue(projectId, delivery.issueId) : null;
       const context = await this.projects.authorize(projectId, actor, "collaboration.view");
-      return { delivery: presentDeliverable(delivery), issue: presentIssue(issue), permissions: context.project.status === "archived" ? context.permissions.filter(p => p.endsWith(".view")) : context.permissions, people: await this.store.people([delivery.authorId, delivery.reviewedById]) };
+      return { delivery: presentDeliverable(delivery), issue: issue ? presentIssue(issue) : null, permissions: context.project.status === "archived" ? context.permissions.filter(p => p.endsWith(".view")) : context.permissions, people: await this.store.people([delivery.authorId, delivery.reviewedById]) };
     });
   }
   async reviewDeliverable(projectId, id, actor, input) {
-    return this.mutate(projectId, actor, ["collaboration.view", "issue.view", "issue.accept"], async () => {
+    return this.mutate(projectId, actor, ["collaboration.view", "deliverable.review"], async () => {
       const current = await this.store.readDeliverable(projectId, id);
       const review = deliveryReview(input, current);
       if (input.transitionId) {
+        if (!current.issueId) throw accountError("独立开发交付没有可流转的事项。", 400);
         const issue = await this.store.issue(projectId, current.issueId);
         const transition = issueTransition(issue, { transitionId: input.transitionId, revision: input.issueRevision, reason: review.reviewNote });
         await this.authorized(projectId, actor, [transition.permission]);

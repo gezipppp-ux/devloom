@@ -23,7 +23,7 @@ async function verifySessionSuppliers(browser, origin, manager, client, key, err
     await page.goto(origin);
     await page.getByText("历史回复", { exact: true }).waitFor();
     const hint = page.locator(".session-composer .execution-settings-hint").filter({ hasText: "供应商" });
-    await hint.filter({ hasText: "本轮供应商：供应商 A" }).waitFor();
+    assert.equal(await hint.count(), 0, "unchanged suppliers do not add a repeated hint");
     const input = page.getByRole("textbox", { name: "发送给 Codex 的指令", exact: true });
     await input.fill("切换供应商时保留这份草稿");
     const before = client.calls.length, readsBefore = modelsRead;

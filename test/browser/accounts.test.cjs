@@ -1,3 +1,4 @@
+const { openSessionList } = require("../support/browser-navigation.cjs");
 /* global document, window */
 // All account/workspace APIs are fixtures; this suite never invokes Codex or TAPD.
 const assert = require("node:assert/strict");
@@ -27,7 +28,7 @@ async function main() {
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
-  const settings = () => ({ model: null, reasoningEffort: null, permissionMode: "ask", notificationsEnabled: true, grouping: "type" });
+  const settings = () => ({ model: null, reasoningEffort: null, permissionMode: "ask", notificationsEnabled: true });
   const users = [{ id: "admin", username: "admin", displayName: "admin", role: "admin", status: "active", mustChangePassword: false }, { id: "member", username: "member", displayName: "member", role: "member", status: "active", mustChangePassword: true }];
   const savedSettings = new Map(users.map((user) => [user.id, settings()]));
   const workspaceFor = (user) => ({ id: user.id === "admin" ? "11111111-1111-4111-8111-111111111111" : "22222222-2222-4222-8222-222222222222", name: `${user.username} 的私有项目` });
@@ -81,7 +82,7 @@ async function main() {
       if (!endpoint.startsWith(`/api/workspaces/${workspace.id}/`)) return send({ error: "工作区不存在。" }, 404);
       if (endpoint.endsWith("/bootstrap")) return send({ token: "fixture-csrf-token", channels: [{ id: "manual", label: "手动输入", capabilities: { manualInput: true } }] });
       if (endpoint.endsWith("/events")) return route.fulfill({ contentType: "text/event-stream", body: ": fixture\n\n" });
-      const run = { key: "manual-fixture", title: `${activeUser.username} 的私有任务`, status: "completed", metadata: { type: "requirement", progress: "in_progress" } };
+      const run = { key: "manual-fixture", title: `${activeUser.username} 的私有任务`, status: "completed" };
       if (endpoint.endsWith("/runs")) return send({ runs: [run] });
       if (endpoint.endsWith("/runs/manual-fixture")) {
         const detail = { ...run, agent: agentDescriptor, sessionId: `session-${activeUser.id}`, items: [{ id: "item-1", type: "agentMessage", text: `${activeUser.username} 的私有回复` }], requests: [], images: [], executionSettings: { model: "", reasoningEffort: "", permissionMode: "ask" } };
@@ -133,7 +134,7 @@ async function main() {
     assert.deepEqual(writesTo("/api/account/profile").at(-1).body, { displayName: "管理员显示名" });
     await page.getByLabel("Codex 模型", { exact: true }).selectOption("fixture-model");
     await page.getByLabel("思考强度", { exact: true }).selectOption("high");
-    await page.getByLabel("默认任务分组").selectOption("none");
+    assert.equal(await page.getByLabel("默认任务分组").count(), 0);
     await page.getByRole("button", { name: "保存个人设置" }).click();
     await page.getByText("个人设置已保存。", { exact: true }).waitFor();
     assert.equal(savedSettings.get("admin").model, "fixture-model");
@@ -222,9 +223,10 @@ async function main() {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await openWorkspace(page, users[0]);
     await page.getByText("admin 的私有回复", { exact: true }).waitFor();
-    await page.getByRole("button", { name: "＋ 从需求启动", exact: true }).click();
+    await page.getByRole("button", { name: "独立开发", exact: true }).click();
     assert.equal(await page.getByLabel("Codex 模型", { exact: true }).inputValue(), "fixture-model");
     assert.equal(await page.getByLabel("思考强度", { exact: true }).inputValue(), "high");
+    await openSessionList(page);
     await page.locator(".session-link").click();
     await page.getByText("admin 的私有回复", { exact: true }).waitFor();
     await page.evaluate(() => {
@@ -282,7 +284,7 @@ async function main() {
     await page.goto(`${origin}/accounts`);
     await page.getByRole("heading", { name: "个人设置", exact: true }).waitFor();
     assert.equal(await page.getByLabel("Codex 模型", { exact: true }).inputValue(), "");
-    assert.equal(await page.getByLabel("默认任务分组").inputValue(), "type");
+    assert.equal(await page.getByLabel("默认任务分组").count(), 0);
     await verifyAccountPreferenceRaces(browser, origin);
     await verifyAccountProfileRaces(browser, origin);
     await verifyAttentionNotifications(browser, origin);

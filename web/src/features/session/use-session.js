@@ -171,11 +171,6 @@ export function useSession({
     }
   }
 
-  function updateMetadata(key, metadata) {
-    if (pendingView?.key === key) pendingView.fields.metadata = metadata;
-    if (session.value?.key === key) session.value.metadata = metadata;
-  }
-
   function updateTitle(key, title) {
     if (pendingView?.key === key) pendingView.fields.title = title;
     if (session.value?.key === key) session.value.title = title;
@@ -289,7 +284,6 @@ export function useSession({
     open,
     refresh,
     receiveEvent,
-    updateMetadata,
     updateTitle,
     remove,
     action,

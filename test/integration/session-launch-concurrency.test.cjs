@@ -12,8 +12,8 @@ const { runKey } = require("../../src/domain/run-identity.cjs");
 async function fixture(t, { fingerprint } = {}) {
   const directory = temporary(t);
   const store = new RunStore(path.join(directory, "runs"));
-  const metadataEntered = Promise.withResolvers();
-  const metadataRelease = Promise.withResolvers();
+  const settingsEntered = Promise.withResolvers();
+  const settingsRelease = Promise.withResolvers();
   const running = Promise.withResolvers();
   const complete = Promise.withResolvers();
   const calls = [];
@@ -49,19 +49,19 @@ async function fixture(t, { fingerprint } = {}) {
       return state;
     },
   });
-  const originalMetadata = store.writeTaskMetadata.bind(store);
-  store.writeTaskMetadata = async (...args) => {
-    metadataEntered.resolve();
-    await metadataRelease.promise;
-    return originalMetadata(...args);
+  const originalSettings = store.writeExecutionSettings.bind(store);
+  store.writeExecutionSettings = async (...args) => {
+    settingsEntered.resolve();
+    await settingsRelease.promise;
+    return originalSettings(...args);
   };
   t.after(async () => {
-    metadataRelease.resolve();
+    settingsRelease.resolve();
     complete.resolve();
     await manager.close();
   });
-  return { manager, agent, store, key, item, config, channel, calls, metadataEntered,
-    metadataRelease, running, complete, runs: () => runs,
+  return { manager, agent, store, key, item, config, channel, calls, settingsEntered,
+    settingsRelease, running, complete, runs: () => runs,
     launch: () => manager.launch(key, item, config, null, {}, channel) };
 }
 
@@ -69,9 +69,9 @@ test("same-key concurrent starts reserve one runtime and release the start lock 
   const context = await fixture(t);
   const { manager, store, key } = context;
   const first = context.launch();
-  await context.metadataEntered.promise;
+  await context.settingsEntered.promise;
   const second = context.launch().then(value => ({ value }), error => ({ error }));
-  context.metadataRelease.resolve();
+  context.settingsRelease.resolve();
   const [accepted, duplicate] = await Promise.all([first, second]);
   assert.equal(accepted.accepted, true);
   assert.match(duplicate.error?.message || "", /上一条操作尚未完成|已有运行记录/);
@@ -95,10 +95,10 @@ test("same-key concurrent starts reserve one runtime and release the start lock 
 test("a busy matching-fingerprint retry can be rejected and a later retry reuses the accepted pipeline", { timeout: 10000 }, async (t) => {
   const context = await fixture(t, { fingerprint: "same-fingerprint" });
   const first = context.manager.start({ channel: "tapd" });
-  await context.metadataEntered.promise;
+  await context.settingsEntered.promise;
   const second = context.manager.start({ channel: "tapd" })
     .then(value => ({ value }), error => ({ error }));
-  context.metadataRelease.resolve();
+  context.settingsRelease.resolve();
   const [accepted, duplicate] = await Promise.all([first, second]);
   assert.equal(accepted.accepted, true);
   if (duplicate.error) assert.match(duplicate.error.message, /上一条操作尚未完成/);
@@ -132,14 +132,14 @@ test("direct launch finishes credential refresh before reserving the task key", 
     assert.equal(context.manager.operations.has(context.key), false);
     assert.equal(context.runs(), 0);
     releaseRefresh.resolve();
-    await context.metadataEntered.promise;
+    await context.settingsEntered.promise;
     assert.equal(context.manager.operations.has(context.key), true);
-    context.metadataRelease.resolve();
+    context.settingsRelease.resolve();
     await starting;
     await context.running.promise;
   } finally {
     releaseRefresh.resolve();
-    context.metadataRelease.resolve();
+    context.settingsRelease.resolve();
     context.complete.resolve();
     await starting;
   }

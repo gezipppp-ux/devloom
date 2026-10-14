@@ -20,7 +20,7 @@ const items = [{ id: "profile", label: "资料与偏好", icon: UserOutlined }, 
 const currentTab = computed(() => items.some(item => item.id === route.query.tab) ? route.query.tab : "profile");
 function select(tab) { void router.push({ query: { ...route.query, tab: tab === "profile" ? undefined : tab } }); }
 defineProps({ notifications: { type: Object, required: true } });
-const form = reactive({ model: accountSession.settings.model || "", reasoningEffort: accountSession.settings.reasoningEffort || "", permissionMode: accountSession.settings.permissionMode || "ask", grouping: accountSession.settings.grouping || "type" });
+const form = reactive({ model: accountSession.settings.model || "", reasoningEffort: accountSession.settings.reasoningEffort || "", permissionMode: accountSession.settings.permissionMode || "ask" });
 const models = useModelCatalog((url) => appApi(`/account${url}`));
 const permissions = usePermissionModes((url) => appApi(`/account${url}`));
 const busy = ref(false), saved = ref(false), error = ref("");
@@ -48,7 +48,6 @@ async function save() {
         <a-form-item :label="$t('默认执行权限')"><PermissionSelect v-model="form.permissionMode" :options="permissions.permissionModes.value" :disabled="busy" refreshable :refreshing="permissions.loading.value" @refresh="permissions.refresh" /></a-form-item>
         <FeedbackMessage :message="permissions.error.value" type="error" />
         <p v-if="!permissions.loading.value && !permissions.error.value && !permissions.isAvailable(form.permissionMode)" class="error" role="alert">{{ $t("当前权限模式不可用，请选择可用的权限模式后保存。") }}</p>
-        <a-form-item :label="$t('默认任务分组')"><select v-model="form.grouping" :aria-label="$t('默认任务分组')" :disabled="busy"><option value="type">{{ $t("按类型") }}</option><option value="progress">{{ $t("按进度") }}</option><option value="none">{{ $t("不分组") }}</option></select></a-form-item>
         <FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="saved ? '个人设置已保存。' : ''" type="success" />
       </a-form>
     </FormSection>

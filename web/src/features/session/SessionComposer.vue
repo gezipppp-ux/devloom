@@ -101,7 +101,7 @@ function send() {
 
 <template>
   <section class="composer-wrap session-composer" :aria-label="$t('会话输入区')">
-    <p v-if="nextSupplier" class="execution-settings-hint" role="status">
+    <p v-if="nextSupplier && supplierPending" class="execution-settings-hint" role="status">
       <span v-if="running && activeSupplier">{{ $t("本轮供应商：") }}{{ activeSupplier.name }} · </span>
       {{ running && supplierPending ? $t("下一轮供应商") : $t("系统供应商") }}：{{ nextSupplier.name }}
     </p>
@@ -294,8 +294,8 @@ function send() {
 
 <style scoped>
 .composer-wrap { padding: 18px max(22px, calc((100% - var(--conversation-width)) / 2)); margin-top: auto; border-top: 1px solid var(--line); background: var(--surface-hover); border-radius: 0 0 var(--radius-card) var(--radius-card); }
-.composer { padding: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
-.composer:focus-within { border: 0; box-shadow: none; }
+.composer { padding: 16px; border: 1px solid var(--line); border-radius: 12px; box-shadow: none; background: var(--surface); }
+.composer:focus-within { border-color: var(--focus); box-shadow: none; }
 .composer textarea { min-height: 76px; max-height: 220px; resize: vertical; font-size: 14px; line-height: 1.7; }
 .composer-footer { gap: 9px; margin-top: 8px; }
 .composer-hints { gap: 6px 16px; margin-top: 10px; }

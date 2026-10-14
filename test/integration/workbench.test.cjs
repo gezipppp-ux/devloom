@@ -20,13 +20,13 @@ test("workbench aggregates only authorized content and delivery reviews are atom
   assert.equal((await workbench.list("issues", actor, { query: "UI" })).total, 1);
   assert.equal((await workbench.list("issues", outsider)).total, 0);
   await assert.rejects(workbench.list("issues", outsider, { projectId: project.id }), { statusCode: 403 });
-  const delivery = await content.addDeliverable(project.id, issue.id, actor, { body: "Implemented and tested", commit: "abc123" });
+  const delivery = await content.addDeliverable(project.id, actor, { issueId: issue.id, body: "Implemented and tested", commit: "abc123" });
   assert.equal(delivery.status, "pending"); assert.equal(delivery.checklist.length, 4);
   assert.equal((await workbench.list("deliveries", actor, { status: "pending" })).total, 1);
   await assert.rejects(content.readDeliverable(project.id, delivery.id, outsider));
   const review = { revision: 1, status: "accepted", checkedItems: [0, 1, 2, 3], reviewNote: "Verified" };
   const where = { projectId_userId: { projectId: project.id, userId: actor.id } };
-  await database.client.projectMember.update({ where, data: { permissions: permissions.filter(p => p !== "issue.accept") } });
+  await database.client.projectMember.update({ where, data: { permissions: permissions.filter(p => p !== "deliverable.review") } });
   await assert.rejects(content.reviewDeliverable(project.id, delivery.id, actor, review), { statusCode: 403 });
   await database.client.projectMember.update({ where, data: { permissions } });
   const result = await Promise.allSettled([content.reviewDeliverable(project.id, delivery.id, actor, review), content.reviewDeliverable(project.id, delivery.id, actor, { ...review, status: "returned" })]);

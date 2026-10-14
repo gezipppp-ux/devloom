@@ -32,7 +32,6 @@ class SessionPresenter {
       storyId: state.workitem.id,
       workspaceId: state.workitem.workspace_id,
       sessionId: state.session_id,
-      metadata: (await this.store.readTaskMetadata(key, state.workitem)),
       ...(this.settings ? (await this.settings.describe(key, state)) : {}),
       agent: { ...describeAgent(this.agent, agentConfig(state).provider),
         model: agentConfig(state).model, reasoningEffort: agentConfig(state).reasoningEffort,

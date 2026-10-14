@@ -104,7 +104,7 @@ async function verifyWorkspaceNavigation(page, { workspaceA, workspaceB, reposit
 
     assert.equal(await page.getByLabel("项目代码仓库", { exact: true }).count(), 0,
       "loading another workspace must not expose the previous workspace's form");
-    assert.equal(await page.getByRole("button", { name: "＋ 从需求启动", exact: true }).isDisabled(), true);
+    assert.equal(await page.getByRole("button", { name: "独立开发", exact: true }).isDisabled(), true);
     await checkUrl(workspaceB);
     await page.screenshot({ path: path.join(output, "workspace-switch-loading.png"), fullPage: true });
     await select(workspaceA);
@@ -113,7 +113,7 @@ async function verifyWorkspaceNavigation(page, { workspaceA, workspaceB, reposit
     await settingsReady(page, workspaceA, repository);
     await checkUrl(workspaceA);
 
-    await page.getByRole("button", { name: "＋ 从需求启动", exact: true }).click();
+    await page.getByRole("button", { name: "独立开发", exact: true }).click();
     await page.getByLabel("需求渠道", { exact: true }).selectOption("manual");
     await page.getByLabel("需求标题", { exact: true }).fill("只属于项目 A 的未提交草稿");
     const delayedUpload = await holdResponse(page, `**/api/workspaces/${workspaceA.id}/channels/manual/images`);
@@ -125,7 +125,7 @@ async function verifyWorkspaceNavigation(page, { workspaceA, workspaceB, reposit
     await select(workspaceB);
     await settingsReady(page, workspaceB, repository);
     await releaseResponse(page, oldUpload, "old-manual-upload");
-    await page.getByRole("button", { name: "＋ 从需求启动", exact: true }).click();
+    await page.getByRole("button", { name: "独立开发", exact: true }).click();
     await page.getByLabel("需求渠道", { exact: true }).selectOption("manual");
     assert.equal(await page.getByLabel("需求标题", { exact: true }).inputValue(), "");
     assert.equal(await page.locator(".manual-images img").count(), 0);

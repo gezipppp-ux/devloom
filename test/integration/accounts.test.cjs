@@ -169,7 +169,6 @@ async function fixture(t, options = {}) {
         "deleteWorktree",
         "uploadMessageImage",
         "send",
-        "updateTaskMetadata",
         "updateExecutionSettings",
         "interrupt",
         "respond",
@@ -387,7 +386,6 @@ test("PostgreSQL accounts require login and session CSRF, isolate workspaces inc
     reasoningEffort: "high",
     permissionMode: "ask",
     notificationsEnabled: false,
-    grouping: "none",
   };
   assert.deepEqual(
     (await member.request("/api/account/settings", settings)).data.settings,

@@ -132,7 +132,7 @@ test("shutdown rejects a requirement that finishes resolving after the service c
   assert.equal(client.calls.length, 0);
 });
 
-for (const entry of ["start", "launch"]) for (const stage of ["claim", "metadata", "settings", "web", "publish"]) {
+for (const entry of ["start", "launch"]) for (const stage of ["claim", "settings", "web", "publish"]) {
   test(`shutdown waits for ${stage} during ${entry} and releases only the unstarted reservation`, async t => {
     const { manager, store, key: existingKey } = setup(t);
     const previous = await store.read(existingKey);
@@ -143,7 +143,7 @@ for (const entry of ["start", "launch"]) for (const stage of ["claim", "metadata
     let runs = 0;
     manager.run = async () => { runs++; return { execution: { status: "completed" } }; };
     const [target, method] = {
-      claim: [store.requirements, "claim"], metadata: [store, "writeTaskMetadata"],
+      claim: [store.requirements, "claim"],
       settings: [manager.settings, "initialize"], web: [store, "writeWeb"], publish: [manager, "publish"],
     }[stage];
     const original = target[method].bind(target);

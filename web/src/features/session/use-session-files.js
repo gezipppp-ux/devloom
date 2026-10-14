@@ -30,6 +30,7 @@ export function useSessionFile(taskKey, requested, scope) {
     const current = ++generation;
     file.value = null;
     error.value = "";
+    if (!requested()) { loading.value = false; return; }
     loading.value = true;
     try {
       const data = await api(`/runs/${taskKey()}/file?${new URLSearchParams({ path: requested(), scope: scope.value })}`);

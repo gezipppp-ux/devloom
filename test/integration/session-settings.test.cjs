@@ -30,7 +30,6 @@ function saveRun(store, key, directory) {
   };
   fs.mkdirSync(store.dir(key), { recursive: true });
   fs.writeFileSync(path.join(store.dir(key), 'run.json'), JSON.stringify(state));
-  store.writeTaskMetadata(key, { type: 'bug', progress: 'review' });
   return state;
 }
 
@@ -78,7 +77,6 @@ test('explicit agent sessions default to ask; idle settings persist without star
   const saved = (await store.read(key));
   for (const field of ['source', 'workitem', 'worktree', 'session_id', 'execution', 'transition'])
     assert.deepEqual(saved[field], state[field], field + ' must stay unchanged');
-  assert.deepEqual((await store.readTaskMetadata(key)), { type: 'bug', progress: 'review' });
   assert.deepEqual((await manager.view(key)).executionSettings, selected);
   await manager.send(key, '使用已保存配置');
   const turn = client.calls.find((entry) => entry.method === 'turn/start');

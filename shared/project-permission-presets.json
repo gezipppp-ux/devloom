@@ -11,6 +11,7 @@
       "issue.assign",
       "issue.transition",
       "issue.accept",
+      "deliverable.review",
       "collaboration.view",
       "comment.create",
       "deliverable.create",

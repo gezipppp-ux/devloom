@@ -45,7 +45,7 @@ test("project activity exposes only authorized public actions, newest ten, witho
   const projects = new ProjectServices(database), content = new ProjectContentServices(database, projects), workbench = new WorkbenchServices(database, projects);
   const issue = await content.createIssue(project.id, actor, { type: "requirement", title: "Public title" });
   for (let index = 0; index < 12; index++) await content.store.issueHistory(project.id, issue.id, actor.id, "updated", { privateSession: "private-secret", index });
-  const delivery = await content.addDeliverable(project.id, issue.id, actor, { body: "Public delivery" });
+  const delivery = await content.addDeliverable(project.id, actor, { issueId: issue.id, body: "Public delivery" });
   await content.reviewDeliverable(project.id, delivery.id, actor, { revision: 1, status: "returned", reviewNote: "More detail needed", checkedItems: [] });
   const result = await workbench.activity(project.id, actor);
   assert.equal(result.items.length, 10);

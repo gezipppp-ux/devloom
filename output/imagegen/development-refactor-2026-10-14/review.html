@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>开发界面 · 三套方案评审</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif; color:#24252d; background:#fafafb; }
+    * { box-sizing:border-box; } body { margin:0; } button,a { -webkit-tap-highlight-color:transparent; } button { font:inherit; cursor:pointer; } a { color:#7256d8; text-decoration:none; } a:hover { text-decoration:underline; }
+    .wrap { width:min(1760px,100%); margin:auto; padding:40px clamp(16px,3vw,56px) 64px; }
+    .eyebrow { font-size:12px; color:#727480; letter-spacing:.08em; } h1 { font-size:clamp(25px,3vw,36px); margin:12px 0; letter-spacing:-.04em; } p { line-height:1.8; } .lead { color:#727480; margin:0 0 28px; max-width:1000px; font-size:14px; }
+    .directions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin:24px 0; } .direction { padding:22px; background:#fff; border:1px solid #e9e9ef; border-radius:12px; text-align:left; min-width:0; color:#24252d; }
+    .direction[aria-pressed=true] { border-color:#a591e5; background:#f6f3ff; } .direction strong { display:block; font-size:18px; margin-bottom:10px; } .direction span { font-size:13px; line-height:1.8; color:#727480; } .tag { font-size:11px!important; margin-left:10px; color:#7256d8!important; }
+    .toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:16px 0; border-top:1px solid #e9e9ef; } .toolbar button { border:1px solid #e9e9ef; background:#fff; color:#555761; border-radius:7px; padding:10px 14px; min-height:42px; }
+    .toolbar button[aria-current=step] { color:#fff; border-color:#292a33; background:#292a33; } .toolbar .count { margin-left:auto; font-size:12px; color:#727480; }
+    .screen-head { display:flex; align-items:center; justify-content:space-between; gap:14px; margin:20px 0 12px; } h2 { margin:0; font-size:20px; } .links { display:flex; gap:16px; font-size:13px; }
+    figure { margin:0; } .image-wrap { background:#fff; border:1px solid #e9e9ef; border-radius:12px; overflow:hidden; } .image-wrap img { display:block; width:100%; height:auto; } figcaption { margin:10px 0 24px; color:#727480; font-size:13px; line-height:1.8; }
+    .notice { padding:14px 18px; border-left:3px solid #b5a4e3; background:#f5f2fc; font-size:13px; line-height:1.8; margin-bottom:18px; } .hidden { display:none; }
+    .detail { display:grid; grid-template-columns:1fr 1fr; gap:36px; border-top:1px solid #e9e9ef; padding-top:28px; margin-top:32px; } h3 { margin:0 0 12px; font-size:16px; } ul { padding-left:19px; margin:0; } li { padding:5px 0; font-size:14px; line-height:1.8; } .detail p { font-size:14px; }
+    .mosaic { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin:24px 0; } .thumb { padding:0; border:1px solid #e9e9ef; border-radius:9px; overflow:hidden; background:#fff; text-align:left; } .thumb img { width:100%; display:block; aspect-ratio:3/2; object-fit:contain; } .thumb span { display:block; padding:12px; font-size:13px; }
+    footer { margin-top:36px; font-size:12px; color:#727480; line-height:1.9; } button:focus-visible,a:focus-visible { outline:3px solid #b7a4eb; outline-offset:3px; }
+    @media(max-width:850px) { .directions { gap:8px; } .direction { padding:14px; } .direction strong { font-size:15px; } .mosaic { grid-template-columns:repeat(2,minmax(0,1fr)); } .detail { grid-template-columns:1fr; gap:24px; } }
+    @media(max-width:560px) { .wrap { padding-top:24px; } .directions { grid-template-columns:1fr; } .direction strong { margin-bottom:4px; } .screen-head { align-items:flex-start; flex-direction:column; } .toolbar .count { margin-left:0; width:100%; } .mosaic { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<main class="wrap">
+  <div class="eyebrow">WEB CODING · DESIGN REVIEW · 2026.10.14</div>
+  <h1>开发界面，三种工作方式</h1>
+  <p class="lead">以图 2 为视觉方向。三套各六张，覆盖独立开发与事项开发两条入口、会话、代码和成果整理。当前是效果图评审，尚未修改生产功能。</p>
+  <section class="directions" aria-label="选择方案">
+    <button class="direction" data-scheme="a" aria-pressed="true"><strong>A · 会话主导 <span class="tag">推荐</span></strong><span>最接近图 2。宽会话＋精简右侧上下文，分支与来源随时可见。</span></button>
+    <button class="direction" data-scheme="b" aria-pressed="false"><strong>B · 任务列表主导</strong><span>从任务列表进入，通过会话／代码／交付页签推进，适合多任务切换。</span></button>
+    <button class="direction" data-scheme="c" aria-pressed="false"><strong>C · 开发目标主导</strong><span>从目标输入开始，单列专注会话，上下文按需打开。</span></button>
+  </section>
+  <nav class="toolbar" aria-label="链路页面"></nav>
+  <section aria-label="选中的设计图">
+    <div class="screen-head"><h2 id="screen-title">A · 开发会话</h2><div class="links"><a id="full" href="a-04-session.png" target="_blank" rel="noopener">打开原图 ↗</a><a id="download" href="a-04-session.png" download>下载此图</a><a id="overview" href="a-overview.jpg" target="_blank" rel="noopener">整套总览 ↗</a><a href="README.md">设计与清理说明</a></div></div>
+    <div id="delivery-note" class="notice hidden">新增能力提案：现有发布交付必须关联事项。本页展示“独立开发直接分享项目成果”的建议；仍需随方案确认。仅结束个人开发可以保持不关联事项。</div>
+    <figure><div class="image-wrap"><img id="main-image" src="a-04-session.png" alt="A 方案：开发会话" width="1536" height="1024"></div><figcaption id="caption"></figcaption></figure>
+  </section>
+  <h3 id="overview-title">本方案完整链路</h3><section class="mosaic" aria-labelledby="overview-title"></section>
+  <section class="detail">
+    <div><h3>独立开发入口已存在，需要更明确</h3><p>现有全局「开发 → 独立开发」与图 1 的「手动开启」都可直接启动。三套统一命名为「独立开发」，突出“无需关联需求或 Bug”，仍保留项目、目标和起始分支。</p><p>独立开发属于一个授权项目及其 Git 仓库；准备环境与进入页面不会启动执行。</p></div>
+    <div><h3>确认后清理的重点</h3><ul><li>常驻第二侧栏、重复项目标题和重复整理交付入口。</li><li>独立开发的需求／Bug 类型选择、会话中的重复进度编辑。</li><li>常驻 UUID、渠道同步、创建时模型等低频字段。</li><li>供应商重复说明与首屏展开的原始长提示词。</li></ul></div>
+  </section>
+  <footer>生成模型：gpt-image-2.5-sunburst · 用户指定 API 服务 · imagegen CLI · 共 18 张独立效果图。<br>图片用于方案评审，文字及控件的偶发生成误差不作为接口契约；准确范围见设计说明。选择方案后再实施并验证响应式、权限与执行状态。</footer>
+</main>
+<script>
+  const pages = [
+    ['01-entry','开发入口','独立开发与从事项开发并列；已有任务可继续。'],
+    ['02-independent','独立开发准备','不要求需求、Bug 或版本；保留项目、标题、目标／图片和实时起始分支，明确点击开始。'],
+    ['03-issue-start','事项开发准备','从已规划任务确认范围、环境和分支；认领与整理范围不执行 Agent。'],
+    ['04-session','开发会话','以独立开发为例：审批在正文内，输入与停止保持可达；不显示空的关联事项区。'],
+    ['05-code','代码查看','查看真实变更、返回会话、整理成果；不自动提交、合并或推送。'],
+    ['06-delivery','整理与分享成果','可仅结束个人开发；无需事项的项目交付为待确认的新能力。']
+  ];
+  const labels = { a:'A · 会话主导',b:'B · 任务列表主导',c:'C · 开发目标主导' };
+  let scheme='a', page=3;
+  const params = new URLSearchParams(location.hash.slice(1));
+  if (Object.hasOwn(labels,params.get('scheme'))) scheme=params.get('scheme');
+  const requested=pages.findIndex(p=>p[0]===params.get('page')); if(requested>=0)page=requested;
+  const toolbar=document.querySelector('.toolbar'), mosaic=document.querySelector('.mosaic');
+  pages.forEach((p,i)=>{const b=document.createElement('button');b.textContent=`${i+1} · ${p[1]}`;b.onclick=()=>{page=i;render()};toolbar.append(b)});
+  const count=document.createElement('span');count.className='count';count.textContent='3 套 × 6 页';toolbar.append(count);
+  document.querySelectorAll('[data-scheme]').forEach(b=>b.onclick=()=>{scheme=b.dataset.scheme;render()});
+  function render(){
+    const data=pages[page],src=`${scheme}-${data[0]}.png`,title=`${labels[scheme]} / ${data[1]}`;
+    document.querySelectorAll('[data-scheme]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.scheme===scheme)));
+    toolbar.querySelectorAll('button').forEach((b,i)=>{if(i===page)b.setAttribute('aria-current','step');else b.removeAttribute('aria-current')});
+    document.getElementById('screen-title').textContent=title;
+    const image=document.getElementById('main-image');image.src=src;image.alt=title;
+    document.getElementById('full').href=src;document.getElementById('download').href=src;document.getElementById('overview').href=`${scheme}-overview.jpg`;
+    document.getElementById('caption').textContent=data[2];
+    document.getElementById('delivery-note').classList.toggle('hidden',page!==5);
+    mosaic.replaceChildren();pages.forEach((p,i)=>{const b=document.createElement('button');b.className='thumb';b.setAttribute('aria-label',`查看${p[1]}`);const im=document.createElement('img');im.src=`${scheme}-${p[0]}.png`;im.alt=`${labels[scheme]}：${p[1]}`;im.loading='lazy';const span=document.createElement('span');span.textContent=`0${i+1} / ${p[1]}`;b.append(im,span);b.onclick=()=>{page=i;render();document.getElementById('screen-title').scrollIntoView({behavior:'smooth',block:'start'})};mosaic.append(b)});
+    history.replaceState(null,'',`#scheme=${scheme}&page=${data[0]}`);
+  }
+  render();
+</script>
+</body>
+</html>

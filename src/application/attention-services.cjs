@@ -6,7 +6,7 @@ class AttentionServices {
   async list(actor) {
     const directory = await this.projects.list(actor);
     const active = directory.projects.filter(project => project.status === "active");
-    const deliveryProjects = active.filter(project => ["collaboration.view", "issue.view", "issue.accept"].every(permission => project.permissions.includes(permission)));
+    const deliveryProjects = active.filter(project => ["collaboration.view", "issue.view", "deliverable.review"].every(permission => project.permissions.includes(permission)));
     const sessionProjects = active.filter(project => ["session.view", "session.approve"].every(permission => project.permissions.includes(permission)));
     const deliveries = await this.store.pendingDeliveries(deliveryProjects.map(project => project.id));
     const requests = [];
@@ -20,7 +20,7 @@ class AttentionServices {
       requests.push({ projectId: space.projectId, workspaceId: space.workspaceId, sessions });
     }
     // Any revocation during aggregation invalidates the complete response, including totals.
-    for (const project of deliveryProjects) for (const permission of ["collaboration.view", "issue.view", "issue.accept"]) await this.projects.authorize(project.id, actor, permission);
+    for (const project of deliveryProjects) for (const permission of ["collaboration.view", "issue.view", "deliverable.review"]) await this.projects.authorize(project.id, actor, permission);
     for (const project of sessionProjects) for (const permission of ["session.view", "session.approve"]) await this.projects.authorize(project.id, actor, permission);
     return presentAttention(deliveries, requests, active);
   }

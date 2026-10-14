@@ -1,3 +1,4 @@
+const { openSessionList } = require("../support/browser-navigation.cjs");
 /* global window */
 const assert = require("node:assert/strict");
 const { agentDescriptor } = require("../fixtures/agent-descriptor.cjs");
@@ -6,7 +7,7 @@ const { navigateWorkspace } = require("../support/browser-navigation.cjs");
 async function verifyAccountPreferenceRaces(browser, origin) {
   const context = await browser.newContext();
   const users = ["alice", "bob"].map((id) => ({ id, username: id, displayName: id, role: "member", status: "active", mustChangePassword: false }));
-  const settings = new Map(users.map((user) => [user.id, { model: null, reasoningEffort: null, permissionMode: "ask", grouping: "type", notificationsEnabled: false }]));
+  const settings = new Map(users.map((user) => [user.id, { model: null, reasoningEffort: null, permissionMode: "ask", notificationsEnabled: false }]));
   const workspaces = ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"].map((id, index) => ({ id, name: `项目 ${index ? "B" : "A"}` }));
   const preferences = new Map();
   const gates = new Map(), requests = [], errors = [];
@@ -17,7 +18,7 @@ async function verifyAccountPreferenceRaces(browser, origin) {
   const preferenceKey = (user, workspaceId) => `${user.id}:${workspaceId}`;
   const readPreferences = () => preferences.get(preferenceKey(users[0], workspaces[0].id));
   const selectWorkspace = (index) => navigateWorkspace(page, workspaces[index]);
-  const openTask = (name) => page.locator(".session-link").filter({ hasText: `任务 ${name}` }).click();
+  const openTask = async (name) => { await openSessionList(page); await page.locator(".session-link").filter({ hasText: `任务 ${name}` }).click(); };
   const login = async (name) => {
     await page.getByLabel("账号", { exact: true }).fill(name);
     await page.getByLabel("密码", { exact: true }).fill("fixture-password");
@@ -88,7 +89,7 @@ async function verifyAccountPreferenceRaces(browser, origin) {
     if (endpoint.endsWith("/bootstrap")) return reply({ token: "fixture-token", channels: [{ id: "manual", label: "手动输入", capabilities: { manualInput: true } }] });
     if (endpoint.endsWith("/models")) return reply({ models: [] });
     if (endpoint.endsWith("/execution-options")) return reply({ agent: agentDescriptor, permissionModes: ["ask", "auto", "full"].map((id) => ({ id, available: true })) });
-    const runs = ["a", "b"].map((name) => ({ key: `manual-${name}`, title: `任务 ${name}`, status: "completed", metadata: { type: "requirement", progress: "in_progress" } }));
+    const runs = ["a", "b"].map((name) => ({ key: `manual-${name}`, title: `任务 ${name}`, status: "completed" }));
     if (endpoint.endsWith("/runs")) return reply({ runs });
     const run = runs.find((entry) => endpoint.endsWith(`/runs/${entry.key}`));
     if (run) return reply({ ...run, agent: agentDescriptor, sessionId: run.key, items: [{ id: "reply", type: "agentMessage", text: `回复 ${run.key.at(-1)}` }], requests: [], executionSettings: { model: "", reasoningEffort: "", permissionMode: "ask" } });
@@ -97,17 +98,6 @@ async function verifyAccountPreferenceRaces(browser, origin) {
   try {
     await page.goto(`${origin}/?workspace=${workspaces[0].id}`);
     await page.getByText("回复 a", { exact: true }).waitFor();
-    const heldSave = hold("POST", "/api/account/settings");
-    await page.getByLabel("任务分组方式").selectOption("none");
-    const save = await heldSave;
-    const heldSession = hold("GET", "/api/auth/session");
-    await page.evaluate(() => window.preferenceFixture.events.at(-1).onerror());
-    const session = await heldSession;
-    await save.release();
-    await page.locator(".task-group.ungrouped").waitFor();
-    await session.release();
-    assert.equal(await page.getByLabel("任务分组方式").inputValue(), "none", "SSE revalidation must preserve a save completed after its settings snapshot");
-
     await selectWorkspace(1);
     await page.getByText("回复 a", { exact: true }).waitFor();
     preferences.set(preferenceKey(users[0], workspaces[0].id), ["manual-a", "manual-b"]);

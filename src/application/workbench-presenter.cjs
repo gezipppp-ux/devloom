@@ -8,7 +8,7 @@ function presentWorkbenchPage(kind, page, projects, actorId) {
     if (kind === "issues") return { ...base, number: row.number, type: row.type, priority: row.priority, statusName: issueWorkflowNode(row)?.name || row.status,
       completed: ["completed", "cancelled"].includes(issueWorkflowNode(row)?.kind), assigneeId: row.assigneeId, dueDate: row.dueDate, tags: row.tags, releaseName: row.release?.name || "" };
     if (kind === "tasks") return { ...base, ...presentDevelopment(row, actorId, null, { permissions: project.permissions, projectStatus: project.status }), releaseName: row.release?.name || "" };
-    return { ...base, title: row.title || row.issue.title, issue: row.issue, authorId: row.authorId, commit: row.commit, reviewedAt: row.reviewedAt?.toISOString() || null };
+    return { ...base, title: row.title, issue: row.issue, authorId: row.authorId, commit: row.commit, reviewedAt: row.reviewedAt?.toISOString() || null };
   }) };
 }
 function presentRecentProjects(visits, projects) {
@@ -19,7 +19,7 @@ function presentRecentProjects(visits, projects) {
 }
 function presentProjectActivity(projectId, { items, people }) {
   return { items: items.map(row => ({ id: row.id, projectId, action: row.action, createdAt: row.createdAt.toISOString(),
-    actorName: people.find(person => person.id === row.actorId)?.displayName || "", issue: row.issue,
+    actorName: people.find(person => person.id === row.actorId)?.displayName || "", issue: row.issue, title: row.title,
     ...(row.deliveryId ? { deliveryId: row.deliveryId } : {}) })) };
 }
 module.exports = { presentWorkbenchPage, presentRecentProjects, presentProjectActivity };

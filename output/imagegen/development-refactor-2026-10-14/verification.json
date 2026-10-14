@@ -1,0 +1,12 @@
+{
+  "images": 18,
+  "resolutions": [
+    "1536x1024"
+  ],
+  "assetsReachable": true,
+  "galleryScript": "parsed",
+  "gallerySwitch": "B session image loaded",
+  "mobile390": "no horizontal overflow",
+  "credentialInArtifacts": false,
+  "productionChanges": false
+}

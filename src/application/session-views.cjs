@@ -217,7 +217,6 @@ class SessionViews {
         ...(saved.get(runtime.key) || {
           key: runtime.key,
           title: "正在准备需求",
-          metadata: (await this.store.readTaskMetadata(runtime.key)),
           sources: (await this.store.requirements.read(runtime.key)).sources || [],
           requirementCount: (await this.store.requirements.read(runtime.key)).sources?.length || 1,
         }),

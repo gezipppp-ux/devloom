@@ -1,3 +1,4 @@
+const { openSessionList, openSessionContext } = require("../support/browser-navigation.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -166,7 +167,7 @@ async function main() {
       0,
     );
     await page
-      .getByRole("button", { name: "＋ 从需求启动", exact: true })
+      .getByRole("button", { name: "独立开发", exact: true })
       .click();
     assert.deepEqual(await page.getByLabel("需求渠道", { exact: true }).locator("option").evaluateAll(options => options.map(option => option.value)), ["manual"]);
     assert.equal(
@@ -230,7 +231,6 @@ async function main() {
         false,
     );
     await page.getByLabel("需求渠道", { exact: true }).selectOption("manual");
-    await page.getByLabel("任务类型", { exact: true }).selectOption("bug");
     await page
       .getByLabel("需求标题", { exact: true })
       .fill("工作区 A 的独立任务");
@@ -254,7 +254,7 @@ async function main() {
       .click();
     await page.getByRole("textbox", { name: "发送给 Codex 的指令" }).waitFor();
     await page.getByText("历史回复", { exact: true }).waitFor();
-    await page.getByRole("button", { name: "需求资料", exact: true }).click();
+    await openSessionContext(page, '需求资料');
     const image = page
       .locator(".requirement-images img, .requirement-details img")
       .first();
@@ -282,23 +282,10 @@ async function main() {
     assert.equal(aContext.sessions.client.calls.find(
       (entry) => entry.method === "turn/start",
     ).params.approvalsReviewer, "auto_review");
-    assert.deepEqual((await aContext.sessions.store.readTaskMetadata(key)), {
-      type: "bug",
-      progress: "in_progress",
-    });
-    await page.getByRole("button", { name: "会话信息", exact: true }).click();
-    await page.getByLabel("任务进度", { exact: true }).selectOption("review");
-    await page.waitForFunction(
-      () =>
-        document.querySelector('select[aria-label="任务进度"]').value ===
-        "review",
-    );
-    await page.getByLabel("任务分组方式").selectOption("progress");
     assert.ok(aContext.sessions.sessions.get(key).turnId);
     await navigateWorkspace(page, b);
     await page.getByRole("heading", { name: "项目 B · 工作区设置" }).waitFor();
     assert.equal(await page.locator(".session-link").count(), 0);
-    assert.equal(await page.getByLabel("任务分组方式").inputValue(), "progress", "grouping belongs to the account and follows it across workspaces");
     assert.ok(
       aContext.sessions.sessions.get(key).turnId,
       "switching workspace must not stop background execution",
@@ -307,14 +294,6 @@ async function main() {
     await page.getByRole("heading", { name: "项目 B · 工作区设置" }).waitFor();
     await navigateWorkspace(page, a);
     await page.getByText("历史回复", { exact: true }).waitFor();
-    assert.equal(
-      await page.getByLabel("任务分组方式").inputValue(),
-      "progress",
-    );
-    assert.equal(
-      await page.getByLabel("任务进度", { exact: true }).inputValue(),
-      "review",
-    );
     assert.equal(
       await page
         .getByRole("combobox", { name: "Codex 模型", exact: true })
@@ -325,7 +304,8 @@ async function main() {
     assert.equal(await page.locator('.permission-option[data-value="auto"]').getAttribute('aria-selected'), 'true');
     await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "■ 停止", exact: true }).click();
-    await page.getByRole("button", { name: "会话信息", exact: true }).click();
+    await openSessionContext(page, '会话信息');
+    await page.locator(".session-context details summary").click();
     await page
       .locator(".session-context")
       .getByText("fixture-model-a", { exact: true })
@@ -335,7 +315,7 @@ async function main() {
       .getByText("high", { exact: true })
       .waitFor();
     await page
-      .getByRole("button", { name: "＋ 从需求启动", exact: true })
+      .getByRole("button", { name: "独立开发", exact: true })
       .click();
     assert.equal(
       await page.getByLabel("Codex 模型", { exact: true }).inputValue(),
@@ -362,6 +342,7 @@ async function main() {
         () => document.documentElement.scrollWidth <= window.innerWidth,
       ),
     );
+    await openSessionList(page);
     await page.locator(".session-link").filter({ hasText: "工作区 A 的独立任务" }).click();
     await page.getByText("历史回复", { exact: true }).waitFor();
     await verifyLateImageUpload(page, {

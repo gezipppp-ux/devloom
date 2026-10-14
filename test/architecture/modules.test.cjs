@@ -391,7 +391,7 @@ test("installation root and shared catalogs stay independent of cwd and data roo
   const runtime = path.join(sourceRoot, "config", "runtime.cjs");
   const program = `
     const runtime = require(${JSON.stringify(runtime)});
-    require(${JSON.stringify(path.join(sourceRoot, "domain", "task-metadata.cjs"))});
+    require(${JSON.stringify(path.join(sourceRoot, "domain", "project-permissions.cjs"))});
     require(${JSON.stringify(path.join(sourceRoot, "domain", "workspace-icon.cjs"))});
     process.stdout.write(JSON.stringify({ root: runtime.root, dataRoot: runtime.dataRoot }));
   `;

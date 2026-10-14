@@ -5,7 +5,6 @@ import UserSearchSelect from "./UserSearchSelect.vue";
 import ManualRequirementFields from "./ManualRequirementFields.vue";
 import AgentModelSettings from "../../shared/components/AgentModelSettings.vue";
 import FormSection from "../../shared/components/FormSection.vue";
-import { taskTypes } from "./task-metadata.js";
 import { api } from "../../shared/api/api.js";
 import { accountSession } from "../../shared/api/account-session.js";
 import { createRequestId } from "../../shared/api/request-id.js";
@@ -28,7 +27,6 @@ const form = reactive({
   model: accountSession.settings.model || "",
   reasoningEffort: accountSession.settings.reasoningEffort || "",
   permissionMode: accountSession.settings.permissionMode || "ask",
-  taskType: "requirement",
 });
 const query = ref("");
 const items = ref([]);
@@ -132,7 +130,6 @@ async function start() {
             model: form.model,
             reasoningEffort: form.reasoningEffort,
             permissionMode: form.permissionMode,
-            metadata: { type: form.taskType },
           }
         : {
             channel: form.channel,
@@ -142,7 +139,6 @@ async function start() {
             model: form.model,
             reasoningEffort: form.reasoningEffort,
             permissionMode: form.permissionMode,
-            metadata: { type: form.taskType },
           },
     );
     if (!disposed) emit("started", result.key);
@@ -179,25 +175,7 @@ async function start() {
               </option>
             </select></a-form-item
           >
-          <a-form-item :label="$t('任务类型')">
-            <select
-              v-model="form.taskType"
-              :aria-label="$t('任务类型')"
-              :disabled="busy || uploading"
-            >
-              <option
-                v-for="entry in taskTypes"
-                :key="entry.value"
-                :value="entry.value"
-              >
-                {{ $t(entry.label) }}
-              </option>
-            </select>
-          </a-form-item>
         </div>
-        <p class="field-hint">
-          {{ $t("新任务进度默认为“进行中”，后续可在会话中手动更新。") }}
-        </p>
         <ManualRequirementFields
           v-show="manualInput"
           :form="form"
@@ -248,12 +226,7 @@ async function start() {
           >
             <span>{{ item.title }}</span
             ><small>{{ item.id }} · {{ item.status }}</small>
-            <span
-              v-if="item.localRun?.progress === 'in_progress'"
-              class="task-progress-tag"
-              data-progress="in_progress"
-            >{{ $t("本系统进行中") }}</span>
-            <small v-else-if="item.localRun">{{ $t("本系统已有任务") }}</small>
+            <small v-if="item.localRun">{{ $t("本系统已有任务") }}</small>
           </button>
         </div>
         <p v-else-if="searched" class="muted">

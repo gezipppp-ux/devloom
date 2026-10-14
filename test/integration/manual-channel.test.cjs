@@ -99,11 +99,6 @@ test('manual channel validates input, preserves full text and copies image-only 
   assert.deepEqual(imageOnly.item.image_ids, [uploaded.id, second.id]);
   assert.ok(prepared.task.images[0].path.startsWith(directory + path.sep));
   assert.equal((await channel.transition()).status, 'skipped');
-  const bug = await channel.resolve({ ...base, taskType: 'bug' });
-  assert.equal(bug.item.type, 'bug');
-  const bugTask = await channel.prepare({ ...bug, directory });
-  assert.match(bugTask.task.prompt, /请定位并修复以下 Bug/);
-  assert.ok(bugTask.task.prompt.includes(base.content));
   for (const invalid of [
     { title: '' },
     { title: 'a'.repeat(201) },

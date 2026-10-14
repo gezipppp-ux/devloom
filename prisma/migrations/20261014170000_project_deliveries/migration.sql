@@ -1,0 +1,14 @@
+BEGIN;
+ALTER TABLE user_settings DROP COLUMN grouping;
+ALTER TABLE issue_deliverables RENAME TO project_deliverables;
+ALTER TABLE project_deliverables RENAME CONSTRAINT issue_deliverables_revision_check TO project_deliverables_revision_check;
+ALTER TABLE project_deliverables RENAME CONSTRAINT issue_deliverables_status_check TO project_deliverables_status_check;
+ALTER TABLE project_deliverables ALTER COLUMN issue_id DROP NOT NULL;
+ALTER TABLE project_deliverables RENAME CONSTRAINT issue_deliverables_pkey TO project_deliverables_pkey;
+ALTER TABLE project_deliverables RENAME CONSTRAINT issue_deliverables_project_id_issue_id_fkey TO project_deliverables_project_id_issue_id_fkey;
+ALTER TABLE project_deliverables RENAME CONSTRAINT issue_deliverables_project_id_task_id_fkey TO project_deliverables_project_id_task_id_fkey;
+ALTER INDEX issue_deliverables_project_id_issue_id_created_at_idx RENAME TO project_deliverables_project_id_issue_id_created_at_idx;
+ALTER INDEX issue_deliverables_project_status RENAME TO project_deliverables_project_status;
+ALTER TABLE project_deliverables ADD CONSTRAINT project_deliverables_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE project_deliverables ADD CONSTRAINT project_deliverables_source CHECK (issue_id IS NOT NULL OR task_id IS NOT NULL);
+COMMIT;

@@ -7,13 +7,12 @@ import FormSection from "../../shared/components/FormSection.vue";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import ManualDevelopmentContent from "./ManualDevelopmentContent.vue";
 import AgentModelSettings from "../../shared/components/AgentModelSettings.vue";
-import { taskTypes } from "./task-metadata.js";
 
 const props = defineProps({ projectId: { type: String, required: true } });
 const emit = defineEmits(["started", "cancel", "open-record"]);
 const endpoint = `/projects/${props.projectId}/tasks/manual`;
 const requestId = createRequestId();
-const form = reactive({ title: "", content: "", images: [], taskType: "other", baseBranch: "",
+const form = reactive({ title: "", content: "", images: [], baseBranch: "",
   model: accountSession.settings.model || "", reasoningEffort: accountSession.settings.reasoningEffort || "",
   permissionMode: accountSession.settings.permissionMode || "ask" });
 const starting = ref(false), uploading = ref(false), permissionsReady = ref(false), uncertain = ref(false),
@@ -68,16 +67,15 @@ async function start() {
 
 <template>
   <section class="page-layout manual-development-start">
-    <header class="page-heading"><h1>{{ $t("手动开启开发") }}</h1><p>{{ $t("在当前项目中直接启动独立开发，不关联需求或 Bug。填写内容仅在点击启动后提交。") }}</p></header>
+    <header class="page-heading"><h1>{{ $t("独立开发") }}</h1><p>{{ $t("在当前项目中直接启动独立开发，不关联需求或 Bug。填写内容仅在点击启动后提交。") }}</p></header>
     <a-form :model="form" :rules="{ title: [{ required: true, whitespace: true, message: '请填写任务标题' }] }" layout="vertical" @finish="start">
       <FormSection :title="$t('开发目标')">
-        <label>{{ $t("任务类型") }}<select v-model="form.taskType" :aria-label="$t('任务类型')" :disabled="locked || uploading"><option v-for="entry in taskTypes" :key="entry.value" :value="entry.value">{{ $t(entry.label) }}</option></select></label>
         <a-form-item :label="$t('任务标题')" name="title"><input v-model="form.title" :aria-label="$t('任务标题')" maxlength="200" :disabled="locked" required :placeholder="$t('例如：新增登录入口')" /></a-form-item>
         <ManualDevelopmentContent v-model="form.content" v-model:image-ids="form.images" :disabled="locked"
           @uploading="uploading = $event" @validity-change="attachmentsReady = $event" />
       </FormSection>
       <FormSection :title="$t('起始分支')"><slot name="branch-select" :value="form.baseBranch" :disabled="locked || uploading" :update="value => form.baseBranch = value" /></FormSection>
-      <AgentModelSettings v-model:model="form.model" v-model:reasoning-effort="form.reasoningEffort" v-model:permission-mode="form.permissionMode" :disabled="locked || uploading" @validity-change="permissionsReady = $event" />
+      <details class="development-execution-settings" open><summary>{{ $t("执行设置") }}</summary><AgentModelSettings v-model:model="form.model" v-model:reasoning-effort="form.reasoningEffort" v-model:permission-mode="form.permissionMode" :disabled="locked || uploading" @validity-change="permissionsReady = $event" /></details>
       <FeedbackMessage :message="error" type="error" />
       <p v-if="uncertain" role="status">{{ $t("正在确认原启动请求；检查结果只读取记录，不会再次执行。") }}</p>
       <p v-if="accepted" role="status">{{ $t("启动请求已记录，结果需要确认。") }}{{ accepted.error || $t("请查看原开发任务记录，不要重复启动。") }}</p>
@@ -92,7 +90,7 @@ async function start() {
 </template>
 
 <style scoped>
-.manual-development-start { width: 100%; max-width: 1040px; margin-inline: auto; }
+.manual-development-start { width: 100%; max-width: 960px; margin-inline: auto; }
 .page-heading { margin-bottom: 32px; }
 .page-heading h1 { font-size: clamp(24px, 2.2vw, 32px); font-weight: 600; letter-spacing: -.02em; }
 .page-heading p { max-width: 640px; line-height: 1.8; }
@@ -100,6 +98,8 @@ async function start() {
 .manual-development-start :deep(.form-section) { margin: 0; padding: 28px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; }
 .manual-development-start :deep(.form-section-heading) { margin-bottom: 24px; }
 .manual-development-start :deep(.form-section-heading h2) { font-size: 16px; }
+.development-execution-settings { padding-top: 24px; }
+.development-execution-settings summary { font-size: 16px; margin-bottom: 16px; }
 .page-actions { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); gap: 12px; }
 @media (max-width: 767px) {
   .page-heading { margin-bottom: 24px; }

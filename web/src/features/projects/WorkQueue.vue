@@ -24,7 +24,7 @@ const publishing = ref(route.query.publish === "1");
 const selected = ref([]), merging = ref(false);
 const scope = ref(String(route.query.scope || "all")), type = ref(String(route.query.type || "")), status = ref(String(route.query.status || ""));
 const offset = computed(() => Math.max(0, Number.parseInt(route.query.offset, 10) || 0));
-const headings = { issues: ["事项", "从清晰的表达开始，一起把问题推进到完成。"], tasks: ["开发", "整理范围，准备环境，然后专注执行。"], deliveries: ["交付", "把完成的工作，变成可验证的结果。"] };
+const headings = { issues: ["事项", "从清晰的表达开始，一起把问题推进到完成。"], tasks: ["开发", "继续已有任务，或开始新的开发。"], deliveries: ["交付", "把完成的工作，变成可验证的结果。"] };
 const { data, loading, error, reload } = useResource(() => {
   const params = new URLSearchParams({ query: String(route.query.q || ""), scope: String(route.query.scope || "all"), type: String(route.query.type || ""), status: String(route.query.status || ""), offset: String(offset.value), ...(props.projectId ? { projectId: props.projectId } : {}) });
   return appApi(`/workbench/${props.kind}?${params}`);
@@ -50,8 +50,9 @@ function search() { void router.push({ query: { ...route.query, q: query.value |
       <PageHeader :title="$t(headings[kind][0])" :description="$t(headings[kind][1])">
         <button v-if="kind === 'issues'" class="primary" @click="emit('create')"><PlusOutlined aria-hidden="true" />{{ $t('新建事项') }}</button>
         <button v-else-if="kind === 'deliveries' && canPublish" class="primary" @click="publishing = true"><PlusOutlined aria-hidden="true" />{{ $t('发布交付') }}</button>
-        <button v-else-if="kind === 'tasks'" class="primary" @click="emit('create', 'manual')"><PlusOutlined aria-hidden="true" />{{ $t('独立开发') }}</button>
       </PageHeader>
+      <div v-if="kind === 'tasks'" class="development-entry"><div><button class="primary" @click="emit('create', 'manual')"><PlusOutlined aria-hidden="true" />{{ $t('独立开发') }}</button><p class="field-hint">{{ $t('无需关联需求或 Bug。') }}</p></div><button @click="router.push({ name: 'issues', query: projectId ? { projectId } : {} })">{{ $t('从事项开发') }}</button></div>
+      <nav v-if="kind === 'tasks'" class="page-tabs development-status-tabs" :aria-label="$t('开发任务状态')"><button v-for="option in [['', '全部'], ['planned', '待开发'], ['started', '已启动'], ['completed', '已完成']]" :key="option[0]" :aria-pressed="status === option[0]" :class="{ active: status === option[0] }" @click="status = option[0]; search()">{{ $t(option[1]) }}</button></nav>
       <form class="ui-list-toolbar" role="search" @submit.prevent="search">
         <div v-if="kind === 'issues'" class="ui-segmented" :aria-label="$t('事项类型')"><button v-for="option in [['', '全部'], ['requirement', '需求'], ['bug', '缺陷']]" :key="option[0]" type="button" :aria-pressed="type === option[0]" @click="type = option[0]; search()">{{ $t(option[1]) }}</button></div>
         <div v-else-if="kind === 'deliveries'" class="ui-segmented" :aria-label="$t('验收状态')"><button v-for="option in [['', '全部'], ['pending', '待验证'], ['accepted', '已通过'], ['returned', '已退回']]" :key="option[0]" type="button" :aria-pressed="status === option[0]" @click="status = option[0]; search()">{{ $t(option[1]) }}</button></div>
@@ -61,7 +62,7 @@ function search() { void router.push({ query: { ...route.query, q: query.value |
       <div v-if="filtersOpen" class="ui-filter-panel"><label v-if="kind !== 'tasks'">{{ $t('工作范围') }}<select v-model="scope" :aria-label="$t('工作范围')" @change="search"><option value="all">{{ $t('全部') }}</option><option value="mine">{{ $t('与我有关') }}</option></select></label><label v-if="kind === 'tasks'">{{ $t('任务状态') }}<select v-model="status" :aria-label="$t('任务状态')" @change="search"><option value="">{{ $t('全部状态') }}</option><option value="planned">{{ $t('待开发') }}</option><option value="started">{{ $t('已启动') }}</option><option value="unknown">{{ $t('执行结果待确认') }}</option><option value="merged">{{ $t('已合并') }}</option><option value="completed">{{ $t('已完成') }}</option><option value="cancelled">{{ $t('已取消') }}</option></select></label><p class="field-hint">{{ $t(kind === 'tasks' ? '仅显示你有权访问的本人开发任务。' : '筛选仅应用于当前可访问的项目。') }}</p></div>
       <FeedbackMessage :message="error" type="error" /><button v-if="error" @click="reload">{{ $t('重试') }}</button><p v-if="loading" role="status">{{ $t('正在加载…') }}</p>
       <div v-if="kind === 'tasks' && selected.length" class="ui-selection-bar project-development-action"><button class="primary" :disabled="loading || Boolean(mergeError)" @click="merging = true">{{ $t('合并所选任务（') }}{{ selected.length }}）</button><span class="field-hint">{{ $t(mergeError || '所选任务将共用一个 Codex 会话，合并后再开始开发。') }}</span></div>
-      <template v-if="data?.items.length"><WorkItemList v-if="kind === 'deliveries'" :items="data.items" :people="data.people" :kind="kind" @open="item => router.push(workLocation(kind, item))" /><WorkItemTable v-else v-model:selected="selected" :items="rows" :people="data.people" :kind="kind" :selectable="kind === 'tasks'" :disabled="loading" @open="item => router.push(workLocation(kind, item))" @open-session="item => emit('open-workspace', item.workspaceId, item.runKey)" /></template>
+      <template v-if="data?.items.length"><WorkItemList v-if="kind === 'deliveries'" :items="data.items" :people="data.people" :kind="kind" @open="item => router.push(workLocation(kind, item))" /><WorkItemTable v-else v-model:selected="selected" :items="rows" :people="data.people" :kind="kind" :selectable="kind === 'tasks'" :personal="kind === 'tasks'" :disabled="loading" @open="item => router.push(workLocation(kind, item))" @open-session="item => emit('open-workspace', item.workspaceId, item.runKey)" /></template>
       <EmptyState v-else-if="data && !loading" :title="$t('暂无符合条件的内容')" :description="$t('试试调整筛选，或从项目中开始新的工作。')" />
       <div v-if="kind === 'tasks'" class="development-list-footer">
         <span v-if="data" class="field-hint">{{ $t('共 {count} 个任务', { count: formatNumber(data.total) }) }}</span>
@@ -72,3 +73,11 @@ function search() { void router.push({ query: { ...route.query, q: query.value |
     </template>
   </section>
 </template>
+
+<style scoped>
+.development-entry { display: flex; align-items: flex-start; gap: 16px; margin: 4px 0 36px; }
+.development-entry button { min-width: 176px; min-height: 46px; }
+.development-entry p { margin: 8px 0 0; }
+.development-status-tabs { margin-bottom: 12px; }
+@media(max-width: 480px) { .development-entry { gap: 12px; } .development-entry > * { flex: 1; min-width: 0; } .development-entry button { width: 100%; min-width: 0; padding-inline: 12px; } }
+</style>

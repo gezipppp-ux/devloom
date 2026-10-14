@@ -230,7 +230,7 @@ async function submitConfirmation() {
 }
 </script>
 <template>
-  <article class="development-task-detail" :aria-label="$t('开发任务详情')">
+  <article class="development-task-detail" :class="{ 'development-start-confirmation': starting }" :aria-label="$t('开发任务详情')">
     <FeedbackMessage :message="error" type="error" /><FeedbackMessage
       :message="notice"
       type="success"
@@ -597,7 +597,6 @@ async function submitConfirmation() {
           </section>
           <footer class="development-start-actions"><span class="field-hint">{{ $t('明确提交后才启动 Agent') }}</span><button type="button" :disabled="saving" @click="closeStart">{{ $t('取消') }}</button><button class="primary" :aria-label="$t('启动 Codex 开发')" :disabled="busy || editing || !baseBranch || !workspaceId || !permissionsReady || !startConfirmed">{{ saving ? $t('正在提交…') : $t('开始开发') }}</button></footer>
         </form>
-        <aside class="development-start-aside"><h3>{{ $t('一个任务，一个执行上下文') }}</h3><p>{{ $t('开始后保留本次分支和范围。需要补充目标时，在原会话继续沟通。') }}</p></aside>
       </div>
       <DevelopmentTaskConfirmation
         v-if="confirmation"
@@ -611,3 +610,9 @@ async function submitConfirmation() {
     </template>
   </article>
 </template>
+
+<style scoped>
+.development-start-confirmation { max-width: 900px; margin-inline: auto; }
+.development-start-confirmation .development-start-layout { display: block; max-width: 900px; }
+.development-start-confirmation .development-heading { padding-block: 20px; }
+</style>

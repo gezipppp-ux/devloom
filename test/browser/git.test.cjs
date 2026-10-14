@@ -1,3 +1,4 @@
+const { openSessionContext } = require("../support/browser-navigation.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -44,7 +45,7 @@ async function verifyGit(browser, { origin, output, errors, directory, workspace
   const openRepository = () => page.getByRole("button", { name: "代码仓库", exact: true }).click();
   const refreshGit = async () => {
     if (!(await gitPanel.isVisible()))
-      await page.getByRole("button", { name: "Worktree Git", exact: true }).click();
+      await openSessionContext(page, 'Worktree Git');
     await page.getByRole("button", { name: "刷新 Git 状态", exact: true }).click();
   };
   const capture = async (name) => {
@@ -95,13 +96,13 @@ async function verifyGit(browser, { origin, output, errors, directory, workspace
     assert.equal(fs.existsSync(path.join(repository, ".git", "MERGE_HEAD")), false);
     await capture("git-repository-diverged");
 
-    await page.getByRole("button", { name: "＋ 从需求启动", exact: true }).click();
+    await page.getByRole("button", { name: "独立开发", exact: true }).click();
     await page.getByLabel("需求渠道", { exact: true }).selectOption("manual");
     await page.getByLabel("需求标题", { exact: true }).fill("可删除的 Git 测试任务");
     await page.getByLabel("需求内容", { exact: true }).fill("仅使用 FakeClient 验证 Git 管理，不执行真实需求。");
     await page.getByRole("button", { name: "创建 session 并开始开发 →", exact: true }).click();
     await page.getByText("历史回复", { exact: true }).waitFor();
-    await page.getByRole("button", { name: "Worktree Git", exact: true }).click();
+    await openSessionContext(page, 'Worktree Git');
     await gitPanel.getByText("分支尚未发布", { exact: true }).waitFor();
     assert.equal(await page.getByRole("button", { name: "删除 Worktree…", exact: true }).isDisabled(), true,
       "active Codex turns cannot delete their worktree");

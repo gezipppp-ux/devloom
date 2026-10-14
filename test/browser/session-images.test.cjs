@@ -1,3 +1,4 @@
+const { openSessionList } = require("../support/browser-navigation.cjs");
 /* global document, window, navigator, ClipboardItem, ClipboardEvent, DataTransfer, File */
 const assert = require('node:assert/strict');
 const { dismissOperationMessages } = require('../support/operation-feedback.cjs');
@@ -258,14 +259,17 @@ async function verifySessionImages(browser, origin, manager, client, key, errors
     await page.getByRole('button', { name: '■ 停止', exact: true }).click();
     await page.getByRole('button', { name: '■ 停止', exact: true }).waitFor({ state: 'hidden' });
 
+    const returningTitle = await page.locator('.session-header .session-heading').innerText();
     await verifyLateImageUpload(page, {
       pattern: uploads,
       leave: async () => {
+        await openSessionList(page);
         await page.locator('.session-link').filter({ hasText: '修复登录异常' }).click();
-        await page.locator('.session-link.active').filter({ hasText: '修复登录异常' }).waitFor();
+        await page.locator('.session-header').getByRole('heading', { name: '修复登录异常', exact: true }).waitFor();
       },
       reopen: async () => {
-        await page.locator('.session-link').filter({ hasText: '【演示】套餐充值入口' }).click();
+        await openSessionList(page);
+        await page.locator('.session-link').filter({ hasText: returningTitle }).click();
         await page.getByText('历史回复', { exact: true }).waitFor();
       },
     });

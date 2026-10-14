@@ -92,12 +92,12 @@ class AccountStore {
     const row = await this.database.client.userSetting.findUnique({ where: { userId } });
     if (!row) return { ...DEFAULT_ACCOUNT_SETTINGS };
     return { model: row.model, reasoningEffort: row.reasoningEffort, permissionMode: row.permissionMode,
-      notificationsEnabled: row.notificationsEnabled, grouping: row.grouping };
+      notificationsEnabled: row.notificationsEnabled };
   }
 
   async saveSettings(userId, value) {
     const data = { model: value.model, reasoningEffort: value.reasoningEffort, permissionMode: value.permissionMode,
-      notificationsEnabled: value.notificationsEnabled, grouping: value.grouping };
+      notificationsEnabled: value.notificationsEnabled };
     await this.database.client.userSetting.upsert({ where: { userId }, create: { userId, ...data }, update: data });
     return (await this.settings(userId));
   }

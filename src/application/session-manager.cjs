@@ -22,10 +22,6 @@ const { executionConfig } = require("../config/execution-settings.cjs");
 const { validateBaseBranch } = require("../domain/development-baseline.cjs");
 
 const { sourceFor, runKey } = require("../domain/run-identity.cjs");
-const {
-  validateTaskMetadata,
-  defaultTaskMetadata,
-} = require("../domain/task-metadata.cjs");
 
 class SessionManager extends EventEmitter {
   constructor({
@@ -413,15 +409,12 @@ class SessionManager extends EventEmitter {
 
   async resolveAndLaunch(input) {
     this.assertOpen();
-    validateTaskMetadata(input.metadata === undefined ? {} : input.metadata);
     const channel = this.channels.get(input.channel || "manual");
     const selection = await this.validateStartSelection(input);
     const sourceInput = { ...input };
-    sourceInput.taskType = input.metadata?.type;
     delete sourceInput.model;
     delete sourceInput.reasoningEffort;
     delete sourceInput.permissionMode;
-    delete sourceInput.metadata;
     delete sourceInput.baseBranch;
     const baseBranch = input.baseBranch === undefined ? undefined : validateBaseBranch(input.baseBranch);
     const resolved = await channel.resolve(sourceInput);
@@ -438,10 +431,6 @@ class SessionManager extends EventEmitter {
       resolved.session,
       { baseBranch },
       channel,
-      validateTaskMetadata(
-        input.metadata || {},
-        defaultTaskMetadata(resolved.item),
-      ),
     ));
   }
 
@@ -461,10 +450,8 @@ class SessionManager extends EventEmitter {
     session,
     executionSelection = {},
     channel = this.channels.get("manual"),
-    metadata = defaultTaskMetadata(item),
   ) {
     this.assertOpen();
-    metadata = validateTaskMetadata(metadata);
     config = (await executionConfig(config, this.configFile, executionSelection));
     assertAgentIdentity(this.agent, config);
     const source = sourceFor(channel.id, item);
@@ -487,8 +474,6 @@ class SessionManager extends EventEmitter {
       runtime.supplier = binding?.supplier;
       (await this.store.requirements.claim(key, item.sources || [source], { fingerprint: item.request_fingerprint }));
       claimed = true;
-      this.assertOpen();
-      (await this.store.writeTaskMetadata(key, metadata, item));
       this.assertOpen();
       (await this.settings.initialize(key, config.agent));
       this.assertOpen();
@@ -657,20 +642,6 @@ class SessionManager extends EventEmitter {
 
   async list(options) {
     return (await this.views.list(options));
-  }
-
-  async updateTaskMetadata(key, input) {
-    return this.exclusive(key, async () => {
-      const state = (await this.store.read(key));
-      const metadata = (await this.store.writeTaskMetadata(key, input, state.workitem));
-      this.emit("event", {
-        key,
-        type: "metadata",
-        metadata,
-        at: new Date().toISOString(),
-      });
-      return { metadata };
-    });
   }
 
   async updateTitle(key, title) {

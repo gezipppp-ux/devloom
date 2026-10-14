@@ -12,6 +12,8 @@ import {
 import { statusLabel } from "../shared/api/api.js";
 import FeedbackMessage from "../shared/components/FeedbackMessage.vue";
 import { useWorkspaceConsole } from "./use-workspace-console.js";
+import ModalDialog from "../shared/components/ModalDialog.vue";
+import PublishDelivery from "../features/projects/PublishDelivery.vue";
 import StartTask from "../features/tasks/StartTask.vue";
 import ManualDevelopmentStart from "../features/tasks/ManualDevelopmentStart.vue";
 import RemoteBranchSelect from "../features/projects/RemoteBranchSelect.vue";
@@ -26,14 +28,11 @@ import SessionLifecycleDialog from "../features/session/SessionLifecycleDialog.v
 import { useSessionImages } from "../features/session/use-session-images.js";
 import TaskList from "../features/tasks/TaskList.vue";
 import ArchivedSessions from "../features/tasks/ArchivedSessions.vue";
-import TaskMetadataControls from "../features/tasks/TaskMetadataControls.vue";
 import {
-  SettingOutlined,
   ReloadOutlined,
   FolderOpenOutlined,
   BranchesOutlined,
   ArrowLeftOutlined,
-  PlusOutlined,
 } from "@antdv-next/icons";
 import "../features/session/session-files.css";
 
@@ -57,20 +56,22 @@ const emit = defineEmits([
   "task-change",
 ]);
 const allowed = permission => !props.projectId || props.permissions?.includes(permission);
+const sessionPicker = ref(false), publishing = ref(false);
 const settingsOpen = ref(false),
   creating = ref(false),
   repositoryOpen = ref(false);
 const composer = reactive({ text: "" });
 const timeline = ref();
-const fileRequest = ref(null), fileWide = ref(false), detailsDrawer = ref();
+const fileRequest = ref(null), detailsDrawer = ref();
 let fileTrigger;
 function openFile(request) {
   fileTrigger = document.activeElement;
   detailsDrawer.value?.close(false);
   fileRequest.value = { ...request };
 }
-function closeFile(restoreFocus = true) {
+async function closeFile(restoreFocus = true) {
   fileRequest.value = null;
+  await nextTick();
   if (restoreFocus) {
     if (fileTrigger?.isConnected) fileTrigger.focus({ preventScroll: true });
     else detailsDrawer.value?.focusTrigger();
@@ -98,7 +99,6 @@ const {
   action,
   older,
   reloadChannels,
-  metadataSaved,
   titleSaved,
   archiveSaved,
   archiveRevision,
@@ -116,6 +116,7 @@ const {
   initialTask: () => props.initialTask,
   canRefresh: () => !creating.value,
   onOpen: () => {
+    sessionPicker.value = false; publishing.value = false;
     settingsOpen.value = false;
     creating.value = false;
     repositoryOpen.value = false;
@@ -151,7 +152,7 @@ watch([() => props.initialView, workspaceLoading], async ([view, loadingWorkspac
     if (props.initialView === view && !workspaceLoading.value) archivedSessions.value?.open();
   }
 }, { immediate: true });
-watch(active, () => { closeFile(false); fileWide.value = false; });
+watch(active, () => { closeFile(false); });
 watch(active, key => { if (key && key !== props.initialTask && (!props.initialView || !workspaceLoading.value)) emit("task-change", key); });
 
 function readVisibleSession() {
@@ -226,96 +227,28 @@ async function refreshCurrentSession() {
     :class="{ 'with-workspace-rail': $slots['workspace-rail'], 'project-workspace': props.projectId }"
   >
     <slot name="workspace-rail" />
-    <aside class="sidebar">
-      <div class="brand">
-        <span v-if="!$slots['workspace-rail']" class="brand-mark">t_</span>
-        <div>{{ $t("需求") }} <b>×</b> AGENT<small>{{ $t("开发工作台") }}</small></div>
-      </div>
-      <div v-if="props.workspaceName" class="workspace-heading">
-        <h2 :title="props.workspaceName">{{ props.workspaceName }}</h2>
-        <button v-if="props.projectId" type="button" class="workspace-project-return" @click="emit('return-project')"><ArrowLeftOutlined aria-hidden="true" />{{ $t("返回项目协作") }}</button>
-        <button
-          v-if="!props.projectId"
-          type="button"
-          class="workspace-menu workspace-settings-button"
-          :class="{ active: settingsOpen }"
-          :disabled="workspaceLoading"
-          :aria-pressed="settingsOpen"
-          :aria-label="$t('工作区设置')"
-          :title="$t('工作区设置')"
-          @click="
-            settingsOpen = true;
-            repositoryOpen = false;
-          "
-        >
-          <SettingOutlined aria-hidden="true" />
-        </button>
-      </div>
-      <button
-        v-if="!props.workspaceName && !props.projectId"
-        class="settings-link"
-        :class="{ active: settingsOpen }"
-        :disabled="workspaceLoading"
-        @click="
-          settingsOpen = true;
-          repositoryOpen = false;
-        "
-      >
-        <SettingOutlined aria-hidden="true" />
-        {{ $t("执行设置") }}
-      </button>
-      <button
-        v-if="allowed('code.view')"
-        type="button"
-        class="settings-link repository-link"
-        :class="{ active: repositoryOpen }"
-        :disabled="workspaceLoading"
-        :aria-pressed="repositoryOpen"
-        @click="
-          repositoryOpen = true;
-          settingsOpen = false;
-          creating = false;
-        "
-      >
-        <BranchesOutlined aria-hidden="true" />{{ $t("代码仓库") }}
-      </button>
-      <button
-        v-if="!props.projectId && allowed('session.start')"
-        class="new-task"
-        :disabled="workspaceLoading"
-        @click="
-          creating = true;
-          settingsOpen = false;
-          repositoryOpen = false;
-        "
-      >
-        {{ $t("＋ 从需求启动") }}
-      </button>
-      <div v-if="props.projectId && allowed('session.start')" class="development-start-actions">
-        <button v-if="allowed('deliverable.create')" type="button" @click="emit('open-project', 'deliveries')">{{ $t('整理交付') }}</button><button type="button" class="new-task" @click="emit('open-project', 'issues')">{{ $t("从项目事项") }}</button>
-        <button type="button" :disabled="workspaceLoading" @click="creating = true; settingsOpen = false; repositoryOpen = false"><PlusOutlined aria-hidden="true" />{{ $t("手动开启") }}</button>
-      </div>
-      <TaskList
-        :runs="runs"
-        :active="!creating && !settingsOpen && !repositoryOpen ? active : null"
-        :unread-result-keys="unreadResultKeys"
-        @open="open"
-      />
-      <ArchivedSessions ref="archivedSessions" v-if="allowed('session.continue')" :revision="archiveRevision" :disabled="workspaceLoading" @restored="archiveRestored" @deleted="sessionDeleted">
+    <nav class="development-navigation" :aria-label="$t('开发导航')">
+      <button v-if="projectId" class="ui-back" @click="emit('return-project')"><ArrowLeftOutlined aria-hidden="true" />{{ $t('返回项目协作') }}</button>
+      <button type="button" @click="sessionPicker = true">{{ $t('切换会话') }} <span class="muted">{{ runs.length }}</span></button>
+      <button v-if="allowed('session.start')" type="button" :disabled="workspaceLoading" @click="creating = true; settingsOpen = false; repositoryOpen = false">{{ $t('独立开发') }}</button>
+      <button v-if="allowed('code.view')" type="button" :aria-pressed="repositoryOpen" @click="repositoryOpen = !repositoryOpen; creating = false; settingsOpen = false"><BranchesOutlined aria-hidden="true" />{{ $t('代码仓库') }}</button>
+      <button v-if="!projectId" type="button" @click="settingsOpen = true; creating = false; repositoryOpen = false">{{ $t(workspaceName ? '工作区设置' : '执行设置') }}</button>
+      <span class="development-connection"><i :class="['connection', { online }]" />{{ online ? $t('服务已连接') : $t('正在重连服务') }}</span>
+    </nav>
+    <ModalDialog :open="sessionPicker" :title="$t('会话列表')" @close="sessionPicker = false">
+      <TaskList :runs="runs" :active="active" :unread-result-keys="unreadResultKeys" @open="open" />
+    </ModalDialog>
+    <div class="development-history">      <ArchivedSessions ref="archivedSessions" v-if="allowed('session.continue')" :revision="archiveRevision" :disabled="workspaceLoading" @restored="archiveRestored" @deleted="sessionDeleted">
         <template #delete-dialog="{ run, deleted, close }">
           <SessionLifecycleDialog :key="run.key" mode="delete" :task-key="run.key" :title="run.title"
             :worktree="run.worktree" :deletion="run.worktreeDeletion"
             :active="['preparing', 'initializing', 'starting', 'running'].includes(run.status || run.execution?.status)"
             @deleted="deleted" @closed="close" />
         </template>
-      </ArchivedSessions>
-      <div class="sidebar-footer">
-        <FeedbackMessage :message="preferenceError ? $t('未读状态同步失败：{p0}', { p0: preferenceError }) : ''" type="error" />
-        <span :class="['connection', { online }]"></span
-        >{{ online ? $t("服务已连接") : $t("正在重连服务") }}
-      </div>
-    </aside>
+      </ArchivedSessions></div>
+    <FeedbackMessage :message="preferenceError" type="error" />
     <main>
+      <PublishDelivery v-if="publishing && projectId && session" :key="session.key" :project-id="projectId" :run-key="session.key" :can-publish="allowed('deliverable.create')" @close="publishing = false" @finished="publishing = false; refreshCurrentSession()" @published="delivery => { publishing = false; emit('open-project', { tab: 'deliveries', delivery: delivery.id }); }" />
       <SettingsPanel
         v-if="settingsOpen && !props.projectId"
         :can-manage-system="canManageSystem"
@@ -340,12 +273,12 @@ async function refreshCurrentSession() {
         "
       />
       <RepositoryGitPanel v-else-if="repositoryOpen" :can-operate="allowed('code.operate')" />
-      <template v-else-if="session">
+      <section v-else-if="session" v-show="!publishing" class="session-surface">
         <header class="session-header" :aria-label="$t('会话工具栏')">
           <div class="page-breadcrumb" :aria-label="$t('当前位置')">
             <span :title="props.workspaceName || $t('开发工作台')">{{ props.workspaceName || $t("开发工作台") }}</span>
             <span aria-hidden="true">/</span>
-            <strong>{{ $t("需求会话") }}</strong>
+            <strong>{{ $t("个人会话") }}</strong>
           </div>
           <SessionTitleEditor
             v-if="allowed('session.continue')"
@@ -366,13 +299,14 @@ async function refreshCurrentSession() {
                   : statusLabel(session.status)
               }}</span
             >
-            <button :disabled="loading" @click="refreshCurrentSession">
-              <ReloadOutlined aria-hidden="true" /> {{ $t("刷新") }}
-            </button>
+            <button v-if="allowed('code.view')" :aria-pressed="Boolean(fileRequest)" @click="fileRequest ? closeFile() : openFile({})"><BranchesOutlined aria-hidden="true" />{{ fileRequest ? $t('返回会话') : $t('代码变更') }}</button>
+            <button :aria-label="$t('上下文')" @click="detailsDrawer?.toggle('info', $event)">{{ $t('上下文') }}</button>
+            <button v-if="projectId" @click="publishing = true">{{ $t('整理成果') }}</button>
+            <button :disabled="loading" :aria-label="$t('刷新')" @click="refreshCurrentSession"><ReloadOutlined /></button>
           </div>
         </header>
-        <div class="session-body" :class="{ 'with-file-panel': fileRequest, 'file-panel-wide': fileRequest && fileWide }">
-          <div class="session-conversation">
+        <div class="session-body" :class="{ 'with-file-panel': fileRequest }">
+          <div v-show="!fileRequest" class="session-conversation">
             <div v-if="!online" class="banner warning" role="status">
               {{ $t("实时连接已断开，正在重连。服务运行时，关闭网页不会停止任务。") }}
             </div>
@@ -459,7 +393,7 @@ async function refreshCurrentSession() {
               @settings-change="updateExecutionSettings"
             />
           </div>
-          <SessionFilePanel v-if="fileRequest" :key="session.key" :task-key="session.key" :request="fileRequest" :wide="fileWide" :status="session.status" @close="closeFile" @resize="fileWide = !fileWide" />
+          <SessionFilePanel v-if="fileRequest" :key="session.key" :task-key="session.key" :request="fileRequest" :status="session.status" @close="closeFile" />
           <SessionDetailsDrawer
             ref="detailsDrawer"
             :key="session.key"
@@ -476,14 +410,11 @@ async function refreshCurrentSession() {
             @opened="closeFile(false)"
           >
             <template #context-actions>
-              <button v-if="props.projectId && allowed('deliverable.create')" type="button" class="primary" @click="emit('open-project', 'deliveries')">{{ $t('整理交付') }}</button>
-            </template>
-            <template #metadata>
-              <TaskMetadataControls v-if="allowed('session.continue')" :task-key="session.key" :metadata="session.metadata" @saved="metadataSaved" />
+              <button v-if="props.projectId" type="button" @click="publishing = true">{{ $t('整理成果') }}</button>
             </template>
           </SessionDetailsDrawer>
         </div>
-      </template>
+      </section>
       <section
         v-else
         class="empty-state"
@@ -522,42 +453,35 @@ async function refreshCurrentSession() {
 </template>
 
 <style scoped>
-.workspace { min-width: 0; }
-.workspace > .sidebar { min-width: 0; background: var(--surface); }
-.workspace > main { min-width: 0; container-type: inline-size; }
-.brand { padding: 22px 20px 10px; font-size: 13px; letter-spacing: .04em; }
-.brand small { font-size: 12px; letter-spacing: 0; }
-.workspace-heading { padding-inline: 16px; }
-.workspace-heading h2 { font-size: 14px; font-weight: 600; }
-.settings-link { margin-inline: 8px; padding-inline: 12px; border-radius: 6px; }
-.development-start-actions { gap: 8px; padding-inline: 16px; }
-.development-start-actions > button { font-size: 12px; border-radius: 6px; }
-.sidebar-footer { padding: 16px; font-size: 12px; }
-.session-header { min-height: 116px; padding: 24px 28px 20px; background: var(--canvas); border-bottom: 0; gap: 10px 20px; }
+.workspace { min-width: 0; display: flex; flex-direction: column; position: relative; }
+.workspace > main { min-width: 0; min-height: 0; flex: 1; container-type: inline-size; }
+.development-navigation { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 28px; padding-right: 140px; border-bottom: 1px solid var(--line); }
+.development-navigation .ui-back { margin-bottom: 0; }
+.development-navigation button { border: 0; background: transparent; font-size: 12px; }
+.development-connection { margin-left: auto; color: var(--muted); font-size: 12px; }
+.development-history { position: absolute; top: 10px; right: 24px; }
+.development-history :deep(button) { margin: 0; width: auto; font-size: 12px; background: transparent; border: 0; }
+.session-surface { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.session-header { min-height: 108px; padding: 24px 32px 16px; background: var(--canvas); border-bottom: 0; gap: 10px 20px; }
 .session-header .page-breadcrumb { color: var(--muted); font-size: 12px; }
-.session-header :deep(.session-heading) { font-size: clamp(22px, 2vw, 28px); font-weight: 600; letter-spacing: -.02em; line-height: 1.4; }
-.session-body { margin: 0 28px 28px; gap: 24px; min-width: 0; }
-.session-body.with-file-panel > :deep(.session-file-panel) { flex-basis: calc((100% - 104px) / 2); width: calc((100% - 104px) / 2); }
-.session-body.file-panel-wide > :deep(.session-file-panel) { flex-basis: calc((100% - 104px) * .67); width: calc((100% - 104px) * .67); }
-.session-conversation { border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); overflow: hidden; }
-.timeline { padding: 28px max(32px, calc((100% - var(--conversation-width)) / 2)); scroll-padding-bottom: 24px; }
+.session-header :deep(.session-heading) { font-size: clamp(24px, 2vw, 30px); font-weight: 600; letter-spacing: -.02em; line-height: 1.4; }
+.session-toolbar { flex-wrap: wrap; }
+.session-body { margin: 0 32px 24px; gap: 24px; min-width: 0; position: relative; }
+.session-conversation { flex: 1; min-width: 0; background: var(--canvas); }
+.timeline { padding: 28px max(16px, calc((100% - 900px) / 2)); scroll-padding-bottom: 24px; }
+.session-conversation :deep(.composer-wrap) { padding: 16px max(16px, calc((100% - 940px) / 2)); background: var(--canvas); border: 0; }
+.session-body.with-file-panel > :deep(.session-file-panel) { position: relative; inset: auto; width: 100%; flex: 1; box-shadow: none; }
 .working-line { font-size: 12px; line-height: 1.8; }
 .empty-state { background: var(--canvas); }
-.empty-state h1 { font-size: clamp(24px, 2vw, 32px); }
-@container (max-width: 700px) {
-  .session-header { padding-inline: 20px; }
-  .session-body { margin-inline: 20px; gap: 14px; }
-  .timeline { padding: 24px 20px; }
-}
-@container (max-width: 900px) {
-  .session-body.with-file-panel > :deep(.session-file-panel) { position: absolute; inset: 0 80px 0 0; width: auto; border: 1px solid var(--line); }
-}
 @media (max-width: 767px) {
+  .development-navigation { padding: 8px 12px; padding-right: 100px; gap: 4px; }
+  .development-navigation button { min-height: 44px; padding: 6px; }
+  .development-history { right: 8px; }
+  .development-connection { display: none; }
   .session-header { min-height: 0; padding: 20px 16px 16px; gap: 10px; }
-  .session-header :deep(.session-heading) { font-size: 22px; }
-  .session-body { margin: 0 16px 20px; gap: 0; }
-  .timeline { padding: 20px 16px; }
-  .session-body.with-file-panel > :deep(.session-file-panel) { position: fixed; inset: 8px; width: auto; }
-  .workspace > .sidebar { padding-bottom: 10px; }
+  .session-header :deep(.session-heading) { font-size: 24px; }
+  .session-body { margin: 0 12px 12px; gap: 0; }
+  .timeline { padding: 20px 8px; }
+  .session-conversation :deep(.composer-wrap) { padding: 12px 0; }
 }
 </style>

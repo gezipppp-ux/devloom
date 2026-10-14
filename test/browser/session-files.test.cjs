@@ -1,3 +1,4 @@
+const { openSessionContext } = require("../support/browser-navigation.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -34,7 +35,7 @@ async function verifySessionFiles(browser, origin, key, errors, output) {
     await page.goto(origin);
     const link = page.getByRole("button", { name: "seed.ts", exact: true });
     await link.waitFor();
-    const draft = page.getByRole("textbox", { name: "发送给 Codex 的指令" });
+    const draft = page.locator(".session-composer textarea");
     await draft.fill("预览过程中保留草稿");
     await link.click();
     const panel = page.getByRole("complementary", { name: "文件预览与对比" });
@@ -101,8 +102,8 @@ async function verifySessionFiles(browser, origin, key, errors, output) {
     await panel.locator(".file-diff-line.removed").waitFor();
     assert.equal(await draft.inputValue(), "预览过程中保留草稿");
     await page.keyboard.press("Escape");
-    const gitButton = page.getByRole("button", { name: "Worktree Git", exact: true });
-    await gitButton.click();
+    const gitButton = page.getByRole("button", { name: "上下文", exact: true });
+    await openSessionContext(page, "Worktree Git");
     await page.getByRole("button", { name: "修改 src/seed.ts", exact: true }).click();
     await panel.locator(".file-diff-line.removed").waitFor();
     await page.keyboard.press("Escape");

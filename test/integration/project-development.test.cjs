@@ -163,7 +163,7 @@ test("project tasks and image additions use the real session manager with tempor
   }
   assert.equal(client.calls.filter(call => call.method === "turn/start").length, 2);
   const manualImage = await (await workspaces.get(space.workspaceId, actor)).channels.get("manual").uploadImage(png);
-  const manualInput = { requestId: randomUUID(), title: "独立重构", content: `## 开发目标\n\n不关联事项，验证接口与响应式布局。\n\n![参考图片](manual-image:${manualImage.id})`, taskType: "other", baseBranch: "main", images: [manualImage.id] };
+  const manualInput = { requestId: randomUUID(), title: "独立重构", content: `## 开发目标\n\n不关联事项，验证接口与响应式布局。\n\n![参考图片](manual-image:${manualImage.id})`, baseBranch: "main", images: [manualImage.id] };
   const manualResponse = await http(`/api/projects/${project.id}/tasks/manual`, manualInput);
   assert.equal(manualResponse.status, 202, JSON.stringify(manualResponse));
   const manualTask = manualResponse.data.task;
@@ -179,7 +179,6 @@ test("project tasks and image additions use the real session manager with tempor
   const manualTurn = client.calls.filter(call => call.method === "turn/start").at(-1);
   assert.match(manualTurn.params.input[0].text, /独立重构/);
   assert.equal(manualTurn.params.input.filter(part => part.type === "localImage").length, 1);
-  assert.equal((await sessions.store.readTaskMetadata(manualTask.runKey)).type, "other");
   assert.equal((await http(`/api/projects/${project.id}/tasks/manual`, manualInput)).data.reused, true);
   assert.equal((await http(`/api/projects/${project.id}/tasks/manual`, { ...manualInput, content: "不能改写已启动目标" })).status, 409);
   assert.equal((await http(`/api/projects/${project.id}/tasks/manual?requestId=${manualInput.requestId}`)).data.task.id, manualTask.id);
@@ -222,7 +221,7 @@ test("independent dispatch records no planned task or claim, freezes retries and
   assert.equal(await database.client.issueDevelopmentClaim.count(), 0);
   assert.equal(await database.client.developmentTask.count({ where: { status: "planned" } }), 0);
   assert.equal(calls.starts.length, 1);
-  assert.equal(calls.starts[0].metadata.type, "other");
+  assert.equal(Object.hasOwn(calls.starts[0], "metadata"), false);
   assert.equal((await services.startManual(project.id, actor, input)).reused, true);
   await assert.rejects(services.startManual(project.id, actor, { ...input, baseBranch: "release/1" }), { statusCode: 409 });
   assert.equal((await services.readManual(project.id, other, { requestId: input.requestId })).task, null, "another developer cannot recover a private request");

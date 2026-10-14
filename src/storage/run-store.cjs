@@ -9,10 +9,6 @@ const { databaseForPath } = require("./database-registry.cjs");
 const { writeArtifact, materializeArtifact, appendArtifact } = require("./artifact-store.cjs");
 const { SessionHistoryStore } = require("./session-history-store.cjs");
 const { RunRequirementsStore } = require("./run-requirements-store.cjs");
-const {
-  defaultTaskMetadata,
-  validateTaskMetadata,
-} = require("../domain/task-metadata.cjs");
 const { validateSessionTitle } = require("../domain/session-title.cjs");
 const { REQUEST_ID } = require("../domain/requirement-fusion.cjs");
 
@@ -141,17 +137,6 @@ class RunStore {
           return [];
         }
       }))).flat();
-  }
-
-  async readTaskMetadata(key, item) {
-    const saved = (await readOptional(path.join(this.dir(key), "task-metadata.json")));
-    return validateTaskMetadata(saved, defaultTaskMetadata(item));
-  }
-
-  async writeTaskMetadata(key, input, item) {
-    return (await updateConfig(path.join(this.dir(key), "task-metadata.json"), (saved) =>
-      validateTaskMetadata(input, validateTaskMetadata(saved, defaultTaskMetadata(item))),
-    ));
   }
 
   async readSessionTitle(key, fallback) {

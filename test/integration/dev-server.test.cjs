@@ -225,10 +225,10 @@ test("development CLI serves Vite and workspace APIs on one guarded origin", asy
     assert.equal(component.status, 200, component.text);
     assert.match(component.text, /__hmrId/);
     const shared = await send(
-      `${origin}${fileUrl(path.join(root, "shared", "task-metadata.json"))}?import`,
+      `${origin}${fileUrl(path.join(root, "shared", "agent-permissions.json"))}?import`,
     );
     assert.equal(shared.status, 200, shared.text);
-    assert.match(shared.text, /in_progress/);
+    assert.match(shared.text, /请求批准/);
 
     assert.equal((await send(`${origin}/api/bootstrap`)).status, 401);
     const initial = await send(`${origin}/api/auth/session`);
