@@ -1,3 +1,8 @@
+# 界面交互原型
+
+- [B 方案中性协作 UI](./ui-refactor/review.html)：本轮新的全站原型，适配 1080P、2K 和移动端，详见 [PRD](../prd/ui-refactor.md)。
+- 下方保留已有初始化引导原型的说明，其历史视觉不作为 B 方案依据。
+
 # 初始化引导交互原型
 
 打开 [initialization-guide.html](./initialization-guide.html) 即可体验；相邻 CSS、JS 与仓库设计变量文件需保持现有相对位置。支持直接用浏览器打开 HTML，也可以由本地静态服务器预览。

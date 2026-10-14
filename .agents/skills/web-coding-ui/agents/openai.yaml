@@ -1,4 +1,4 @@
 interface:
-  display_name: "Web Coding 界面规范"
-  short_description: "复用仓库浅绿工作台主题，统一页面交互状态并验证桌面与移动布局"
-  default_prompt: "使用 $web-coding-ui 完成本次界面调整，复用设计变量与组件，并验证响应式和异步状态。"
+  display_name: "Web Coding B 方案 UI 实施"
+  short_description: "从中性协作原型到 Vue 实现，落实大屏移动适配、交互状态和业务边界"
+  default_prompt: "使用 $web-coding-ui 按 B 方案完成本次原型或界面实现，并验证响应式及关键操作。"

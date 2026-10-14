@@ -1,4 +1,5 @@
 <script setup>
+import { formatDate } from "../../shared/i18n/index.js";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { onMounted, onUnmounted, ref } from "vue";
 import { ReloadOutlined, CloudDownloadOutlined } from "@antdv-next/icons";
@@ -59,7 +60,7 @@ async function execute(action) {
 function fetchedLabel(value) {
   if (!value) return "尚未通过此工作台获取";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? value : formatDate(date, { hour: "2-digit", minute: "2-digit" });
 }
 onMounted(refresh);
 onUnmounted(() => {
@@ -68,18 +69,18 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="page-layout repository-git-panel" aria-label="代码仓库">
+  <section class="page-layout repository-git-panel" :aria-label="$t(&quot;代码仓库&quot;)">
     <header class="page-heading">
       <div class="eyebrow">REPOSITORY</div>
-      <h1>代码仓库</h1>
+      <h1>{{ $t("代码仓库") }}</h1>
       <p>
         管理当前工作区的远端更新与新任务基准。已有 Worktree
         的代码同步、合并和冲突处理可直接交给会话中的 Codex。
       </p>
     </header>
     <FormSection
-      title="仓库状态"
-      description="显示服务器上的项目仓库与配置的开发分支。"
+      :title="$t(&quot;仓库状态&quot;)"
+      :description="$t(&quot;显示服务器上的项目仓库与配置的开发分支。&quot;)"
     >
       <template #action>
         <button
@@ -87,46 +88,46 @@ onUnmounted(() => {
           :disabled="loading || Boolean(operation)"
           @click="refresh"
         >
-          <ReloadOutlined aria-hidden="true" /> 刷新仓库状态
+          <ReloadOutlined aria-hidden="true" /> {{ $t("刷新仓库状态") }}
         </button>
       </template>
       <p v-if="loading && !repository" class="muted" role="status">
-        正在读取仓库状态…
+        {{ $t("正在读取仓库状态…") }}
       </p>
       <dl v-if="repository" class="git-facts">
-        <dt>项目仓库</dt>
+        <dt>{{ $t("项目仓库") }}</dt>
         <dd>
           <code>{{ repository.repository }}</code>
         </dd>
-        <dt>新任务基准</dt>
+        <dt>{{ $t("新任务基准") }}</dt>
         <dd>
           <code>{{ repository.baseBranch }}</code>
         </dd>
-        <dt>本地基准分支</dt>
-        <dd>{{ repository.branch || "当前引用不是可更新的本地分支" }}</dd>
-        <dt>跟踪远端</dt>
-        <dd>{{ repository.upstream || "尚未设置上游分支" }}</dd>
-        <dt>最近获取</dt>
-        <dd>{{ fetchedLabel(repository.lastFetchedAt) }}</dd>
+        <dt>{{ $t("本地基准分支") }}</dt>
+        <dd>{{ repository.branch || $t("当前引用不是可更新的本地分支") }}</dd>
+        <dt>{{ $t("跟踪远端") }}</dt>
+        <dd>{{ repository.upstream || $t("尚未设置上游分支") }}</dd>
+        <dt>{{ $t("最近获取") }}</dt>
+        <dd>{{ $t(fetchedLabel(repository.lastFetchedAt)) }}</dd>
       </dl>
       <FeedbackMessage :message="error ? `${repository ? '仓库状态可能已过期。' : ''}${error}` : ''" type="error" />
     </FormSection>
     <FormSection
       v-if="repository && canOperate"
-      title="获取最新代码"
-      description="先获取远端分支信息，再按需更新本地基准分支。"
+      :title="$t(&quot;获取最新代码&quot;)"
+      :description="$t(&quot;先获取远端分支信息，再按需更新本地基准分支。&quot;)"
     >
       <label class="git-field-label" for="repository-remote"
-        >要获取更新的远端</label
+        >{{ $t("要获取更新的远端") }}</label
       >
       <select
         id="repository-remote"
         v-model="selectedRemote"
-        aria-label="远端仓库"
+        :aria-label="$t(&quot;远端仓库&quot;)"
         :disabled="loading || Boolean(operation) || !repository.remotes?.length"
       >
         <option v-if="!repository.remotes?.length" value="">
-          此仓库未配置远端
+          {{ $t("此仓库未配置远端") }}
         </option>
         <option
           v-for="remote in repository.remotes"
@@ -137,7 +138,7 @@ onUnmounted(() => {
         </option>
       </select>
       <p class="git-hint">
-        「获取远端更新」只更新远程跟踪引用，现有任务文件不变。待推送和落后远端的数量以最近获取结果为准。
+        {{ $t("「获取远端更新」只更新远程跟踪引用，现有任务文件不变。待推送和落后远端的数量以最近获取结果为准。") }}
       </p>
       <div class="git-repository-actions">
         <button
@@ -147,7 +148,7 @@ onUnmounted(() => {
           @click="execute('fetch')"
         >
           <CloudDownloadOutlined aria-hidden="true" />{{
-            operation === "fetch" ? "正在获取…" : "获取远端更新"
+            operation === "fetch" ? $t("正在获取…") : $t("获取远端更新")
           }}
         </button>
         <button
@@ -160,7 +161,7 @@ onUnmounted(() => {
           "
           @click="execute('update')"
         >
-          {{ operation === "update" ? "正在更新…" : "更新基准分支" }}
+          {{ operation === "update" ? $t("正在更新…") : $t("更新基准分支") }}
         </button>
       </div>
       <p class="git-hint">

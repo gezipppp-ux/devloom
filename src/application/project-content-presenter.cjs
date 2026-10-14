@@ -29,5 +29,11 @@ function presentProjectFile(row) {
     name: row.name, mimeType: row.mimeType, size: row.size, createdAt: row.createdAt.toISOString(), url: `/api/projects/${row.projectId}/files/${row.id}` };
 }
 function presentPage(page, present = dates) { return { ...page, items: page.items.map(present) }; }
+function presentDeliverable(row) {
+  return { id: row.id, projectId: row.projectId, issueId: row.issueId, authorId: row.authorId, taskId: row.taskId,
+    title: row.title, body: row.body, commit: row.commit, status: row.status, revision: row.revision,
+    checklist: row.checklist, checkedItems: row.checkedItems, reviewNote: row.reviewNote,
+    reviewedById: row.reviewedById, reviewedAt: row.reviewedAt?.toISOString() || null, createdAt: row.createdAt.toISOString() };
+}
 
-module.exports = { presentIssueImages, presentIssue, presentAsset, presentProjectFile, presentPage };
+module.exports = { presentIssueImages, presentIssue, presentAsset, presentProjectFile, presentPage, presentDeliverable };

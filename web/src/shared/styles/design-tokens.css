@@ -1,68 +1,21 @@
 :root {
-  --canvas: #f7f8f5;
-  --surface: #ffffff;
-  --surface-hover: #fafbfa;
-  --sidebar: #eff3ed;
-  --rail: #e6ece4;
-  --ink: #203e34;
-  --muted: #68796f;
-  --accent: #204b3c;
-  --accent-hover: #30634d;
-  --accent-active: #183a2e;
-  --accent-subtle: #e9f0e8;
-  --line: #dfe5de;
-  --field-border: #cbd6cd;
-  --field-border-hover: #9bb0a0;
-  --soft: #edf2eb;
-  --selected: #e1ebdf;
-  --danger: #a34638;
-  --danger-soft: #fbefeb;
-  --warning: #8a692e;
-  --warning-soft: #faf4e6;
-  --success: #38734a;
-  --success-soft: #e9f2e7;
-  --focus: #568165;
-  --focus-ring: rgba(86, 129, 101, 0.18);
-  --shadow-xs: 0 1px 2px rgba(32, 62, 52, 0.04);
-  --shadow-sm: 0 1px 3px rgba(32, 62, 52, 0.06), 0 1px 2px rgba(32, 62, 52, 0.04);
-  --shadow-md: 0 4px 12px -2px rgba(32, 62, 52, 0.08), 0 2px 6px -1px rgba(32, 62, 52, 0.04);
-  --shadow-dialog: 0 16px 36px -4px rgba(32, 62, 52, 0.16), 0 6px 16px -2px rgba(32, 62, 52, 0.08);
-  --shadow-composer: 0 8px 24px -4px rgba(32, 62, 52, 0.1), 0 2px 6px -1px rgba(32, 62, 52, 0.04);
-  --code-keyword: #426784;
-  --code-string: #80602b;
-  --code-literal: #815471;
-  --radius-control: 8px;
-  --radius-card: 12px;
-  --radius-dialog: 16px;
-  --radius-composer: 16px;
-  --control-height: 40px;
-  --page-width: 1160px;
-  --page-gutter: 32px;
-  --page-padding-top: 28px;
-  --page-padding-bottom: 64px;
-  --content-width: calc(var(--page-width) - 2 * var(--page-gutter));
-  --conversation-width: var(--content-width);
-  --project-pane-width: 240px;
-  --font-size-message: 14px;
-  --font-size-tool: 13px;
-  --font-size-command: 12px;
-  --font-size-session-meta: 12px;
-  --font-ui: "Segoe UI", "Microsoft YaHei", sans-serif;
-  --font-code: "Cascadia Code", Consolas, monospace;
+  --canvas: #fafafb; --surface: #fff; --surface-hover: #f8f8fb; --sidebar: #fff; --rail: #f5f5f8;
+  --ink: #24252d; --muted: #727480; --accent: #292a33; --accent-hover: #444551; --accent-active: #1d1e25;
+  --accent-subtle: #f1edfd; --line: #e9e9ef; --field-border: #d9d9e3; --field-border-hover: #aaa5bd;
+  --soft: #f5f5f8; --selected: #f1edfd; --highlight: #7256d8; --danger: #b64750; --danger-soft: #fff0f1;
+  --warning: #95620c; --warning-soft: #fff7e7; --success: #26765a; --success-soft: #edf7f1;
+  --focus: #7256d8; --focus-ring: #7256d825;
+  --shadow-xs: none; --shadow-sm: 0 2px 8px #26223705; --shadow-md: 0 4px 20px #26223708;
+  --shadow-dialog: 0 12px 48px #26223718; --shadow-composer: 0 6px 24px #2622370c;
+  --code-keyword: #6752b9; --code-string: #33705b; --code-literal: #97613a;
+  --radius-control: 6px; --radius-card: 10px; --radius-dialog: 14px; --radius-composer: 12px; --control-height: 40px;
+  --page-width: 1440px; --page-gutter: clamp(24px, 3vw, 56px); --page-padding-top: 40px; --page-padding-bottom: 64px;
+  --content-width: calc(var(--page-width) - 2 * var(--page-gutter)); --conversation-width: 960px; --project-pane-width: 240px;
+  --font-size-message: 14px; --font-size-tool: 13px; --font-size-command: 12px; --font-size-session-meta: 12px;
+  --font-ui: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; --font-code: "Cascadia Code", Consolas, monospace;
+  --shell-sidebar: 208px; --shell-header: 72px;
 }
-
-@media (max-width: 768px) {
-  :root {
-    --page-gutter: 20px;
-    --page-padding-top: 24px;
-    --page-padding-bottom: 48px;
-  }
-}
-
-@media (max-width: 480px) {
-  :root {
-    --page-gutter: 16px;
-    --page-padding-top: 20px;
-    --page-padding-bottom: 40px;
-  }
-}
+@media (min-width: 1920px) { :root { --page-width: 1712px; } }
+@media (max-width: 1199px) and (min-width: 768px) { :root { --shell-sidebar: 76px; } }
+@media (max-width: 767px) { :root { --page-gutter: 20px; --page-padding-top: 24px; --page-padding-bottom: 40px; --control-height: 44px; --shell-header: 60px; } }
+@media (max-width: 360px) { :root { --page-gutter: 16px; } }

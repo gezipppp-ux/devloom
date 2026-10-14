@@ -4,6 +4,10 @@
 
 `main.js` 是唯一入口，负责挂载 Vue、注册表单组件，并从共享样式读取主题变量。
 
+国际化使用 `vue-i18n`，语言资源与日期／数字格式化集中于 `shared/i18n/`。默认简体中文，支持英文；`LocaleSelect` 在登录、首次改密、初始化及主壳层复用。选择保存在本机 `web-coding.locale`，设置文档 `lang` 并同步组件库语言；切换不改变账号、业务输入、查询或执行状态。界面文案在呈现处翻译，带变量的句子使用命名插值；事项正文、自定义流程名、提示词、代码和上游诊断保留原文。新的界面文案需要同时补齐英文资源；不要通过重建组件或给路由添加语言 key 实现切换。
+
+跨项目的工作台、搜索与事项／本人开发／交付队列由 `features/projects/` 组合，复用 `WorkItemList`；`PageHeader`、`FilterBar`、`EmptyState`、`PagePagination`、`StatusBadge`、`ModalDialog` 为共享呈现组件。分页、权限及提交由所属业务组件和 API 负责。项目内需求／Bug 分类保留完整批量分配和版本筛选，主「事项」提供统一跨项目查询。
+
 会话文件查看归 `features/session/`：`file-reference.js` 解析本地链接，`SessionItem` 发出文件请求，app 仅协调侧栏开关；`use-session-files.js` 拥有文件/列表请求与代际隔离，`SessionFilePanel`、`SessionChangedFiles` 呈现预览和 Git 列表，`code-content.js` 处理高亮与差异行。高亮库仅在打开文件侧栏时加载。文件内容始终由后端按会话的 Worktree 校验，前端不拼接服务器磁盘路径。
 
 | 目录 | 职责 |
@@ -81,7 +85,7 @@ ProjectPermissionEditor 在部门模式显示功能上限，在成员模式显�
 
 权限细项采用分类双栏：左侧显示分类及已选数量，右侧显示独立权限、依赖和执行／敏感字段提示；600px 及以下上下排列。部门模式默认展开，成员模式按需展开。搜索和已选筛选共同过滤权限，批量选择／清空只作用于当前分类的可见结果，并明确标注筛选范围；勾选补齐依赖、取消级联关闭的规则不变。父表单提供保存时的权限基线用于变更摘要与撤销，切换部门／成员或部门保存成功后重建编辑器，清空筛选及操作反馈。保存期间禁止权限变更，检索和分类浏览不触发保存。
 
-样式沿用浅绿工作台规范，统一修改 `shared/styles/design-tokens.css` 与 `shared/styles/style.css`。验证遵循仓库契约：lint、单元测试、构建、浏览器回归；视觉改动还需模拟数据截图验证。
+新界面以 [B 方案 UI 重构 PRD](../../docs/prd/ui-refactor.md) 为目标，正式主题使用 `shared/styles/design-tokens.css`，壳层与复用样式位于 `shared/styles/workbench.css`，业务样式继续按职责组织。验证遵循仓库契约：lint、单元测试、构建、浏览器回归；视觉改动还需模拟数据截图验证。
 
 项目生命周期由 `ProjectReleases` 与 `PlanDevelopmentDialog` 组合；管理员在系统设置中的 `features/settings/SystemWorkflows` 维护全局需求和 Bug 两套流程，项目没有流程配置入口。`shared/components/WorkflowGraph` 呈现系统流程编辑画布；项目事项详情不显示流程图，只读取发布版本用于状态流转。流程选项和可用流转来自服务端发布版本，不再在页面维护固定状态表。事项先认领／指派为待开发任务，由 `ProjectTasks` 单独执行开始、完成和取消；`RemoteBranchSelect` 只接受远端返回的分支选项，刷新立即清空旧选择，失败不得手填回退。流程图按状态类型配色，`workflow-routing.js` 负责节点间距、正式连线及拖线预览的避障和贝塞尔曲线路径；双击空白／Insert 新增状态，拖动或依次点击连接点连线，点击节点／连线在画布内编辑，Delete 在画布内确认删除及关联连线。支持键盘选取、移动与 Esc 取消，保存期间禁用编辑，窄屏图内平移、属性区移至画布下方；资产、图文事项和已有会话保持原安全渲染边界。
 

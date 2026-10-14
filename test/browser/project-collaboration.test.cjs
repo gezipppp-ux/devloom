@@ -70,6 +70,8 @@ async function main() {
       await page.getByLabel("账号", { exact: true }).fill(username);
       await page.getByLabel("密码", { exact: true }).fill("fixture-password");
       await page.getByRole("button", { name: "登录", exact: true }).click();
+      await page.getByRole("heading", { name: "工作台", exact: true }).waitFor();
+      await page.getByRole("navigation", { name: "主导航", exact: true }).getByRole("button", { name: "项目", exact: true }).click();
       await page.getByRole("heading", { name: username === "admin" ? "全部项目" : "我的项目", exact: true }).waitFor();
       await page.getByRole("button", { name: /项目协作回归/ }).click();
       await page.getByRole("heading", { name: "项目协作回归", exact: true }).waitFor();
@@ -244,7 +246,7 @@ async function main() {
     await login("admin");
     await verifyProjectReleases({ page, origin, projectId: project.id, output });
     await verifyAdministratorProjectAccess({ page, origin, projects, accounts, admin, department, remoteUrl: remote.remoteUrl, output });
-    await page.getByLabel("账号导航").getByRole("button", { name: "全部项目", exact: true }).click();
+    await page.getByRole("navigation", { name: "主导航", exact: true }).getByRole("button", { name: "项目", exact: true }).click();
     await page.getByRole("button", { name: "创建项目", exact: true }).click();
     assert.equal(await page.getByLabel("归属部门", { exact: true }).count(), 0);
     await page.getByLabel("项目名称", { exact: true }).fill("直接引入的新项目");

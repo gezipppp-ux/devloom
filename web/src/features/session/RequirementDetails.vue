@@ -1,4 +1,5 @@
 <script setup>
+import { formatDate } from "../../shared/i18n/index.js";
 import { computed } from 'vue';
 import { renderRequirement, safeRequirementLink } from './requirement-content.js';
 const props = defineProps({ requirement: { type: Object, default: null }, disabled: Boolean, nested: Boolean });
@@ -12,26 +13,26 @@ const sourceUrl = computed(() =>
 const capturedAt = computed(() => {
   const value = props.requirement?.capturedAt;
   return value && !Number.isNaN(Date.parse(value))
-    ? new Date(value).toLocaleString()
+    ? formatDate(value, { hour: "2-digit", minute: "2-digit" })
     : '';
 });
 </script>
 
 <template>
-  <section class="requirement-details" aria-label="完整需求资料">
+  <section class="requirement-details" :aria-label="$t(&quot;完整需求资料&quot;)">
     <div class="requirement-heading">
-      <h2>{{ requirement?.requirements?.length ? requirement.title : '需求正文' }}</h2>
+      <h2>{{ requirement?.requirements?.length ? requirement.title : $t("需求正文") }}</h2>
       <a
         v-if="sourceUrl"
         :href="sourceUrl"
         target="_blank"
         rel="noopener noreferrer"
-        >查看原需求 ↗</a
+        >{{ $t("查看原需求 ↗") }}</a
       >
     </div>
     <p class="field-hint">
       <template v-if="requirement?.id && !requirement?.requirements?.length">#{{ requirement.id }} · </template>
-      {{ nested ? '完整资料快照' : '任务启动时保存的完整快照' }}<template v-if="capturedAt">
+      {{ nested ? $t("完整资料快照") : $t("任务启动时保存的完整快照") }}<template v-if="capturedAt">
         · {{ capturedAt }}</template
       >
     </p>
@@ -42,16 +43,16 @@ const capturedAt = computed(() => {
     <p v-else-if="!requirement?.requirements?.length" class="muted">
       {{
         requirement
-          ? '该需求没有原始文字描述，请查看补充说明或图片附件。'
-          : '需求资料尚未准备完成。'
+          ? $t("该需求没有原始文字描述，请查看补充说明或图片附件。")
+          : $t("需求资料尚未准备完成。")
       }}
     </p>
     <section
       v-if="requirement?.supplementaryInstructions"
       class="requirement-supplement"
-      aria-label="补充说明与指导意见"
+      :aria-label="$t(&quot;补充说明与指导意见&quot;)"
     >
-      <h3>补充说明与指导意见</h3>
+      <h3>{{ $t("补充说明与指导意见") }}</h3>
       <pre>{{ requirement.supplementaryInstructions }}</pre>
     </section>
     <details v-for="(child, index) in requirement?.requirements || []" :key="child.id" class="requirement-source">
@@ -59,7 +60,7 @@ const capturedAt = computed(() => {
       <RequirementDetails :requirement="child" nested />
     </details>
     <div v-if="requirement?.images?.length && !requirement?.requirements?.length" class="requirement-attachments">
-      <h3>图片附件 · {{ requirement.images.length }}</h3>
+      <h3>{{ $t("图片附件 ·") }} {{ requirement.images.length }}</h3>
       <div class="image-strip">
         <a
           v-for="image in requirement.images"
@@ -73,19 +74,19 @@ const capturedAt = computed(() => {
             :alt="`图片 ${image.index + 1}：${image.name}`"
             loading="lazy"
           />
-          <span>图片 {{ image.index + 1 }} · 点击查看原图</span>
+          <span>{{ $t("图片") }} {{ image.index + 1 }} {{ $t("· 点击查看原图") }}</span>
         </a>
       </div>
     </div>
     <details v-if="requirement?.prompt" class="requirement-prompt">
-      <summary>{{ nested ? '本批资料的完整提示词' : '发送给 Codex 的完整内容' }}</summary>
+      <summary>{{ nested ? $t("本批资料的完整提示词") : $t("发送给 Codex 的完整内容") }}</summary>
       <pre>{{ requirement.prompt }}</pre>
     </details>
     <section v-for="(addition, index) in requirement?.additions || []" :key="addition.id" class="requirement-addition">
-      <h3>追加资料 {{ index + 1 }} · {{ addition.status === 'ready' ? '待处理' : addition.status === 'sent' ? '已发送' : '发送结果待确认' }}</h3>
+      <h3>{{ $t("追加资料") }} {{ index + 1 }} · {{ addition.status === 'ready' ? $t("待处理") : addition.status === 'sent' ? $t("已发送") : $t("发送结果待确认") }}</h3>
       <RequirementDetails :requirement="addition.requirement" nested />
-      <button v-if="addition.status === 'ready'" type="button" class="primary" :disabled="disabled" @click="emit('continue', addition.id)">继续处理新增需求</button>
-      <p v-else-if="addition.status !== 'sent'" class="notice">请检查会话历史后通过消息继续；系统不会自动重发这批资料。</p>
+      <button v-if="addition.status === 'ready'" type="button" class="primary" :disabled="disabled" @click="emit('continue', addition.id)">{{ $t("继续处理新增需求") }}</button>
+      <p v-else-if="addition.status !== 'sent'" class="notice">{{ $t("请检查会话历史后通过消息继续；系统不会自动重发这批资料。") }}</p>
     </section>
   </section>
 </template>

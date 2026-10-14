@@ -7,7 +7,8 @@ const { chromium } = require("playwright");
 async function operationFeedbackChecks() {
   const { createServer } = await import("vite");
   const { default: vue } = await import("@vitejs/plugin-vue");
-  const source = `import {createApp,h,ref,nextTick} from 'vue';
+  const source = `import {i18n} from '/src/shared/i18n/index.js';
+import {createApp,h,ref,nextTick} from 'vue';
 import OperationMessages from '/src/shared/components/OperationMessages.vue';
 import FeedbackMessage from '/src/shared/components/FeedbackMessage.vue';
 import {showMessage,clearMessages,messageRevision} from '/src/shared/components/operation-messages.js';
@@ -18,7 +19,7 @@ const Resource={setup(){const resource=useResource(async()=>{throw new Error('�
 window.resource=resource;
 return()=>h('section',{id:'resource'},[h(FeedbackMessage,{message:resource.error.value,type:'error'}),h('button',{id:'save',onClick:()=>resource.perform(async()=>({}),()=>{visible.value=false;},'卸载后仍已保存')},'保存并离开')]);}};
 window.feedback={show:showMessage,clear:clearMessages,revision:()=>messageRevision.value,async bind(message,kind){text.value=message;type.value=kind;await nextTick();},async reset(){text.value='';clearMessages();await nextTick();}};
-createApp({render:()=>h('main',[h(OperationMessages),h(FeedbackMessage,{message:text.value,type:type.value}),h('section',{id:'content',style:'margin:160px 16px 0'},[h('input',{id:'field','aria-label':'原表单'}),h('p','固定页面内容'),visible.value?h(Resource):null]),h('dialog',{id:'modal'},[h('input',{id:'modal-field','aria-label':'弹窗表单'}),h('button',{onClick:()=>document.querySelector('#modal').close()},'关闭弹窗')])])}).mount('#app');`;
+createApp({render:()=>h('main',[h(OperationMessages),h(FeedbackMessage,{message:text.value,type:type.value}),h('section',{id:'content',style:'margin:160px 16px 0'},[h('input',{id:'field','aria-label':'原表单'}),h('p','固定页面内容'),visible.value?h(Resource):null]),h('dialog',{id:'modal'},[h('input',{id:'modal-field','aria-label':'弹窗表单'}),h('button',{onClick:()=>document.querySelector('#modal').close()},'关闭弹窗')])])}).use(i18n).mount('#app');`;
   const server = await createServer({ configFile: false, root: path.resolve("web"), logLevel: "error", plugins: [vue(), {
     name: "operation-feedback-fixture",
     resolveId(id) { if (id === "virtual:feedback") return "\0feedback"; },

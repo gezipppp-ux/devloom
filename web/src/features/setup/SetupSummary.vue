@@ -3,14 +3,14 @@ import FormSection from "../../shared/components/FormSection.vue";
 defineProps({ state: { type: Object, required: true } });
 </script>
 <template>
-  <FormSection title="初始化结果">
+  <FormSection :title="$t(&quot;初始化结果&quot;)">
     <dl class="setup-summary">
-      <div><dt>管理员</dt><dd>{{ state.administrator?.displayName || '—' }}<small>{{ state.administrator?.username }}</small></dd></div>
-      <div><dt>运行环境</dt><dd>{{ state.steps.environment ? '基础工具检测通过' : '未记录' }}<small v-if="state.steps.environment?.data?.deferCodexLogin">配置时选择稍后完成 Codex 登录；开发前请重新检测。</small></dd></div>
-      <div><dt>成员目录</dt><dd><code>{{ state.memberStorageRoot }}</code></dd></div>
-      <div><dt>默认部门</dt><dd>{{ state.departments.map(item => item.name).join('、') || '未记录' }}</dd></div>
-      <div><dt>测试账号</dt><dd>{{ state.accounts.map(item => item.displayName).join('、') || '已跳过' }}</dd></div>
-      <div><dt>第一个项目</dt><dd>{{ state.project?.name || '已跳过' }}<small v-if="state.project">已选择 {{ state.steps.project.data.memberIds.length }} 个测试成员加入项目</small><small v-else>之后创建项目并添加成员，账号才获得该项目的访问权。</small></dd></div>
+      <div><dt>{{ $t("管理员") }}</dt><dd>{{ state.administrator?.displayName || '—' }}<small>{{ state.administrator?.username }}</small></dd></div>
+      <div><dt>{{ $t("运行环境") }}</dt><dd>{{ state.steps.environment ? $t("基础工具检测通过") : $t("未记录") }}<small v-if="state.steps.environment?.data?.deferCodexLogin">{{ $t("配置时选择稍后完成 Codex 登录；开发前请重新检测。") }}</small></dd></div>
+      <div><dt>{{ $t("成员目录") }}</dt><dd><code>{{ state.memberStorageRoot }}</code></dd></div>
+      <div><dt>{{ $t("默认部门") }}</dt><dd>{{ state.departments.map(item => item.name).join('、') || $t("未记录") }}</dd></div>
+      <div><dt>{{ $t("测试账号") }}</dt><dd>{{ state.accounts.map(item => item.displayName).join('、') || $t("已跳过") }}</dd></div>
+      <div><dt>{{ $t("第一个项目") }}</dt><dd>{{ state.project?.name || $t("已跳过") }}<small v-if="state.project">{{ $t("已选择") }} {{ state.steps.project.data.memberIds.length }} {{ $t("个测试成员加入项目") }}</small><small v-else>{{ $t("之后创建项目并添加成员，账号才获得该项目的访问权。") }}</small></dd></div>
     </dl>
   </FormSection>
 </template>

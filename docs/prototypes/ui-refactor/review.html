@@ -1,0 +1,1214 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <title>Web Coding · B 方案交互原型</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237256d8'/%3E%3Cpath d='m12 10-6 6 6 6m8-12 6 6-6 6' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
+  <style>
+/* B proposal tokens. Prototype-only until its production implementation is approved. */
+:root {
+  --ui-bg: #fafafb;
+  --ui-surface: #ffffff;
+  --ui-subtle: #f5f5f8;
+  --ui-line: #e9e9ef;
+  --ui-line-strong: #d9d9e3;
+  --ui-text: #24252d;
+  --ui-muted: #727480;
+  --ui-faint: #9496a2;
+  --ui-primary: #292a33;
+  --ui-primary-hover: #444551;
+  --ui-accent: #7256d8;
+  --ui-accent-soft: #f1edfd;
+  --ui-success: #26765a;
+  --ui-success-soft: #edf7f1;
+  --ui-warning: #95620c;
+  --ui-warning-soft: #fff7e7;
+  --ui-danger: #b64750;
+  --ui-danger-soft: #fff0f1;
+  --ui-font: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --ui-mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  --ui-radius-sm: 6px;
+  --ui-radius: 10px;
+  --ui-radius-lg: 14px;
+  --ui-shadow: 0 12px 48px #26223712, 0 2px 6px #26223705;
+  --ui-sidebar: 208px;
+  --ui-header: 72px;
+  --ui-page-gap: clamp(20px, 3vw, 56px);
+  --ui-page-width: 1440px;
+  --ui-workspace-width: 1760px;
+  --ui-body: 14px;
+  --ui-title: clamp(28px, 2.3vw, 32px);
+  --ui-control: 40px;
+  --ui-focus: 0 0 0 3px #7256d825;
+}
+@media (min-width: 1920px) {
+  :root { --ui-page-width: 1600px; --ui-workspace-width: 1920px; }
+}
+@media (max-width: 1199px) and (min-width: 768px) {
+  :root { --ui-sidebar: 76px; }
+}
+@media (max-width: 767px) {
+  :root { --ui-header: 60px; --ui-page-gap: 20px; --ui-control: 44px; }
+}
+
+
+* { box-sizing: border-box; }
+html { color-scheme: light; scroll-behavior: smooth; }
+body { margin: 0; background: var(--ui-bg); color: var(--ui-text); font: var(--ui-body)/1.65 var(--ui-font); -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .48; }
+button, a { touch-action: manipulation; }
+a { color: inherit; text-decoration: none; }
+button { border: 0; background: none; }
+button, input, select, textarea { outline: none; }
+:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 3px; }
+input:focus, select:focus, textarea:focus { border-color: var(--ui-accent); box-shadow: var(--ui-focus); }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--ui-accent); width: 16px; height: 16px; flex: 0 0 auto; box-shadow: none; }
+input, select, textarea { min-width: 0; max-width: 100%; }
+textarea { resize: vertical; min-height: 108px; }
+svg.icon { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; vertical-align: middle; }
+h1, h2, h3, h4, p { margin-top: 0; }
+h1 { font-size: var(--ui-title); letter-spacing: -.045em; line-height: 1.4; font-weight: 650; margin-bottom: 8px; }
+h2 { font-size: 19px; line-height: 1.5; font-weight: 620; letter-spacing: -.025em; margin-bottom: 16px; }
+h3 { font-size: 15px; font-weight: 620; margin-bottom: 8px; }
+h4 { font-size: 14px; margin-bottom: 10px; }
+p { margin-bottom: 14px; }
+small, .small { font-size: 12px; }
+.muted { color: var(--ui-muted); }
+.faint { color: var(--ui-faint); }
+.text-accent { color: var(--ui-accent); }
+.text-success { color: var(--ui-success); }
+.text-danger { color: var(--ui-danger); }
+.mono, code, pre { font-family: var(--ui-mono); }
+code { font-size: 12px; background: var(--ui-subtle); padding: 3px 6px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { white-space: pre; overflow: auto; max-width: 100%; font-size: 13px; line-height: 1.9; padding: 20px; margin: 0; background: #f7f8fb; border-radius: 8px; }
+hr { border: none; border-top: 1px solid var(--ui-line); margin: 26px 0; }
+.skip-link { position: fixed; top: -100px; left: 20px; z-index: 100; background: white; padding: 12px; }
+.skip-link:focus { top: 12px; }
+.shell { min-height: 100dvh; padding-left: var(--ui-sidebar); }
+.sidebar { position: fixed; inset: 0 auto 0 0; width: var(--ui-sidebar); z-index: 20; background: var(--ui-surface); border-right: 1px solid var(--ui-line); padding: 27px 14px 20px; display: flex; flex-direction: column; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -.02em; padding: 0 12px; height: 32px; white-space: nowrap; }
+.brand .icon { color: var(--ui-accent); width: 23px; height: 23px; }
+.brand small { color: var(--ui-faint); font-weight: 400; letter-spacing: 0; }
+.sidebar-nav { display: flex; flex-direction: column; gap: 6px; margin-top: 46px; }
+.nav-link { display: flex; align-items: center; gap: 13px; min-height: 44px; padding: 10px 14px; border-radius: 8px; color: #666673; font-weight: 480; position: relative; white-space: nowrap; }
+.nav-link:hover { background: #f8f8fb; color: var(--ui-text); }
+.nav-link.active { color: var(--ui-accent); background: var(--ui-accent-soft); font-weight: 580; }
+.nav-link .nav-count { font-size: 12px; margin-left: auto; background: #fff9; border: 1px solid #e5dffc; border-radius: 5px; padding: 0 5px; }
+.sidebar-bottom { margin-top: auto; padding-top: 60px; }
+.sidebar-bottom .nav-link { font-size: 13px; }
+.prototype-tag { display: flex; align-items: center; gap: 8px; margin: 22px 14px 0; font-size: 12px; color: var(--ui-faint); letter-spacing: .04em; }
+.prototype-tag i { width: 5px; height: 5px; background: var(--ui-accent); border-radius: 50%; }
+.topbar { min-height: var(--ui-header); height: var(--ui-header); padding: 0 var(--ui-page-gap); border-bottom: 1px solid var(--ui-line); display: flex; align-items: center; gap: 24px; background: #ffffffd9; position: relative; z-index: 10; }
+.context-select { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.context-select select { border: none; background: transparent; min-width: 140px; height: 40px; font-size: 13px; padding: 0 20px 0 0; }
+.context-select .icon { width: 17px; color: var(--ui-muted); }
+.topbar-divider { color: #d6d7de; }
+.breadcrumb { font-size: 13px; color: var(--ui-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar-spacer { flex: 1; }
+.global-search { display: flex; align-items: center; gap: 9px; color: var(--ui-faint); padding: 7px 12px; border: 1px solid var(--ui-line); border-radius: 7px; min-width: 248px; text-align: left; font-size: 12px; background: white; }
+.global-search kbd { margin-left: auto; font: 12px var(--ui-font); padding: 1px 4px; border: 1px solid var(--ui-line); border-radius: 3px; }
+.avatar { width: 30px; height: 30px; background: #efeafa; color: #756397; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 50%; font-size: 12px; font-weight: 600; border: 2px solid white; }
+.avatar.blue { background: #eaf0f9; color: #6b82a6; }
+.avatar.peach { background: #f9eee5; color: #b28260; }
+.avatar-stack { display: flex; padding-left: 6px; }
+.avatar-stack .avatar { margin-left: -6px; }
+.avatar-button { display: flex; align-items: center; }
+.avatar-button .avatar { width: 34px; height: 34px; }
+.mobile-menu { display: none !important; }
+.bottom-nav { display: none; }
+.page { width: 100%; max-width: calc(var(--ui-page-width) + var(--ui-page-gap) * 2); margin: 0 auto; padding: 42px var(--ui-page-gap) 72px; }
+.page.wide { max-width: calc(var(--ui-workspace-width) + var(--ui-page-gap) * 2); }
+.page-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 36px; }
+.page-heading p { color: var(--ui-muted); margin-bottom: 0; font-size: 13px; }
+.heading-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding-top: 5px; }
+.eyebrow { color: var(--ui-muted); text-transform: uppercase; letter-spacing: .14em; font-size: 12px; margin-bottom: 12px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--ui-control); padding: 8px 17px; border: 1px solid var(--ui-line-strong); border-radius: var(--ui-radius-sm); background: white; font-size: 13px; font-weight: 500; line-height: 1.5; white-space: nowrap; transition: background .14s, border-color .14s; }
+.btn:hover:not(:disabled) { background: #f8f8fb; border-color: #c4c4d1; }
+.btn.primary { background: var(--ui-primary); border-color: var(--ui-primary); color: white; box-shadow: 0 2px 3px #24242c0a; }
+.btn.primary:hover:not(:disabled) { background: var(--ui-primary-hover); }
+.btn.accent { background: var(--ui-accent); color: white; border-color: var(--ui-accent); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--ui-muted); }
+.btn.ghost:hover:not(:disabled) { color: var(--ui-text); background: var(--ui-subtle); }
+.btn.danger { background: var(--ui-danger); color: white; border-color: var(--ui-danger); }
+.btn.small { min-height: 32px; padding: 5px 12px; font-size: 12px; }
+.btn .icon { width: 16px; height: 16px; }
+.icon-btn { display: inline-flex; justify-content: center; align-items: center; width: 36px; height: 36px; border-radius: 7px; color: var(--ui-muted); flex: 0 0 auto; }
+.icon-btn:hover { background: var(--ui-subtle); color: var(--ui-text); }
+.text-link { color: var(--ui-accent); font-size: 13px; display: inline-flex; gap: 7px; align-items: center; padding: 5px 0; }
+.text-link:hover { text-decoration: underline; text-underline-offset: 4px; }
+.text-link .icon { width: 14px; height: 14px; }
+.section { margin-top: 32px; }
+.section-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 16px; }
+.section-title h2, .section-title h3 { margin: 0; display: inline-flex; align-items: center; gap: 10px; }
+.count { border: 1px solid var(--ui-line); border-radius: 5px; padding: 1px 6px; font-size: 12px; font-weight: 450; color: var(--ui-muted); line-height: 1.5; background: white; }
+.marker { width: 3px; height: 15px; border-radius: 4px; background: var(--ui-accent); }
+.marker.blue { background: #6f91d3; }
+.marker.green { background: #72a591; }
+.panel { background: var(--ui-surface); border: 1px solid var(--ui-line); border-radius: var(--ui-radius); min-width: 0; }
+.panel-pad { padding: 26px; }
+.work-section { margin-top: 34px; }
+.work-section:first-child { margin-top: 0; }
+.work-row { display: flex; align-items: center; gap: 20px; padding: 20px 24px; min-height: 86px; }
+.work-row + .work-row { border-top: 1px solid var(--ui-line); }
+.item-symbol { width: 34px; height: 34px; border-radius: 9px; background: #f6f3fd; color: #9076c9; display: inline-flex; justify-content: center; align-items: center; flex-shrink: 0; }
+.item-symbol.bug { color: #b77c77; background: #fcf3f0; }
+.row-main { flex: 1; min-width: 0; }
+.row-title { font-size: 14px; font-weight: 560; text-align: left; display: block; line-height: 1.6; overflow-wrap: anywhere; }
+.row-title:hover { color: var(--ui-accent); }
+.row-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; color: var(--ui-faint); font-size: 12px; margin-top: 5px; }
+.row-meta .sep { width: 2px; height: 2px; background: #bdbdc8; border-radius: 50%; }
+.row-person { display: flex; align-items: center; gap: 7px; width: 106px; color: var(--ui-muted); font-size: 12px; flex-shrink: 0; }
+.row-date { color: var(--ui-faint); width: 90px; font-size: 12px; }
+.work-row > .btn { min-width: 70px; }
+.home-layout { display: grid; grid-template-columns: minmax(0,1fr) 264px; gap: 44px; }
+.home-aside { padding-top: 44px; }
+.quiet-heading { font-size: 12px; color: var(--ui-faint); letter-spacing: .08em; margin: 0 0 20px; }
+.mini-project { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+.project-icon { width: 42px; height: 42px; border-radius: 10px; background: #f0ecfa; color: #8b70c0; font-size: 17px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.project-icon.blue { background: #eaf0f8; color: #7c96bb; }
+.project-icon.peach { background: #f8f0e8; color: #b89670; }
+.mini-project .project-icon { width: 34px; height: 34px; font-size: 13px; border-radius: 8px; }
+.mini-project strong { font-size: 12px; font-weight: 550; }
+.mini-project p { margin: 1px 0 0; color: var(--ui-faint); font-size: 12px; }
+.quiet-note { padding-top: 20px; border-top: 1px solid var(--ui-line); font-size: 12px; line-height: 1.9; color: var(--ui-faint); }
+.quiet-note .icon { width: 15px; margin-bottom: 10px; }
+.toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; flex-wrap: wrap; }
+.toolbar-spacer { flex: 1; }
+.input-search { display: flex; gap: 8px; align-items: center; border: 1px solid var(--ui-line); background: white; border-radius: 7px; padding: 0 12px; color: var(--ui-faint); min-height: var(--ui-control); }
+.input-search input { border: 0; background: none; box-shadow: none; min-height: 36px; width: 190px; font-size: 12px; outline: none; }
+.input-search:focus-within { border-color: var(--ui-accent); box-shadow: var(--ui-focus); }
+.input-search .icon { width: 16px; height: 16px; }
+.segmented { display: inline-flex; background: #f0f0f4; padding: 3px; border-radius: 7px; gap: 2px; flex-wrap: wrap; }
+.segment { padding: 6px 14px; border-radius: 5px; font-size: 12px; color: var(--ui-muted); min-height: 32px; }
+.segment.active { background: white; color: var(--ui-text); box-shadow: 0 1px 4px #2929330a; }
+.tabs { display: flex; align-items: center; gap: 28px; border-bottom: 1px solid var(--ui-line); margin-bottom: 28px; flex-wrap: wrap; }
+.tab { padding: 10px 0 13px; color: var(--ui-muted); font-size: 13px; position: relative; min-height: 44px; }
+.tab.active { color: var(--ui-accent); font-weight: 550; }
+.tab.active::after { position: absolute; content: ''; bottom: -1px; height: 2px; background: var(--ui-accent); left: 0; right: 0; }
+.project-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 22px; }
+.project-card { padding: 28px; transition: border-color .15s; }
+.project-card:hover { border-color: #cac2e0; }
+.project-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 26px; }
+.project-card h2 { margin-bottom: 8px; font-size: 19px; }
+.project-card p { color: var(--ui-muted); font-size: 12px; min-height: 42px; }
+.project-card-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--ui-line); padding-top: 20px; margin-top: 24px; }
+.badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 5px; color: #7b718e; background: #f4f1fa; font-size: 12px; padding: 2px 7px; font-weight: 450; white-space: nowrap; line-height: 1.8; }
+.badge.success { color: var(--ui-success); background: var(--ui-success-soft); }
+.badge.warning { color: var(--ui-warning); background: var(--ui-warning-soft); }
+.badge.danger { color: var(--ui-danger); background: var(--ui-danger-soft); }
+.badge.neutral { color: var(--ui-muted); background: #f0f1f4; }
+.badge.blue { color: #5274a5; background: #eef3fc; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; display: inline-block; flex-shrink: 0; }
+.overview-grid { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 28px; }
+.metrics { display: grid; grid-template-columns: repeat(3,1fr); border-bottom: 1px solid var(--ui-line); padding-bottom: 28px; margin-bottom: 28px; gap: 28px; }
+.metric + .metric { border-left: 1px solid var(--ui-line); padding-left: 30px; }
+.metric span { font-size: 12px; color: var(--ui-muted); }
+.metric strong { display: block; font-size: 28px; font-weight: 500; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.meta-list { margin: 0; }
+.meta-list div { margin-bottom: 21px; }
+.meta-list dt { color: var(--ui-faint); font-size: 12px; margin-bottom: 7px; }
+.meta-list dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.meta-list.horizontal div { display: grid; grid-template-columns: 100px minmax(0,1fr); gap: 18px; margin-bottom: 14px; }
+.meta-list.horizontal dt { margin: 0; font-size: 12px; }
+.table-wrap { border: 1px solid var(--ui-line); border-radius: 9px; background: white; min-width: 0; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; }
+th { color: var(--ui-faint); background: #fbfbfd; font-weight: 450; padding: 13px 20px; white-space: nowrap; font-size: 12px; }
+td { border-top: 1px solid var(--ui-line); padding: 17px 20px; vertical-align: middle; }
+td.title-cell { width: 48%; min-width: 200px; }
+td.actions-cell { text-align: right; white-space: nowrap; }
+tr:hover td { background: #fcfcfe; }
+.table-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; color: var(--ui-faint); font-size: 12px; gap: 16px; }
+.list-check { width: 36px; padding-right: 0; }
+.list-table .row-title { font-size: 13px; }
+.list-table .row-meta { font-size: 12px; }
+.priority { color: #a17c60; font-size: 12px; display: inline-flex; gap: 6px; align-items: center; }
+.priority i { display: inline-block; width: 3px; height: 10px; background: #bc9272; border-radius: 2px; }
+.priority.medium { color: var(--ui-muted); }
+.priority.medium i { height: 7px; background: #aeb0bd; }
+.detail-grid { display: grid; grid-template-columns: minmax(0,1fr) 300px; gap: 40px; align-items: start; }
+.detail-body { max-width: 880px; min-width: 0; }
+.detail-body > .panel { margin-bottom: 24px; }
+.prose { font-size: 14px; line-height: 1.9; }
+.prose p { margin-bottom: 18px; }
+.prose h3 { margin-top: 24px; font-size: 14px; }
+.prose ul, .prose ol { padding-left: 22px; color: #62636f; }
+.prose li { padding: 3px 0; }
+.detail-aside { border-left: 1px solid var(--ui-line); padding-left: 28px; min-width: 0; }
+.detail-aside h3 { margin-bottom: 22px; font-size: 13px; }
+.detail-aside .btn { width: 100%; margin-top: 12px; }
+.detail-title-meta { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; color: var(--ui-faint); font-size: 12px; }
+.timeline { display: flex; flex-direction: column; gap: 22px; }
+.timeline-item { display: flex; gap: 14px; }
+.timeline-icon { width: 26px; height: 26px; color: var(--ui-accent); background: var(--ui-accent-soft); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.timeline-icon .icon { width: 13px; height: 13px; }
+.timeline-item p { margin: 4px 0 0; font-size: 12px; color: var(--ui-faint); }
+.timeline-item strong { font-size: 12px; font-weight: 500; }
+.comment { display: flex; gap: 12px; padding: 18px 0; border-bottom: 1px solid var(--ui-line); }
+.comment p { margin: 7px 0 0; font-size: 13px; }
+.comment-body { min-width: 0; flex: 1; }
+.comment-name { font-size: 12px; font-weight: 550; }
+.comment-time { margin-left: 10px; font-size: 12px; color: var(--ui-faint); }
+.comment-form { margin-top: 20px; }
+.comment-form textarea { width: 100%; }
+.form-layout { display: grid; grid-template-columns: minmax(0,840px) 260px; gap: 44px; align-items: start; }
+.form-layout > aside { padding-top: 22px; }
+.form-layout > aside p { color: var(--ui-faint); font-size: 12px; line-height: 1.95; }
+.form-section { padding: 28px 30px; border-bottom: 1px solid var(--ui-line); }
+.form-section:last-child { border-bottom: 0; }
+.form-section > h2 { font-size: 15px; margin-bottom: 24px; }
+.field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 22px; min-width: 0; }
+.field:last-child { margin-bottom: 0; }
+.field > label, .field-label { font-size: 12px; font-weight: 530; display: flex; align-items: center; gap: 6px; }
+.field em { font-size: 12px; color: var(--ui-danger); font-style: normal; }
+.control { width: 100%; border: 1px solid var(--ui-line-strong); background: white; border-radius: 6px; padding: 9px 12px; min-height: var(--ui-control); font-size: 13px; line-height: 1.6; }
+.control[readonly] { background: #f8f8fa; color: var(--ui-muted); }
+.field-hint { font-size: 12px; color: var(--ui-faint); line-height: 1.8; }
+.field-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 22px; }
+.field-grid .field { margin-bottom: 0; }
+.field-error, .form-error { color: var(--ui-danger); font-size: 12px; }
+.form-error:empty { display: none; }
+.form-error { padding: 12px; background: var(--ui-danger-soft); border-radius: 6px; margin-bottom: 16px; }
+.form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 22px 30px; border-top: 1px solid var(--ui-line); background: white; border-radius: 0 0 10px 10px; flex-wrap: wrap; }
+.form-actions .muted { font-size: 12px; margin-right: auto; }
+.form-check { min-height: 44px; display: flex; align-items: flex-start; gap: 9px; padding: 10px 0; font-size: 13px; }
+.form-check input { margin-top: 4px; }
+.editor { border: 1px solid var(--ui-line-strong); border-radius: 7px; overflow: hidden; background: white; }
+.editor-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--ui-line); padding: 6px 10px; background: #fcfcfd; flex-wrap: wrap; }
+.editor-tools { display: flex; align-items: center; gap: 2px; }
+.editor-tools button { min-width: 30px; min-height: 30px; font-size: 12px; color: var(--ui-muted); border-radius: 4px; }
+.editor-tools button:hover { background: var(--ui-subtle); }
+.editor textarea { display: block; width: 100%; min-height: 245px; border: none; padding: 20px; box-shadow: none; font-size: 13px; line-height: 1.85; }
+.editor-preview { min-height: 245px; padding: 20px; white-space: pre-wrap; font-size: 13px; line-height: 1.9; overflow-wrap: anywhere; }
+.upload-zone { border: 1px dashed var(--ui-line-strong); border-radius: 7px; padding: 20px; text-align: center; font-size: 12px; color: var(--ui-muted); cursor: pointer; display: block; }
+.upload-zone:hover { background: #fcfbff; border-color: #b5a4dc; }
+.upload-zone .icon { margin-right: 8px; color: var(--ui-accent); }
+.upload-zone input { display: block; width: 100%; margin-top: 12px; font-size: 12px; }
+.attachment { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--ui-line); border-radius: 7px; font-size: 12px; background: #fbfbfd; margin-top: 10px; }
+.attachment .icon { color: #9193a4; }
+.attachment .row-main { overflow-wrap: anywhere; }
+.banner { display: flex; align-items: flex-start; gap: 10px; padding: 14px 17px; background: var(--ui-accent-soft); color: #786197; border-radius: 7px; font-size: 12px; line-height: 1.8; margin-bottom: 24px; }
+.banner .icon { width: 16px; height: 16px; margin-top: 3px; }
+.banner.warning { color: var(--ui-warning); background: var(--ui-warning-soft); }
+.banner.danger { color: var(--ui-danger); background: var(--ui-danger-soft); }
+.banner.success { color: var(--ui-success); background: var(--ui-success-soft); }
+.banner p { margin: 0; }
+.steps { display: flex; align-items: flex-start; gap: 0; margin: 0 0 38px; }
+.step { flex: 1; position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; font-size: 12px; color: var(--ui-faint); }
+.step::before { content: ''; position: absolute; left: -50%; right: 50%; height: 1px; background: var(--ui-line); top: 15px; }
+.step:first-child::before { content: none; }
+.step-number { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--ui-line); display: flex; align-items: center; justify-content: center; background: white; z-index: 1; font-size: 12px; }
+.step.active { color: var(--ui-accent); }
+.step.active .step-number { background: var(--ui-accent); color: white; border-color: var(--ui-accent); box-shadow: 0 0 0 4px var(--ui-accent-soft); }
+.step.done .step-number { color: var(--ui-accent); border-color: #d8cbed; }
+.step.done::before, .step.active::before { background: #d3c6ee; }
+.inline-options { display: flex; gap: 20px; flex-wrap: wrap; }
+.inline-options label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.release-card { display: flex; gap: 24px; align-items: center; padding: 24px; }
+.release-card + .release-card { border-top: 1px solid var(--ui-line); }
+.release-number { font-size: 21px; font-weight: 500; min-width: 90px; }
+.release-progress { min-width: 140px; }
+.progress { height: 4px; background: #eeecf4; border-radius: 5px; margin-top: 10px; overflow: hidden; }
+.progress span { display: block; height: 100%; background: #a395cc; border-radius: 5px; }
+.progress .one-third { width: 33%; }
+.progress .two-thirds { width: 66%; }
+.progress .full { width: 100%; }
+.selection-bar { display: flex; gap: 18px; align-items: center; border: 1px solid #dcd0f4; border-radius: 8px; padding: 12px 18px; margin-bottom: 18px; background: #f9f7ff; font-size: 12px; flex-wrap: wrap; }
+.selection-bar p { margin: 0; flex: 1; }
+.empty { min-height: 360px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 40px 24px; }
+.empty-symbol { width: 56px; height: 56px; border-radius: 16px; background: #f1eef8; color: #a191bf; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
+.empty-symbol .icon { width: 25px; height: 25px; }
+.empty h2 { font-size: 19px; margin-bottom: 10px; }
+.empty p { font-size: 13px; color: var(--ui-muted); max-width: 430px; }
+.skeleton { height: 16px; background: #f0f0f5; border-radius: 5px; width: 62%; }
+.skeleton-row { display: flex; align-items: center; gap: 30px; padding: 28px; border-bottom: 1px solid var(--ui-line); }
+.skeleton-row .skeleton:first-child { width: 30px; height: 30px; }
+.skeleton-row .skeleton:last-child { width: 90px; margin-left: auto; }
+.session-layout { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 28px; height: calc(100dvh - var(--ui-header) - 174px); min-height: 500px; }
+.session-layout.focus { grid-template-columns: minmax(0,1fr); max-width: 1120px; margin: auto; }
+.session-layout.code-open { grid-template-columns: minmax(420px,1fr) minmax(380px,1fr); }
+.conversation { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: white; border: 1px solid var(--ui-line); border-radius: 10px; }
+.conversation-log { flex: 1; overflow-y: auto; min-height: 0; padding: 28px 32px; scroll-padding-bottom: 24px; }
+.message { display: flex; gap: 13px; margin-bottom: 30px; }
+.message .message-mark { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; color: #7c69a7; background: var(--ui-accent-soft); border-radius: 8px; }
+.message-content { min-width: 0; flex: 1; font-size: 13px; line-height: 1.9; overflow-wrap: anywhere; }
+.message-content > strong { font-size: 12px; font-weight: 600; }
+.message-content > p { margin-top: 9px; }
+.message.user .message-content > p { background: #f7f7fa; border-radius: 8px; padding: 14px 16px; }
+.message time { color: var(--ui-faint); font-size: 12px; margin-left: 9px; }
+.tool-line { display: flex; align-items: center; gap: 8px; padding: 8px 0; color: var(--ui-muted); font-size: 12px; }
+.tool-line .icon { width: 13px; height: 13px; color: var(--ui-success); }
+.approval-card { border: 1px solid #e3d8f5; padding: 18px; border-radius: 9px; background: #fefcff; margin: 16px 0; }
+.approval-card h4 { margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+.approval-card .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.composer { padding: 18px 22px; border-top: 1px solid var(--ui-line); background: #fdfdfe; border-radius: 0 0 10px 10px; }
+.composer textarea { border: none; background: transparent; min-height: 76px; max-height: 220px; width: 100%; resize: vertical; outline: none; box-shadow: none; font-size: 13px; }
+.composer-footer { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-top: 8px; }
+.composer-footer .send { margin-left: auto; }
+.composer-select { border: 0; font-size: 12px; background: transparent; max-width: 155px; color: var(--ui-muted); padding: 5px 0; min-height: 30px; }
+.session-context { overflow: auto; min-height: 0; }
+.session-context .panel { padding: 22px; margin-bottom: 20px; }
+.session-context h3 { font-size: 13px; margin-bottom: 20px; }
+.code-panel { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.code-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--ui-line); font-size: 12px; }
+.file-list { padding: 8px; border-bottom: 1px solid var(--ui-line); display: flex; gap: 8px; flex-wrap: wrap; }
+.file-choice { padding: 8px 10px; font-size: 12px; border-radius: 5px; display: flex; gap: 8px; }
+.file-choice.active { background: var(--ui-accent-soft); color: var(--ui-accent); }
+.diff { overflow: auto; padding: 20px 0; background: white; flex: 1; border-radius: 0; }
+.diff-line { display: block; padding: 0 18px; min-width: max-content; }
+.diff-line.added { background: #f0faf2; color: #367346; }
+.diff-line.removed { background: #fff3f2; color: #a45a59; }
+.line-number { display: inline-block; width: 34px; color: #a4a7b4; user-select: none; }
+.settings-layout { display: grid; grid-template-columns: 200px minmax(0,1fr); gap: 34px; }
+.settings-menu { display: flex; flex-direction: column; gap: 4px; align-self: start; }
+.settings-menu a { padding: 10px 14px; font-size: 13px; color: var(--ui-muted); border-radius: 6px; min-height: 40px; display: flex; align-items: center; gap: 10px; }
+.settings-menu a .icon { width: 16px; height: 16px; }
+.settings-menu a.active { background: var(--ui-accent-soft); color: var(--ui-accent); }
+.settings-menu .menu-label { font-size: 12px; color: var(--ui-faint); letter-spacing: .05em; padding: 14px; }
+.settings-content { min-width: 0; max-width: 1160px; }
+.settings-content h2 { font-size: 20px; margin-bottom: 6px; }
+.settings-intro { font-size: 12px; color: var(--ui-muted); margin-bottom: 25px; }
+.setting-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 22px 24px; }
+.setting-row + .setting-row { border-top: 1px solid var(--ui-line); }
+.setting-row p { margin: 4px 0 0; font-size: 12px; color: var(--ui-muted); }
+.setting-row strong { font-size: 13px; }
+.toggle { width: 44px; height: 44px; padding: 0; position: relative; background: none; flex: 0 0 auto; }
+.toggle::before { content: ""; position: absolute; left: 6px; top: 12px; width: 32px; height: 20px; border-radius: 12px; background: #d6d6df; }
+.toggle::after { content: ""; position: absolute; left: 8px; top: 14px; width: 16px; height: 16px; border-radius: 50%; background: white; box-shadow: 0 1px 3px #0001; }
+.toggle[aria-checked="true"]::before { background: var(--ui-accent); }
+.toggle[aria-checked="true"]::after { left: 20px; }
+.permissions { display: grid; grid-template-columns: 190px minmax(0,1fr); min-height: 330px; border: 1px solid var(--ui-line); border-radius: 8px; background: white; overflow: hidden; }
+.permission-nav { padding: 14px; background: #fbfbfd; border-right: 1px solid var(--ui-line); }
+.permission-nav button { display: flex; width: 100%; padding: 12px; font-size: 12px; text-align: left; border-radius: 6px; }
+.permission-nav button.active { background: var(--ui-accent-soft); color: var(--ui-accent); }
+.permission-fields { padding: 24px; }
+.permission-fields .form-check { margin-bottom: 10px; }
+.workflow-canvas { min-height: 400px; padding: 60px 26px; overflow: auto; background-image: radial-gradient(#dcdce5 .7px, transparent .7px); background-size: 18px 18px; border: 1px solid var(--ui-line); border-radius: 9px; }
+.workflow-track { display: flex; align-items: center; justify-content: center; gap: 18px; min-width: 680px; min-height: 220px; }
+.workflow-node { width: 126px; min-height: 78px; padding: 16px; border: 1px solid var(--ui-line-strong); border-radius: 9px; display: flex; flex-direction: column; justify-content: center; gap: 8px; background: white; font-size: 13px; box-shadow: 0 3px 12px #36304004; }
+.workflow-node.active { border-color: #ac96e3; background: #fcfaff; color: var(--ui-accent); }
+.workflow-track > .icon { width: 22px; color: #bcbdc8; }
+.resource-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 20px; }
+.resource-card { padding: 24px; }
+.resource-card .item-symbol { margin-bottom: 22px; }
+.resource-card h3 { font-size: 14px; }
+.resource-card p { color: var(--ui-muted); font-size: 12px; margin-bottom: 20px; }
+.resource-card footer { display: flex; justify-content: space-between; font-size: 12px; color: var(--ui-faint); }
+.auth-page { min-height: 100dvh; display: flex; flex-direction: column; background: radial-gradient(ellipse at 48% 28%,#f7f5fc 0, #fcfcfd 48%,#fff 100%); padding: 36px 40px; }
+.auth-top { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.auth-card { margin: auto; width: min(420px,100%); padding: 36px; background: white; border: 1px solid var(--ui-line); border-radius: 12px; box-shadow: 0 12px 60px #55467f05; }
+.auth-card h1 { font-size: 26px; margin-bottom: 8px; }
+.auth-card > p { font-size: 13px; color: var(--ui-muted); margin-bottom: 28px; }
+.auth-card .btn.primary { width: 100%; }
+.auth-footer { color: var(--ui-faint); font-size: 12px; text-align: center; margin-top: 22px; }
+.setup-page { max-width: 900px; margin: 0 auto; padding: 50px 28px 80px; width: 100%; }
+.setup-page .panel { max-width: 680px; margin: 0 auto; }
+.setup-page .page-heading { justify-content: center; text-align: center; }
+.setup-page h1 { font-size: 27px; }
+.checks-list { display: flex; flex-direction: column; }
+.check-row { display: flex; align-items: flex-start; gap: 14px; border-bottom: 1px solid var(--ui-line); padding: 22px 0; }
+.check-row:last-child { border: none; }
+.check-row input { margin-top: 5px; }
+.check-row strong { font-size: 13px; font-weight: 500; }
+.check-row p { color: var(--ui-faint); font-size: 12px; margin: 4px 0 0; }
+.check-row .badge { margin-left: auto; }
+.conflict-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+.conflict-grid .panel { padding: 22px; }
+.conflict-grid textarea { min-height: 180px; }
+.confirmation-summary { padding: 18px; border-radius: 7px; background: #f8f8fb; font-size: 12px; margin: 20px 0; }
+.catalog-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 24px; margin-top: 26px; }
+.catalog-group h3 { font-size: 12px; color: var(--ui-muted); font-weight: 500; margin-bottom: 10px; }
+.catalog-link { display: flex; gap: 9px; align-items: center; padding: 9px 10px; border-radius: 6px; font-size: 12px; min-height: 38px; }
+.catalog-link:hover { background: var(--ui-accent-soft); color: var(--ui-accent); }
+.catalog-link .icon { width: 15px; height: 15px; }
+.catalog-link span { color: var(--ui-faint); font-size: 12px; margin-left: auto; }
+.catalog-links { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; margin-top: 14px; }
+dialog { width: min(560px,calc(100vw - 40px)); max-height: calc(100dvh - 48px); padding: 0; border: 1px solid var(--ui-line); border-radius: 12px; background: white; color: var(--ui-text); box-shadow: var(--ui-shadow); overflow-y: auto; }
+dialog::backdrop { background: #27243145; backdrop-filter: blur(3px); }
+dialog.catalog { width: min(1080px,calc(100vw - 48px)); }
+dialog.drawer { inset: 16px 16px 16px auto; margin: 0; height: calc(100dvh - 32px); max-height: none; width: 440px; max-width: calc(100vw - 32px); }
+.dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px 26px; border-bottom: 1px solid var(--ui-line); position: sticky; top: 0; z-index: 2; background: white; }
+.dialog-head h2 { margin: 0; font-size: 18px; }
+.dialog-content { padding: 25px 26px; }
+.dialog-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; padding: 18px 26px; border-top: 1px solid var(--ui-line); background: white; }
+.dialog-actions .muted { margin-right: auto; font-size: 12px; }
+.toasts { position: fixed; z-index: 100; right: 28px; bottom: 26px; max-width: min(400px,calc(100vw - 40px)); pointer-events: none; }
+.toast { background: var(--ui-primary); color: white; padding: 13px 18px; border-radius: 8px; box-shadow: var(--ui-shadow); font-size: 12px; margin-top: 9px; display: flex; align-items: center; gap: 10px; animation: toast-in .18s ease-out; }
+.toast .icon { width: 16px; height: 16px; }
+.simulation-label { font-size: 12px; color: var(--ui-faint); }
+.nav-overlay { display: none; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+@keyframes toast-in { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (min-width: 2200px) {
+  .page { padding-top: 54px; }
+  .home-layout { grid-template-columns: minmax(0,1fr) 288px; gap: 64px; }
+  .work-row { padding-top: 24px; padding-bottom: 24px; }
+}
+@media (max-width: 1399px) {
+  .home-layout { grid-template-columns: minmax(0,1fr); }
+  .home-aside { display: none; }
+  .row-person { width: 80px; }
+  .row-date { width: 65px; }
+  .detail-grid { gap: 28px; grid-template-columns: minmax(0,1fr) 250px; }
+  .form-layout { grid-template-columns: minmax(0,840px); }
+  .form-layout > aside { display: none; }
+  .session-layout.code-open { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+}
+@media (max-width: 1199px) and (min-width: 768px) {
+  .sidebar { padding-left: 10px; padding-right: 10px; }
+  .brand { justify-content: center; padding: 0; }
+  .sidebar .brand span, .nav-link > span, .prototype-tag, .sidebar .brand small { display: none; }
+  .nav-link { justify-content: center; padding: 10px; }
+  .sidebar-nav { margin-top: 35px; }
+  .topbar { gap: 14px; }
+  .global-search { min-width: 200px; }
+  .page { padding-top: 32px; }
+  .project-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .resource-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 1023px) {
+  .overview-grid, .detail-grid { grid-template-columns: minmax(0,1fr); }
+  .detail-aside { padding: 22px; border: 1px solid var(--ui-line); border-radius: 9px; background: white; }
+  .detail-aside .meta-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 22px; }
+  .detail-body { max-width: none; }
+  .overview-grid > aside { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .overview-grid > aside .section { margin: 0; }
+  .settings-layout { grid-template-columns: minmax(0,1fr); gap: 24px; }
+  .settings-menu { flex-direction: row; flex-wrap: wrap; border-bottom: 1px solid var(--ui-line); padding-bottom: 14px; }
+  .settings-menu .menu-label { display: none; }
+  .settings-menu a { padding: 7px 12px; font-size: 12px; }
+  .session-layout, .session-layout.code-open { grid-template-columns: minmax(0,1fr); height: auto; min-height: 0; }
+  .conversation { min-height: 620px; }
+  .conversation-log { max-height: 580px; }
+  .session-context { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .session-context .panel { margin: 0; }
+  .code-panel { min-height: 500px; max-height: 740px; }
+}
+@media (max-width: 767px) {
+  body { font-size: 14px; }
+  .shell { padding-left: 0; padding-bottom: calc(68px + env(safe-area-inset-bottom)); }
+  .sidebar { width: 252px; transform: translateX(-100%); transition: transform .18s; z-index: 40; padding-bottom: max(20px,env(safe-area-inset-bottom)); }
+  .sidebar:not(.open) { visibility: hidden; }
+  .sidebar.open { transform: none; visibility: visible; }
+  .sidebar-bottom { padding-top: 28px; }
+  .nav-overlay.open { display: block; position: fixed; inset: 0; background: #25213055; z-index: 35; }
+  .topbar { gap: 12px; padding: 0 16px; position: relative; }
+  .mobile-menu { display: inline-flex !important; }
+  .topbar-divider, .breadcrumb { display: none; }
+  .context-select { flex: 1; }
+  .context-select .icon { display: none; }
+  .context-select select { width: 100%; min-width: 0; max-width: 190px; font-size: 12px; }
+  .global-search { min-width: 0; padding: 0; width: 36px; height: 44px; border: none; background: none; justify-content: center; }
+  .global-search > span, .global-search kbd { display: none; }
+  .topbar-spacer { display: none; }
+  .avatar-button .avatar { width: 29px; height: 29px; }
+  .bottom-nav { display: flex; justify-content: space-around; align-items: center; position: fixed; bottom: 0; left: 0; right: 0; z-index: 25; padding: 7px 6px max(7px,env(safe-area-inset-bottom)); min-height: 66px; border-top: 1px solid var(--ui-line); background: #fffffff5; backdrop-filter: blur(12px); }
+  .bottom-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 12px; color: var(--ui-muted); min-height: 46px; min-width: 52px; border-radius: 7px; }
+  .bottom-nav a.active { color: var(--ui-accent); }
+  .bottom-nav .icon { width: 20px; height: 20px; }
+  .page { padding-top: 28px; padding-bottom: 35px; }
+  .page-heading { gap: 14px; margin-bottom: 27px; flex-wrap: wrap; }
+  .page-heading h1 { font-size: 27px; }
+  .page-heading p { font-size: 12px; }
+  .heading-actions { gap: 8px; padding-top: 0; }
+  .btn, .btn.small { min-height: 44px; padding: 9px 13px; font-size: 12px; }
+  .icon-btn { width: 44px; height: 44px; }
+  .work-row { padding: 18px 15px; gap: 12px; flex-wrap: wrap; min-height: 100px; }
+  .work-row .item-symbol { width: 29px; height: 29px; border-radius: 7px; }
+  .work-row .item-symbol .icon { width: 15px; height: 15px; }
+  .work-row .row-person, .work-row .row-date { display: none; }
+  .work-row .row-title { font-size: 13px; }
+  .work-row .row-meta { font-size: 12px; gap: 6px; }
+  .work-row > .btn { min-width: 52px; padding: 8px 10px; }
+  .work-section { margin-top: 26px; }
+  .section-title h2 { font-size: 16px; }
+  .section-title { gap: 8px; }
+  .section-title .text-link { font-size: 12px; }
+  .project-grid, .resource-grid { grid-template-columns: minmax(0,1fr); gap: 16px; }
+  .project-card { padding: 22px; }
+  .project-card-top { margin-bottom: 18px; }
+  .project-card p { min-height: 0; }
+  .toolbar { gap: 10px; }
+  .input-search { flex: 1; min-width: 150px; }
+  .input-search input { width: 100%; min-height: 42px; }
+  .segment { padding: 7px 12px; min-height: 44px; }
+  .tabs { gap: 22px; margin-bottom: 22px; }
+  .tab { font-size: 12px; }
+  .panel-pad { padding: 20px; }
+  .overview-grid > aside { grid-template-columns: minmax(0,1fr); }
+  .metrics { gap: 14px; }
+  .metric + .metric { padding-left: 15px; }
+  .metric strong { font-size: 25px; }
+  .metric span { font-size: 12px; }
+  .list-table, .list-table tbody, .list-table tr, .list-table td { display: block; width: 100%; }
+  .list-table thead { display: none; }
+  .list-table tr { padding: 18px; position: relative; border-bottom: 1px solid var(--ui-line); }
+  .list-table tr:last-child { border-bottom: 0; }
+  .list-table td { padding: 4px 0; border: 0; }
+  .list-table td.title-cell { min-width: 0; padding-right: 4px; }
+  .list-table td[data-label] { display: flex; gap: 14px; align-items: center; font-size: 12px; }
+  .list-table td[data-label]::before { content: attr(data-label); color: var(--ui-faint); min-width: 44px; }
+  .list-table td.actions-cell { display: flex; justify-content: flex-end; margin-top: 6px; }
+  .list-table .list-check { width: auto; position: absolute; top: 16px; right: 16px; }
+  .list-table tr:has(.list-check) td.title-cell { padding-right: 30px; }
+  .table-wrap { overflow: hidden; }
+  .table-footer { font-size: 12px; }
+  .form-section { padding: 23px 20px; }
+  .form-actions { padding: 17px 20px; }
+  .form-actions .muted { width: 100%; }
+  .field-grid { grid-template-columns: minmax(0,1fr); gap: 20px; }
+  .field { margin-bottom: 22px; }
+  .editor textarea, .editor-preview { padding: 16px; min-height: 230px; }
+  .detail-aside { padding: 20px; }
+  .detail-aside .meta-list { gap: 0 14px; }
+  .detail-title-meta { gap: 7px; }
+  .release-card { flex-wrap: wrap; gap: 15px; padding: 20px; }
+  .release-card .row-main { min-width: 110px; }
+  .release-progress { min-width: 0; flex: 1; }
+  .session-context { grid-template-columns: minmax(0,1fr); }
+  .session-layout { gap: 20px; }
+  .conversation { min-height: 570px; }
+  .conversation-log { padding: 20px 16px; max-height: 540px; }
+  .message { gap: 10px; margin-bottom: 22px; }
+  .message .message-mark { width: 24px; height: 24px; border-radius: 6px; }
+  .message .message-mark .icon { width: 16px; height: 16px; }
+  .message-content { font-size: 12px; }
+  .message.user .message-content > p { padding: 12px; }
+  .composer { padding: 14px 16px; }
+  .composer-select { max-width: 125px; font-size: 12px; }
+  .composer .send { padding: 8px 12px; }
+  .code-panel { min-height: 460px; }
+  .settings-menu { gap: 2px; }
+  .settings-menu a { min-height: 44px; padding: 8px 10px; font-size: 12px; }
+  .settings-menu a .icon { width: 14px; height: 14px; }
+  .setting-row { padding: 18px 20px; gap: 15px; flex-wrap: wrap; }
+  .setting-row .row-main { min-width: 120px; }
+  .permissions { grid-template-columns: minmax(0,1fr); }
+  .permission-nav { border-right: 0; border-bottom: 1px solid var(--ui-line); display: flex; flex-wrap: wrap; gap: 5px; }
+  .permission-nav button { width: auto; min-height: 44px; }
+  .permission-fields { padding: 18px; }
+  .conflict-grid { grid-template-columns: minmax(0,1fr); }
+  .check-row { gap: 10px; flex-wrap: wrap; }
+  .check-row .row-main { min-width: 170px; }
+  .check-row .badge { margin-left: 26px; }
+  .auth-page { padding: 24px 20px; gap: 40px; }
+  .auth-top .brand { font-size: 12px; padding: 0; }
+  .auth-card { padding: 28px 24px; }
+  .auth-top .btn { font-size: 12px; }
+  .setup-page { padding: 34px 0 50px; }
+  .setup-page .page-heading { padding: 0 10px; }
+  .step { font-size: 12px; }
+  .step-number { width: 26px; height: 26px; }
+  .step::before { top: 13px; }
+  dialog, dialog.catalog { width: calc(100vw - 24px); max-height: calc(100dvh - 24px); border-radius: 10px; }
+  dialog.drawer { inset: 12px 12px 12px auto; width: calc(100vw - 24px); height: calc(100dvh - 24px); max-width: none; }
+  .dialog-head { padding: 16px 20px; }
+  .dialog-head h2 { font-size: 17px; }
+  .dialog-content { padding: 20px; }
+  .dialog-actions { padding: 16px 20px; }
+  .catalog-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px 12px; }
+  .catalog-link { padding: 8px 0; min-height: 44px; font-size: 12px; }
+  .catalog-link span { display: none; }
+  .catalog-group h3 { font-size: 12px; }
+  .toasts { right: 20px; bottom: calc(80px + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 359px) {
+  :root { --ui-page-gap: 14px; }
+  .topbar { gap: 6px; padding: 0 10px; }
+  .work-row { padding: 16px 12px; gap: 9px; }
+  .work-row .item-symbol { display: none; }
+  .row-meta { gap: 5px; }
+  .btn { padding-left: 11px; padding-right: 11px; }
+  .form-section, .form-actions { padding: 20px 15px; }
+  .form-section > h2 { margin-bottom: 20px; }
+  .catalog-grid { grid-template-columns: minmax(0,1fr); }
+  .detail-aside .meta-list { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-height: 700px) and (min-width: 1024px) {
+  .session-layout { height: auto; min-height: 440px; }
+  .conversation-log { max-height: 440px; }
+  .sidebar-nav { margin-top: 24px; }
+  .sidebar-bottom { padding-top: 24px; }
+  .prototype-tag { margin-top: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+</style>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div id="app"></div>
+  <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+  <div class="toasts" id="toasts" role="status" aria-live="polite" aria-atomic="true"></div>
+  <noscript>此原型需要 JavaScript 来演示页面和交互；不会连接真实业务系统。</noscript>
+<script>
+/* All records below are fictional review fixtures. No backend, credentials or network calls. */
+(function () {
+  'use strict';
+  const icons = {
+    logo: '<path d="m8 5-6 7 6 7m8-14 6 7-6 7"/>',
+    home: '<path d="m3 10 9-7 9 7v10H3z"/><path d="M9 20v-7h6v7"/>',
+    folder: '<path d="M3 7h7l2-3h8a1 1 0 0 1 1 1v14H3z"/><path d="M3 7V4h6l3 3"/>',
+    issue: '<rect x="4" y="3" width="16" height="18" rx="3"/><path d="m8 11 3 3 5-6"/>',
+    code: '<path d="m7 6-5 6 5 6m10-12 5 6-5 6m-3-14-4 16"/>',
+    box: '<path d="m12 2 9 5v10l-9 5-9-5V7zM3 7l9 5 9-5M12 12v10M7.5 4.5l9 5"/>',
+    search: '<circle cx="10.5" cy="10.5" r="7.5"/><path d="m16 16 5 5"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    down: '<path d="m6 9 6 6 6-6"/>',
+    right: '<path d="m9 5 7 7-7 7"/>',
+    back: '<path d="m10 5-7 7 7 7M3 12h18"/>',
+    arrow: '<path d="M4 12h15m-6-6 6 6-6 6"/>',
+    user: '<circle cx="12" cy="7" r="4"/><path d="M4 22v-3a8 8 0 0 1 16 0v3"/>',
+    users: '<circle cx="9" cy="7" r="3"/><path d="M2 21v-3a7 7 0 0 1 14 0v3m0-17a3 3 0 0 1 0 6m3 3c3 1 3 4 3 8"/>',
+    settings: '<path d="m9 3-1 3-3 1-2 5 2 5 3 1 1 3h6l1-3 3-1 2-5-2-5-3-1-1-3z"/><circle cx="12" cy="12" r="3"/>',
+    grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+    menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+    close: '<path d="m6 6 12 12M6 18 18 6"/>',
+    check: '<path d="m4 12 5 5L20 6"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/>',
+    link: '<path d="m9 15 6-6m-5-3 2-2a5 5 0 0 1 7 7l-2 2m-3 5-2 2a5 5 0 0 1-7-7l2-2"/>',
+    more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+    file: '<path d="M5 2h9l5 5v15H5zM14 2v6h5M8 12h8M8 16h8"/>',
+    branch: '<circle cx="6" cy="4" r="2"/><circle cx="6" cy="20" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 6v12M18 9c0 6-12 3-12 9"/>',
+    play: '<path d="m7 4 13 8-13 8z"/>',
+    stop: '<rect x="5" y="5" width="14" height="14" rx="2"/>',
+    spark: '<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/>',
+    shield: '<path d="m12 2 8 3v7c0 6-8 10-8 10S4 18 4 12V5z"/><path d="m8 12 3 3 5-6"/>',
+    lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4M12 14v3"/>',
+    upload: '<path d="M12 16V3m-5 5 5-5 5 5M3 16v5h18v-5"/>',
+    copy: '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V3H3v13h5"/>',
+    refresh: '<path d="M20 9A8 8 0 0 0 5 5L2 8m0-6v6h6m-4 7a8 8 0 0 0 15 4l3-3m0 6v-6h-6"/>',
+    message: '<path d="M3 3h18v14H9l-6 4z"/>',
+    send: '<path d="m2 3 20 9L2 21l4-9zM6 12h16"/>',
+    filter: '<path d="M3 5h18M6 12h12M10 19h4"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6M17 2v6M3 11h18"/>',
+    edit: '<path d="m15 3 6 6-11 11-7 1 1-7zM12 6l6 6"/>',
+    trash: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v1"/>',
+    monitor: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+    phone: '<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 18h4"/>',
+    logout: '<path d="M9 3H3v18h6m-2-9h14m-5-5 5 5-5 5"/>',
+  };
+  const routes = [
+    ['home','工作台','home','工作入口与项目'], ['projects','项目','folder','工作入口与项目'],
+    ['project','项目概览','folder','工作入口与项目'], ['project-settings','项目配置','settings','工作入口与项目'],
+    ['issues','事项','issue','事项表达与协作'], ['issue-new','编写需求','file','事项表达与协作'],
+    ['bug-new','提交缺陷','issue','事项表达与协作'], ['issue','事项详情','issue','事项表达与协作'],
+    ['releases','版本目录','box','版本规划与分派'], ['release','版本范围规划','box','版本规划与分派'],
+    ['assignment','认领与指派','user','版本规划与分派'], ['deliveries','待验证与交付','box','版本规划与分派'],
+    ['tasks','开发任务','code','开发任务与准备'], ['task','任务范围与合并','code','开发任务与准备'],
+    ['prepare','个人开发环境','monitor','开发任务与准备'], ['start','分支与执行确认','play','开发任务与准备'],
+    ['manual','独立开发','spark','AI 会话与代码'], ['session','开发会话','message','AI 会话与代码'],
+    ['approval','执行审批与澄清','shield','AI 会话与代码'], ['changes','文件变更与 Git','branch','AI 会话与代码'],
+    ['publish','发布交付','upload','交付、验证与历史'], ['delivery','验收与退回','check','交付、验证与历史'],
+    ['archive','归档会话','clock','交付、验证与历史'], ['cleanup','删除与清理确认','trash','交付、验证与历史'],
+    ['assets','项目资料库','folder','项目资料与配置'], ['asset','资料与安全字段','file','项目资料与配置'],
+    ['members','项目成员','users','项目资料与配置'], ['prompts','提示词','spark','项目资料与配置'],
+    ['personal','个人设置','user','个人设置与接入'], ['git','Git 账号','branch','个人设置与接入'],
+    ['tokens','MCP Token','lock','个人设置与接入'], ['mcp-guide','MCP 连接与上传','link','个人设置与接入'],
+    ['accounts','账号管理','users','组织与平台管理'], ['departments','部门功能上限','shield','组织与平台管理'],
+    ['workflow','事项流程','grid','组织与平台管理'], ['suppliers','Agent 供应商','spark','组织与平台管理'],
+    ['supplier','供应商连接','link','运行平台与系统配置'], ['environment','运行环境','monitor','运行平台与系统配置'],
+    ['storage','成员目录','folder','运行平台与系统配置'], ['init-log','初始化记录','clock','运行平台与系统配置'],
+    ['login','登录','lock','账号与首次使用'], ['password','首次修改密码','lock','账号与首次使用'],
+    ['setup','初始化向导','spark','账号与首次使用'], ['setup-summary','初始化确认','check','账号与首次使用'],
+    ['conflict','编辑冲突','edit','冲突、异常与移动端'], ['uncertain','启动结果待确认','info','冲突、异常与移动端'],
+  ];
+  const projects = [
+    { id:'console',name:'Web Console',initial:'W',description:'让从想法到交付的每一步，都更清晰。', color:'violet',members:6 },
+    { id:'portal',name:'Portal',initial:'P',description:'面向客户的产品入口与服务体验。', color:'blue',members:4 },
+    { id:'design',name:'Design System',initial:'D',description:'一致、轻盈、可持续的界面基础。',color:'peach',members:3 },
+  ];
+  const issues = [
+    {id:'WC-128',title:'统一搜索与项目筛选体验',type:'需求',project:'console',release:'v0.2',status:'规划中',priority:'高',owner:'待分派',date:'10月16日',description:'让成员在不同项目之间快速找到事项、交付和相关资料。搜索保留当前项目上下文，并允许切换到全部项目。'},
+    {id:'WC-126',title:'优化登录与首次使用体验',type:'需求',project:'console',release:'v0.2',status:'开发中',priority:'高',owner:'林晨',date:'10月15日',description:'简化首次登录流程，用清晰的状态反馈引导成员进入工作台。'},
+    {id:'WC-124',title:'移动端菜单遮挡底部操作',type:'缺陷',project:'console',release:'v0.2',status:'待验证',priority:'高',owner:'林晨',date:'10月14日',description:'在较小视口打开菜单后，底部确认操作被遮挡。需要保证完整内容与操作都可访问。'},
+    {id:'WC-121',title:'项目资料支持按类型筛选',type:'需求',project:'console',release:'v0.2',status:'规划中',priority:'中',owner:'陈宇',date:'10月18日',description:'文档、链接和附件按类型展示，便于定位项目资料。'},
+    {id:'PT-042',title:'完善新用户引导的验收标准',type:'需求',project:'portal',release:'v1.1',status:'规划中',priority:'中',owner:'待分派',date:'10月17日',description:'明确引导完成条件及异常恢复方式。'},
+    {id:'PT-039',title:'修复窄屏页面的横向滚动',type:'缺陷',project:'portal',release:'v1.1',status:'待验证',priority:'中',owner:'陈宇',date:'10月14日',description:'表格和长链接不应撑开移动端页面。'},
+    {id:'DS-018',title:'补齐按钮的键盘焦点状态',type:'需求',project:'design',release:'v0.1',status:'已实现',priority:'中',owner:'张敏',date:'10月12日',description:'所有按钮的焦点状态保持清晰一致。'},
+  ];
+  window.UI = {
+    icons, routes, projects,
+    state: {
+      route:'home', project:'all', selectedIssue:'WC-128', selectedTask:'DEV-032', selectedAsset:'需求说明',
+      issues, search:'', issueFilter:'全部', taskFilter:'我的任务', scenario:'default', navOpen:false,
+      tasks:[
+        {id:'DEV-032',title:'统一搜索与项目筛选',status:'待开发',project:'console',release:'v0.2',owner:'林晨',issues:['WC-128']},
+        {id:'DEV-030',title:'登录与首次使用体验优化',status:'开发中',project:'console',release:'v0.2',owner:'林晨',issues:['WC-126']},
+        {id:'DEV-028',title:'修复移动端菜单遮挡',status:'已完成',project:'console',release:'v0.2',owner:'林晨',issues:['WC-124']},
+        {id:'DEV-027',title:'资料类型与目录整理',status:'待开发',project:'console',release:'v0.2',owner:'林晨',issues:['WC-121']},
+      ],
+      selectedTasks:[], prepared:false, running:false, approved:false, approvalStatus:'pending',
+      checks:[false,false,false], comments:[], messages:[], artifacts:[], deliveries:[],
+      catalogSearch:'', formDraft:{}, editorMode:'write', codeFile:'SearchPanel.vue',
+      settingsTab:'资料', securityVisible:false, tokenCreated:false, tokens:[{name:'本机助手',scope:'读取 · 当前可访问项目',enabled:true}],
+      setupStep:1, selectedPermission:'事项', permissions:['查看事项','创建事项','编辑事项','认领与分派'],
+      mergeHistory:[], saved:{}, activity:[], gitConnected:false, supplierConnected:false,
+    },
+  };
+})();
+
+</script>
+<script>
+(function () {
+  'use strict';
+  const U = window.UI;
+  const S = U.state;
+  const h = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const icon = name => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${U.icons[name] || U.icons.file}</svg>`;
+  const btn = (text, action, kind = '', symbol = '', attrs = '') => `<button type="${action === 'submit' ? 'submit' : 'button'}" class="btn ${kind}" ${action && action !== 'submit' ? `data-action="${action}"` : ''} ${attrs}>${symbol ? icon(symbol) : ''}${h(text)}</button>`;
+  const link = (text, route, kind = 'text-link', symbol = '') => `<a href="#${route}" class="${kind}">${symbol ? icon(symbol) : ''}${h(text)}</a>`;
+  const avatar = (name = '林晨', kind = '') => `<span class="avatar ${kind}" aria-hidden="true">${h(name.slice(-1))}</span>`;
+  const badge = (text, kind = '') => `<span class="badge ${kind}">${h(text)}</span>`;
+  const status = text => badge(text, /已实现|已完成|已通过|就绪|已验证/.test(text) ? 'success' : /待验证|待开发|规划中/.test(text) ? '' : /失败|退回|缺陷/.test(text) ? 'danger' : /运行|开发中|处理中/.test(text) ? 'blue' : 'neutral');
+  const projectName = id => U.projects.find(p => p.id === id)?.name || 'Web Console';
+  const project = () => U.projects.find(p => p.id === S.project) || U.projects[0];
+  const currentIssue = () => S.issues.find(i => i.id === S.selectedIssue) || S.issues[0];
+  const currentTask = () => S.tasks.find(t => t.id === S.selectedTask) || S.tasks[0];
+  const scopedIssues = () => S.issues.filter(i => S.project === 'all' || i.project === S.project);
+  const sectionTitle = (title, count, extra = '', marker = '') => `<div class="section-title"><h2>${marker ? `<i class="marker ${marker}"></i>` : ''}${h(title)}${count !== undefined ? `<span class="count">${count}</span>` : ''}</h2>${extra}</div>`;
+  const heading = (title, desc, actions = '', meta = '') => `<div class="page-heading"><div><h1 id="page-title" tabindex="-1">${h(title)}</h1>${desc ? `<p>${h(desc)}</p>` : ''}${meta}</div>${actions ? `<div class="heading-actions">${actions}</div>` : ''}</div>`;
+  const page = (title, desc, content, actions = '', options = '') => `<main id="main" class="page ${options}" tabindex="-1">${heading(title,desc,actions)}${content}</main>`;
+  const banner = (text, kind = '', symbol = 'info') => `<div class="banner ${kind}">${icon(symbol)}<p>${text}</p></div>`;
+  const field = (label, name, value = '', options = {}) => {
+    const attrs = `${options.required ? 'required' : ''} ${options.readonly ? 'readonly' : ''} ${options.type === 'password' ? 'autocomplete="off"' : ''} ${options.attrs || ''}`;
+    const input = options.select ? `<select class="control" id="f-${name}" name="${name}" ${attrs}>${options.select.map(o => `<option value="${h(Array.isArray(o) ? o[0] : o)}" ${(Array.isArray(o) ? o[0] : o) === value ? 'selected' : ''}>${h(Array.isArray(o) ? o[1] : o)}</option>`).join('')}</select>` : options.textarea ? `<textarea class="control" id="f-${name}" name="${name}" ${attrs}>${h(value)}</textarea>` : `<input class="control" id="f-${name}" name="${name}" type="${options.type || 'text'}" value="${h(value)}" ${attrs} ${options.placeholder ? `placeholder="${h(options.placeholder)}"` : ''}>`;
+    return `<div class="field"><label for="f-${name}">${h(label)}${options.required ? '<em>*</em>' : ''}</label>${input}${options.hint ? `<div class="field-hint">${h(options.hint)}</div>` : ''}</div>`;
+  };
+  const form = (id, content, submitLabel = '保存', cancel = '', extra = '') => `<form data-form="${id}"><div class="form-error" role="alert"></div>${content}<div class="form-actions">${extra}${cancel ? link('取消',cancel,'btn ghost') : ''}${btn(submitLabel,'submit','primary')}</div></form>`;
+  const tabs = entries => `<nav class="tabs" aria-label="页面分区">${entries.map(([name,route,active]) => `<a class="tab ${active || S.route === route ? 'active' : ''}" href="#${route}" ${active || S.route === route ? 'aria-current="page"' : ''}>${h(name)}</a>`).join('')}</nav>`;
+  const projectTabs = () => tabs([['概览','project'],['版本','releases'],['资料','assets'],['成员','members'],['设置','project-settings'],['提示词','prompts']]);
+  const search = placeholder => `<label class="input-search">${icon('search')}<input type="search" name="local-search" aria-label="${h(placeholder)}" placeholder="${h(placeholder)}" value="${h(S.search)}"></label>`;
+  const empty = (title, desc, action = '', symbol = 'folder') => `<div class="panel empty"><div class="empty-symbol">${icon(symbol)}</div><h2>${h(title)}</h2><p>${h(desc)}</p>${action}</div>`;
+  const meta = items => `<dl class="meta-list">${items.map(([key,val]) => `<div><dt>${h(key)}</dt><dd>${val}</dd></div>`).join('')}</dl>`;
+  const attachment = (name, detail = '项目共享资料 · 演示附件') => `<div class="attachment">${icon('file')}<div class="row-main">${h(name)}<div class="faint small">${h(detail)}</div></div><button type="button" class="icon-btn" data-action="preview-attachment" data-name="${h(name)}" aria-label="预览 ${h(name)}">${icon('right')}</button></div>`;
+  const typeSymbol = i => `<span class="item-symbol ${i.type === '缺陷' ? 'bug' : ''}">${icon(i.type === '缺陷' ? 'issue' : 'file')}</span>`;
+  const issueRow = (i, action = '查看', target = 'open-issue') => `<div class="work-row">${typeSymbol(i)}<div class="row-main"><button type="button" class="row-title" data-action="open-issue" data-id="${i.id}">${h(i.title)}</button><div class="row-meta"><span>${h(projectName(i.project))}</span><i class="sep"></i><span>${h(i.type)}</span><i class="sep"></i><span>${h(i.id)}</span></div></div><span class="row-person">${avatar(i.owner === '待分派' ? '未' : i.owner)}${h(i.owner)}</span><span class="row-date">${h(i.date)}</span>${btn(action,target,'small','',`data-id="${i.id}"`)}</div>`;
+  function issueTable(items, selection = false) {
+    if (!items.length) return empty('没有符合条件的事项','调整搜索或筛选条件，也可以创建一个新事项。',link('新建事项','issue-new','btn primary','plus'));
+    return `<div class="table-wrap"><table class="list-table"><thead><tr>${selection ? '<th class="list-check"></th>' : ''}<th>事项</th><th>状态</th><th>优先级</th><th>负责人</th><th>版本</th><th></th></tr></thead><tbody>${items.map(i=>`<tr>${selection ? `<td class="list-check"><input type="checkbox" name="scope-issue" value="${i.id}" aria-label="选择 ${h(i.title)}" checked></td>` : ''}<td class="title-cell"><button class="row-title" data-action="open-issue" data-id="${i.id}">${h(i.title)}</button><div class="row-meta">${badge(i.type,i.type === '缺陷' ? 'danger' : '')}<span>${i.id}</span><i class="sep"></i><span>${h(projectName(i.project))}</span></div></td><td data-label="状态">${status(i.status)}</td><td data-label="优先级"><span class="priority ${i.priority === '中' ? 'medium' : ''}"><i></i>${i.priority}</span></td><td data-label="负责人">${h(i.owner)}</td><td data-label="版本">${h(i.release)}</td><td class="actions-cell">${btn(i.owner === '待分派' ? '分派' : '查看',i.owner === '待分派' ? 'assign' : 'open-issue','small ghost','',`data-id="${i.id}"`)}</td></tr>`).join('')}</tbody></table></div><div class="table-footer"><span>共 ${items.length} 项</span><span>当前范围内的全部事项</span></div>`;
+  }
+  const settingsItems = [['个人资料','personal','user'],['Git 账号','git','branch'],['MCP 接入','tokens','link']];
+  const adminItems = [['账号','accounts','users'],['部门与权限','departments','shield'],['事项流程','workflow','grid'],['Agent 供应商','suppliers','spark'],['运行环境','environment','monitor'],['成员目录','storage','folder'],['初始化记录','init-log','clock']];
+  function settingsPage(title,desc,content,admin = false,actions = '') {
+    const group = admin ? adminItems : settingsItems;
+    const active = {supplier:'suppliers','mcp-guide':'tokens'}[S.route] || S.route;
+    return page(admin ? '管理中心' : '个人设置',admin ? '组织、流程与运行平台，集中维护。' : '管理你的偏好与连接，让工作更顺手。',`<div class="settings-layout"><nav class="settings-menu" aria-label="${admin ? '管理' : '个人'}设置"><div class="menu-label">${admin ? '组织与平台' : '我的账号'}</div>${group.map(([name,route,sym])=>`<a href="#${route}" class="${active === route ? 'active' : ''}" ${active === route ? 'aria-current="page"' : ''}>${icon(sym)}${name}</a>`).join('')}</nav><section class="settings-content"><div class="section-title"><div><h2>${h(title)}</h2><p class="settings-intro">${h(desc)}</p></div>${actions}</div>${content}</section></div>`);
+  }
+  const V = {};
+  V.home = () => {
+    const pool = scopedIssues();
+    const groups = [['待推进','规划中','完善','open-issue',''],['处理中','开发中','继续','open-session','blue'],['待验证','待验证','验证','open-delivery','green']];
+    return page('工作台','从下一件事开始，让每一步都有进展。',`<div class="home-layout"><div>${groups.map(([title,state,action,target,color])=>{const rows=pool.filter(i=>i.status===state).slice(0,2);return `<section class="work-section">${sectionTitle(title,rows.length,link('查看全部',state==='待验证'?'deliveries':state==='开发中'?'tasks':'issues','text-link','arrow'),color || 'violet')}<div class="panel">${rows.length ? rows.map(i=>issueRow(i,action,target)).join('') : '<div class="panel-pad muted small">当前没有需要处理的工作。</div>'}</div></section>`;}).join('')}</div><aside class="home-aside"><p class="quiet-heading">最近访问</p>${U.projects.map(p=>`<a href="#project" class="mini-project" data-action="open-project" data-id="${p.id}"><div class="project-icon ${p.color}">${p.initial}</div><div><strong>${p.name}</strong><p>${p.members} 位参与者</p></div></a>`).join('')}<div class="quiet-note">${icon('spark')}<p>从一个清晰的想法开始。<br>规划、协作、开发与交付，<br>在同一个空间自然衔接。</p></div></aside></div>`,link('新建事项','issue-new','btn primary','plus')+btn('更多','quick-create','','down'));
+  };
+  V.projects = () => page('项目','将想法、协作与代码，放在同一个上下文里。',`<div class="toolbar">${search('搜索项目')}<span class="toolbar-spacer"></span><span class="muted small">${U.projects.length} 个可访问项目</span></div><div class="project-grid">${U.projects.filter(p=>(p.name+p.description).toLowerCase().includes(S.search.toLowerCase())).map(p=>`<article class="panel project-card"><div class="project-card-top"><div class="project-icon ${p.color}">${p.initial}</div>${badge('进行中','neutral')}</div><h2><a href="#project" data-action="open-project" data-id="${p.id}">${p.name}</a></h2><p>${p.description}</p><div class="row-meta"><span>${S.issues.filter(i=>i.project===p.id).length} 个事项</span><i class="sep"></i><span>更新于今天</span></div><footer class="project-card-footer"><div class="avatar-stack">${avatar()}${avatar('陈宇','blue')}${avatar('张敏','peach')}</div><a href="#project" class="text-link" data-action="open-project" data-id="${p.id}">进入项目 ${icon('arrow')}</a></footer></article>`).join('')}</div>`,btn('新建项目','new-project','primary','plus'));
+  V.project = () => {
+    const p=project(), items=S.issues.filter(i=>i.project===p.id);
+    return page(p.name,p.description,projectTabs()+`<div class="overview-grid"><div><div class="metrics"><div class="metric"><span>进行中的事项</span><strong>${items.filter(i=>i.status!=='已实现').length.toString().padStart(2,'0')}</strong></div><div class="metric"><span>待验证</span><strong>${items.filter(i=>i.status==='待验证').length.toString().padStart(2,'0')}</strong></div><div class="metric"><span>参与者</span><strong>${String(p.members).padStart(2,'0')}</strong></div></div>${sectionTitle('当前版本',undefined,link('查看版本','releases','text-link','arrow'))}<div class="panel release-card"><div class="release-number">${p.id==='portal'?'v1.1':'v0.2'}</div><div class="row-main"><h3>让协作更简单</h3><div class="row-meta">目标交付 · 2026年10月23日</div></div><div class="release-progress"><span class="small muted">2 / 6 已完成</span><div class="progress"><span class="one-third"></span></div></div></div><section class="section">${sectionTitle('近期事项',undefined,link('全部事项','issues','text-link','arrow'))}<div class="panel">${items.slice(0,3).map(i=>issueRow(i)).join('')}</div></section></div><aside><section class="panel panel-pad"><h3>项目概况</h3>${meta([['负责人',avatar()+' 林晨'],['代码仓库','<span class="small">team/web-console</span>'],['参与者',avatar()+avatar('陈宇','blue')+avatar('张敏','peach')],['创建时间','2026年10月8日']])}${link('项目配置','project-settings','text-link','settings')}</section><section class="section"><h3>最新动态</h3><div class="timeline"><div class="timeline-item"><span class="timeline-icon">${icon('box')}</span><div><strong>林晨发布了移动端修复</strong><p>今天 10:32 · 等待验证</p></div></div><div class="timeline-item"><span class="timeline-icon">${icon('file')}</span><div><strong>新增统一搜索需求</strong><p>昨天 16:48 · ${p.name}</p></div></div></div></section></aside></div>`,link('新建事项','issue-new','btn primary','plus'));
+  };
+  V['project-settings'] = () => page('项目配置','维护项目基础信息与执行前的准备。',projectTabs()+`<div class="form-layout"><div class="panel">${form('project-settings',`<section class="form-section"><h2>基础信息</h2>${field('项目名称','name',project().name,{required:true})}${field('项目说明','description',project().description,{textarea:true})}${field('Git 仓库','remote','https://git.example.com/team/web-console.git',{readonly:true,hint:'开发空间已分配，仓库地址保持固定。'})}</section><section class="form-section"><h2>工作目录初始化</h2>${field('初始化命令','commands','npm ci\nnpm run build',{textarea:true,hint:'每行一个命令，在新的工作目录中依次执行。'})}</section>`,'保存配置','project')}</div><aside><h3>项目与个人配置</h3><p>这里的配置由项目参与者共用。Git 凭据和个人执行默认值在个人设置中维护。</p>${link('管理项目成员','members','text-link','users')}</aside></div>`);
+  V.issues = () => {
+    const items=scopedIssues().filter(i=>(S.issueFilter==='全部'||i.type===S.issueFilter)&&(i.title+i.id).toLowerCase().includes(S.search.toLowerCase()));
+    return page('事项','从清晰的表达开始，一起把问题推进到完成。',`<div class="toolbar"><div class="segmented" aria-label="事项类型">${['全部','需求','缺陷'].map(t=>`<button class="segment ${S.issueFilter===t?'active':''}" data-action="issue-filter" data-value="${t}" aria-pressed="${S.issueFilter===t}">${t}</button>`).join('')}</div><span class="toolbar-spacer"></span>${search('搜索事项或编号')}${btn('筛选','issue-filters','','filter')}</div>${issueTable(items)}`,link('新建事项','issue-new','btn primary','plus'));
+  };
+  function editorView(bug = false) {
+    const d=S.formDraft;
+    const content=d.content ?? (bug?'复现步骤\n1. 在移动端打开事项详情。\n2. 展开菜单后尝试操作底部按钮。\n\n预期结果\n全部操作保持可见、可点击。':'## 目标\n让成员更快找到与当前工作有关的内容。\n\n## 方案描述\n统一项目、事项与交付的搜索体验，保留当前项目上下文。');
+    return page(bug?'提交缺陷':'编写需求',bug?'描述发生了什么，让问题更容易重现。':'写清目标和验收标准，让下一步协作更顺畅。',`<div class="form-layout"><div class="panel">${form('issue-editor',`<section class="form-section"><div class="field-grid">${field('所属项目','project',d.project||project().id,{select:U.projects.map(p=>[p.id,p.name]),required:true})}${field('类型','type',bug?'缺陷':'需求',{select:['需求','缺陷']})}</div></section><section class="form-section">${field('标题','title',d.title||'',{placeholder:bug?'用一句话描述遇到的问题':'例如：统一搜索与项目筛选体验',required:true,attrs:'maxlength="120"'})}<div class="field"><label for="issue-content">${bug?'复现步骤与实际表现':'需求描述'}<em>*</em></label><div class="editor"><div class="editor-toolbar"><div class="editor-tools"><button type="button" data-action="editor-format" data-value="**重点内容**" aria-label="插入粗体">B</button><button type="button" data-action="editor-format" data-value="## 小节标题" aria-label="插入标题">H</button><button type="button" data-action="editor-format" data-value="- 列表项" aria-label="插入列表">≡</button><button type="button" data-action="editor-format" data-value="[链接标题](https://example.com)" aria-label="插入链接">${icon('link')}</button></div><div class="editor-tools"><button type="button" data-action="editor-mode" data-value="write" aria-pressed="${S.editorMode==='write'}">编辑</button><button type="button" data-action="editor-mode" data-value="preview" aria-pressed="${S.editorMode==='preview'}">预览</button></div></div>${S.editorMode==='write'?`<textarea name="content" id="issue-content" required>${h(content)}</textarea>`:`<div class="editor-preview">${h(content)}</div><textarea name="content" hidden>${h(content)}</textarea>`}</div></div>${field(bug?'期望结果':'验收标准','criteria',d.criteria||'在桌面和移动端均可完成搜索。\n切换项目时保留明确的上下文。\n无结果时提供可理解的提示。',{textarea:true,required:true})}<label class="upload-zone">${icon('upload')}添加图片或参考附件<input type="file" name="attachments" multiple accept="image/*,.pdf,.txt,.md"></label><div id="attachment-list">${(d.attachments||[]).map(n=>attachment(n,'本地选择 · 仅演示文件名')).join('')}</div></section><section class="form-section"><div class="field-grid">${field('目标版本','release',d.release||'v0.2',{select:['暂不排期','v0.2','v1.1']})}${field('优先级','priority',d.priority||'中',{select:['高','中','低']})}</div></section>`,'创建事项','issues','<span class="muted">保存事项不会开始开发</span>')}</div><aside><h3>让表达更有方向</h3><p>先说明要解决的问题，再补充可核对的完成标准。方案细节可以在讨论中逐步明确。</p><hr><h3>接下来</h3><p>创建后可继续讨论、安排版本，再认领或分派给参与者。</p></aside></div>`);
+  }
+  V['issue-new']=()=>editorView(false); V['bug-new']=()=>editorView(true);
+  V.issue = () => {
+    const i=currentIssue();
+    const c=`<div class="detail-title-meta">${badge(i.type,i.type==='缺陷'?'danger':'')}${status(i.status)}<span>${i.id}</span><i>·</i><span>${h(projectName(i.project))}</span><i>·</i><span>更新于今天</span></div>`;
+    return `<main id="main" class="page" tabindex="-1">${link('返回事项','issues','text-link','back')}${heading(i.title,'',btn('编辑','edit-issue','','edit')+btn('分派','assign','primary','user',`data-id="${i.id}"`),c)}<div class="detail-grid"><div class="detail-body"><article class="prose"><h3>${i.type==='缺陷'?'问题描述':'目标与背景'}</h3><p>${h(i.description)}</p><h3>验收标准</h3><ol>${(i.criteria||'在 1080P、2K 与移动端均可完整操作。\n操作状态明确，失败后保留输入。\n页面不出现多余的横向滚动。').split('\n').map(t=>`<li>${h(t)}</li>`).join('')}</ol><h3>参考资料</h3>${attachment('交互说明与参考.png','图片 · 项目内可见')}</article><section class="section">${tabs([['讨论','issue',true],['交付','delivery'],['历史','issue-history']])}<div class="comment">${avatar('陈宇','blue')}<div class="comment-body"><span class="comment-name">陈宇</span><span class="comment-time">今天 09:42</span><p>建议把移动端一起纳入这次验收，确保筛选和底部操作都能完整使用。</p></div></div>${S.comments.filter(c=>c.issue===i.id).map(c=>`<div class="comment">${avatar()}<div class="comment-body"><span class="comment-name">林晨</span><span class="comment-time">刚刚</span><p>${h(c.text)}</p></div></div>`).join('')}<form class="comment-form" data-form="comment"><label class="sr-only" for="comment-text">添加讨论</label><textarea class="control" id="comment-text" name="comment" placeholder="补充想法，或提出一个问题…" required></textarea><div class="heading-actions">${btn('发送讨论','submit','small')}</div></form></section></div><aside class="detail-aside"><h3>事项信息</h3>${meta([['所属项目',h(projectName(i.project))],['目标版本',link(i.release,'release')],['优先级',h(i.priority)],['负责人',h(i.owner)],['创建者',avatar()+' 林晨'],['参与人',avatar('陈宇','blue')+avatar('张敏','peach')]])}<hr><h3>关联开发</h3><p class="muted small">${i.owner==='待分派'?'尚未安排开发任务。':h(i.owner)+' 正在跟进此事项。'}</p>${i.owner==='待分派'?btn('认领事项','claim','','plus',`data-id="${i.id}"`):link('查看开发任务','task','btn','code')}<hr><p class="field-hint">事项与交付在项目内共享。个人会话与代码保留在执行者自己的空间。</p></aside></div></main>`;
+  };
+  V['issue-history']=()=>page('事项历史','追踪每一步协作与变更。',`<div class="panel panel-pad timeline">${[['创建事项','林晨 · 2026年10月13日 09:10'],['补充验收标准','陈宇 · 今天 09:42'],['安排目标版本 v0.2','林晨 · 今天 10:05']].map(([a,b])=>`<div class="timeline-item"><span class="timeline-icon">${icon('clock')}</span><div><strong>${a}</strong><p>${b}</p></div></div>`).join('')}</div>`,link('返回事项','issue','btn','back'));
+  V.releases = () => page('版本','用清晰的范围，推动每一次交付。',projectTabs()+`<div class="toolbar">${badge(project().name,'neutral')}<span class="toolbar-spacer"></span>${btn('显示已归档','show-archived','','clock')}</div><div class="panel">${[['v0.2','让协作更简单','2026年10月23日','2 / 6 已完成','one-third'],['v0.1','基础能力与首次体验','2026年10月12日','6 / 6 已完成','full']].map(([num,title,date,progress,css])=>`<div class="release-card"><div class="release-number">${num}</div><div class="row-main"><h3>${title}</h3><div class="row-meta">目标日期 · ${date}</div></div><div class="release-progress"><span class="small muted">${progress}</span><div class="progress"><span class="${css}"></span></div></div>${link('查看范围','release','btn small','arrow')}</div>`).join('')}${(S.saved.releases||[]).map(r=>`<div class="release-card"><div class="release-number">${h(r.version)}</div><div class="row-main"><h3>${h(r.title)}</h3><div class="row-meta">${h(r.date)}</div></div>${link('查看范围','release','btn small','arrow')}</div>`).join('')}</div>`,btn('新建版本','new-release','primary','plus'));
+  V.release = () => page('v0.2 · 让协作更简单','目标交付 2026年10月23日 · Web Console',`<div class="detail-grid"><div>${sectionTitle('版本范围',4,btn('添加事项','add-scope','small','plus'))}${issueTable(S.issues.filter(i=>i.project==='console'),true)}<div class="heading-actions">${btn('保存范围','save-scope','primary')}${link('返回版本','releases','btn ghost')}</div></div><aside class="detail-aside"><h3>交付进展</h3><div class="metric"><span>已完成 / 全部事项</span><strong>2 <span>/ 6</span></strong></div><div class="progress"><span class="one-third"></span></div><hr>${meta([['负责人',avatar()+' 林晨'],['目标日期','2026年10月23日'],['版本状态',status('进行中')]])}${btn('归档版本','archive-release','','box')}<p class="field-hint section">归档前需结束所有事项和开发任务。</p></aside></div>`);
+  V.assignment = V.issue;
+  V.deliveries = () => {
+    const rows=scopedIssues().filter(i=>i.status==='待验证');
+    return page('交付','把完成的工作，变成可验证的结果。',`<div class="toolbar"><div class="segmented"><button class="segment active" data-action="delivery-filter" data-value="pending">待验证 <span class="count">${rows.length}</span></button><button class="segment" data-action="delivery-filter" data-value="done">已验证</button></div><span class="toolbar-spacer"></span>${search('搜索交付')}</div><div id="delivery-results">${rows.length?`<div class="panel">${rows.filter(i=>i.title.includes(S.search)).map(i=>issueRow(i,'开始验证','open-delivery')).join('')}</div>`:empty('暂无待验证的交付','发布交付后，相关参与者可以在这里核对结果。',link('发布交付','publish','btn primary'))}</div>`,link('发布交付','publish','btn primary','plus'));
+  };
+  V.tasks = () => {
+    const tasks=S.tasks.filter(t=>t.status!=='已合并'&&(S.taskFilter==='项目全部任务'||t.owner==='林晨')&&(S.project==='all'||t.project===S.project)&&(t.title+t.id).toLowerCase().includes(S.search.toLowerCase()));
+    return page('开发','整理范围，准备环境，然后专注执行。',`<div class="toolbar"><div class="segmented">${['我的任务','项目全部任务'].map(v=>`<button class="segment ${S.taskFilter===v?'active':''}" data-action="task-filter" data-value="${v}">${v}</button>`).join('')}</div><span class="toolbar-spacer"></span>${search('搜索开发任务')}${link('历史会话','archive','btn ghost','clock')}</div>${S.selectedTasks.length?`<div class="selection-bar"><p>已选择 ${S.selectedTasks.length} 个任务</p>${btn('合并范围','merge','small','link')}${btn('取消选择','clear-selection','small ghost')}</div>`:''}<div class="table-wrap"><table class="list-table"><thead><tr><th></th><th>开发任务</th><th>任务状态</th><th>版本</th><th>执行者</th><th></th></tr></thead><tbody>${tasks.map(t=>`<tr><td class="list-check"><input type="checkbox" name="task-select" value="${t.id}" aria-label="选择 ${h(t.title)}" ${S.selectedTasks.includes(t.id)?'checked':''} ${t.status!=='待开发'?'disabled':''}></td><td class="title-cell"><button class="row-title" data-action="open-task" data-id="${t.id}">${h(t.title)}</button><div class="row-meta">${t.id}<i class="sep"></i>${t.issues.length} 个关联事项</div></td><td data-label="任务状态">${status(t.status)}</td><td data-label="版本">${h(t.release)}</td><td data-label="执行者">${h(t.owner)}</td><td class="actions-cell">${btn(t.status==='开发中'?'进入会话':'查看任务',t.status==='开发中'?'open-session':'open-task','small','',`data-id="${t.id}"`)}</td></tr>`).join('')}</tbody></table></div><div class="table-footer"><span>共 ${tasks.length} 个任务</span><span>认领与合并不会启动执行</span></div>`,link('独立开发','manual','btn primary','plus'));
+  };
+  V.task = () => {
+    const t=currentTask();
+    return page(t.title,`${t.id} · ${projectName(t.project)} · ${t.release}`,`<div class="detail-grid"><div><div class="panel panel-pad">${sectionTitle('开发范围',t.issues.length,btn('调整范围','merge','small','link'))}<div class="prose"><p>明确本次要完成的事项。准备完成后，选择起始分支并开始开发。</p></div>${t.issues.map(id=>S.issues.find(i=>i.id===id)).filter(Boolean).map(i=>issueRow(i)).join('')}</div><section class="section">${sectionTitle('执行准备')}<div class="panel"><div class="setting-row"><span class="timeline-icon">${icon('check')}</span><div class="row-main"><strong>确认任务范围</strong><p>关联 ${t.issues.length} 个事项，来自 ${t.release}</p></div>${status('已确认')}</div><div class="setting-row"><span class="timeline-icon">${icon('branch')}</span><div class="row-main"><strong>准备个人环境</strong><p>${S.prepared?'个人 Git 账号与开发空间已就绪':'连接自己的 Git 账号，准备开发空间'}</p></div>${link(S.prepared?'查看环境':'准备环境','prepare','btn small')}</div><div class="setting-row"><span class="timeline-icon">${icon('play')}</span><div class="row-main"><strong>选择分支并开始</strong><p>明确提交后才启动 Agent</p></div>${link(t.status==='开发中'?'进入会话':'开始开发',t.status==='开发中'?'session':'start','btn small primary')}</div></div></section></div><aside class="detail-aside"><h3>任务信息</h3>${meta([['任务状态',status(t.status)],['执行者',avatar()+' '+h(t.owner)],['目标版本',h(t.release)],['任务来源','项目事项'],['Agent 状态',status(S.running?'运行中':'尚未开始')]])}<hr>${btn('取消任务','cancel-task','','close')}<p class="field-hint section">取消会释放当前事项的认领；正在运行的任务需先停止。</p></aside></div>`,link('返回任务','tasks','btn ghost','back'));
+  };
+  V.prepare = () => page('准备个人环境','把你的 Git 账号与项目连接起来。',`<div class="form-layout"><div class="panel">${form('prepare',`<section class="form-section"><h2>${project().name}</h2>${field('Git 账号','gitAccount','林晨 · git.example.com',{select:['林晨 · git.example.com','林晨 · github.com']})}${field('代码仓库','repo','https://git.example.com/team/web-console.git',{readonly:true})}${field('个人开发空间','path','/workspace/web-console/linchen',{readonly:true,hint:'空间由系统分配，准备环境不会开始开发任务。'})}${S.prepared?banner('个人开发空间已就绪，可返回任务选择分支。','success','check'):banner('首次准备会验证仓库读取权限并创建个人副本。')}</section>`,S.prepared?'重新检查':'准备环境','task')}</div><aside><h3>仅属于你的执行空间</h3><p>Git 凭据、会话与工作目录由当前账号持有。项目共享事项，不共享个人凭据。</p>${link('管理 Git 账号','git','text-link','branch')}</aside></div>`,link('返回任务','task','btn ghost','back'));
+  function startView(manual=false) {
+    const t=currentTask();
+    return page(manual?'独立开发':'确认并开始开发',manual?'从一个目标开始，不必先创建事项。':'确认本次范围与执行设置。',`<div class="form-layout"><div class="panel">${form(manual?'manual-start':'start',`<section class="form-section"><h2>${manual?'开发目标':h(t.title)}</h2>${manual?field('任务标题','title','',{required:true,placeholder:'这次想完成什么？'})+field('目标与验收条件','goal','',{textarea:true,required:true,placeholder:'描述目标、边界与完成标准…'}):`<p class="muted small">${t.id} · ${t.issues.length} 个关联事项 · ${t.release}</p>`}${!S.prepared?banner('个人环境尚未准备。请先完成准备，再开始开发。','warning')+link('准备个人环境','prepare','text-link','arrow'):banner('个人环境已就绪。','success','check')}</section><section class="form-section"><h2>分支与执行设置</h2>${field('起始远端分支','branch','origin/main',{select:['origin/main','origin/release/v0.2','origin/develop'],hint:'原型展示模拟远端目录；正式实现将在启动前重新获取最新提交。',required:true})}<div class="field-grid">${field('模型','model','Codex · 默认模型',{select:['Codex · 默认模型','Codex · 快速模型']})}${field('思考强度','effort','标准',{select:['标准','深入']})}</div><div class="section">${field('执行权限','permission','工作区内写入 · 需要时审批',{select:['工作区内写入 · 需要时审批','只读 · 需要时审批']})}${field('补充说明','prompt','',{textarea:true,placeholder:'可选，补充本次执行需要遵循的约定'})}</div></section><section class="form-section"><label class="form-check"><input type="checkbox" name="confirm" required>我已确认任务范围、起始分支和执行设置。</label><p class="field-hint">本原型只模拟执行过程，不调用真实 Agent 或 Git。</p></section>`,'开始开发',manual?'tasks':'task','<span class="muted">明确提交后进入会话</span>')}</div><aside><h3>一个任务，一个执行上下文</h3><p>开始后保留本次分支和范围。需要补充目标时，在原会话继续沟通。</p></aside></div>`);
+  }
+  V.start=()=>startView(false); V.manual=()=>startView(true);
+  function codePanel() {
+    const lines=S.codeFile==='SearchPanel.vue'?['<template>','  <section class="search-panel">','-   <input class="fixed-search" />','+   <label class="search-field">','+     <SearchIcon aria-hidden="true" />','+     <input aria-label="搜索事项" />','+   </label>','  </section>','</template>','','<style scoped>','+ .search-field { min-width: 0; }','+ @media (max-width: 767px) {','+   .search-panel { width: 100%; }','+ }','</style>']:['/* Shared layout tokens */',':root {','+ --content-max: 100rem;','+ --page-gap: clamp(20px, 3vw, 56px);','}','','+ .page {','+   width: 100%;','+   min-width: 0;','+ }'];
+    return `<section class="panel code-panel"><div class="code-panel-head"><span>${icon('branch')} 变更文件 <span class="count">2</span></span>${link('返回会话','session','text-link')}</div><div class="file-list">${['SearchPanel.vue','layout.css'].map(f=>`<button class="file-choice ${S.codeFile===f?'active':''}" data-action="code-file" data-name="${f}">${icon('file')}${f}<span class="text-success">+${f.endsWith('vue')?12:8}</span></button>`).join('')}</div><pre class="diff" tabindex="0" aria-label="代码差异">${lines.map((l,i)=>`<span class="diff-line ${l[0]==='+'?'added':l[0]==='-'?'removed':''}"><span class="line-number">${i+1}</span>${h(l)}</span>`).join('')}</pre><div class="dialog-actions"><span class="muted">codex/search-experience</span>${btn('查看 Git 状态','git-status','small')}</div></section>`;
+  }
+  function sessionView() {
+    const isCode=S.route==='changes', isApproval=S.route==='approval'||S.running||S.approvalStatus!=='pending';
+    const approval=isApproval?`<div class="approval-card"><h4>${icon('shield')} ${S.approvalStatus==='approved'?'已批准本次操作':S.approvalStatus==='rejected'?'已拒绝本次操作':'需要你确认'}</h4><p>运行本地界面检查，验证搜索与移动端布局。</p><pre>npm run test:ui</pre>${S.approvalStatus==='pending'?`<div class="actions">${btn('批准本次','approve','small primary','check')}${btn('拒绝','reject','small')}</div>`:`<p class="small muted">${S.approvalStatus==='approved'?'检查已完成，结果可继续核对。':'操作未执行，可以补充说明后继续。'}</p>`}</div>`:'';
+    return page(currentTask().title,currentTask().id+' · 个人会话',`<div class="session-layout ${isCode?'code-open':''}"><section class="conversation"><div class="conversation-log" id="conversation-log" tabindex="0" aria-label="会话消息"><article class="message user"><span class="message-mark">${icon('user')}</span><div class="message-content"><strong>你</strong><time>10:32</time><p>请根据事项目标优化搜索与筛选体验，保持页面简洁，并兼容桌面和移动端。</p></div></article><article class="message"><span class="message-mark">${icon('spark')}</span><div class="message-content"><strong>Codex</strong><time>10:33</time><p>我会先梳理当前搜索入口，再统一项目上下文和结果反馈。移动端会使用单列布局，保留清晰的筛选入口。</p><div class="tool-line">${icon('check')} 已检查 SearchPanel.vue 与布局样式</div><div class="tool-line">${icon('check')} 更新搜索输入与空结果状态</div>${approval}<p>${S.approvalStatus==='approved'?'检查已通过。可以查看变更，并整理交付说明。':'页面调整已整理好，可以在右侧查看关联事项，或打开代码变更。'}</p>${link('查看 2 个变更文件','changes','text-link','code')}</div></article>${S.messages.map(m=>`<article class="message ${m.author==='你'?'user':''}"><span class="message-mark">${icon(m.author==='你'?'user':'spark')}</span><div class="message-content"><strong>${h(m.author)}</strong><time>刚刚</time><p>${h(m.text)}</p></div></article>`).join('')}</div><form class="composer" data-form="message"><label class="sr-only" for="message-text">补充目标或继续讨论</label><textarea id="message-text" name="message" placeholder="补充目标，或继续讨论…" required></textarea><div class="composer-footer"><select class="composer-select" aria-label="下一轮模型"><option>Codex · 默认模型</option><option>Codex · 快速模型</option></select><select class="composer-select" aria-label="下一轮权限"><option>工作区写入</option><option>只读</option></select>${S.running?btn('停止','stop','send','stop'):btn('发送','submit','primary send','send')}</div></form></section>${isCode?codePanel():`<aside class="session-context"><section class="panel"><h3>执行上下文</h3>${meta([['运行状态',status(S.running?'运行中':'等待输入')],['起始分支','<code>origin/main</code>'],['当前分支','<code>codex/search-experience</code>'],['运行引擎','Codex']])}<hr><p class="field-hint">此会话仅你可见。需要协作验收时，发布项目可见的交付。</p>${link('整理交付','publish','btn primary','box')}</section><section class="panel"><h3>关联事项</h3><a class="row-title" href="#issue">${h(currentIssue().title)}</a><div class="row-meta">${h(currentIssue().id)} · ${h(currentIssue().release)}</div><hr>${link('查看代码变更','changes','text-link','code')}${link('执行审批示例','approval','text-link','shield')}</section></aside>`}</div>`,status(S.running?'运行中':'等待输入')+link('代码变更','changes','btn','code'), 'wide');
+  }
+  V.session=sessionView; V.approval=sessionView; V.changes=sessionView;
+  V.publish=()=>page('发布交付','把结果与依据整理好，让验证有据可依。',`<div class="form-layout"><div class="panel">${form('publish',`<section class="form-section">${field('交付标题','title',currentIssue().title,{required:true})}${field('关联事项','issue',currentIssue().id,{select:S.issues.map(i=>[i.id,i.id+' · '+i.title])})}${field('完成说明','summary','已统一项目上下文与搜索入口，补齐无结果反馈，并完成移动端布局调整。',{textarea:true,required:true})}${field('验证方式','verification','1. 在工作台搜索事项。\n2. 切换项目核对结果范围。\n3. 在桌面与移动端验证布局。',{textarea:true,required:true})}${field('提交标识','commit','a83f27c',{hint:'示例提交标识，不会执行提交或推送。'})}${attachment('界面验证记录.md','将作为公开交付的一部分')}</section><section class="form-section">${banner('仅分享本次填写的说明和附件；个人会话与代码目录保持私有。','', 'shield')}<label class="form-check"><input type="checkbox" name="confirm" required>确认将以上内容发布给项目内有权限的参与者。</label></section>`,'发布交付','session')}</div><aside><h3>可验证的结果</h3><p>说明完成了什么、如何验证，以及仍需关注的事项。公开范围始终由你明确选择。</p></aside></div>`);
+  V.delivery=()=>{
+    const i=currentIssue();
+    const criteria=['桌面与移动端均可完成核心操作','搜索范围与当前项目上下文一致','无结果及异常状态有明确反馈'];
+    return page('验证：'+i.title,`${i.id} · ${i.release} · ${projectName(i.project)}`,`<div class="detail-grid"><div><div class="panel panel-pad">${sectionTitle('核对验收标准',`${S.checks.filter(Boolean).length} / 3`)}<div class="checks-list">${criteria.map((text,index)=>`<label class="check-row"><input type="checkbox" name="delivery-check" value="${index}" ${S.checks[index]?'checked':''}><div class="row-main"><strong>${text}</strong><p>对照交付说明与参考记录进行检查。</p></div>${S.checks[index]?badge('已确认','success'):badge('待确认','neutral')}</label>`).join('')}</div></div><section class="section"><h3>验证意见</h3><label class="sr-only" for="verification-note">验证意见</label><textarea class="control" id="verification-note" placeholder="记录验证结果，退回时请说明需要调整的内容。">${h(S.saved.verificationNote||'')}</textarea><div class="heading-actions">${btn('退回处理','return-delivery','','back')}${btn('通过验收','accept-delivery','primary','check',S.checks.every(Boolean)?'':'disabled')}</div><p class="field-hint section">通过前请核对全部标准；业务验收不会由 Agent 完成状态自动代替。</p></section></div><aside class="detail-aside"><h3>交付摘要</h3><p class="small">已优化核心交互，补齐移动端适配与异常反馈。</p>${meta([['发布人',avatar()+' 林晨'],['发布日期','2026年10月13日'],['公开范围','项目内有权限的参与者'],['提交','<code>a83f27c</code>']])}${attachment('界面验证记录.md','共享交付附件')}${attachment('移动端效果.png','共享交付附件')}</aside></div>`,link('返回交付','deliveries','btn ghost','back'));
+  };
+  V.archive=()=>page('历史会话','已归档的上下文，随时可回看。',`<div class="toolbar">${search('搜索历史会话')}<span class="toolbar-spacer"></span><span class="muted small">个人历史 · 仅你可见</span></div><div class="panel">${['项目初始布局整理','修复移动端菜单遮挡','完善资料目录'].filter(n=>n.includes(S.search)).map((n,i)=>`<div class="work-row"><span class="item-symbol">${icon('clock')}</span><div class="row-main"><span class="row-title">${n}</span><div class="row-meta">Web Console <i class="sep"></i> 2026年10月${12-i}日</div></div>${badge('已归档','neutral')}${btn('恢复','restore-session','small','',`data-name="${n}"`)}${btn('删除','cleanup','small ghost','trash',`data-name="${n}"`)}</div>`).join('')}</div>`,link('返回开发','tasks','btn ghost','back'));
+  V.cleanup=V.archive;
+  V.assets=()=>page('项目资料','把重要的文档、链接和上下文放在一起。',projectTabs()+`<div class="toolbar">${search('搜索项目资料')}<span class="toolbar-spacer"></span>${badge(project().name,'neutral')}</div><div class="resource-grid">${[['需求说明','产品目标与当前范围','file'],['接口文档','接口约定与接入说明','code'],['设计资源','本次版本的设计与规范','grid'],['测试环境','访问地址与受保护配置','lock'],['发布检查清单','交付前的核对事项','check'],['协作约定','项目命名与工作方式','users']].filter(r=>r.join('').includes(S.search)).map(([title,desc,sym])=>`<a class="panel resource-card" href="#asset" data-action="open-asset" data-name="${title}"><span class="item-symbol">${icon(sym)}</span><h3>${title}</h3><p>${desc}</p><footer><span>林晨 · 今天</span>${icon('right')}</footer></a>`).join('')}</div>`,btn('添加资料','add-asset','primary','plus'));
+  V.asset=()=>page(S.selectedAsset,'Web Console · 项目共享资料',`<div class="detail-grid"><article class="panel panel-pad prose"><h3>资料概述</h3><p>${h(S.saved.assetDescription||"这份资料记录项目相关的背景、使用方式和关键约定，便于参与者在同一上下文中协作。")}</p><h3>访问与说明</h3><p>使用项目授权的账号访问环境。受保护字段需要单独授权，只在确有需要时查看。</p>${field('环境地址','url','https://preview.example.com',{readonly:true})}<div class="field"><label>受保护字段</label><div class="toolbar"><input class="control" aria-label="受保护字段" value="${S.securityVisible?'DEMO-NOT-A-REAL-SECRET':'••••••••••••••••'}" readonly>${btn(S.securityVisible?'隐藏':'授权查看','reveal-secret','','lock')}</div><span class="field-hint">原型仅展示演示值；真实内容需后端重新鉴权。</span></div><h3>相关文件</h3>${attachment('项目参考说明.md')}</article><aside class="detail-aside"><h3>资料信息</h3>${meta([['作者',avatar()+' 林晨'],['可见范围','项目参与者'],['修订版本','3'],['更新于','今天 10:05']])}${btn('编辑资料','edit-asset','','edit')}</aside></div>`,link('返回资料库','assets','btn ghost','back'));
+  V.members=()=>page('项目成员','围绕工作授权，让每位参与者都能顺畅协作。',projectTabs()+`<div class="table-wrap"><table class="list-table"><thead><tr><th>参与者</th><th>部门</th><th>当前授权</th><th></th></tr></thead><tbody>${[['林晨','linchen','协作一组','项目管理、事项、开发与交付'],['陈宇','chenyu','协作二组','事项、版本与交付'],['张敏','zhangmin','协作一组','事项、开发与资料']].map(([name,login,dept,scope])=>`<tr><td class="title-cell"><div class="row-person">${avatar(name)}${name}</div><div class="row-meta">${login}</div></td><td data-label="部门">${dept}</td><td data-label="授权">${scope}</td><td class="actions-cell">${btn('调整授权','member-permissions','small','',`data-name="${name}"`)}</td></tr>`).join('')}</tbody></table></div>`,btn('添加成员','add-member','primary','plus'));
+  V.prompts=()=>page('提示词','为项目保持一致的执行背景，也保留你的个人偏好。',projectTabs()+`<div class="form-layout"><div class="panel">${form('prompts',`<section class="form-section"><div class="field-grid">${field('任务类型','kind','需求',{select:['需求','缺陷','补充资料']})}${field('作用范围','scope','项目默认',{select:['项目默认','我的覆盖']})}</div><div class="section">${field('模板内容','prompt','请根据事项目标完成实现。\n先理解项目约定，保留现有业务边界。\n完成后说明变更与验证结果。\n\n事项：{{title}}\n描述：{{content}}',{textarea:true,attrs:'rows="10"'})}</div>${btn('插入验收标准','insert-placeholder','small','plus')}<p class="field-hint section">模板用于后续启动，不改写已有会话。</p></section>`,'保存提示词','project')}</div><aside><h3>实际生效范围</h3><p>个人覆盖优先于项目默认。切换作用范围后，分别维护与保存。</p></aside></div>`);
+  V.personal=()=>settingsPage('个人资料与偏好','这些设置只影响你的账号。',`<div class="panel">${form('personal',`<section class="form-section"><div class="mini-project">${avatar()}<div><h3>林晨</h3><p>linchen · 当前账号</p></div></div>${field('显示名称','displayName',S.saved.displayName||'林晨',{required:true})}</section><section class="form-section"><h2>执行默认值</h2><div class="field-grid">${field('默认模型','model','Codex · 默认模型',{select:['Codex · 默认模型','Codex · 快速模型']})}${field('思考强度','effort','标准',{select:['标准','深入']})}</div><div class="section">${field('默认权限','permission','工作区写入 · 需要时审批',{select:['工作区写入 · 需要时审批','只读 · 需要时审批'],hint:'作为新任务的默认值，不改写已有任务。'})}</div></section><section class="form-section"><h2>通知</h2><div class="setting-row"><div class="row-main"><strong>需要我处理时提醒</strong><p>审批、问题与待验证事项</p></div><button type="button" class="toggle" role="switch" aria-label="需要我处理时提醒" aria-checked="${S.saved.notify!==false}" data-action="toggle-notify"></button></div></section>`,'保存设置')}</div><div class="section">${link('修改密码','password','text-link','lock')}</div>`);
+  V.git=()=>settingsPage('Git 账号','连接仓库使用的个人凭据与提交身份。',`<div class="panel">${form('git-account',`<section class="form-section">${field('账号名称','name','工作 Git',{required:true})}${field('主机地址','host','git.example.com',{required:true})}${field('认证方式','method','HTTP',{select:['HTTP','SSH']})}<div class="field-grid">${field('用户名','username','linchen',{required:true})}${field('访问令牌','token','',{type:'password',placeholder:'输入演示值或留空保留',hint:'不要在原型输入真实凭据。'})}</div></section><section class="form-section"><h2>提交作者</h2><div class="field-grid">${field('姓名','author','林晨',{required:true})}${field('邮箱','email','linchen@example.com',{type:'email',required:true})}</div></section>`,'保存账号','',btn('验证连接','test-git','','refresh'))}</div><div id="connection-result" class="section">${S.gitConnected?banner('模拟连接检查通过。','success','check'):''}</div>`);
+  V.tokens=()=>settingsPage('MCP 接入','让本机工具在明确的范围内访问项目。',`<div class="panel panel-pad"><h3>连接地址</h3><div class="toolbar"><code>https://coding.example.com/mcp</code>${btn('复制','copy-mcp','small','copy')}</div>${link('连接配置与图片上传','mcp-guide','text-link','arrow')}</div><section class="section">${sectionTitle('个人 Token',S.tokens.filter(t=>t.enabled).length,btn('创建 Token','new-token','small primary','plus'))}<div class="panel">${S.tokens.map((t,i)=>`<div class="setting-row"><span class="item-symbol">${icon('lock')}</span><div class="row-main"><strong>${h(t.name)}</strong><p>${h(t.scope)}</p></div>${status(t.enabled?'有效':'已撤销')}${t.enabled?btn('撤销','revoke-token','small ghost','',`data-index="${i}"`):''}</div>`).join('')}</div></section>`);
+  V['mcp-guide']=()=>settingsPage('连接与图片上传','使用 Token 授权本机工具，附件上传后再关联到事项。',`<div class="panel panel-pad"><h3>1. 配置连接</h3><pre tabindex="0">{
+  "url": "https://coding.example.com/mcp",
+  "headers": { "Authorization": "Bearer YOUR_TOKEN" }
+}</pre><p class="field-hint section">配置只包含占位符，不会读取或展示真实 Token。</p><hr><h3>2. 上传图片</h3><pre tabindex="0">curl -X POST https://coding.example.com/api/mcp/uploads \\
+  -H "Authorization: Bearer YOUR_TOKEN" \\
+  -F "file=@/path/to/image.png"</pre><hr><h3>3. 在事项中引用附件 ID</h3><p class="muted small">在创建或编辑事项时引用上传结果。具体参数以当前 MCP 契约为准。</p>${btn('查看返回示例','mcp-example','small')}</div>`);
+  V.accounts=()=>settingsPage('账号管理','维护登录账号及组织归属。',`<div class="table-wrap"><table class="list-table"><thead><tr><th>成员</th><th>部门</th><th>系统身份</th><th>状态</th><th></th></tr></thead><tbody>${[['林晨','linchen','协作一组','普通成员'],['陈宇','chenyu','协作二组','普通成员'],['张敏','zhangmin','协作一组','管理员'],...(S.saved.accounts||[])].map(([name,username,dept,role])=>`<tr><td class="title-cell"><strong>${h(name)}</strong><div class="row-meta">${h(username)}</div></td><td data-label="部门">${h(dept)}</td><td data-label="身份">${h(role)}</td><td data-label="状态">${badge('已启用','success')}</td><td class="actions-cell">${btn('管理','edit-account','small ghost','',`data-name="${h(name)}"`)}</td></tr>`).join('')}</tbody></table></div>`,true,btn('新建账号','new-account','primary small','plus'));
+  const permissions = () => `<div class="permissions"><nav class="permission-nav" aria-label="权限分类">${['项目','事项','开发','交付','资料'].map(t=>`<button type="button" class="${S.selectedPermission===t?'active':''}" data-action="permission-category" data-name="${t}">${t}</button>`).join('')}</nav><div class="permission-fields"><h3>${h(S.selectedPermission)}可用功能</h3><p class="field-hint">项目授权不得超出所属部门的功能上限。</p>${['查看'+S.selectedPermission,'创建'+S.selectedPermission,'编辑'+S.selectedPermission,S.selectedPermission==='事项'?'认领与分派':'管理'+S.selectedPermission].map(t=>`<label class="form-check"><input type="checkbox" name="permission" value="${h(t)}" ${S.permissions.includes(t)?'checked':''}><span>${h(t)}</span></label>`).join('')}</div></div>`;
+  V.departments=()=>settingsPage('部门功能上限','按组织配置可授权的能力，不决定成员使用哪一种工作台。',`<div class="toolbar">${field('当前部门','department','协作一组',{select:['协作一组','协作二组']})}<span class="toolbar-spacer"></span>${btn('新建部门','new-department','small','plus')}</div>${permissions()}<div class="heading-actions">${btn('保存部门','save-permissions','primary')}</div>`,true);
+  V.workflow=()=>settingsPage('事项流程','全局流程由管理员发布，新事项使用发布后的版本。',`<div class="toolbar"><div class="segmented"><button class="segment ${S.saved.workflowType!=='缺陷'?'active':''}" data-action="workflow-type" data-value="需求">需求</button><button class="segment ${S.saved.workflowType==='缺陷'?'active':''}" data-action="workflow-type" data-value="缺陷">缺陷</button></div>${badge(S.saved.workflowPublished?'已发布':'草稿',S.saved.workflowPublished?'success':'')}<span class="toolbar-spacer"></span>${btn('校验','validate-workflow','small')}${btn('发布流程','publish-workflow','small primary')}</div><div class="workflow-canvas" tabindex="0" aria-label="流程画布，可横向滚动"><div class="workflow-track">${(S.saved.workflowType==='缺陷'?['待处理','处理中','待验证','已关闭']:['规划中','开发中','待验证','已实现']).map((t,i)=>`${i?icon('arrow'):''}<button class="workflow-node ${i===1?'active':''}" data-action="workflow-node" data-name="${t}"><span>${t}</span><small class="muted">${i===0?'初始状态':i===3?'完成状态':'进行中'}</small></button>`).join('')}</div></div><p class="field-hint section">点击节点查看配置。发布不改写在途事项已绑定的流程版本。</p>`,true);
+  V.suppliers=()=>settingsPage('Agent 供应商','统一维护连接，已有会话在后续轮次使用生效配置。',`<div class="panel"><div class="setting-row"><span class="item-symbol">${icon('spark')}</span><div class="row-main"><strong>服务器现有配置</strong><p>Codex · 使用服务账号现有认证</p></div>${badge('当前默认','')} ${link('详情','supplier','btn small')}</div><div class="setting-row"><span class="item-symbol">${icon('link')}</span><div class="row-main"><strong>团队供应商</strong><p>原生 Responses · 自定义连接</p></div>${badge('可用','success')}${link('编辑','supplier','btn small')}</div></div>`,true,link('新增供应商','supplier','btn primary small','plus'));
+  V.supplier=()=>settingsPage('供应商连接','配置原生 Responses 接口与模型目录。',`<div class="panel">${form('supplier',`<section class="form-section">${field('名称','name','团队供应商',{required:true})}${field('Base URL','baseUrl','https://api.example.com/v1',{type:'url',required:true})}${field('API Key','key','',{type:'password',placeholder:'输入演示值，留空保留',hint:'原型不接入服务，也不保存真实凭据。'})}${field('默认模型','model','从供应商模型目录选择',{select:['从供应商模型目录选择','示例标准模型','示例快速模型']})}</section>`,'保存供应商','suppliers',btn('测试连接','test-supplier','','refresh'))}</div>${S.supplierConnected?`<div class="section">${banner('原型模拟连接成功。正式检测以供应商实际响应为准。','success','check')}</div>`:''}`,true);
+  V.environment=()=>settingsPage('运行环境','检查服务所在机器的依赖与就绪情况。',`<div class="panel">${[['Git','2.47.0','已就绪','success'],['Node.js','22.13.0','已就绪','success'],['Codex','示例版本',S.saved.environmentChecked?'已就绪':'待确认',S.saved.environmentChecked?'success':'warning']].map(([name,version,state,kind])=>`<div class="setting-row"><span class="item-symbol">${icon(name==='Git'?'branch':name==='Codex'?'spark':'code')}</span><div class="row-main"><strong>${name}</strong><p>${version}</p></div>${badge(state,kind)}${btn('查看详情','environment-detail','small ghost','',`data-name="${name}"`)}</div>`).join('')}</div><p class="field-hint section">原型展示模拟环境数据。实际检测、安装及升级均需服务端支持。</p>`,true,btn('重新检测','check-environment','small primary','refresh'));
+  V.storage=()=>settingsPage('成员目录','设置后续新建执行空间使用的基础目录。',`<div class="panel">${form('storage',`<section class="form-section">${field('基础目录','path',S.saved.storage||'D:/Workspace',{required:true})}${btn('浏览目录','browse-directory','small','folder')}<hr><h3>目录结构预览</h3><pre>Workspace/
+  projects/
+    web-console/
+      members/
+        linchen/
+          repository/
+          worktree/</pre><p class="field-hint section">设置仅影响后续分配。已有工作目录、会话身份与记录路径保持不变。</p></section>`,'保存目录设置')}</div>`,true);
+  V['init-log']=()=>settingsPage('初始化记录','查看环境首次准备的步骤与结果。',`<div class="panel panel-pad"><div class="section-title"><h3>初始化已完成</h3>${badge('2026年10月13日','success')}</div><div class="timeline">${[['管理员已创建','账号与身份配置已保存'],['基础目录已确认','成员空间根目录已验证'],['Git 连接已验证','示例连接配置可用'],['示例项目已准备','项目与授权已建立，未开始执行']].map(([a,b])=>`<div class="timeline-item"><span class="timeline-icon">${icon('check')}</span><div><strong>${a}</strong><p>${b}</p></div></div>`).join('')}</div></div>`,true);
+  const authShell=content=>`<main id="main" class="auth-page"><div class="auth-top"><a class="brand" href="#home">${icon('logo')}<span>WEB CODING</span></a>${btn('界面目录','catalog','ghost small','grid')}</div>${content}<div class="auth-footer">B 方案交互原型 · 仅使用演示数据</div></main>`;
+  V.login=()=>authShell(`<section class="auth-card"><div class="eyebrow">WELCOME BACK</div><h1 id="page-title">欢迎回来</h1><p>继续你的想法与协作。</p><form data-form="login"><div class="form-error" role="alert"></div>${field('账号','username','linchen',{required:true})}${field('密码','password','',{type:'password',required:true,placeholder:'输入任意演示密码'})}${btn('登录工作台','submit','primary','arrow')}<p class="auth-footer">原型不验证真实账号，不保存密码。</p></form></section>`);
+  V.password=()=>authShell(`<section class="auth-card"><h1 id="page-title">设置新密码</h1><p>首次使用，请更新临时密码。</p><form data-form="password"><div class="form-error" role="alert"></div>${field('当前密码','current','',{type:'password',required:true})}${field('新密码','password','',{type:'password',required:true,attrs:'minlength="6"',hint:'按当前账号契约至少 6 个字符，仅输入演示值。'})}${field('确认新密码','confirm','',{type:'password',required:true})}${btn('保存并继续','submit','primary')}</form></section>`);
+  const setupSteps=['管理员','环境','目录','项目','确认'];
+  V.setup=()=>{
+    const step=S.setupStep;
+    const fields=step===1?field('管理员显示名称','name','管理员',{required:true})+field('登录名','username','admin',{required:true})+field('密码','password','',{type:'password',required:true,attrs:'minlength="6"',hint:'仅输入演示值。密码不持久化。'}):step===2?banner('Git、Node.js 和 Codex 的模拟检测均已就绪。','success','check')+field('Git 认证','git','稍后配置',{select:['稍后配置','已完成认证（演示）']}):step===3?field('成员基础目录','path','D:/Workspace',{required:true})+field('默认协作部门','department','协作一组',{required:true}):field('首个项目名称','name','Web Console',{required:true})+field('Git 仓库地址','repo','https://git.example.com/team/web-console.git',{type:'url',required:true});
+    return authShell(`<div class="setup-page"><div class="steps">${setupSteps.map((t,i)=>`<div class="step ${i+1===step?'active':i+1<step?'done':''}"><span class="step-number">${i+1<step?'✓':i+1}</span>${t}</div>`).join('')}</div>${heading(['','创建管理员','检查运行环境','确认工作目录','创建第一个项目'][step],'按步骤完成准备，稍后即可开始协作。')}<div class="panel">${form('setup-step',`<section class="form-section">${fields}</section>`,step===4?'确认配置':'下一步','',step>1?btn('上一步','setup-back','ghost'):link('返回登录','login','btn ghost'))}</div></div>`);
+  };
+  V['setup-summary']=()=>authShell(`<div class="setup-page">${heading('准备就绪','确认以下配置，然后进入统一工作台。')}<div class="panel panel-pad">${[['管理员','admin'],['成员目录',S.saved.setupPath||'D:/Workspace'],['协作部门','协作一组'],['项目',S.saved.setupProject||'Web Console']].map(([k,v])=>`<div class="setting-row"><div class="row-main"><strong>${k}</strong><p>${h(v)}</p></div>${badge('已确认','success')}</div>`).join('')}<div class="form-actions">${link('修改配置','setup','btn ghost')}${btn('完成初始化','finish-setup','primary','check')}</div></div><p class="field-hint section">完成初始化只建立协作环境，不会开始开发任务。</p></div>`);
+  V.conflict=()=>page('内容已更新','你的草稿仍然保留，请选择需要合并的内容。',`${banner('另一位参与者修改了此事项，保存前需要处理冲突。','warning')}<form data-form="conflict"><div class="form-error" role="alert"></div><div class="conflict-grid"><section class="panel"><h3>我的草稿</h3><p class="muted small">编辑于今天 10:12</p>${field('需求描述','draft','统一桌面与移动端的搜索入口，保持项目上下文。',{textarea:true})}</section><section class="panel"><h3>最新版本</h3><p class="muted small">陈宇 · 今天 10:24</p>${field('最新描述','latest','统一搜索与项目筛选，补充空结果、失败重试和权限变化的反馈。',{textarea:true,readonly:true})}</section></div><section class="panel panel-pad section"><h3>选择合并方式</h3><div class="inline-options"><label><input type="radio" name="choice" value="draft" required>保留我的草稿</label><label><input type="radio" name="choice" value="latest">使用最新版本</label></div><div class="heading-actions">${btn('合并并保存','submit','primary')}</div></section></form>`,link('返回编辑','issue-new','btn ghost','back'));
+  V.uncertain=()=>page('启动结果待确认','请求 DEV-032 · 个人开发任务',`${banner('连接中断，暂时无法确认任务是否已开始。请查询原请求的结果。','warning')}<div class="panel empty"><div class="empty-symbol">${icon('link')}</div><h2>${S.saved.requestChecked?'已找到原任务':'先确认结果，再继续'}</h2><p>${S.saved.requestChecked?'原任务已经开始，可进入原会话继续查看。':'为避免重复创建工作目录，这里不会重新派发执行。'}</p>${S.saved.requestChecked?link('进入原会话','session','btn primary','arrow'):btn('查询原请求','query-request','primary','refresh')}${link('返回任务记录','tasks','text-link')}</div><div class="panel panel-pad section">${meta([['原任务','统一搜索与项目筛选'],['起始分支','<code>origin/main</code>'],['执行人','林晨']])}${btn('重新开始开发','','','play','disabled')}</div>`);
+  V.notfound=()=>page('页面不存在','这个原型链接没有对应的界面。',empty('返回工作台继续浏览','也可以从界面目录查看全部页面。',link('工作台','home','btn primary')));
+  Object.assign(U,{h,icon,btn,link,avatar,badge,status,heading,page,banner,field,form,empty,meta,permissions,settingsPage,currentIssue,currentTask,project,scopedIssues,views:V});
+})();
+
+</script>
+<script>
+(function () {
+  'use strict';
+  const U = window.UI;
+  const S = U.state;
+  const {h,icon,btn,link,badge,field,banner,permissions} = U;
+  const app=document.getElementById('app');
+  const dialog=document.getElementById('dialog');
+  let dialogTrigger=null;
+  const nav=[['工作台','home','home'],['项目','projects','folder'],['事项','issues','issue'],['开发','tasks','code'],['交付','deliveries','box']];
+  const groupFor=route=> ['home'].includes(route)?'home': ['projects','project','project-settings','releases','release','assets','asset','members','prompts'].includes(route)?'projects':['issues','issue','issue-new','bug-new','assignment','conflict','issue-history'].includes(route)?'issues':['tasks','task','prepare','start','manual','session','approval','changes','archive','cleanup','uncertain'].includes(route)?'tasks':['deliveries','delivery','publish'].includes(route)?'deliveries':['personal','git','tokens','mcp-guide','password'].includes(route)?'personal':'accounts';
+  function shell(content) {
+    const active=groupFor(S.route);
+    return `<div class="shell"><button class="nav-overlay ${S.navOpen?'open':''}" data-action="close-nav" aria-label="关闭菜单"></button><aside class="sidebar ${S.navOpen?'open':''}" id="primary-nav" ${S.navOpen?'':'data-collapsed="true"'}><a class="brand" href="#home">${icon('logo')}<span>WEB CODING</span></a><nav class="sidebar-nav" aria-label="主导航">${nav.map(([name,route,sym])=>`<a class="nav-link ${active===route?'active':''}" href="#${route}" aria-label="${name}" ${active===route?'aria-current="page"':''}>${icon(sym)}<span>${name}</span>${route==='issues'?'<span class="nav-count">'+S.issues.length+'</span>':''}</a>`).join('')}</nav><div class="sidebar-bottom"><a href="#personal" class="nav-link ${active==='personal'?'active':''}" aria-label="个人设置">${icon('user')}<span>个人设置</span></a><a href="#accounts" class="nav-link ${active==='accounts'?'active':''}" aria-label="管理中心">${icon('settings')}<span>管理中心</span></a><button class="nav-link" data-action="catalog" aria-label="界面目录">${icon('grid')}<span>界面目录</span></button><div class="prototype-tag"><i></i> B / 交互原型</div></div></aside><header class="topbar"><button class="icon-btn mobile-menu" data-action="toggle-nav" aria-label="打开导航" aria-controls="primary-nav" aria-expanded="${S.navOpen}">${icon('menu')}</button><label class="context-select">${icon('folder')}<span class="sr-only">当前项目</span><select name="project-context" aria-label="当前项目"><option value="all">全部项目</option>${U.projects.map(p=>`<option value="${p.id}" ${S.project===p.id?'selected':''}>${p.name}</option>`).join('')}</select></label><span class="topbar-divider">/</span><span class="breadcrumb">${h(U.routes.find(r=>r[0]===S.route)?.[1]||'事项历史')}</span><span class="topbar-spacer"></span><button class="global-search" data-action="global-search" aria-label="全局搜索">${icon('search')}<span>搜索项目、事项或页面</span><kbd>⌘ K</kbd></button><a href="#personal" class="avatar-button" aria-label="林晨的个人设置">${U.avatar()}</a></header>${content}<nav class="bottom-nav" aria-label="移动端导航">${nav.map(([name,route,sym])=>`<a href="#${route}" class="${active===route?'active':''}" ${active===route?'aria-current="page"':''}>${icon(sym)}${name}</a>`).join('')}</nav></div>`;
+  }
+  function toast(message) {
+    const item=document.createElement('div');
+    item.className='toast';
+    item.innerHTML=icon('check')+`<span>${h(message)}</span>`;
+    const host=dialog.open?dialog:document.getElementById('toasts');
+    host.append(item);
+    setTimeout(()=>item.remove(),4200);
+  }
+  function closeDialog() {
+    if (dialog.open) dialog.close();
+    dialog.innerHTML='';
+    dialog.className='';
+    if (dialogTrigger?.isConnected) dialogTrigger.focus();
+  }
+  function openDialog(title,content,actions='',kind='') {
+    if (dialog.open) dialog.close();
+    dialogTrigger=document.activeElement;
+    dialog.className=kind;
+    dialog.innerHTML=`<div class="dialog-head"><h2 id="dialog-title">${h(title)}</h2><button class="icon-btn" data-action="close-dialog" aria-label="关闭弹窗">${icon('close')}</button></div><div class="dialog-content">${content}</div>${actions?`<div class="dialog-actions">${actions}</div>`:''}`;
+    dialog.showModal();
+  }
+  function dialogForm(id,title,fields,label='保存',kind='') {
+    openDialog(title,`<form data-form="${id}" id="dialog-form"><div class="form-error" role="alert"></div>${fields}</form>`,btn('取消','close-dialog','ghost')+`<button type="submit" class="btn primary" form="dialog-form">${label}</button>`,kind);
+  }
+  function navigate(route, options={}) {
+    closeDialog();
+    S.navOpen=false;
+    if (!options.keepSearch) S.search='';
+    if (location.hash==='#'+route) render();
+    else location.hash=route;
+  }
+  function render(preserve=false) {
+    const active=document.activeElement;
+    const focusName=preserve?active?.getAttribute('name'):null;
+    const selection=preserve&&active?.selectionStart!==null?active?.selectionStart:null;
+    const position=window.scrollY;
+    S.route=decodeURIComponent(location.hash.replace(/^#/,''))||'home';
+    const special=['login','password','setup','setup-summary'].includes(S.route);
+    let content=(U.views[S.route]||U.views.notfound)();
+    if (!special&&S.scenario!=='default'&&S.scenario!=='readonly') {
+      const title=U.routes.find(r=>r[0]===S.route)?.[1]||'当前页面';
+      const body=S.scenario==='empty'?U.empty('还没有相关内容','这里会展示当前范围内的工作。可以先创建一个事项。',link('新建事项','issue-new','btn primary','plus')):S.scenario==='error'?U.empty('暂时无法获取内容','当前筛选条件已保留，请重试。',btn('重新加载','reset-scenario','primary','refresh'),'info'):S.scenario==='permission'?U.empty('当前内容不可访问','权限可能已经变化，受限信息已从页面移除。',btn('返回可访问内容','reset-scenario','primary','back'),'lock'):`<div class="panel" aria-busy="true">${[1,2,3,4].map(()=>'<div class="skeleton-row"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>').join('')}</div><div class="section">${btn('完成模拟加载','reset-scenario','small')}</div>`;
+      content=U.page(title,'',body);
+    }
+    app.innerHTML=special?content:shell(content);
+    if (S.scenario==='readonly'&&!special) {
+      document.querySelector('main')?.insertAdjacentHTML('afterbegin',banner('当前为只读状态示例，内容可以查看，变更操作已禁用。'));
+      app.querySelectorAll('form input,form textarea,form select,form button[type="submit"]').forEach(el=>el.disabled=true);
+      app.querySelectorAll('[data-action]').forEach(el=>{if(mutations.has(el.dataset.action))el.disabled=true;});
+    }
+    document.title=`${U.routes.find(r=>r[0]===S.route)?.[1]||'Web Coding'} · B 方案原型`;
+    if(preserve){
+      const target=focusName?app.querySelector(`[name="${CSS.escape(focusName)}"]`):null;
+      if(target){target.focus({preventScroll:true});if(typeof target.setSelectionRange==='function'&&selection!==null)try{target.setSelectionRange(selection,selection);}catch{/* Non-text controls have no selection. */}}
+      window.scrollTo(0,position);
+    }else window.scrollTo(0,0);
+    if(S.route==='issues')applyIssueFilters();
+    if(S.route==='assignment'&&S.scenario==='default')showAssign();
+    if(S.route==='cleanup'&&S.scenario==='default')showCleanup();
+  }
+  function openIssue(id){ if(id)S.selectedIssue=id; S.checks=[false,false,false]; navigate('issue'); }
+  function showAssign(){
+    const i=U.currentIssue();
+    dialogForm('assignment','分派事项',`<p class="muted small">选择参与者，建立待开发任务。</p><div class="confirmation-summary"><strong>${h(i.title)}</strong><p class="muted small">${i.id} · ${i.release}</p></div>${field('负责人','owner',i.owner==='待分派'?'林晨':i.owner,{select:['林晨','陈宇','张敏'],required:true})}<label class="form-check"><input type="checkbox" name="notify" checked>在事项讨论中记录分派结果</label>${banner('此次操作只安排负责人，不启动 Agent。')}`,'确认分派','drawer');
+  }
+  function showCleanup(name='已归档会话'){
+    dialogForm('cleanup','删除历史与清理工作目录',`${banner('永久删除后无法从界面恢复，请明确选择影响范围。','warning')}<div class="confirmation-summary"><strong>${h(name)}</strong><p class="small muted">个人历史 · codex/search-experience</p></div><label class="form-check"><input type="checkbox" name="history" required>删除该会话历史</label><label class="form-check"><input type="checkbox" name="files">同时清理关联的工作目录与本地分支</label>${field('输入分支名称确认','branch','',{placeholder:'codex/search-experience',required:true,hint:'原型只模拟结果，不会删除磁盘文件。'})}`,'确认删除');
+  }
+  function catalog(){
+    const groups=[...new Set(U.routes.map(r=>r[3]))];
+    openDialog('界面目录',`<p class="muted small">46 个桌面页面与状态，移动端使用同一套响应式界面。所有操作仅影响演示数据。</p><div class="catalog-links"><a class="text-link" href="../../prd/ui-refactor.md" target="_blank" rel="noopener">PRD</a><a class="text-link" href="../../prd/assets/ui-refactor/index.html" target="_blank" rel="noopener">48 张参考图</a>${btn('重置演示','reset-demo','small ghost','refresh')}</div><div class="section">${field('页面状态演示','scenario',S.scenario,{select:[['default','正常内容'],['empty','空内容'],['loading','加载中'],['error','加载失败'],['permission','权限失效'],['readonly','只读状态']]})}</div><div class="catalog-grid">${groups.map(g=>`<section class="catalog-group"><h3>${g}</h3>${U.routes.filter(r=>r[3]===g).map(([route,title,sym])=>`<a class="catalog-link" href="#${route}" data-action="catalog-route" data-route="${route}">${icon(sym)}${title}<span>↗</span></a>`).join('')}</section>`).join('')}</div>`,'','catalog');
+  }
+  function globalSearch(){
+    openDialog('搜索',`<label class="input-search">${icon('search')}<input type="search" name="global-query" aria-label="搜索项目、事项或页面" placeholder="搜索项目、事项或页面" autofocus></label><div id="global-results" class="section"><p class="small muted">输入关键字，搜索演示项目、事项或功能页面。</p></div>`);
+    dialog.querySelector('input')?.focus();
+  }
+  function formError(form,message){
+    let el=form.querySelector('.form-error');
+    if(!el){el=document.createElement('div');el.className='form-error';el.setAttribute('role','alert');form.prepend(el);}
+    el.textContent=message;
+    el.scrollIntoView({block:'nearest'});
+  }
+  const mutations=new Set(['assign','claim','merge','approve','reject','stop','accept-delivery','return-delivery','new-project','new-release','new-token','revoke-token','save-permissions','publish-workflow','new-account','add-member','cleanup','cancel-task','save-scope','archive-release','add-asset','edit-asset']);
+  const actions={
+    'close-dialog':closeDialog,
+    'catalog':catalog,
+    'catalog-route':el=>{closeDialog();navigate(el.dataset.route);},
+    'toggle-nav':()=>{S.navOpen=!S.navOpen;render(true);const side=document.getElementById('primary-nav');if(S.navOpen)side?.querySelector('a')?.focus();},
+    'close-nav':()=>{S.navOpen=false;render(true);document.querySelector('[data-action="toggle-nav"]')?.focus();},
+    'global-search':globalSearch,
+    'quick-create':()=>openDialog('从这里开始',`<div class="settings-menu">${[['创建事项','issue-new','file'],['提交缺陷','bug-new','issue'],['新建独立开发','manual','code']].map(([name,route,sym])=>`<a href="#${route}" data-action="catalog-route" data-route="${route}">${icon(sym)}${name}</a>`).join('')}<button class="nav-link" data-action="new-project">${icon('folder')}新建项目</button></div>`),
+    'open-project':el=>{S.project=el.dataset.id;navigate('project');},
+    'open-issue':el=>openIssue(el.dataset.id),
+    'open-task':el=>{S.selectedTask=el.dataset.id;navigate('task');},
+    'open-session':el=>{if(el.dataset.id?.startsWith('DEV'))S.selectedTask=el.dataset.id;else if(el.dataset.id)S.selectedIssue=el.dataset.id;navigate('session');},
+    'open-delivery':el=>{S.selectedIssue=el.dataset.id;S.checks=[false,false,false];navigate('delivery');},
+    'open-asset':el=>{S.selectedAsset=el.dataset.name;navigate('asset');},
+    'issue-filter':el=>{S.issueFilter=el.dataset.value;render(true);},
+    'task-filter':el=>{S.taskFilter=el.dataset.value;render(true);},
+    'issue-filters':()=>dialogForm('issue-filters','筛选事项',field('状态','status',S.saved.statusFilter||'全部',{select:['全部','规划中','开发中','待验证','已实现']})+field('负责人','owner',S.saved.ownerFilter||'全部',{select:['全部','林晨','陈宇','待分派']}),'应用筛选'),
+    'assign':el=>{if(el.dataset.id)S.selectedIssue=el.dataset.id;showAssign();},
+    'claim':el=>{const i=S.issues.find(i=>i.id===el.dataset.id)||U.currentIssue();if(i.owner!=='待分派'){toast('该事项已经有负责人。');return;}i.owner='林晨';S.tasks.push({id:'DEV-'+(40+S.tasks.length),title:i.title,status:'待开发',project:i.project,release:i.release,owner:'林晨',issues:[i.id]});render(true);toast('已认领并建立待开发任务，尚未启动执行。');},
+    'edit-issue':()=>{const i=U.currentIssue();S.formDraft={title:i.title,content:i.description,project:i.project,criteria:i.criteria,release:i.release,priority:i.priority,editing:i.id};navigate(i.type==='缺陷'?'bug-new':'issue-new');},
+    'editor-mode':el=>{saveIssueDraft();S.editorMode=el.dataset.value;render(true);},
+    'editor-format':el=>{const area=document.getElementById('issue-content');if(!area||area.hidden){toast('请先切换到编辑模式。');return;}const pos=area.selectionStart;area.setRangeText(el.dataset.value+'\n',pos,area.selectionEnd,'end');saveIssueDraft();area.focus();},
+    'new-project':()=>dialogForm('new-project','新建项目',field('项目名称','name','',{required:true,placeholder:'例如：Web Console'})+field('项目说明','description','',{textarea:true})+field('Git 仓库地址','repo','',{required:true,type:'url',placeholder:'https://git.example.com/team/repo.git'}),'创建项目'),
+    'new-release':()=>dialogForm('new-release','新建版本',field('版本号','version','',{required:true,placeholder:'v0.3'})+field('版本主题','title','',{required:true})+field('目标日期','date','2026-10-30',{type:'date',required:true}),'创建版本'),
+    'show-archived':()=>openDialog('已归档版本',`<div class="setting-row"><div class="row-main"><strong>v0.0 · 最初的探索</strong><p>2026年9月30日归档 · 只读</p></div>${badge('已归档','neutral')}</div>`,btn('关闭','close-dialog')),
+    'add-scope':()=>dialogForm('add-scope','添加版本事项',S.issues.filter(i=>i.project==='console').map(i=>`<label class="form-check"><input type="checkbox" name="scope" value="${i.id}">${h(i.title)}</label>`).join(''),'加入版本'),
+    'save-scope':()=>{const ids=[...app.querySelectorAll('[name="scope-issue"]:checked')].map(x=>x.value);S.saved.scope=ids;toast(`已保存版本范围：${ids.length} 个事项。`);},
+    'archive-release':()=>openDialog('版本暂时不能归档',banner('还有未结束的事项与开发任务，请先完成或移出此版本。','warning')+'<p class="small muted">业务事项和开发任务都结束后，版本才会成为只读历史。</p>',btn('继续处理','close-dialog','primary')),
+    'clear-selection':()=>{S.selectedTasks=[];render(true);},
+    'merge':()=>{
+      const candidates=S.tasks.filter(t=>t.status==='待开发'&&t.owner==='林晨');
+      dialogForm('merge','合并开发范围',banner('仅合并本人、同项目、同版本的待开发任务；不会启动执行。')+field('合并后的标题','title','统一搜索与资料体验',{required:true})+candidates.map(t=>`<label class="form-check"><input type="checkbox" name="tasks" value="${t.id}" ${S.selectedTasks.includes(t.id)?'checked':''}><span>${h(t.title)}<small class="muted"> · ${h(t.release)}</small></span></label>`).join(''),'合并任务');
+    },
+    'cancel-task':()=>{if(S.running){toast('请先停止运行，再取消任务。');return;}dialogForm('cancel-task','取消开发任务',banner('取消会释放关联事项的认领。历史上下文继续保留。','warning')+field('取消原因','reason','',{textarea:true,required:true}),'确认取消');},
+    'code-file':el=>{S.codeFile=el.dataset.name;render(true);},
+    'git-status':()=>openDialog('Git 状态',`<div class="confirmation-summary"><p>当前分支：<code>codex/search-experience</code></p><p>2 个变更文件 · +20 / −1</p><p class="muted small">此为演示数据，不执行提交、合并或推送。</p></div>`,btn('完成','close-dialog','primary')),
+    'approve':()=>{S.approvalStatus='approved';S.running=false;render(true);toast('已批准本次模拟操作，检查完成。');},
+    'reject':()=>{S.approvalStatus='rejected';S.running=false;render(true);toast('已拒绝，本次模拟操作未执行。');},
+    'stop':()=>{S.running=false;S.messages.push({author:'Codex',text:'当前模拟轮次已停止，已有内容保留。'});render(true);toast('已停止当前轮次。');},
+    'accept-delivery':()=>{if(!S.checks.every(Boolean))return;const i=U.currentIssue();i.status='已实现';S.activity.push('通过验收：'+i.id);navigate('deliveries');toast('验收已通过，事项标记为已实现。');},
+    'return-delivery':()=>dialogForm('return-delivery','退回处理',field('需要调整的内容','reason',document.getElementById('verification-note')?.value||'',{textarea:true,required:true,hint:'填写原因，帮助参与者明确下一步。'}),'确认退回'),
+    'delivery-filter':el=>{const done=el.dataset.value==='done';const items=U.scopedIssues().filter(i=>i.status===(done?'已实现':'待验证'));app.querySelectorAll('[data-action="delivery-filter"]').forEach(b=>b.classList.toggle('active',b===el));document.getElementById('delivery-results').innerHTML=items.length?`<div class="panel">${items.map(i=>`<div class="work-row"><div class="row-main"><strong>${h(i.title)}</strong><div class="row-meta">${i.id}</div></div>${U.status(i.status)}${btn('查看','open-delivery','small','',`data-id="${i.id}"`)}</div>`).join('')}</div>`:U.empty('暂无'+(done?'已验证':'待验证')+'的交付','后续结果会出现在这里。');},
+    'restore-session':el=>{S.saved.restored=el.dataset.name;el.closest('.work-row')?.remove();toast('会话已恢复到开发列表，没有自动开始执行。');},
+    'cleanup':el=>showCleanup(el.dataset.name),
+    'preview-attachment':el=>openDialog(el.dataset.name||'参考资料',`<div class="prose"><h3>参考资料预览</h3><p>这份演示资料说明了项目目标、布局与验收方式。</p><ul><li>保持同一套导航和协作上下文。</li><li>在 1080P、2K 与移动端完成相同核心操作。</li><li>区分准备、执行与业务验收。</li></ul></div>`,btn('关闭','close-dialog','primary')),
+    'add-asset':()=>dialogForm('asset','添加项目资料',field('标题','title','',{required:true})+field('内容说明','description','',{textarea:true,required:true})+field('类型','type','文档',{select:['文档','链接','受保护配置']}),'保存资料'),
+    'edit-asset':()=>dialogForm('asset','编辑资料',field('标题','title',S.selectedAsset,{required:true})+field('内容说明','description','更新项目资料与使用约定。',{textarea:true,required:true}),'保存修改'),
+    'reveal-secret':()=>{S.securityVisible=!S.securityVisible;render(true);},
+    'member-permissions':el=>openDialog('调整 '+el.dataset.name+' 的授权',`<p class="field-hint">授权组合来自部门功能上限，不创建岗位角色。</p><div id="permission-region">${permissions()}</div>`,btn('取消','close-dialog','ghost')+btn('保存授权','save-permissions','primary'),'drawer'),
+    'add-member':()=>dialogForm('member','添加项目成员',field('成员','name','张敏',{select:['张敏','李澄','陈宇'],required:true})+banner('加入项目后，再按部门功能上限分配工作权限。'),'添加成员'),
+    'insert-placeholder':()=>{const area=app.querySelector('[name="prompt"]');if(area){area.value+='\n验收标准：{{acceptanceCriteria}}';area.focus();}},
+    'toggle-notify':el=>{S.saved.notify=el.getAttribute('aria-checked')!=='true';el.setAttribute('aria-checked',String(S.saved.notify));},
+    'test-git':()=>{S.gitConnected=true;document.getElementById('connection-result').innerHTML=banner('模拟连接检查通过。','success','check');toast('演示连接已验证，未访问真实主机。');},
+    'copy-mcp':async()=>{try{await navigator.clipboard.writeText('https://coding.example.com/mcp');toast('已复制示例 MCP 地址。');}catch{openDialog('复制示例地址',field('连接地址','copy','https://coding.example.com/mcp',{readonly:true}));}},
+    'new-token':()=>dialogForm('token','创建 MCP Token',field('名称','name','本机助手',{required:true})+field('操作范围','scope','只读',{select:['只读','读取与写入']})+field('项目范围','project','当前可访问项目',{select:['当前可访问项目','仅 Web Console']})+field('有效期','expires','30 天',{select:['7 天','30 天','90 天']}),'创建 Token','drawer'),
+    'revoke-token':el=>{S.tokens[Number(el.dataset.index)].enabled=false;render(true);toast('演示 Token 已撤销。');},
+    'mcp-example':()=>openDialog('上传返回示例','<pre>{\n  "attachment_id": "demo-attachment-id"\n}</pre><p class="field-hint section">示例字段只用于原型说明，请以真实 MCP 契约为准。</p>',btn('关闭','close-dialog')),
+    'new-account':()=>dialogForm('account','新建账号',field('登录名','username','',{required:true})+field('显示名称','name','',{required:true})+field('部门','department','协作一组',{select:['协作一组','协作二组']})+field('系统身份','role','普通成员',{select:['普通成员','管理员']})+field('临时密码','password','',{type:'password',required:true,attrs:'minlength="6"',hint:'仅输入演示值；不持久化。'}),'创建账号','drawer'),
+    'edit-account':el=>dialogForm('edit-account','管理账号',field('显示名称','name',el.dataset.name,{required:true})+field('部门','department','协作一组',{select:['协作一组','协作二组']})+field('状态','status','启用',{select:['启用','停用']}),'保存账号'),
+    'permission-category':el=>{S.selectedPermission=el.dataset.name;if(dialog.open){document.getElementById('permission-region').innerHTML=permissions();}else render(true);},
+    'save-permissions':()=>{closeDialog();toast('已保存演示权限，不影响实际账号。');},
+    'new-department':()=>dialogForm('department','新建部门',field('部门名称','name','',{required:true}),'创建部门'),
+    'workflow-type':el=>{S.saved.workflowType=el.dataset.value;render(true);},
+    'workflow-node':el=>dialogForm('workflow-node','状态配置',field('名称','name',el.dataset.name,{required:true})+field('类型','kind','进行中',{select:['初始状态','进行中','完成状态','取消状态']})+'<label class="form-check"><input type="checkbox" name="development" checked>在此状态允许开始开发</label>','保存节点','drawer'),
+    'validate-workflow':()=>toast('模拟校验通过：初始状态唯一，所有节点可达。'),
+    'publish-workflow':()=>openDialog('发布流程',banner('发布为新版本，仅供之后创建的事项使用。在途事项保持当前流程。')+'<p class="muted small">本原型仅模拟发布状态。</p>',btn('取消','close-dialog','ghost')+btn('确认发布','confirm-workflow','primary')),
+    'confirm-workflow':()=>{S.saved.workflowPublished=true;closeDialog();render(true);toast('流程演示版本已发布。');},
+    'test-supplier':()=>{S.supplierConnected=true;toast('模拟连接成功；未发送真实网络请求。');},
+    'check-environment':()=>{S.saved.environmentChecked=true;render(true);toast('模拟环境检测完成。');},
+    'environment-detail':el=>openDialog(el.dataset.name+' 环境信息',banner('当前为原型模拟数据，不执行安装或升级。')+U.meta([['检查项',h(el.dataset.name)],['执行位置','应用服务所在机器'],['状态','已就绪（演示）']]),btn('关闭','close-dialog')),
+    'browse-directory':()=>openDialog('选择目录',`<div class="settings-menu">${['D:/Workspace','D:/Projects','D:/Work'].map(p=>`<button class="nav-link" data-action="select-directory" data-path="${p}">${icon('folder')}${p}</button>`).join('')}</div>`),
+    'select-directory':el=>{const path=el.dataset.path;closeDialog();app.querySelector('[name="path"]').value=path;},
+    'setup-back':()=>{S.setupStep=Math.max(1,S.setupStep-1);render();},
+    'finish-setup':()=>{navigate('home');toast('演示初始化完成，没有启动开发。');},
+    'query-request':()=>{S.saved.requestChecked=true;render(true);toast('已查询到原任务，未重新派发。');},
+    'reset-scenario':()=>{S.scenario='default';render();},
+    'reset-demo':()=>{closeDialog();location.href=location.pathname+'#home';location.reload();},
+  };
+  function saveIssueDraft(){
+    const form=app.querySelector('[data-form="issue-editor"]');
+    if(!form)return;
+    const data=new FormData(form);
+    for(const key of ['project','title','content','criteria','release','priority'])S.formDraft[key]=data.get(key);
+  }
+  const submits={
+    'issue-editor':(f,d)=>{
+      const editing=S.formDraft.editing;
+      let issue=editing?S.issues.find(i=>i.id===editing):null;
+      if(!issue){const project=String(d.get('project'));issue={id:(project==='portal'?'PT-':project==='design'?'DS-':'WC-')+(130+S.issues.length),owner:'待分派',status:'规划中',date:'今天'};S.issues.unshift(issue);}
+      Object.assign(issue,{title:String(d.get('title')),description:String(d.get('content')),criteria:String(d.get('criteria')),type:String(d.get('type')),project:String(d.get('project')),priority:String(d.get('priority')),release:String(d.get('release'))});
+      S.selectedIssue=issue.id;S.formDraft={};navigate('issue');toast(editing?'事项已更新。':'事项已创建，尚未分派或启动开发。');
+    },
+    'comment':(f,d)=>{S.comments.push({issue:S.selectedIssue,text:String(d.get('comment'))});render(true);toast('讨论已发送。');},
+    'assignment':(f,d)=>{
+      const i=U.currentIssue(), owner=String(d.get('owner'));i.owner=owner;
+      let task=S.tasks.find(t=>t.issues.includes(i.id)&&!['已完成','已取消','已合并'].includes(t.status));
+      if(task)task.owner=owner;else{task={id:'DEV-'+(40+S.tasks.length),title:i.title,status:'待开发',project:i.project,release:i.release,owner,issues:[i.id]};S.tasks.unshift(task);}
+      S.selectedTask=task.id;closeDialog();if(S.route==='assignment')navigate('issue');else render(true);toast('已分派给'+owner+'，任务保持待开发。');
+    },
+    'new-project':(f,d)=>{const p={id:'project-'+Date.now(),name:String(d.get('name')),description:String(d.get('description'))||'新的协作空间',initial:String(d.get('name')).slice(0,1),color:'violet',members:1};U.projects.push(p);S.project=p.id;closeDialog();navigate('project');toast('演示项目已创建。');},
+    'new-release':(f,d)=>{const version=String(d.get('version'));if(!/^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*))?$/.test(version)){formError(f,'版本号应为 v0.3 或 v1.0.0，不包含空格或后缀。');return;}(S.saved.releases??=[]).push({version,title:String(d.get('title')),date:String(d.get('date'))});closeDialog();render(true);toast('版本已创建。');},
+    'add-scope':(f,d)=>{const ids=d.getAll('scope');ids.forEach(id=>{const i=S.issues.find(x=>x.id===id);if(i)i.release='v0.2';});closeDialog();render(true);toast(`已将 ${ids.length} 个事项加入版本。`);},
+    'merge':(f,d)=>{const ids=d.getAll('tasks'),tasks=S.tasks.filter(t=>ids.includes(t.id));if(tasks.length<2){formError(f,'请至少选择两个待开发任务。');return;}if(tasks.some(t=>t.status!=='待开发'||t.owner!=='林晨'||t.release!==tasks[0].release||t.project!==tasks[0].project)){formError(f,'只能合并本人、同项目、同版本且未开始的任务。');return;}const merged={id:'DEV-'+(50+S.tasks.length),title:String(d.get('title')),status:'待开发',project:tasks[0].project,release:tasks[0].release,owner:'林晨',issues:[...new Set(tasks.flatMap(t=>t.issues))]};tasks.forEach(t=>t.status='已合并');S.tasks.unshift(merged);S.mergeHistory.push(ids);S.selectedTask=merged.id;S.selectedTasks=[];closeDialog();navigate('task');toast('范围已合并，尚未开始执行。');},
+    'cancel-task':(f,d)=>{const t=U.currentTask();t.status='已取消';t.issues.forEach(id=>{const i=S.issues.find(x=>x.id===id);if(i)i.owner='待分派';});S.activity.push('取消：'+d.get('reason'));closeDialog();navigate('tasks');toast('任务已取消，认领已释放。');},
+    'prepare':()=>{S.prepared=true;render(true);toast('个人环境已模拟准备完成，可以返回任务。');},
+    'start':f=>startExecution(f,false),
+    'manual-start':f=>startExecution(f,true),
+    'message':(f,d)=>{if(S.running){formError(f,'当前轮次仍在运行，请先停止或完成审批。');return;}S.messages.push({author:'你',text:String(d.get('message'))});S.messages.push({author:'Codex',text:'已收到补充。我会保留当前上下文，并按你的说明继续检查相关界面。这是原型中的模拟回复。'});render(true);document.getElementById('conversation-log').scrollTop=1e6;},
+    'publish':(f,d)=>{const id=String(d.get('issue'));S.deliveries.push({issue:id,title:String(d.get('title')),summary:String(d.get('summary'))});S.issues.find(i=>i.id===id).status='待验证';S.selectedIssue=id;S.checks=[false,false,false];navigate('delivery');toast('交付已发布到项目，私人会话未公开。');},
+    'return-delivery':(f,d)=>{const i=U.currentIssue();i.status='开发中';S.comments.push({issue:i.id,text:'退回原因：'+String(d.get('reason'))});S.checks=[false,false,false];closeDialog();navigate('issue');toast('已退回处理，并记录原因。');},
+    'cleanup':(f,d)=>{if(d.get('branch')!=='codex/search-experience'){formError(f,'分支名称不一致，请输入 codex/search-experience。');return;}closeDialog();navigate('archive');toast('已演示删除结果，没有删除任何真实文件。');},
+    'asset':(f,d)=>{S.selectedAsset=String(d.get('title'));S.saved.assetDescription=String(d.get('description'));closeDialog();navigate('asset');toast('资料已保存到原型。');},
+    'member':(f,d)=>{S.saved.member=String(d.get('name'));closeDialog();toast('成员已添加到演示项目，可继续分配权限。');},
+    'project-settings':(f,d)=>{const p=U.project();p.name=String(d.get('name'));p.description=String(d.get('description'));S.saved.commands=String(d.get('commands'));toast('项目配置已保存到演示状态。');},
+    'prompts':(f,d)=>{S.saved.prompt=String(d.get('prompt'));toast('已保存当前作用范围的提示词。');},
+    'personal':(f,d)=>{S.saved.displayName=String(d.get('displayName'));toast('个人设置已保存，不影响已有任务。');},
+    'git-account':f=>{f.querySelector('[name="token"]').value='';S.saved.gitAccount=true;toast('演示账号已保存，凭据输入已清除。');},
+    'token':(f,d)=>{S.tokens.push({name:String(d.get('name')),scope:String(d.get('scope'))+' · '+String(d.get('project')),enabled:true});closeDialog();render(true);openDialog('Token 已创建',banner('演示字符串仅展示一次，关闭后不再显示。')+field('演示 Token','demo-token','DEMO-TOKEN-NOT-A-REAL-CREDENTIAL',{readonly:true})+'<p class="field-hint">这是无效占位符，不可用于任何真实服务。</p>',btn('已保存，关闭','close-dialog','primary'));},
+    'account':(f,d)=>{(S.saved.accounts??=[]).push([String(d.get('name')),String(d.get('username')),String(d.get('department')),String(d.get('role'))]);f.querySelector('[name="password"]').value='';closeDialog();render(true);toast('演示账号已创建，临时密码已清除。');},
+    'edit-account':()=>{closeDialog();toast('演示账号配置已保存。');},
+    'department':(f,d)=>{S.saved.department=String(d.get('name'));closeDialog();toast('演示部门已创建，可按需配置功能上限。');},
+    'workflow-node':(f,d)=>{S.saved.workflowNode=String(d.get('name'));closeDialog();toast('节点草稿已保存，发布后对新事项生效。');},
+    'supplier':f=>{f.querySelector('[name="key"]').value='';toast('供应商演示配置已保存，密钥输入已清除。');},
+    'storage':(f,d)=>{S.saved.storage=String(d.get('path'));toast('演示目录设置已保存，现有目录没有移动。');},
+    'login':f=>{f.querySelector('[name="password"]').value='';navigate('home');toast('已进入原型工作台。');},
+    'password':(f,d)=>{if(d.get('password')!==d.get('confirm')){formError(f,'两次输入的新密码不一致。');return;}f.querySelectorAll('[type="password"]').forEach(el=>el.value='');navigate('home');toast('密码表单校验通过；没有修改真实账号。');},
+    'setup-step':(f,d)=>{if(S.setupStep===3)S.saved.setupPath=String(d.get('path'));if(S.setupStep===4)S.saved.setupProject=String(d.get('name'));f.querySelectorAll('[type="password"]').forEach(el=>el.value='');if(S.setupStep<4){S.setupStep++;render();}else navigate('setup-summary');},
+    'conflict':(f,d)=>{U.currentIssue().description=String(d.get(d.get('choice')));navigate('issue');toast('已合并并保存选择的内容。');},
+    'issue-filters':(f,d)=>{S.saved.statusFilter=String(d.get('status'));S.saved.ownerFilter=String(d.get('owner'));closeDialog();render(true);applyIssueFilters();},
+  };
+  function startExecution(form,manual){
+    if(!S.prepared){formError(form,'个人环境尚未准备，请先打开“准备个人环境”。');return;}
+    if(S.running){formError(form,'已有模拟轮次运行中，请进入原会话查看。');return;}
+    if(manual){const d=new FormData(form);const t={id:'DEV-'+(60+S.tasks.length),title:String(d.get('title')),status:'开发中',project:U.project().id,release:'独立开发',owner:'林晨',issues:[]};S.tasks.unshift(t);S.selectedTask=t.id;}
+    else U.currentTask().status='开发中';
+    S.running=true;S.approvalStatus='pending';navigate('session');toast('已进入模拟执行，未调用真实 Agent。');
+  }
+  function applyIssueFilters(){
+    const rows=app.querySelectorAll('.list-table tbody tr');
+    rows.forEach(row=>{const text=row.textContent;row.hidden=Boolean((S.saved.statusFilter&&S.saved.statusFilter!=='全部'&&!text.includes(S.saved.statusFilter))||(S.saved.ownerFilter&&S.saved.ownerFilter!=='全部'&&!text.includes(S.saved.ownerFilter)));});
+  }
+  document.addEventListener('click',event=>{
+    const el=event.target.closest('[data-action]');
+    if(!el){
+      if(event.target.closest('.skip-link')){event.preventDefault();document.getElementById('main')?.focus();return;}
+      if(event.target.closest('a[href^="#"]')){saveIssueDraft();closeDialog();S.search='';S.navOpen=false;}
+      return;
+    }
+    if(el.disabled)return;
+    const handler=actions[el.dataset.action];
+    if(handler){event.preventDefault();handler(el,event);}
+    if(event.target.closest('a[href^="#"]')&&!handler){saveIssueDraft();closeDialog();S.search='';S.navOpen=false;}
+  });
+  document.addEventListener('submit',event=>{
+    const form=event.target.closest('[data-form]');
+    if(!form)return;
+    event.preventDefault();
+    if(!form.reportValidity())return;
+    const handler=submits[form.dataset.form];
+    if(handler)handler(form,new FormData(form));
+  });
+  document.addEventListener('input',event=>{
+    const el=event.target;
+    if(el.name==='local-search'){S.search=el.value;render(true);}
+    if(el.closest('[data-form="issue-editor"]')&&el.type!=='file')saveIssueDraft();
+    if(el.id==='verification-note')S.saved.verificationNote=el.value;
+    if(el.name==='global-query'){
+      const q=el.value.trim().toLowerCase();
+      const matches=U.routes.filter(r=>r[1].toLowerCase().includes(q)).slice(0,8);
+      const issues=S.issues.filter(i=>(i.id+i.title).toLowerCase().includes(q)).slice(0,5);
+      document.getElementById('global-results').innerHTML=q?`<div class="settings-menu">${issues.map(i=>`<button class="nav-link" data-action="open-issue" data-id="${i.id}">${icon('issue')}${h(i.title)}</button>`).join('')}${matches.map(([route,name,sym])=>`<a href="#${route}" data-action="catalog-route" data-route="${route}">${icon(sym)}${h(name)}</a>`).join('')}${!matches.length&&!issues.length?'<p class="muted small">没有匹配的结果。</p>':''}</div>`:'<p class="muted small">输入关键字，搜索项目、事项或页面。</p>';
+    }
+  });
+  document.addEventListener('change',event=>{
+    const el=event.target;
+    if(el.name==='project-context'){S.project=el.value;S.selectedTasks=[];render(true);}
+    if(el.name==='scenario'){S.scenario=el.value;closeDialog();render();}
+    if(el.name==='task-select'){S.selectedTasks=[...app.querySelectorAll('[name="task-select"]:checked')].map(x=>x.value);render(true);}
+    if(el.name==='delivery-check'){S.checks[Number(el.value)]=el.checked;render(true);}
+    if(el.name==='permission'){S.permissions=el.checked?[...new Set([...S.permissions,el.value])]:S.permissions.filter(p=>p!==el.value);}
+    if(el.name==='attachments'){S.formDraft.attachments=[...el.files].map(f=>f.name);const host=document.getElementById('attachment-list');host.innerHTML=S.formDraft.attachments.map(n=>`<div class="attachment">${icon('file')}<span>${h(n)}</span><span class="faint small">仅演示文件名</span></div>`).join('');}
+  });
+  document.addEventListener('keydown',event=>{
+    if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){event.preventDefault();globalSearch();}
+    if(event.key==='Escape'&&S.navOpen){S.navOpen=false;render(true);document.querySelector('[data-action="toggle-nav"]')?.focus();}
+    if(event.key==='Tab'&&S.navOpen){
+      const items=[...document.querySelectorAll('.sidebar a,.sidebar button')];const first=items[0],last=items.at(-1);
+      if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+    }
+  });
+  dialog.addEventListener('cancel',()=>{setTimeout(closeDialog,0);});
+  window.addEventListener('hashchange',()=>{closeDialog();S.navOpen=false;render();});
+  window.addEventListener('pagehide',()=>{S.securityVisible=false;S.tokenCreated=false;document.querySelectorAll('[type="password"]').forEach(el=>el.value='');});
+  render();
+})();
+
+</script>
+</body>
+</html>

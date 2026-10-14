@@ -1,4 +1,5 @@
 <script setup>
+import { formatDate } from "../../shared/i18n/index.js";
 import { computed, useId } from "vue";
 import { Select as ASelect } from "antdv-next";
 import { appApi } from "../../shared/api/api.js";
@@ -28,7 +29,7 @@ function refresh() {
 <template>
   <section class="project-form development-branch-select">
     <div class="development-branch-field">
-      <label :for="inputId">起始分支</label>
+      <label :for="inputId">{{ $t("起始分支") }}</label>
       <a-select
         :id="inputId"
         :value="modelValue || undefined"
@@ -40,23 +41,23 @@ function refresh() {
         :loading="loading"
         :disabled="disabled || loading || Boolean(error)"
         aria-required="true"
-        placeholder="搜索并选择远端分支"
+        :placeholder="$t(&quot;搜索并选择远端分支&quot;)"
         :not-found-content="loading ? '正在读取远端分支…' : '没有匹配的远端分支。'"
         @change="value => emit('update:modelValue', value || '')"
       />
     </div>
     <button type="button" :disabled="disabled || loading" @click="refresh">
-      {{ loading ? "正在读取远端…" : "刷新远端分支" }}
+      {{ loading ? $t("正在读取远端…") : $t("刷新远端分支") }}
     </button>
     <p v-if="error" role="alert" class="error">{{ error }}</p>
     <p v-if="data && !branches.length" class="field-hint">
-      没有匹配的远端分支。
+      {{ $t("没有匹配的远端分支。") }}
     </p>
     <p class="field-hint">
-      实时读取远端分支；启动时获取最新提交。读取失败请刷新重试。
+      {{ $t("实时读取远端分支；启动时获取最新提交。读取失败请刷新重试。") }}
     </p>
     <p v-if="data?.fetchedAt" class="field-hint">
-      读取时间：{{ data.fetchedAt }}
+      {{ $t("读取时间：") }}{{ formatDate(data.fetchedAt, { hour: "2-digit", minute: "2-digit" }) }}
     </p>
   </section>
 </template>

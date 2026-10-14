@@ -48,16 +48,16 @@ const groups = computed(() => {
 <template>
   <div class="task-list-toolbar">
     <span
-      >需求列表 <small>{{ runs.length }}</small></span
+      >{{ $t("需求列表") }} <small>{{ runs.length }}</small></span
     >
-    <select :value="grouping" aria-label="任务分组方式" @change="changeGrouping">
-      <option value="type">按类型</option>
-      <option value="progress">按进度</option>
-      <option value="none">不分组</option>
+    <select :value="grouping" :aria-label="$t(&quot;任务分组方式&quot;)" @change="changeGrouping">
+      <option value="type">{{ $t("按类型") }}</option>
+      <option value="progress">{{ $t("按进度") }}</option>
+      <option value="none">{{ $t("不分组") }}</option>
     </select>
   </div>
-  <FeedbackMessage :message="preferenceError ? `分组保存失败：${preferenceError}` : ''" type="error" />
-  <nav class="task-list" aria-label="会话列表">
+  <FeedbackMessage :message="preferenceError ? $t(&quot;分组保存失败：{p0}&quot;, { p0: preferenceError }) : ''" type="error" />
+  <nav class="task-list" :aria-label="$t(&quot;会话列表&quot;)">
     <details
       v-for="group in groups"
       :key="`${grouping}:${group.value}`"
@@ -65,8 +65,8 @@ const groups = computed(() => {
       :class="{ ungrouped: grouping === 'none' }"
       open
     >
-      <summary :aria-label="`${group.label}分组，${group.runs.length}个任务`">
-        <span>{{ group.label }}</span
+      <summary :aria-label="$t(&quot;{p0}分组，{p1}个任务&quot;, { p0: group.label, p1: group.runs.length })">
+        <span>{{ $t(group.label) }}</span
         ><small>{{ group.runs.length }}</small>
       </summary>
       <button
@@ -91,29 +91,29 @@ const groups = computed(() => {
             v-if="props.unreadResultKeys.includes(run.key)"
             class="unread-result"
             role="img"
-            :aria-label="`有未读 ${run.agent?.label || 'Agent'} 回复`"
+            :aria-label="$t(&quot;有未读 {p0} 回复&quot;, { p0: run.agent?.label || 'Agent' })"
           ></span></span
         >
         <span class="task-tags"
           ><span
             class="task-type-tag"
             :data-type="run.metadata?.type || 'requirement'"
-            >{{ taskTypeLabel(run.metadata?.type) }}</span
+            >{{ $t(taskTypeLabel(run.metadata?.type)) }}</span
           ><span
             class="task-progress-tag"
             :data-progress="run.metadata?.progress || 'in_progress'"
-            >{{ taskProgressLabel(run.metadata?.progress) }}</span
+            >{{ $t(taskProgressLabel(run.metadata?.progress)) }}</span
           ></span
         >
         <span class="session-meta"
           ><i
             :class="{ live: ['running', 'inProgress'].includes(run.status) }"
           ></i
-          >{{ run.agent?.label || 'Agent' }} · {{ statusLabel(run.status || run.execution?.status) }}</span
+          >{{ run.agent?.label || 'Agent' }} · {{ $t(statusLabel(run.status || run.execution?.status)) }}</span
         >
-        <small v-if="run.requirementCount > 1">关联 {{ run.requirementCount }} 条需求</small>
+        <small v-if="run.requirementCount > 1">{{ $t("关联") }} {{ run.requirementCount }} {{ $t("条需求") }}</small>
       </button>
     </details>
-    <p v-if="!runs.length" class="muted">暂无任务，从一个需求开始。</p>
+    <p v-if="!runs.length" class="muted">{{ $t("暂无任务，从一个需求开始。") }}</p>
   </nav>
 </template>

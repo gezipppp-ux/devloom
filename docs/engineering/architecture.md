@@ -24,7 +24,7 @@ web/src/
   main.js          # Vue 挂载与主题入口
   app/             # 应用壳层、工作区选择、跨功能协调
   features/        # accounts/、projects/、workspaces/、tasks/、session/、settings/
-  shared/          # api/、components/、styles/
+  shared/          # api/、components/、styles/、i18n/
 shared/            # 前后端共用的 JSON 目录与枚举
 test/
   architecture/    # 依赖/环、渠道隔离、入口归属、命名与安装根约束
@@ -129,7 +129,7 @@ docs/engineering/  # 行为契约与架构规则
 
 ## 前端与命名
 
-前端依赖方向为 `main.js → app → features → shared`。功能目录内组合自己的组件；跨功能业务由 app 协调，共享组件不引用具体功能。登录、改密、账号管理、个人设置与通知偏好位于 `features/accounts/`；app 保留路由与跨功能壳层。样式继续使用既有浅绿工作台变量。实施入口为项目内 [工程 Skill](../../.agents/skills/web-coding-engineering/SKILL.md) 和 [界面 Skill](../../.agents/skills/web-coding-ui/SKILL.md)，详细说明见 [前端模块边界](../../web/src/README.md) 和 [渠道模块说明](../../src/channels/README.md)。
+前端依赖方向为 `main.js → app → features → shared`。功能目录内组合自己的组件；跨功能业务由 app 协调，共享组件不引用具体功能。登录、改密、账号管理、个人设置与通知偏好位于 `features/accounts/`；app 保留路由与跨功能壳层。新 UI 目标采用 B 方案中性协作设计；正式 Vue 使用中性主题、共享呈现组件及 `shared/i18n` 国际化，详见 [UI 重构 PRD](../prd/ui-refactor.md)。实施入口为项目内 [工程 Skill](../../.agents/skills/web-coding-engineering/SKILL.md) 和 [界面 Skill](../../.agents/skills/web-coding-ui/SKILL.md)，详细说明见 [前端模块边界](../../web/src/README.md) 和 [渠道模块说明](../../src/channels/README.md)。
 
 app 中的 `use-workspace-selection` 管理工作区与 URL，`use-workspace-console` 协调启动/SSE/刷新；tasks 的 `use-task-list` 拥有任务列表与元数据覆盖，session 的 `use-session` 拥有快照、流事件合并、消息动作和分页。Vue 壳层保留页面、草稿与滚动等呈现状态。异步操作必须保留请求身份、选择代际和卸载清理，避免过期 HTTP 响应覆盖新选择或 SSE。
 

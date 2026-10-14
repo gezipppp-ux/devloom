@@ -76,7 +76,8 @@ async function verifySessionFiles(browser, origin, key, errors, output) {
       await panel.locator(".file-diff-line.removed").waitFor();
       const bounds = await panel.boundingBox();
       assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width + 1);
-      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+      const overflow = await page.evaluate(() => ({ width: window.innerWidth, scroll: document.documentElement.scrollWidth, elements: [...document.querySelectorAll('body *')].filter(el => el.getBoundingClientRect().right > window.innerWidth + 1).slice(0, 12).map(el => ({ tag: el.tagName, class: el.className, right: el.getBoundingClientRect().right })) }));
+      assert.ok(overflow.scroll <= width, JSON.stringify(overflow));
       await page.screenshot({ path: path.join(output, `file-panel-${width}.png`), fullPage: true });
       await page.keyboard.press("Escape");
     }

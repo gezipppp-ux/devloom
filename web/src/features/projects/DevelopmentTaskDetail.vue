@@ -1,4 +1,5 @@
 <script setup>
+import { formatDate } from "../../shared/i18n/index.js";
 import { computed, nextTick, reactive, ref } from "vue";
 import { ArrowLeftOutlined, ReloadOutlined } from "@antdv-next/icons";
 import { statusLabel, appApi } from "../../shared/api/api.js";
@@ -198,7 +199,7 @@ async function submitConfirmation() {
 }
 </script>
 <template>
-  <article class="development-task-detail" aria-label="开发任务详情">
+  <article class="development-task-detail" :aria-label="$t(&quot;开发任务详情&quot;)">
     <FeedbackMessage :message="error" type="error" /><FeedbackMessage
       :message="notice"
       type="success"
@@ -209,20 +210,20 @@ async function submitConfirmation() {
         :disabled="saving"
         @click="emit('back')"
       >
-        <ArrowLeftOutlined aria-hidden="true" />返回任务列表</button
+        <ArrowLeftOutlined aria-hidden="true" />{{ $t("返回任务列表") }}</button
       ><button
         class="development-quiet-button"
         :disabled="busy"
         @click="reload"
       >
         <ReloadOutlined aria-hidden="true" />{{
-          loading ? "正在刷新…" : "刷新状态"
+          loading ? $t("正在刷新…") : $t("刷新状态")
         }}
       </button>
     </div>
-    <p v-if="loading && !task" role="status">正在读取指定开发任务…</p>
+    <p v-if="loading && !task" role="status">{{ $t("正在读取指定开发任务…") }}</p>
     <p v-else-if="!task" role="alert">
-      {{ error || "指定开发任务不存在或无权访问。" }}
+      {{ error || $t("指定开发任务不存在或无权访问。") }}
     </p>
     <template v-if="task">
       <header class="development-heading">
@@ -230,16 +231,16 @@ async function submitConfirmation() {
           <h2>{{ task.title }}</h2>
           <div class="development-states">
             <span class="development-task-status"
-              >任务：{{
-                developmentTaskLabels[task.status] || task.status
+              >{{ $t("任务：") }}{{
+                $t(developmentTaskLabels[task.status] || task.status)
               }}</span
             ><span class="development-execution-status"
-              >Codex：{{ codexStatus }}</span
+              >Codex：{{ $t(codexStatus) }}</span
             >
           </div>
           <p class="development-meta">
-            开发负责人：{{ task.executor?.displayName || "未分配" }} · 版本：{{
-              task.release?.name || "未排期"
+            {{ $t("开发负责人：") }}{{ task.executor?.displayName || $t("未分配") }} {{ $t("· 版本：") }}{{
+              task.release?.name || $t("未排期")
             }}
           </p>
         </div>
@@ -249,17 +250,17 @@ async function submitConfirmation() {
           :disabled="busy || editing"
           @click="edit"
         >
-          编辑任务信息
+          {{ $t("编辑任务信息") }}
         </button>
       </header>
       <form
         v-if="editing && canEdit"
         class="development-panel project-form"
-        aria-label="编辑任务信息"
+        :aria-label="$t(&quot;编辑任务信息&quot;)"
         @submit.prevent="saveInformation"
         @keydown.esc.prevent="!saving && closeEdit()"
       >
-        <h3>编辑任务信息</h3>
+        <h3>{{ $t("编辑任务信息") }}</h3>
         <FeedbackMessage :message="members.error.value" type="error" />
         <button
           v-if="members.error.value"
@@ -267,18 +268,18 @@ async function submitConfirmation() {
           :disabled="members.loading.value"
           @click="members.reload"
         >
-          重新读取开发负责人
+          {{ $t("重新读取开发负责人") }}
         </button>
         <div class="form-columns">
           <label
-            >任务标题<input
+            >{{ $t("任务标题") }}<input
               ref="titleInput"
               v-model="title"
               required
               maxlength="200"
               :disabled="saving" /></label
           ><label v-if="canAssign"
-            >开发负责人<select
+            >{{ $t("开发负责人") }}<select
               v-model="executorId"
               :disabled="
                 saving || members.loading.value || Boolean(members.error.value)
@@ -293,7 +294,7 @@ async function submitConfirmation() {
                 "
                 :value="executorId"
               >
-                {{ task.executor?.displayName || "当前负责人" }}
+                {{ task.executor?.displayName || $t("当前负责人") }}
               </option>
               <option
                 v-for="member in eligibleMembers"
@@ -306,7 +307,7 @@ async function submitConfirmation() {
           >
         </div>
         <p class="field-hint">
-          仅保存标题与负责人，不会启动 Codex，也不会保存下方尚未提交的关联事项。
+          {{ $t("仅保存标题与负责人，不会启动 Codex，也不会保存下方尚未提交的关联事项。") }}
         </p>
         <div class="actions">
           <button
@@ -318,13 +319,13 @@ async function submitConfirmation() {
                 (members.loading.value || Boolean(members.error.value)))
             "
           >
-            {{ saving ? "正在保存…" : "保存任务信息" }}</button
+            {{ saving ? $t("正在保存…") : $t("保存任务信息") }}</button
           ><button type="button" :disabled="saving" @click="closeEdit">
-            取消编辑
+            {{ $t("取消编辑") }}
           </button>
         </div>
       </form>
-      <ol v-if="view.step" class="development-steps" aria-label="开发操作顺序">
+      <ol v-if="view.step" class="development-steps" :aria-label="$t(&quot;开发操作顺序&quot;)">
         <li
           v-for="(step, index) in steps"
           :key="step"
@@ -332,7 +333,7 @@ async function submitConfirmation() {
           :aria-current="view.step === index + 1 ? 'step' : undefined"
         >
           <span>{{ index + 1 }}</span
-          >{{ step }}
+          >{{ $t(step) }}
         </li>
       </ol>
       <section
@@ -343,12 +344,12 @@ async function submitConfirmation() {
           {{
             ["completed", "cancelled", "merged"].includes(task.status) ||
             readOnly
-              ? "任务记录"
-              : "当前步骤"
+              ? $t("任务记录")
+              : $t("当前步骤")
           }}
         </p>
-        <h3 id="development-next-title">{{ view.title }}</h3>
-        <p>{{ view.description }}</p>
+        <h3 id="development-next-title">{{ $t(view.title) }}</h3>
+        <p>{{ $t(view.description) }}</p>
         <p
           v-if="task.error || task.execution?.error"
           class="error project-text"
@@ -359,11 +360,11 @@ async function submitConfirmation() {
           v-if="readOnlyReason || task.release?.status === 'archived'"
           class="warning"
         >
-          {{ readOnlyReason || "版本已归档，开发任务只读。" }}
+          {{ readOnlyReason || $t("版本已归档，开发任务只读。") }}
         </p>
         <div v-if="task.mergedIntoTaskId" class="actions">
           <button @click="emit('open-task', { id: task.mergedIntoTaskId })">
-            查看合并后的任务
+            {{ $t("查看合并后的任务") }}
           </button>
         </div>
         <template v-else-if="canStart">
@@ -373,7 +374,7 @@ async function submitConfirmation() {
               :disabled="busy"
               @click="emit('prepare-development', task)"
             >
-              去准备开发环境
+              {{ $t("去准备开发环境") }}
             </button>
           </div>
           <form
@@ -387,16 +388,16 @@ async function submitConfirmation() {
               :disabled="busy || editing"
             />
             <label>
-              补充提示词（可选）
+              {{ $t("补充提示词（可选）") }}
               <textarea
                 v-model="supplementaryPrompt"
-                aria-label="补充提示词"
+                :aria-label="$t(&quot;补充提示词&quot;)"
                 rows="5"
                 maxlength="20000"
                 :disabled="busy || editing"
-                placeholder="填写本次开发的额外要求、实现约束或验证重点"
+                :placeholder="$t(&quot;填写本次开发的额外要求、实现约束或验证重点&quot;)"
               />
-              <small class="field-hint">最多 20000 字，点击启动时按补充模板一并发送给 Codex。</small>
+              <small class="field-hint">{{ $t("最多 20000 字，点击启动时按补充模板一并发送给 Codex。") }}</small>
             </label>
             <AgentModelSettings :key="workspaceId" :workspace-id="workspaceId"
               v-model:model="selection.model" v-model:reasoning-effort="selection.reasoningEffort"
@@ -406,16 +407,16 @@ async function submitConfirmation() {
               class="primary"
               :disabled="busy || editing || !baseBranch || !workspaceId || !permissionsReady"
             >
-              {{ saving ? "正在提交…" : "启动 Codex 开发" }}
+              {{ saving ? $t("正在提交…") : $t("启动 Codex 开发") }}
             </button>
           </form>
           <p class="field-hint">
             {{
               !spaceReady
-                ? "准备环境不会自动执行，返回后再选择分支并启动。"
+                ? $t("准备环境不会自动执行，返回后再选择分支并启动。")
                 : editing
-                  ? "请先保存或取消编辑，再启动开发。"
-                  : "启动时获取最新代码并创建独立开发目录；所有关联事项需处于允许开发的流程节点。"
+                  ? $t("请先保存或取消编辑，再启动开发。")
+                  : $t("启动时获取最新代码并创建独立开发目录；所有关联事项需处于允许开发的流程节点。")
             }}
           </p>
         </template>
@@ -426,17 +427,17 @@ async function submitConfirmation() {
             :disabled="busy"
             @click="emit('open-workspace', task.workspaceId, task.runKey)"
           >
-            {{ sessionLabel }}</button
+            {{ $t(sessionLabel) }}</button
           ><button
             v-if="canComplete"
             :disabled="busy"
             @click="confirm('complete')"
           >
-            标记开发任务完成
+            {{ $t("标记开发任务完成") }}
           </button>
         </div>
         <p v-if="canComplete" class="field-hint">
-          完成后会话转为只读。Codex 本轮结束不代表需求或 Bug 已验收。
+          {{ $t("完成后会话转为只读。Codex 本轮结束不代表需求或 Bug 已验收。") }}
         </p>
       </section>
       <section
@@ -445,9 +446,9 @@ async function submitConfirmation() {
       >
         <header class="development-panel-heading">
           <h3 id="development-scope-title">
-            本次开发范围
+            {{ $t("本次开发范围") }}
             <span class="development-count"
-              >{{ task.kind === 'manual' ? '独立开发' : `${task.issueIds.length} 条事项` }}</span
+              >{{ task.kind === 'manual' ? $t("独立开发") : $t("{p0} 条事项", { p0: task.issueIds.length }) }}</span
             >
           </h3>
           <button
@@ -461,40 +462,40 @@ async function submitConfirmation() {
           >
             {{
               adding
-                ? "收起事项选择"
+                ? $t("收起事项选择")
                 : canEdit
-                  ? "添加关联事项"
-                  : "追加关联事项"
+                  ? $t("添加关联事项")
+                  : $t("追加关联事项")
             }}
           </button>
         </header>
         <p v-if="task.kind !== 'manual'" class="field-hint">
-          以下为纳入任务时保存的事项内容；后续资料按批次单独保存和发送。
+          {{ $t("以下为纳入任务时保存的事项内容；后续资料按批次单独保存和发送。") }}
         </p>
-        <template v-else><p class="field-hint">此任务独立开发，不关联项目事项。后续目标在原会话中补充。</p><MarkdownContent :content="task.manualContent || '开发目标见原会话参考图片。'" /></template>
+        <template v-else><p class="field-hint">{{ $t("此任务独立开发，不关联项目事项。后续目标在原会话中补充。") }}</p><MarkdownContent :content="task.manualContent || '开发目标见原会话参考图片。'" /></template>
         <section
           v-if="adding && (canEdit || canAppend)"
           id="development-add-issues"
           class="development-add-issues"
         >
-          <h4>{{ canEdit ? "添加同版本事项" : "追加同版本事项" }}</h4>
+          <h4>{{ canEdit ? $t("添加同版本事项") : $t("追加同版本事项") }}</h4>
           <FeedbackMessage :message="search.error.value" type="error" />
           <form class="project-filter" @submit.prevent="search.reload">
             <input
               ref="searchInput"
               v-model="query"
-              aria-label="搜索追加事项"
-              placeholder="搜索待追加的事项"
+              :aria-label="$t(&quot;搜索追加事项&quot;)"
+              :placeholder="$t(&quot;搜索待追加的事项&quot;)"
               :disabled="saving"
             /><button :disabled="busy || search.loading.value">
-              {{ search.loading.value ? "正在搜索…" : "搜索事项" }}
+              {{ search.loading.value ? $t("正在搜索…") : $t("搜索事项") }}
             </button>
           </form>
           <p
             v-if="search.data.value && !search.loading.value && !choices.length"
             class="field-hint"
           >
-            没有可添加的匹配事项，请调整搜索条件。
+            {{ $t("没有可添加的匹配事项，请调整搜索条件。") }}
           </p>
           <div class="development-choices">
             <label
@@ -514,14 +515,14 @@ async function submitConfirmation() {
               :disabled="busy || search.loading.value || !checked.length"
               @click="saveIssues"
             >
-              {{ canEdit ? "保存关联事项" : "保存追加资料（暂不发送）" }}
+              {{ canEdit ? $t("保存关联事项") : $t("保存追加资料（暂不发送）") }}
             </button>
           </div>
           <p class="field-hint">
             {{
               canEdit
-                ? "保存后纳入开发范围，不会启动 Codex。"
-                : "先保存内容副本；保存后还需单独点击「发送资料并继续 Codex」。"
+                ? $t("保存后纳入开发范围，不会启动 Codex。")
+                : $t("先保存内容副本；保存后还需单独点击「发送资料并继续 Codex」。")
             }}
           </p>
         </section>
@@ -533,7 +534,7 @@ async function submitConfirmation() {
           <header class="development-panel-heading">
             <h4>
               <span class="development-issue-type">{{
-                issue.type === "bug" ? "Bug" : "需求"
+                issue.type === "bug" ? "Bug" : $t("需求")
               }}</span
               >#{{ issue.number }} {{ issue.title }}
             </h4>
@@ -543,11 +544,11 @@ async function submitConfirmation() {
               :disabled="busy"
               @click="confirm('remove', issue)"
             >
-              移出此任务
+              {{ $t("移出此任务") }}
             </button>
           </header>
           <details>
-            <summary>查看开发内容与验收标准</summary>
+            <summary>{{ $t("查看开发内容与验收标准") }}</summary>
             <MarkdownContent
               :content="issue.description || '暂无描述。'"
             /><template
@@ -559,7 +560,7 @@ async function submitConfirmation() {
               ]"
               :key="field"
               ><template v-if="issue[field]"
-                ><h5>{{ label }}</h5>
+                ><h5>{{ $t(label) }}</h5>
                 <MarkdownContent :content="issue[field]" /></template
             ></template>
           </details>
@@ -569,37 +570,37 @@ async function submitConfirmation() {
           :key="batch.requestId"
           class="development-addition"
         >
-          <h4>追加资料 · {{ additionLabels[batch.status] || batch.status }}</h4>
+          <h4>{{ $t("追加资料 ·") }} {{ $t(additionLabels[batch.status] || batch.status) }}</h4>
           <p v-for="issue in batch.issues" :key="issue.id">
             #{{ issue.number }} {{ issue.title }}
           </p>
           <p v-if="batch.error" class="error">{{ batch.error }}</p>
           <template v-if="batch.status === 'ready'"
             ><p class="field-hint">
-              {{ canAppend ? '内容已保存，发送后才会交给 Codex 继续执行。' : '未发送的资料保留在任务记录中；当前任务或账号不允许继续发送。' }}
+              {{ canAppend ? $t("内容已保存，发送后才会交给 Codex 继续执行。") : $t("未发送的资料保留在任务记录中；当前任务或账号不允许继续发送。") }}
             </p>
             <button v-if="canAppend" :disabled="busy" @click="send(batch)">
-              发送资料并继续 Codex
+              {{ $t("发送资料并继续 Codex") }}
             </button></template
           >
           <p v-else-if="batch.status === 'unknown'" class="warning">
-            发送结果待确认，请先检查原会话，避免重复发送。
+            {{ $t("发送结果待确认，请先检查原会话，避免重复发送。") }}
           </p>
         </section>
       </section>
       <footer class="development-footer">
         <details class="development-baseline">
-          <summary>起始代码与开发记录</summary>
+          <summary>{{ $t("起始代码与开发记录") }}</summary>
           <dl class="project-facts">
-            <dt>起始分支</dt>
-            <dd>{{ task.baseBranch || "尚未选择，环境准备好后可选择。" }}</dd>
-            <dt>起始提交</dt>
+            <dt>{{ $t("起始分支") }}</dt>
+            <dd>{{ task.baseBranch || $t("尚未选择，环境准备好后可选择。") }}</dd>
+            <dt>{{ $t("起始提交") }}</dt>
             <dd>
-              {{ task.baseCommit || "尚未记录。启动时获取远端最新提交。" }}
+              {{ task.baseCommit || $t("尚未记录。启动时获取远端最新提交。") }}
             </dd>
             <template v-if="task.fetchedAt"
-              ><dt>远端获取时间</dt>
-              <dd>{{ task.fetchedAt }}</dd></template
+              ><dt>{{ $t("远端获取时间") }}</dt>
+              <dd>{{ formatDate(task.fetchedAt, { hour: "2-digit", minute: "2-digit" }) }}</dd></template
             >
           </dl>
         </details>
@@ -609,7 +610,7 @@ async function submitConfirmation() {
           :disabled="busy"
           @click="confirm('cancel')"
         >
-          取消任务并释放认领
+          {{ $t("取消任务并释放认领") }}
         </button>
       </footer>
       <DevelopmentTaskConfirmation

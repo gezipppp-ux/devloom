@@ -1,4 +1,5 @@
 <script setup>
+import { translate } from "../i18n/index.js";
 /* global document, window */
 import { CheckOutlined, DownOutlined, ReloadOutlined } from "@antdv-next/icons";
 import {
@@ -51,7 +52,7 @@ const menuPosition = ref({});
 const menuId = `model-options-${useId()}`;
 
 function label(value) {
-  return labels[value] ? `${labels[value]}（${value}）` : value;
+  return labels[value] ? `${translate(labels[value])} (${value})` : value;
 }
 function compactLabel(value) {
   return labels[value] || value;
@@ -192,7 +193,7 @@ onUnmounted(() => {
         ref="modelTrigger"
         type="button"
         role="combobox"
-        :aria-label="`${agentLabel} 模型`"
+        :aria-label="$t(&quot;{p0} 模型&quot;, { p0: agentLabel })"
         aria-haspopup="listbox"
         :aria-controls="menuId"
         :aria-expanded="expanded && menuMode === 'models'"
@@ -209,18 +210,18 @@ onUnmounted(() => {
         ref="effortTrigger"
         type="button"
         role="combobox"
-        aria-label="思考强度"
+        :aria-label="$t(&quot;思考强度&quot;)"
         aria-haspopup="listbox"
         :aria-controls="menuId"
         :aria-expanded="expanded && menuMode === 'efforts'"
         :data-effort="reasoningEffort"
         :disabled="disabled || loading || !selected || !efforts.length"
-        :title="reasoningEffort ? label(reasoningEffort) : '使用默认思考强度'"
+        :title="reasoningEffort ? label(reasoningEffort) : $t(&quot;使用默认思考强度&quot;)"
         class="model-compact-trigger model-compact-effort"
         @click="expanded && menuMode === 'efforts' ? close() : open('efforts')"
         @keydown.down.prevent="open('efforts')"
       >
-        <span>{{ selectedEffortLabel }}</span>
+        <span>{{ $t(selectedEffortLabel) }}</span>
       </button>
     </div>
     <div
@@ -232,8 +233,8 @@ onUnmounted(() => {
       @keydown.esc.stop.prevent="close(true)"
     >
       <template v-if="menuMode === 'models'">
-        <p class="model-menu-title">选择模型</p>
-        <div :id="menuId" role="listbox" :aria-label="`${agentLabel} 模型选项`" @keydown="navigate">
+        <p class="model-menu-title">{{ $t("选择模型") }}</p>
+        <div :id="menuId" role="listbox" :aria-label="$t(&quot;{p0} 模型选项&quot;, { p0: agentLabel })" @keydown="navigate">
           <button
             type="button"
             role="option"
@@ -242,9 +243,9 @@ onUnmounted(() => {
             :aria-selected="!model"
             @click="chooseModel('')"
           >
-            <span>默认</span><CheckOutlined v-if="!model" aria-hidden="true" />
+            <span>{{ $t("默认") }}</span><CheckOutlined v-if="!model" aria-hidden="true" />
           </button>
-          <p v-if="models.length" class="model-menu-group">推荐模型集</p>
+          <p v-if="models.length" class="model-menu-group">{{ $t("推荐模型集") }}</p>
           <button
             v-for="entry in models"
             :key="entry.model"
@@ -255,7 +256,7 @@ onUnmounted(() => {
             :aria-selected="model === entry.model"
             @click="chooseModel(entry.model)"
           >
-            <span>{{ entry.label }}</span>
+            <span>{{ $t(entry.label) }}</span>
             <CheckOutlined v-if="model === entry.model" aria-hidden="true" />
           </button>
           <button
@@ -267,26 +268,26 @@ onUnmounted(() => {
             aria-selected="true"
             @click="chooseModel(model)"
           >
-            <span>当前选择 · {{ model }}（未在当前列表中）</span>
+            <span>{{ $t("当前选择 ·") }} {{ model }}{{ $t("（未在当前列表中）") }}</span>
             <CheckOutlined aria-hidden="true" />
           </button>
         </div>
       </template>
       <template v-else>
         <div class="effort-menu-heading">
-          <strong>{{ selectedEffortLabel }}</strong>
+          <strong>{{ $t(selectedEffortLabel) }}</strong>
           <span>{{ selectedModelLabel }}</span>
           <button
             type="button"
             class="model-menu-reset"
-            aria-label="使用默认思考强度"
-            title="使用默认思考强度"
+            :aria-label="$t(&quot;使用默认思考强度&quot;)"
+            :title="$t(&quot;使用默认思考强度&quot;)"
             @click="chooseEffort('')"
           >
             <ReloadOutlined aria-hidden="true" />
           </button>
         </div>
-        <div :id="menuId" role="listbox" aria-label="思考强度选项" @keydown="navigate">
+        <div :id="menuId" role="listbox" :aria-label="$t(&quot;思考强度选项&quot;)" @keydown="navigate">
           <button
             v-for="effort in efforts"
             :key="effort"
@@ -297,7 +298,7 @@ onUnmounted(() => {
             :aria-selected="reasoningEffort === effort"
             @click="chooseEffort(effort)"
           >
-            <span>{{ label(effort) }}</span>
+            <span>{{ $t(label(effort)) }}</span>
             <CheckOutlined v-if="reasoningEffort === effort" aria-hidden="true" />
           </button>
         </div>
@@ -305,38 +306,38 @@ onUnmounted(() => {
     </div>
   </div>
   <div v-else class="model-controls form-columns">
-    <a-form-item :label="`${agentLabel} 模型（可选）`" class="model-control" layout="vertical">
+    <a-form-item :label="$t(&quot;{p0} 模型（可选）&quot;, { p0: agentLabel })" class="model-control" layout="vertical">
       <select
-        :aria-label="`${agentLabel} 模型`"
+        :aria-label="$t(&quot;{p0} 模型&quot;, { p0: agentLabel })"
         :value="model"
         :disabled="disabled || loading"
         @change="changeModel"
       >
-        <option value="">使用 {{ agentLabel }} 默认配置</option>
+        <option value="">{{ $t("使用") }} {{ agentLabel }} {{ $t("默认配置") }}</option>
         <option v-for="entry in models" :key="entry.model" :value="entry.model">
-          {{ entry.label }}
+          {{ $t(entry.label) }}
         </option>
         <option v-if="model && !selected" :value="model">
-          当前选择 · {{ model }}（未在当前列表中）
+          {{ $t("当前选择 ·") }} {{ model }}{{ $t("（未在当前列表中）") }}
         </option>
       </select>
     </a-form-item>
-    <a-form-item label="思考强度（可选）" class="effort-control" layout="vertical">
+    <a-form-item :label="$t(&quot;思考强度（可选）&quot;)" class="effort-control" layout="vertical">
       <select
-        aria-label="思考强度"
+        :aria-label="$t(&quot;思考强度&quot;)"
         :value="reasoningEffort"
         :disabled="disabled || loading || !selected"
         @change="changeEffort"
       >
-        <option value="">使用默认思考强度</option>
+        <option value="">{{ $t("使用默认思考强度") }}</option>
         <option v-for="effort in efforts" :key="effort" :value="effort">
-          {{ label(effort) }}
+          {{ $t(label(effort)) }}
         </option>
         <option
           v-if="reasoningEffort && !efforts.includes(reasoningEffort)"
           :value="reasoningEffort"
         >
-          当前选择 · {{ label(reasoningEffort) }}（未在当前列表中）
+          {{ $t("当前选择 ·") }} {{ $t(label(reasoningEffort)) }}{{ $t("（未在当前列表中）") }}
         </option>
       </select>
     </a-form-item>

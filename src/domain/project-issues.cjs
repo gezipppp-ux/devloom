@@ -3,7 +3,7 @@ const { accountError } = require("./account.cjs");
 const ISSUE_TYPES = ["requirement", "bug"];
 const PRIORITIES = ["low", "normal", "high", "urgent"];
 const SEVERITIES = ["minor", "normal", "major", "critical"];
-const contentFields = ["releaseId", "title", "description", "priority", "acceptanceCriteria", "reproductionSteps", "expectedResult", "actualResult", "severity"];
+const contentFields = ["releaseId", "title", "description", "priority", "acceptanceCriteria", "reproductionSteps", "expectedResult", "actualResult", "severity", "dueDate", "tags"];
 const assignmentFields = ["participantIds"];
 
 function text(value, label, limit, { required = false } = {}) {
@@ -44,7 +44,9 @@ function issueInput(input, current) {
   const type = current?.type || choice(input.type, ISSUE_TYPES, "事项类型");
   const value = current ? {} : { type, title: "", description: "", priority: "normal", severity: "normal", assigneeId: null, participantIds: [], acceptanceCriteria: "", reproductionSteps: "", expectedResult: "", actualResult: "" };
   for (const field of contentFields) if (Object.hasOwn(input, field)) {
-    value[field] = field === "releaseId" ? (input[field] === null ? null : identifier(input[field], "发布版本"))
+    value[field] = field === "dueDate" ? issueDueDate(input[field])
+      : field === "tags" ? issueTags(input[field])
+      : field === "releaseId" ? (input[field] === null ? null : identifier(input[field], "发布版本"))
       : field === "priority" ? choice(input[field], PRIORITIES, "优先级")
       : field === "severity" ? choice(input[field], SEVERITIES, "严重程度")
         : text(input[field], field === "title" ? "标题" : "内容", field === "title" ? 200 : 60000, { required: field === "title" });
@@ -52,6 +54,16 @@ function issueInput(input, current) {
   if (!current && !value.title) throw accountError("请填写事项标题。", 400);
   if (Object.hasOwn(input, "participantIds")) value.participantIds = identifiers(input.participantIds, "参与人");
   return value;
+}
+function issueDueDate(value) {
+  if (value === null || value === "") return null;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value)
+    throw accountError("截止日期需为有效的 YYYY-MM-DD 日期。", 400);
+  return value;
+}
+function issueTags(value) {
+  if (!Array.isArray(value) || value.length > 12) throw accountError("标签最多 12 个。", 400);
+  return [...new Set(value.map(item => text(item, "标签", 30, { required: true })))];
 }
 function issueTransition(issue, input) {
   object(input, ["transitionId", "status", "revision", "reason"]);

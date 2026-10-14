@@ -20,13 +20,13 @@ function select(tab) {
 </script>
 <template>
   <section class="system-settings-panel">
-    <header class="page-heading"><div class="eyebrow">SYSTEM</div><h1><SettingOutlined aria-hidden="true" /> 系统设置</h1><p>管理 Agent 供应商、服务器目录、运行环境与系统事项流程。</p></header>
-    <nav class="page-tabs" aria-label="系统设置分类">
-      <button :aria-pressed="currentTab === 'agent-suppliers'" :class="{ active: currentTab === 'agent-suppliers' }" @click="select('agent-suppliers')">Agent 供应商</button>
-      <button :aria-pressed="currentTab === 'storage'" :class="{ active: currentTab === 'storage' }" @click="select('storage')">目录设置</button>
-      <button :aria-pressed="currentTab === 'environment'" :class="{ active: currentTab === 'environment' }" @click="select('environment')">环境检测</button>
-      <button :aria-pressed="currentTab === 'workflows'" :class="{ active: currentTab === 'workflows' }" @click="select('workflows')">流程编排</button>
-      <button :aria-pressed="currentTab === 'initialization'" :class="{ active: currentTab === 'initialization' }" @click="select('initialization')">初始化记录</button>
+    <header class="page-heading"><div class="eyebrow">SYSTEM</div><h1><SettingOutlined aria-hidden="true" /> {{ $t("系统设置") }}</h1><p>{{ $t("管理 Agent 供应商、服务器目录、运行环境与系统事项流程。") }}</p></header>
+    <nav class="page-tabs" :aria-label="$t(&quot;系统设置分类&quot;)">
+      <button :aria-pressed="currentTab === 'agent-suppliers'" :class="{ active: currentTab === 'agent-suppliers' }" @click="select('agent-suppliers')">{{ $t("Agent 供应商") }}</button>
+      <button :aria-pressed="currentTab === 'storage'" :class="{ active: currentTab === 'storage' }" @click="select('storage')">{{ $t("目录设置") }}</button>
+      <button :aria-pressed="currentTab === 'environment'" :class="{ active: currentTab === 'environment' }" @click="select('environment')">{{ $t("环境检测") }}</button>
+      <button :aria-pressed="currentTab === 'workflows'" :class="{ active: currentTab === 'workflows' }" @click="select('workflows')">{{ $t("流程编排") }}</button>
+      <button :aria-pressed="currentTab === 'initialization'" :class="{ active: currentTab === 'initialization' }" @click="select('initialization')">{{ $t("初始化记录") }}</button>
     </nav>
     <AgentSuppliers v-if="currentTab === 'agent-suppliers'" />
     <EnvironmentPage v-else-if="currentTab === 'environment'" />

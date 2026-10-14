@@ -1,4 +1,5 @@
 <script setup>
+import { formatDate } from "../../shared/i18n/index.js";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, nextTick, ref } from "vue";
 import { ReloadOutlined, DownloadOutlined } from "@antdv-next/icons";
@@ -32,55 +33,55 @@ async function confirm() {
 </script>
 
 <template>
-  <section class="environment-panel" aria-label="环境检测">
-    <p class="muted">检查运行服务的服务器环境，自动安装缺失工具并管理更新。支持 Windows 和 Linux，安装方式以服务端可用的包管理器为准。</p>
+  <section class="environment-panel" :aria-label="$t(&quot;环境检测&quot;)">
+    <p class="muted">{{ $t("检查运行服务的服务器环境，自动安装缺失工具并管理更新。支持 Windows 和 Linux，安装方式以服务端可用的包管理器为准。") }}</p>
     <div class="actions environment-actions">
-      <button :disabled="disabled" @click="load()"><ReloadOutlined aria-hidden="true" />{{ loading ? '检测中…' : '重新检测' }}</button>
-      <button class="primary" :disabled="disabled || !report" @click="load(true)">{{ checking ? '检查版本中…' : '检查最新版本' }}</button>
+      <button :disabled="disabled" @click="load()"><ReloadOutlined aria-hidden="true" />{{ loading ? $t("检测中…") : $t("重新检测") }}</button>
+      <button class="primary" :disabled="disabled || !report" @click="load(true)">{{ checking ? $t("检查版本中…") : $t("检查最新版本") }}</button>
     </div>
     <FeedbackMessage :message="error" type="error" />
-    <p v-if="submitting" class="muted" role="status">正在核对目标版本与安装方式…</p>
-    <p v-if="loading && !report" class="muted" role="status">正在检测工具版本、登录状态与目录权限…</p>
+    <p v-if="submitting" class="muted" role="status">{{ $t("正在核对目标版本与安装方式…") }}</p>
+    <p v-if="loading && !report" class="muted" role="status">{{ $t("正在检测工具版本、登录状态与目录权限…") }}</p>
     <FeedbackMessage :message="jobMessage" :type="jobMessageType" />
     <template v-if="report">
-      <FormSection title="环境概况" :description="report.ready ? '基础环境检测通过' : '部分检测项需要处理或进一步确认'">
+      <FormSection :title="$t(&quot;环境概况&quot;)" :description="report.ready ? $t(&quot;基础环境检测通过&quot;) : $t(&quot;部分检测项需要处理或进一步确认&quot;)">
         <ul class="environment-checks">
-          <li v-for="check in report.checks" :key="check.name"><div><strong>{{ check.name }}</strong><p class="field-hint">{{ check.detail }}</p></div><span class="environment-status" :class="check.status">{{ labels[check.status] }}</span></li>
+          <li v-for="check in report.checks" :key="check.name"><div><strong>{{ check.name }}</strong><p class="field-hint">{{ check.detail }}</p></div><span class="environment-status" :class="check.status">{{ $t(labels[check.status]) }}</span></li>
         </ul>
-        <p class="field-hint">服务正在使用 Node.js {{ report.runningNode }}。检测时间：{{ new Date(report.checkedAt).toLocaleString() }}</p>
-        <p class="field-hint">基础检测不代表所有业务依赖或外部服务均可用。SSH、目标项目工具链、Git 与 Codex 网络访问仍需按项目确认。</p>
+        <p class="field-hint">{{ $t("服务正在使用 Node.js") }} {{ report.runningNode }}{{ $t("。检测时间：") }}{{ formatDate(report.checkedAt, { hour: "2-digit", minute: "2-digit" }) }}</p>
+        <p class="field-hint">{{ $t("基础检测不代表所有业务依赖或外部服务均可用。SSH、目标项目工具链、Git 与 Codex 网络访问仍需按项目确认。") }}</p>
       </FormSection>
       <FormSection v-for="tool in report.tools" :key="tool.id" :title="tool.name" :description="tool.requirement">
-        <template #action><span class="environment-status" :class="tool.status">{{ labels[tool.status] }}</span></template>
+        <template #action><span class="environment-status" :class="tool.status">{{ $t(labels[tool.status]) }}</span></template>
         <dl class="environment-versions">
-          <div><dt>已安装版本</dt><dd>{{ tool.version || '未检测到' }}</dd></div>
-          <div><dt>{{ tool.id === 'node' ? '最新 LTS' : '最新稳定版' }}</dt><dd>{{ tool.latest || '—' }}</dd></div>
+          <div><dt>{{ $t("已安装版本") }}</dt><dd>{{ tool.version || $t("未检测到") }}</dd></div>
+          <div><dt>{{ tool.id === 'node' ? $t("最新 LTS") : $t("最新稳定版") }}</dt><dd>{{ tool.latest || '—' }}</dd></div>
         </dl>
         <p :class="tool.status === 'pass' ? 'field-hint' : 'error'">{{ tool.detail }}</p>
-        <p :class="tool.latestStatus === 'error' ? 'error' : 'field-hint'">{{ latestLabels[tool.latestStatus] }}{{ tool.latestError ? '：' + tool.latestError : '' }}{{ tool.source ? ' · ' + tool.source : '' }}</p>
-        <p v-if="tool.nodeEngine" class="field-hint">此更新要求 Node.js {{ tool.nodeEngine }}；安装时会再次校验兼容性。</p>
-        <p v-if="tool.pendingRestart" class="notice">新版本已安装，当前服务仍在使用 {{ report.runningNode }}，重启后生效。</p>
-        <p v-if="tool.missing && tool.installVersion" class="field-hint">安装目标：{{ tool.installVersion }}{{ tool.installSource ? ' · ' + tool.installSource : '' }}</p>
-        <p v-if="tool.missing && tool.installAvailable && !tool.installVersion" class="field-hint">请先检查最新版本，再确认自动安装。</p>
+        <p :class="tool.latestStatus === 'error' ? 'error' : 'field-hint'">{{ $t(latestLabels[tool.latestStatus]) }}{{ tool.latestError ? '：' + tool.latestError : '' }}{{ tool.source ? ' · ' + tool.source : '' }}</p>
+        <p v-if="tool.nodeEngine" class="field-hint">{{ $t("此更新要求 Node.js") }} {{ tool.nodeEngine }}{{ $t("；安装时会再次校验兼容性。") }}</p>
+        <p v-if="tool.pendingRestart" class="notice">{{ $t("新版本已安装，当前服务仍在使用") }} {{ report.runningNode }}{{ $t("，重启后生效。") }}</p>
+        <p v-if="tool.missing && tool.installVersion" class="field-hint">{{ $t("安装目标：") }}{{ tool.installVersion }}{{ tool.installSource ? ' · ' + tool.installSource : '' }}</p>
+        <p v-if="tool.missing && tool.installAvailable && !tool.installVersion" class="field-hint">{{ $t("请先检查最新版本，再确认自动安装。") }}</p>
         <p v-if="!tool.updateAvailable && !tool.installAvailable" class="field-hint">{{ tool.updateReason }}</p>
         <div class="actions">
-          <button v-if="tool.missing" class="primary" :disabled="disabled || !tool.installAvailable || !tool.installVersion" @click="open(tool)"><DownloadOutlined aria-hidden="true" />自动安装 {{ tool.name }}</button>
-          <button v-else class="primary" :disabled="disabled || !tool.updateAvailable || tool.latestStatus !== 'available'" @click="open(tool)"><DownloadOutlined aria-hidden="true" />更新 {{ tool.name }}</button>
+          <button v-if="tool.missing" class="primary" :disabled="disabled || !tool.installAvailable || !tool.installVersion" @click="open(tool)"><DownloadOutlined aria-hidden="true" />{{ $t("自动安装") }} {{ tool.name }}</button>
+          <button v-else class="primary" :disabled="disabled || !tool.updateAvailable || tool.latestStatus !== 'available'" @click="open(tool)"><DownloadOutlined aria-hidden="true" />{{ $t("更新") }} {{ tool.name }}</button>
         </div>
       </FormSection>
     </template>
     <Teleport to="body">
       <dialog ref="dialog" class="workspace-dialog environment-dialog" aria-labelledby="environment-update-title" @cancel.prevent="close">
         <template v-if="selected">
-          <div class="workspace-dialog-heading"><h2 id="environment-update-title">{{ selected.missing ? '自动安装' : '更新' }} {{ selected.name }}</h2><button aria-label="关闭安装窗口" @click="close">×</button></div>
+          <div class="workspace-dialog-heading"><h2 id="environment-update-title">{{ selected.missing ? $t("自动安装") : $t("更新") }} {{ selected.name }}</h2><button :aria-label="$t(&quot;关闭安装窗口&quot;)" @click="close">×</button></div>
           <template v-if="selected.updateAvailable || selected.installAvailable">
-            <p v-if="selected.missing">将在服务器安装 {{ selected.name }} {{ selected.installVersion }}{{ selected.installSource ? '（' + selected.installSource + '）' : '' }}。{{ selected.updateDescription }}</p>
-            <p v-else>从 {{ selected.version }} 更新到 {{ selected.latest }}。{{ selected.updateDescription }}</p>
-            <p>请先结束正在执行或等待审批的任务。安装期间将暂停新的写入操作；关闭页面后安装仍会继续，可返回本页查看结果。</p>
-            <p v-if="selected.restartRequired" class="notice">Node.js 更新后需要重启服务才能生效；跨主版本升级时还需重新安装应用依赖。当前任务不会自动恢复执行。</p>
-            <p class="field-hint">安装需要网络与目标目录写入权限。</p>
-            <p v-if="selected.id === 'git'" class="field-hint">Windows Git 使用 winget；Linux Git 使用 APT 或 DNF，服务账号须已有 root 权限。</p>
-            <div class="actions"><button autofocus @click="close">取消</button><button class="primary" :disabled="disabled" @click="confirm">{{ selected.missing ? '确认安装' : '确认更新' }}</button></div>
+            <p v-if="selected.missing">{{ $t("将在服务器安装") }} {{ selected.name }} {{ selected.installVersion }}{{ selected.installSource ? '（' + selected.installSource + '）' : '' }}。{{ selected.updateDescription }}</p>
+            <p v-else>{{ $t("从") }} {{ selected.version }} {{ $t("更新到") }} {{ selected.latest }}。{{ selected.updateDescription }}</p>
+            <p>{{ $t("请先结束正在执行或等待审批的任务。安装期间将暂停新的写入操作；关闭页面后安装仍会继续，可返回本页查看结果。") }}</p>
+            <p v-if="selected.restartRequired" class="notice">{{ $t("Node.js 更新后需要重启服务才能生效；跨主版本升级时还需重新安装应用依赖。当前任务不会自动恢复执行。") }}</p>
+            <p class="field-hint">{{ $t("安装需要网络与目标目录写入权限。") }}</p>
+            <p v-if="selected.id === 'git'" class="field-hint">{{ $t("Windows Git 使用 winget；Linux Git 使用 APT 或 DNF，服务账号须已有 root 权限。") }}</p>
+            <div class="actions"><button autofocus @click="close">{{ $t("取消") }}</button><button class="primary" :disabled="disabled" @click="confirm">{{ selected.missing ? $t("确认安装") : $t("确认更新") }}</button></div>
           </template>
         </template>
       </dialog>

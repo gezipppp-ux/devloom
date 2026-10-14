@@ -1,0 +1,45 @@
+import { enCommon } from "./en-common.js";
+import { enActions } from "./en-actions.js";
+import { enDetails } from "./en-details.js";
+import { enDynamic } from "./en-dynamic.js";
+import { enParameters } from "./en-parameters.js";
+import { enFeedback } from "./en-feedback.js";
+export const en = {
+  "{priority}优先级": "{priority} priority",
+"格式为 v主版本.次版本 或 v主版本.次版本.修订版本，例如 v0.1、v1.0、v0.5.9。数字不带多余前导零。": "Use vMAJOR.MINOR or vMAJOR.MINOR.PATCH, for example v0.1, v1.0 or v0.5.9. Do not add leading zeros.",
+"版本号格式无效，请填写 v0.1、v1.0 或 v0.5.9 这样的版本号（小写 v，2–3 段数字，无空格、前导零或后缀，最多 100 个字符）。": "Invalid version. Use v0.1, v1.0 or v0.5.9: lowercase v, 2–3 numeric parts, no spaces, leading zeros or suffix, up to 100 characters.",
+  "{count} 个指定项目": "Selected projects: {count}",
+  "正在初始化 worktree，完成后自动启动 {agent}。": "Initializing the worktree. {agent} will start when ready.",
+  ...enCommon,
+  ...enActions,
+  ...enDetails,
+  ...enDynamic,
+  ...enParameters,
+  ...enFeedback,
+  "共 {count} 项": "Items: {count}",
+  "关联 {count} 条事项": "{count} linked issues",
+  "选择事项 {number}": "Select issue {number}",
+  "负责人：{name}": "Owner: {name}",
+  "{name}冲突处理": "Resolve conflict: {name}",
+  "{agent} 默认配置": "{agent} defaults",
+  "回答后 {agent} 将继续当前任务。": "{agent} will continue after you answer.",
+  "{agent} 可以继续执行，你也可以随时补充回答。": "{agent} can continue. You can add an answer at any time.",
+  "{agent} 请求执行命令": "{agent} requests command execution",
+  "{agent} 请求修改文件": "{agent} requests file changes",
+  "及其 {count} 条连线": "and its {count} transitions",
+  "请求失败（HTTP {status}）": "Request failed (HTTP {status})",
+  "图片上传失败（HTTP {status}），请重试": "Image upload failed (HTTP {status}). Please retry.",
+  "“{title}”已完成本轮回复。": "“{title}” has finished this turn.",
+  "工作台": "Overview", "项目": "Projects", "事项": "Issues", "开发": "Development", "交付": "Deliveries", "主导航": "Main navigation", "移动端导航": "Mobile navigation", "移动主导航": "Mobile menu", "导航": "Navigation",
+  "个人设置": "Personal settings", "部门可用功能": "Department permissions", "账号管理": "Accounts", "系统设置": "Administration", "退出登录": "Sign out", "账号导航": "Account navigation", "当前项目": "Project", "全部项目": "All projects", "我的项目": "My projects", "全局搜索": "Search everything", "打开导航": "Open navigation", "跳到主要内容": "Skip to main content",
+  "搜索项目、事项或页面": "Search projects, issues or pages", "搜索项目与工作": "Search projects and work", "搜索项目、事项、任务或交付": "Search projects, issues, tasks or deliveries", "搜索": "Search", "正在搜索…": "Searching…", "暂无匹配结果。": "No matching results.", "找到下一件事": "Find your next task", "搜索你有权访问的项目内容，开发任务仅显示本人数据。": "Search accessible projects and your own development tasks.",
+  "从下一件事开始，让每一步都有进展。": "Start with the next thing. Make every step count.", "＋ 新建事项": "+ New issue", "新建事项": "New issue", "待推进": "To move forward", "我的开发": "My development", "待验证": "Awaiting review", "查看全部 ↗": "View all ↗", "这里已经处理妥当": "You are all caught up", "新的工作会显示在这里。": "New work will appear here.", "项目空间": "Project spaces", "进行中": "In progress", "已归档": "Archived", "进入项目目录": "Explore projects", "从一个清晰的想法开始。": "Start with a clear idea.", "规划、协作、开发与交付，": "Plan, collaborate, build and deliver", "在同一个空间自然衔接。": "in one shared space.", "正在读取工作内容…": "Loading your work…", "重新加载": "Reload",
+  "把想法写清楚，让协作有据可循。": "Turn ideas into clear, actionable work.", "整理范围，准备环境，专注下一次推进。": "Define scope, prepare your environment and focus on progress.", "每一份成果，都有清晰的验证与反馈。": "Review every delivery with clear checks and feedback.", "准备开发环境": "Prepare environment", "工作范围": "Scope", "全部": "All", "与我有关": "Related to me", "事项类型": "Issue type", "全部类型": "All types", "需求": "Requirement", "缺陷": "Bug", "验收状态": "Review status", "全部状态": "All statuses", "已通过": "Accepted", "已退回": "Returned", "正在加载…": "Loading…", "暂无符合条件的内容": "No matching work", "试试调整筛选，或从项目中开始新的工作。": "Adjust the filters or start new work in a project.", "搜索事项标题、描述或标签": "Search title, description or tags", "搜索标题或交付内容": "Search title or delivery content",
+  "关闭弹窗": "Close dialog", "暂无内容": "Nothing here yet", "分页": "Pagination", "上一页": "Previous", "下一页": "Next", "取消": "Cancel", "保存": "Save", "重试": "Retry", "确认": "Confirm", "关闭": "Close", "刷新": "Refresh", "返回": "Back", "更多": "More", "待分派": "Unassigned", "未排期": "Unscheduled", "历史成员": "Former member", "未提供": "Not provided",
+  "← 返回交付": "← Back to deliveries", "正在读取交付…": "Loading delivery…", "重新读取": "Reload", "审阅成果，逐项核对，再记录验收结论。": "Review the results, verify each criterion and record your decision.", "交付说明": "Delivery notes", "验收核对": "Acceptance checklist", "验收说明": "Review notes", "记录验证结果；退回时请说明原因。": "Record your findings. A reason is required when returning a delivery.", "同时更新事项状态": "Also update issue status", "保持当前状态": "Keep current status", "交付验收与事项流程分别记录；如需流转，可选择当前允许的操作。": "Delivery review and issue workflow are recorded separately. Choose an available transition if needed.", "通过验收": "Accept delivery", "退回修改": "Return for changes", "验收记录": "Review record", "全部核对项已确认。": "All checklist items verified.", "关联事项": "Related issue", "提交标识": "Commit reference", "发布人": "Published by", "交付已通过验收。": "Delivery accepted.", "已退回交付，并记录原因。": "Delivery returned with feedback.",
+  "选择事项所属项目": "Choose a project for the issue", "选择开发项目": "Choose a development project", "暂无允许此操作的项目，请先创建项目或联系项目负责人授权。": "No accessible project supports this action. Create a project or request access.", "返回开发环境": "Back to environment", "返回项目协作": "Back to project", "正在读取开发空间…": "Loading workspace…",
+  "截止日期": "Due date", "标签": "Tags", "用逗号分隔，最多 12 个": "Comma-separated, up to 12 tags", "标题": "Title", "描述": "Description", "验收标准": "Acceptance criteria", "复现步骤": "Steps to reproduce", "预期结果": "Expected result", "实际结果": "Actual result", "目标版本": "Target release", "优先级": "Priority", "严重程度": "Severity", "参与人": "Participants", "负责人": "Assignee", "处理人": "Assignee", "轻微": "Minor", "普通": "Normal", "严重": "Major", "致命": "Critical", "低": "Low", "中": "Normal", "高": "High", "紧急": "Urgent",
+  "账号": "Username", "密码": "Password", "登录": "Sign in", "正在登录…": "Signing in…", "显示名称": "Display name", "登录名": "Username", "确认密码": "Confirm password", "新密码": "New password", "修改密码": "Change password", "保存修改": "Save changes", "正在保存…": "Saving…", "已保存。": "Saved.", "项目名称": "Project name", "项目说明": "Description", "创建项目": "Create project", "保存项目": "Save project", "Git 仓库地址": "Git repository URL", "项目概览": "Project overview", "概览": "Overview", "开发任务": "Development tasks", "版本": "Releases", "代码与环境": "Code & environment", "资产": "Resources", "成员": "Members", "提示词": "Prompts", "设置": "Settings", "刷新项目": "Refresh project", "正在读取项目…": "Loading project…",
+  "新建需求": "New requirement", "新建Bug": "New bug", "新建 Bug": "New bug", "保存事项": "Save issue", "编辑事项": "Edit issue", "取消编辑": "Cancel editing", "认领": "Claim", "指派": "Assign", "需求内容": "Requirement", "Bug 信息": "Bug details", "暂无描述。": "No description.", "尚未填写。": "Not specified.", "沟通与记录": "Discussion & activity", "评论": "Comments", "交付结果": "Deliveries", "变更历史": "History", "评论内容": "Comment", "发表评论": "Post comment", "发布交付结果": "Publish delivery", "提交标识（可选）": "Commit reference (optional)", "关联开发任务": "Development task", "不关联任务": "No task", "暂无记录。": "No records yet.", "状态流转": "Workflow", "当前状态": "Current status", "目标状态": "Target status", "选择目标状态": "Choose a status", "原因": "Reason", "更新状态": "Update status", "事项信息": "Issue information", "发布版本": "Release", "无": "None",
+  "语言": "Language", "界面语言": "Interface language", "中文": "简体中文", "English": "English",
+};

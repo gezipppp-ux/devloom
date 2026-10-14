@@ -54,7 +54,8 @@ export function useWorkspaceSelection() {
     else if (open) navigate(workspace.id);
   }
 
-  onMounted(async () => {
+  async function reload() {
+    error.value = "";
     try {
       selectWorkspace("");
       const initial = await bootstrap();
@@ -66,12 +67,13 @@ export function useWorkspaceSelection() {
     } catch (e) {
       if (!disposed) error.value = e.message;
     }
-  });
+  }
+  onMounted(reload);
   onUnmounted(() => {
     disposed = true;
     selectWorkspace("");
   });
   watch(() => route.query.workspace, () => { if (ready.value) restoreSelection(); });
 
-  return { workspaces, current, ready, error, standalone, navigate, workspaceSaved };
+  return { workspaces, current, ready, error, standalone, navigate, workspaceSaved, reload };
 }

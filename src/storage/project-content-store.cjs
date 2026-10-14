@@ -100,6 +100,20 @@ class ProjectContentStore {
       throw accountError("开发任务不属于当前项目。", 400);
     return this.database.client.issueDeliverable.create({ data: { projectId, issueId, authorId, ...data } });
   }
+  async readDeliverable(projectId, id) {
+    const row = await this.database.client.issueDeliverable.findFirst({ where: { projectId, id } });
+    if (!row) throw missing();
+    return row;
+  }
+  async reviewDeliverable(projectId, id, actorId, revision, input) {
+    const before = await this.readDeliverable(projectId, id);
+    assertIssueWritable(await this.issue(projectId, before.issueId));
+    const updated = await this.database.client.issueDeliverable.updateMany({ where: { projectId, id, revision, status: "pending" },
+      data: { ...input, reviewedById: actorId, reviewedAt: new Date(), revision: { increment: 1 } } });
+    if (!updated.count) throw conflict();
+    await this.issueHistory(projectId, before.issueId, actorId, "delivery.reviewed", { deliveryId: id, ...input });
+    return this.readDeliverable(projectId, id);
+  }
   async asset(projectId, id) {
     const row = await this.database.client.projectAsset.findFirst({ where: { projectId, id }, include: { issueLinks: { select: { issueId: true } } } });
     if (!row) throw missing();

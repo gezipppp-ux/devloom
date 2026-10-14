@@ -39,16 +39,16 @@ onBeforeUnmount(() => dialog.value?.close());
 
 <template>
   <section class="request-panel">
-    <div class="eyebrow">{{ blocking ? '需要你的输入' : '有待回答的问题' }}</div>
+    <div class="eyebrow">{{ blocking ? $t("需要你的输入") : $t("有待回答的问题") }}</div>
     <p>{{ request.questions.map((question) => question.question).join('；') }}</p>
-    <button ref="trigger" type="button" class="primary" @click="open">回答问题</button>
+    <button ref="trigger" type="button" class="primary" @click="open">{{ $t("回答问题") }}</button>
     <Teleport to="body">
-      <dialog ref="dialog" class="workspace-dialog session-question-dialog" :aria-label="`${agentLabel} 的问题`" @cancel.prevent="close">
+      <dialog ref="dialog" class="workspace-dialog session-question-dialog" :aria-label="$t(&quot;{p0} 的问题&quot;, { p0: agentLabel })" @cancel.prevent="close">
         <div class="workspace-dialog-heading">
-          <h2>{{ agentLabel }} 的问题</h2>
-          <button type="button" class="workspace-menu" aria-label="收起问题" @click="close">×</button>
+          <h2>{{ agentLabel }} {{ $t("的问题") }}</h2>
+          <button type="button" class="workspace-menu" :aria-label="$t(&quot;收起问题&quot;)" @click="close">×</button>
         </div>
-        <p class="muted">{{ blocking ? `回答后 ${agentLabel} 将继续当前任务。` : `${agentLabel} 可以继续执行，你也可以随时补充回答。` }}</p>
+        <p class="muted">{{ blocking ? $t('回答后 {agent} 将继续当前任务。', { agent: agentLabel }) : $t('{agent} 可以继续执行，你也可以随时补充回答。', { agent: agentLabel }) }}</p>
         <form @submit.prevent="submit">
           <fieldset v-for="(question, index) in request.questions" :key="question.id" class="question-field" :disabled="disabled">
             <legend><span v-if="question.header" class="question-header">{{ index + 1 }} · {{ question.header }}</span>{{ question.question }}</legend>
@@ -61,13 +61,13 @@ onBeforeUnmount(() => dialog.value?.close());
               </button>
             </div>
             <input v-if="question.isSecret" v-model="answers[question.id]" :aria-label="question.question" type="password" autocomplete="off" maxlength="20000" required />
-            <textarea v-else v-model="answers[question.id]" :aria-label="question.question" rows="2" maxlength="20000" required placeholder="选择选项，或输入自己的回答" />
+            <textarea v-else v-model="answers[question.id]" :aria-label="question.question" rows="2" maxlength="20000" required :placeholder="$t(&quot;选择选项，或输入自己的回答&quot;)" />
           </fieldset>
-          <p v-if="validation" class="error" role="alert">{{ validation }}</p>
+          <p v-if="validation" class="error" role="alert">{{ $t(validation) }}</p>
           <FeedbackMessage :message="error" type="error" />
           <div class="actions">
-            <button type="button" @click="close">稍后回答</button>
-            <button type="submit" class="primary" :disabled="disabled">提交回答</button>
+            <button type="button" @click="close">{{ $t("稍后回答") }}</button>
+            <button type="submit" class="primary" :disabled="disabled">{{ $t("提交回答") }}</button>
           </div>
         </form>
       </dialog>

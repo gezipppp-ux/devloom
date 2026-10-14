@@ -1,6 +1,0 @@
-interface:
-  display_name: "浅绿工作台统一风格"
-  short_description: "统一工作台页面、表单、会话、弹窗和移动端的浅绿视觉规范"
-  default_prompt: "使用 $sage-workbench 统一所有页面的视觉风格并验证响应式布局。"
-policy:
-  allow_implicit_invocation: true

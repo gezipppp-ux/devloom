@@ -1,4 +1,5 @@
 <script setup>
+import LocaleSelect from "../../shared/components/LocaleSelect.vue";
 import { computed } from "vue";
 import { CheckOutlined, SaveOutlined } from "@antdv-next/icons";
 import steps from "../../../../shared/setup-steps.json";
@@ -8,12 +9,12 @@ const maximum = computed(() => steps.findIndex(item => item.id === props.current
 </script>
 <template>
   <div class="setup-page">
-    <header class="setup-brand-bar"><div><span class="setup-mark">W</span><strong>Web Coding</strong><span class="muted">首次初始化</span></div><span>{{ username || '等待创建管理员' }}</span></header>
+    <header class="setup-brand-bar"><div><span class="setup-mark">W</span><strong>Web Coding</strong><span class="muted">{{ $t("首次初始化") }}</span></div><LocaleSelect /><span>{{ username || $t("等待创建管理员") }}</span></header>
     <main class="page-layout">
-      <header class="page-heading setup-heading"><div><div class="eyebrow">WORKSPACE SETUP</div><h1>初始化你的工作台</h1><p>从管理员账号开始，为团队准备好协作环境。</p></div><button v-if="username" type="button" :disabled="busy" @click="$emit('exit')">保存并退出</button></header>
+      <header class="page-heading setup-heading"><div><div class="eyebrow">WORKSPACE SETUP</div><h1>{{ $t("初始化你的工作台") }}</h1><p>{{ $t("从管理员账号开始，为团队准备好协作环境。") }}</p></div><button v-if="username" type="button" :disabled="busy" @click="$emit('exit')">{{ $t("保存并退出") }}</button></header>
       <div class="setup-layout">
-        <aside><ol class="setup-steps" aria-label="初始化步骤"><li v-for="(item, index) in steps" :key="item.id"><button type="button" :class="{ active: step === item.id, done: completed[item.id] }" :aria-current="step === item.id ? 'step' : undefined" :disabled="busy || index > maximum" @click="$emit('navigate', item.id)"><span class="setup-number"><CheckOutlined aria-hidden="true" v-if="completed[item.id]?.status === 'completed'" /><span v-else>{{ completed[item.id]?.status === 'skipped' ? '–' : index + 1 }}</span></span><span><strong>{{ item.title }}</strong><small>{{ completed[item.id]?.status === 'skipped' ? '已跳过' : completed[item.id] ? '已保存' : item.description }}</small></span></button></li></ol><p class="setup-side-note"><strong>按步骤保存，随时继续</strong>基础配置需要完成。测试账号和第一个项目可跳过，之后再补充。</p></aside>
-        <section class="setup-content"><slot /><p class="setup-save-note"><SaveOutlined aria-hidden="true" /> 已完成的步骤保留结果，返回不会重复创建。</p></section>
+        <aside><ol class="setup-steps" :aria-label="$t(&quot;初始化步骤&quot;)"><li v-for="(item, index) in steps" :key="item.id"><button type="button" :class="{ active: step === item.id, done: completed[item.id] }" :aria-current="step === item.id ? 'step' : undefined" :disabled="busy || index > maximum" @click="$emit('navigate', item.id)"><span class="setup-number"><CheckOutlined aria-hidden="true" v-if="completed[item.id]?.status === 'completed'" /><span v-else>{{ completed[item.id]?.status === 'skipped' ? '–' : index + 1 }}</span></span><span><strong>{{ $t(item.title) }}</strong><small>{{ completed[item.id]?.status === 'skipped' ? $t("已跳过") : completed[item.id] ? $t("已保存") : $t(item.description) }}</small></span></button></li></ol><p class="setup-side-note"><strong>{{ $t("按步骤保存，随时继续") }}</strong>{{ $t("基础配置需要完成。测试账号和第一个项目可跳过，之后再补充。") }}</p></aside>
+        <section class="setup-content"><slot /><p class="setup-save-note"><SaveOutlined aria-hidden="true" /> {{ $t("已完成的步骤保留结果，返回不会重复创建。") }}</p></section>
       </div>
     </main>
   </div>

@@ -22,7 +22,7 @@ async function verifyAccountPreferenceRaces(browser, origin) {
     await page.getByLabel("账号", { exact: true }).fill(name);
     await page.getByLabel("密码", { exact: true }).fill("fixture-password");
     await page.getByRole("button", { name: "登录", exact: true }).click();
-    await page.getByRole("heading", { name: "我的项目", exact: true }).waitFor();
+    await page.getByRole("heading", { name: "工作台", exact: true }).waitFor();
     await selectWorkspace(0);
     await page.getByText("回复 a", { exact: true }).waitFor();
   };
@@ -75,6 +75,7 @@ async function verifyAccountPreferenceRaces(browser, origin) {
       return { settings: settings.get(user.id) };
     });
     if (endpoint === "/api/projects") return reply({ projects: [], canCreateProjects: false });
+    if (endpoint.startsWith("/api/workbench/")) return reply({ items: [], people: [], total: 0, nextOffset: null });
     if (endpoint === "/api/account/git-accounts") return reply({ accounts: [] });
     if (endpoint === "/api/workspace-clones") return reply({ clones: [{ id: `${user.id}-clone`, name: `${user.id} 的私有克隆`, status: "running", progress: { stage: "receiving", percent: 37 }, workspace: null }] });
     if (endpoint === "/api/account/preferences") return reply(() => {

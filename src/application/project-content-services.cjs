@@ -3,7 +3,8 @@ const { ProjectContentStore } = require("../storage/project-content-store.cjs");
 const { issueRequestId, issueInput, issueTransition, pageInput, text, object, identifier, choice, ISSUE_TYPES, contentFields, assignmentFields } = require("../domain/project-issues.cjs");
 const { assetInput, ASSET_TYPES } = require("../domain/project-assets.cjs");
 const { accountError } = require("../domain/account.cjs");
-const { presentIssueImages, presentIssue, presentAsset, presentProjectFile, presentPage } = require("./project-content-presenter.cjs");
+const { deliveryChecklist, deliveryReview } = require("../domain/deliverable-review.cjs");
+const { presentIssueImages, presentIssue, presentAsset, presentProjectFile, presentPage, presentDeliverable } = require("./project-content-presenter.cjs");
 
 class ProjectContentServices {
   constructor(database, projects) {
@@ -90,7 +91,7 @@ class ProjectContentServices {
       const page = await this.store.childList(kind, projectId, id, pageInput(input));
       const people = page.items.flatMap(row => [row.authorId || row.actorId,
         ...[row.data?.before, row.data?.after].flatMap(snapshot => [snapshot?.assigneeId, ...(snapshot?.participantIds || [])])]);
-      return { ...presentPage(page), people: await this.store.people(people) };
+      return { ...presentPage(page, kind === "deliverables" ? presentDeliverable : undefined), people: await this.store.people(people) };
     });
   }
   async addComment(projectId, id, actor, input) {
@@ -99,10 +100,34 @@ class ProjectContentServices {
     return this.mutate(projectId, actor, ["comment.create"], async () => (await this.store.comment(projectId, id, actor.id, body)));
   }
   async addDeliverable(projectId, id, actor, input) {
-    object(input, ["body", "taskId", "commit"]);
+    object(input, ["body", "taskId", "commit", "title"]);
     const data = { body: text(input.body, "交付内容", 60000, { required: true }), taskId: input.taskId ? identifier(input.taskId, "开发任务") : null,
       commit: input.commit ? text(input.commit, "提交信息", 2000) : null };
-    return this.mutate(projectId, actor, ["deliverable.create"], async () => (await this.store.deliverable(projectId, id, actor.id, data)));
+    return this.mutate(projectId, actor, ["deliverable.create"], async () => {
+      const issue = await this.store.issue(projectId, id);
+      return presentDeliverable(await this.store.deliverable(projectId, id, actor.id, { ...data, title: input.title !== undefined ? text(input.title, "交付标题", 200, { required: true }) : issue.title, checklist: deliveryChecklist(issue) }));
+    });
+  }
+  async readDeliverable(projectId, id, actor) {
+    return this.read(projectId, actor, ["collaboration.view", "issue.view"], async () => {
+      const delivery = await this.store.readDeliverable(projectId, id);
+      const issue = await this.store.issue(projectId, delivery.issueId);
+      const context = await this.projects.authorize(projectId, actor, "collaboration.view");
+      return { delivery: presentDeliverable(delivery), issue: presentIssue(issue), permissions: context.project.status === "archived" ? context.permissions.filter(p => p.endsWith(".view")) : context.permissions, people: await this.store.people([delivery.authorId, delivery.reviewedById]) };
+    });
+  }
+  async reviewDeliverable(projectId, id, actor, input) {
+    return this.mutate(projectId, actor, ["collaboration.view", "issue.view", "issue.accept"], async () => {
+      const current = await this.store.readDeliverable(projectId, id);
+      const review = deliveryReview(input, current);
+      if (input.transitionId) {
+        const issue = await this.store.issue(projectId, current.issueId);
+        const transition = issueTransition(issue, { transitionId: input.transitionId, revision: input.issueRevision, reason: review.reviewNote });
+        await this.authorized(projectId, actor, [transition.permission]);
+        await this.store.updateIssue(projectId, issue.id, actor.id, input.issueRevision, { status: transition.status }, "transition", { reason: transition.reason });
+      }
+      return presentDeliverable(await this.store.reviewDeliverable(projectId, id, actor.id, input.revision, review));
+    });
   }
   async listAssets(projectId, actor, input) {
     const page = pageInput(input);

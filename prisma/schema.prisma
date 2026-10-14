@@ -467,6 +467,8 @@ model ProjectIssue {
   expectedResult     String   @default("") @map("expected_result")
   actualResult       String   @default("") @map("actual_result")
   severity           String   @default("normal")
+  dueDate            String?  @map("due_date")
+  tags               String[] @default([])
   createdById        String   @map("created_by_id")
   updatedById        String   @map("updated_by_id")
   revision           Int      @default(1)
@@ -528,12 +530,21 @@ model IssueDeliverable {
   taskId    String?  @map("task_id")
   body      String
   commit    String?
+  title     String @default("")
+  status    String @default("pending")
+  checklist String[] @default([])
+  checkedItems Int[] @default([]) @map("checked_items")
+  reviewNote String @default("") @map("review_note")
+  reviewedById String? @map("reviewed_by_id")
+  reviewedAt DateTime? @map("reviewed_at") @db.Timestamptz(3)
+  revision Int @default(1)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   issue     ProjectIssue @relation(fields: [projectId, issueId], references: [projectId, id], onDelete: Restrict)
   task      DevelopmentTask? @relation(fields: [projectId, taskId], references: [projectId, id], onDelete: Restrict)
 
   @@index([projectId, issueId, createdAt])
   @@map("issue_deliverables")
+  @@index([projectId, status, createdAt(sort: Desc)], map: "issue_deliverables_project_status")
 }
 
 model IssueHistory {

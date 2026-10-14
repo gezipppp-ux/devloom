@@ -72,39 +72,39 @@ defineExpose({ open });
     <dialog
       ref="dialog"
       class="workspace-dialog directory-picker"
-      aria-label="选择服务器目录"
+      :aria-label="$t(&quot;选择服务器目录&quot;)"
       @cancel.prevent="close"
     >
       <div class="workspace-dialog-heading">
-        <h2>选择服务器目录</h2>
+        <h2>{{ $t("选择服务器目录") }}</h2>
         <button
           type="button"
           class="workspace-menu"
-          aria-label="关闭目录选择"
+          :aria-label="$t(&quot;关闭目录选择&quot;)"
           @click="close"
         >
           ×
         </button>
       </div>
       <p class="muted">
-        浏览运行服务的主机目录。选择后返回表单，点击「{{ saveLabel }}」生效。
+        {{ $t("浏览运行服务的主机目录。选择后返回表单，点击「") }}{{ $t(saveLabel) }}{{ $t("」生效。") }}
       </p>
       <form @submit.prevent="browse(draftPath)">
-        <label for="directory-browse-path">浏览目录路径</label>
+        <label for="directory-browse-path">{{ $t("浏览目录路径") }}</label>
         <div class="directory-path-row">
           <input
             id="directory-browse-path"
             ref="pathInput"
             v-model="draftPath"
-            aria-label="浏览目录路径"
-            placeholder="输入服务器绝对路径"
+            :aria-label="$t(&quot;浏览目录路径&quot;)"
+            :placeholder="$t(&quot;输入服务器绝对路径&quot;)"
           />
-          <button type="submit" :disabled="loading">打开目录</button>
+          <button type="submit" :disabled="loading">{{ $t("打开目录") }}</button>
         </div>
       </form>
-      <nav class="directory-roots" aria-label="服务器根目录">
+      <nav class="directory-roots" :aria-label="$t(&quot;服务器根目录&quot;)">
         <button type="button" :disabled="loading" @click="browse()">
-          默认目录
+          {{ $t("默认目录") }}
         </button>
         <button
           v-for="root in roots"
@@ -117,22 +117,22 @@ defineExpose({ open });
         </button>
       </nav>
       <div v-if="listing" class="directory-current">
-        <span>当前目录</span><code>{{ listing.path }}</code>
+        <span>{{ $t("当前目录") }}</span><code>{{ listing.path }}</code>
         <button
           type="button"
           :disabled="loading || !listing.parentPath"
           @click="browse(listing.parentPath)"
         >
-          <ArrowUpOutlined aria-hidden="true" /> 上一级
+          <ArrowUpOutlined aria-hidden="true" /> {{ $t("上一级") }}
         </button>
       </div>
-      <p v-if="loading" class="muted" role="status">正在读取目录…</p>
+      <p v-if="loading" class="muted" role="status">{{ $t("正在读取目录…") }}</p>
       <FeedbackMessage :message="error" type="error" />
-      <ul v-if="listing" class="directory-list" aria-label="子目录">
+      <ul v-if="listing" class="directory-list" :aria-label="$t(&quot;子目录&quot;)">
         <li v-for="entry in listing.directories" :key="entry.path">
           <button
             type="button"
-            :aria-label="`打开目录：${entry.name}`"
+            :aria-label="$t(&quot;打开目录：{p0}&quot;, { p0: entry.name })"
             :disabled="loading"
             @click="browse(entry.path)"
           >
@@ -143,7 +143,7 @@ defineExpose({ open });
           v-if="!listing.directories.length && !loading"
           class="directory-empty"
         >
-          此目录下没有可浏览的子目录，可直接选择当前目录。
+          {{ $t("此目录下没有可浏览的子目录，可直接选择当前目录。") }}
         </li>
       </ul>
       <button
@@ -153,17 +153,17 @@ defineExpose({ open });
         :disabled="loading"
         @click="browse(listing.path, true)"
       >
-        加载更多目录
+        {{ $t("加载更多目录") }}
       </button>
       <div class="actions">
-        <button type="button" @click="close">取消</button>
+        <button type="button" @click="close">{{ $t("取消") }}</button>
         <button
           type="button"
           class="primary"
           :disabled="loading || !listing || Boolean(error)"
           @click="select"
         >
-          选择此目录
+          {{ $t("选择此目录") }}
         </button>
       </div>
     </dialog>

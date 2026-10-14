@@ -46,8 +46,8 @@ async function update(field, event) {
   <div class="task-metadata-controls">
     <div class="task-metadata-fields">
       <label
-        >任务类型<select
-          aria-label="任务类型"
+        >{{ $t("任务类型") }}<select
+          :aria-label="$t(&quot;任务类型&quot;)"
           :value="metadata.type"
           :disabled="busy"
           @change="update('type', $event)"
@@ -57,13 +57,13 @@ async function update(field, event) {
             :key="entry.value"
             :value="entry.value"
           >
-            {{ entry.label }}
+            {{ $t(entry.label) }}
           </option>
         </select></label
       >
       <label
-        >任务进度<select
-          aria-label="任务进度"
+        >{{ $t("任务进度") }}<select
+          :aria-label="$t(&quot;任务进度&quot;)"
           :value="metadata.progress"
           :disabled="busy"
           @change="update('progress', $event)"
@@ -73,12 +73,12 @@ async function update(field, event) {
             :key="entry.value"
             :value="entry.value"
           >
-            {{ entry.label }}
+            {{ $t(entry.label) }}
           </option>
         </select></label
       >
       <span class="metadata-note">{{
-        busy ? "正在保存…" : "进度由你维护"
+        busy ? $t("正在保存…") : $t("进度由你维护")
       }}</span>
     </div>
     <FeedbackMessage :message="error" type="error" />

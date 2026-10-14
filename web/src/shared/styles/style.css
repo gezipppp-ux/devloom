@@ -143,12 +143,12 @@ select:hover {
 }
 input::placeholder,
 textarea::placeholder {
-  color: #829087;
+  color: var(--muted);
 }
 input[readonly],
 select:disabled,
 textarea:disabled {
-  background: #f3f5f1;
+  background: var(--soft);
 }
 input[type="checkbox"] {
   width: 16px;
@@ -211,7 +211,7 @@ pre {
   overflow: auto;
   max-height: 400px;
   font: 12px/1.8 var(--font-code);
-  background: #f1f4ef;
+  background: var(--soft);
   padding: 16px;
   margin: 0;
 }
@@ -244,7 +244,7 @@ pre {
 }
 .stop {
   color: var(--danger);
-  border-color: #e1c9c1;
+  border-color: var(--danger);
 }
 .actions {
   display: flex;
@@ -530,7 +530,7 @@ pre {
   height: 40px;
   padding: 0;
   border-radius: 10px;
-  border-color: #c5d0c2;
+  border-color: var(--field-border);
   background: transparent;
   color: var(--muted);
   font-size: 18px;
@@ -606,7 +606,7 @@ pre {
   letter-spacing: 0.3px;
 }
 .brand b {
-  color: #899889;
+  color: var(--muted);
   font-weight: 400;
 }
 .brand small {
@@ -707,7 +707,7 @@ pre {
 .task-group summary small {
   display: inline-grid;
   place-items: center;
-  background: #e2e9e0;
+  background: var(--soft);
   min-width: 19px;
   height: 19px;
   border-radius: 10px;
@@ -782,7 +782,7 @@ pre {
 }
 .session-link.active {
   background: var(--selected);
-  border-color: #d1dfce;
+  border-color: var(--line);
   box-shadow: var(--shadow-xs);
 }
 .session-title-row {
@@ -828,36 +828,36 @@ pre {
   line-height: 1.5;
   border-radius: 5px;
   padding: 2px 6px;
-  background: #e2eade;
-  color: #4c6848;
+  background: var(--soft);
+  color: var(--muted);
 }
 .task-type-tag[data-type="bug"] {
-  color: #974f41;
-  background: #f6e6df;
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 .task-type-tag[data-type="other"] {
-  color: #666f70;
-  background: #e7eae8;
+  color: var(--muted);
+  background: var(--soft);
 }
 .task-progress-tag {
-  background: #eef2eb;
-  color: #5a705d;
+  background: var(--soft);
+  color: var(--muted);
 }
 .task-progress-tag[data-progress="review"] {
-  color: #87672e;
-  background: #f5ecd6;
+  color: var(--warning);
+  background: var(--warning-soft);
 }
 .task-progress-tag[data-progress="merge"] {
-  color: #6a588c;
-  background: #eee8f6;
+  color: var(--highlight);
+  background: var(--selected);
 }
 .task-progress-tag[data-progress="done"] {
   color: var(--success);
-  background: #e0efdb;
+  background: var(--success-soft);
 }
 .task-progress-tag[data-progress="on_hold"] {
-  color: #71736e;
-  background: #e9e9e4;
+  color: var(--muted);
+  background: var(--soft);
 }
 .session-meta {
   display: flex;
@@ -871,7 +871,7 @@ pre {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #a1afa2;
+  background: var(--muted);
 }
 .session-meta i.live {
   background: var(--success);
@@ -888,11 +888,11 @@ pre {
   height: 6px;
   border-radius: 50%;
   margin-right: 8px;
-  background: #b79459;
+  background: var(--warning);
 }
 .connection.online {
-  background: #448354;
-  box-shadow: 0 0 0 3px #44835414;
+  background: var(--success);
+  box-shadow: 0 0 0 3px var(--success-soft);
 }
 
 /* Page and form anatomy */
@@ -1366,7 +1366,7 @@ main {
   min-width: 0;
   background: var(--surface);
   border-left: 1px solid var(--line);
-  box-shadow: -8px 0 24px #203e3412;
+  box-shadow: -8px 0 24px #26223712;
 }
 .session-drawer-heading {
   display: flex;
@@ -2068,7 +2068,7 @@ main {
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface);
-  box-shadow: 0 12px 32px #203e341f;
+  box-shadow: 0 12px 32px #2622371f;
 }
 .model-menu-title,
 .model-menu-group {
@@ -2190,7 +2190,7 @@ main {
   border: 1px solid var(--line);
   border-radius: var(--radius-dialog);
   background: var(--surface);
-  box-shadow: 0 12px 32px #203e341f;
+  box-shadow: 0 12px 32px #2622371f;
 }
 .permission-option {
   display: flex;
@@ -2258,10 +2258,10 @@ main {
   line-height: 1.8;
 }
 .request-panel {
-  border: 1px solid #ded3b3;
+  border: 1px solid var(--warning);
   border-radius: var(--radius-card);
   padding: 24px;
-  background: #fffdf6;
+  background: var(--warning-soft);
   margin: 20px 0;
 }
 .request-panel .eyebrow {
@@ -2422,7 +2422,7 @@ main {
   box-shadow: var(--shadow-dialog);
 }
 .workspace-dialog::backdrop {
-  background: #183b304d;
+  background: #24252d4d;
 }
 .workspace-dialog-heading {
   display: flex;
@@ -2526,7 +2526,7 @@ main {
 .icon-presets button[aria-pressed="true"] {
   color: var(--accent);
   background: var(--selected);
-  border-color: #8ba58a;
+  border-color: var(--field-border-hover);
 }
 .icon-presets .muted {
   grid-column: 1 / -1;

@@ -12,19 +12,19 @@ const emit = defineEmits(['respond']);
 <template>
   <SessionQuestions v-if="request.kind === 'user-input'" :request="request" :agent-label="agentLabel" :disabled="disabled" :auto-open="autoOpen" :error="error" @respond="emit('respond', $event)" />
   <section v-else-if="request.kind === 'approval' && ['command', 'file-change'].includes(request.action)" class="request-panel">
-    <div class="eyebrow">需要你的输入</div>
+    <div class="eyebrow">{{ $t("需要你的输入") }}</div>
     <h3>
         {{
           request.action === 'command'
-            ? `${agentLabel} 请求执行命令`
-            : `${agentLabel} 请求修改文件`
+            ? $t('{agent} 请求执行命令', { agent: agentLabel })
+            : $t('{agent} 请求修改文件', { agent: agentLabel })
         }}
       </h3>
       <p>{{ request.reason }}</p>
       <pre>{{
         request.command ||
         request.grantRoot ||
-        '请查看本轮工具记录中的操作详情。'
+        $t("请查看本轮工具记录中的操作详情。")
       }}</pre>
       <div class="actions">
         <button
@@ -33,7 +33,7 @@ const emit = defineEmits(['respond']);
             emit('respond', { requestId: request.id, decision: 'decline' })
           "
         >
-          拒绝</button
+          {{ $t("拒绝") }}</button
         ><button
           class="primary"
           :disabled="disabled"
@@ -41,12 +41,12 @@ const emit = defineEmits(['respond']);
             emit('respond', { requestId: request.id, decision: 'accept' })
           "
         >
-          允许本次操作
+          {{ $t("允许本次操作") }}
         </button>
       </div>
   </section>
   <section v-else class="request-panel" role="alert">
-    <h3>暂不支持此交互请求</h3>
-    <p>无法通过当前界面处理，请查看会话状态或停止当前一轮。</p>
+    <h3>{{ $t("暂不支持此交互请求") }}</h3>
+    <p>{{ $t("无法通过当前界面处理，请查看会话状态或停止当前一轮。") }}</p>
   </section>
 </template>

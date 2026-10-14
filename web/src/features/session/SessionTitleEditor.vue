@@ -71,8 +71,8 @@ async function save() {
   <div class="session-title-editor">
     <form v-if="editing" class="session-title-form" @submit.prevent="save">
       <div class="session-title-label">
-        <label :for="`session-title-${taskKey}`">会话标题</label>
-        <span :id="`session-title-hint-${taskKey}`" class="session-title-limit">最多 200 个字符</span>
+        <label :for="`session-title-${taskKey}`">{{ $t("会话标题") }}</label>
+        <span :id="`session-title-hint-${taskKey}`" class="session-title-limit">{{ $t("最多 200 个字符") }}</span>
       </div>
       <textarea
         ref="input"
@@ -86,16 +86,16 @@ async function save() {
         @keydown.esc="cancelFromKeyboard"
       />
       <div class="session-title-actions">
-        <button type="button" :disabled="busy" @click="cancel">取消</button>
+        <button type="button" :disabled="busy" @click="cancel">{{ $t("取消") }}</button>
         <button type="submit" class="primary compact" :disabled="busy || !draft.trim()">
-          {{ busy ? "保存中…" : "保存" }}
+          {{ busy ? $t("保存中…") : $t("保存") }}
         </button>
       </div>
       <FeedbackMessage :message="error" type="error" />
     </form>
     <div v-else class="session-title-display">
       <h1 class="session-heading">{{ title }}</h1>
-      <button ref="editButton" type="button" class="icon-button" aria-label="修改会话标题" title="修改会话标题" @click="start">
+      <button ref="editButton" type="button" class="icon-button" :aria-label="$t(&quot;修改会话标题&quot;)" :title="$t(&quot;修改会话标题&quot;)" @click="start">
         <EditOutlined aria-hidden="true" />
       </button>
     </div>

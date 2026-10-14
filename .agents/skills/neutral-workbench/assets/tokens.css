@@ -1,0 +1,45 @@
+/* B proposal tokens. Prototype-only until its production implementation is approved. */
+:root {
+  --ui-bg: #fafafb;
+  --ui-surface: #ffffff;
+  --ui-subtle: #f5f5f8;
+  --ui-line: #e9e9ef;
+  --ui-line-strong: #d9d9e3;
+  --ui-text: #24252d;
+  --ui-muted: #727480;
+  --ui-faint: #9496a2;
+  --ui-primary: #292a33;
+  --ui-primary-hover: #444551;
+  --ui-accent: #7256d8;
+  --ui-accent-soft: #f1edfd;
+  --ui-success: #26765a;
+  --ui-success-soft: #edf7f1;
+  --ui-warning: #95620c;
+  --ui-warning-soft: #fff7e7;
+  --ui-danger: #b64750;
+  --ui-danger-soft: #fff0f1;
+  --ui-font: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --ui-mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  --ui-radius-sm: 6px;
+  --ui-radius: 10px;
+  --ui-radius-lg: 14px;
+  --ui-shadow: 0 12px 48px #26223712, 0 2px 6px #26223705;
+  --ui-sidebar: 208px;
+  --ui-header: 72px;
+  --ui-page-gap: clamp(20px, 3vw, 56px);
+  --ui-page-width: 1440px;
+  --ui-workspace-width: 1760px;
+  --ui-body: 14px;
+  --ui-title: clamp(28px, 2.3vw, 32px);
+  --ui-control: 40px;
+  --ui-focus: 0 0 0 3px #7256d825;
+}
+@media (min-width: 1920px) {
+  :root { --ui-page-width: 1600px; --ui-workspace-width: 1920px; }
+}
+@media (max-width: 1199px) and (min-width: 768px) {
+  :root { --ui-sidebar: 76px; }
+}
+@media (max-width: 767px) {
+  :root { --ui-header: 60px; --ui-page-gap: 20px; --ui-control: 44px; }
+}

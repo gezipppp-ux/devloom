@@ -12,12 +12,13 @@ async function main() {
   const issue = { id: "i", number: 1, type: "requirement", title: "原事项", description: "原描述", revision: 1, priority: "normal", status: "ready", statusName: "规划中", participantIds: [], assigneeId: null, acceptanceCriteria: "", availableTransitions: [{ id: "develop", name: "开发中", permission: "issue.edit", requiresReason: true }], people: [] };
   const asset = { id: "a", title: "测试资产", type: "note", environment: "test", category: "", tags: ["参考"], content: "内容", ownerId: "u", issueIds: ["i"], expiresAt: "2027-01-01T00:00:00Z", revision: 32, people: [{ id: "u", username: "product-member", displayName: "产品成员" }] };
   const permissions = ["asset.view", "asset.edit", "issue.view", "issue.edit", "collaboration.view", "comment.create", "deliverable.create", "session.start"];
-  const source = `import {createApp,h,ref} from 'vue'; import {createRouter,createWebHistory} from 'vue-router';
+  const source = `import {i18n} from '/src/shared/i18n/index.js';
+import {createApp,h,ref} from 'vue'; import {createRouter,createWebHistory} from 'vue-router'; import LocaleSelect from '/src/shared/components/LocaleSelect.vue';
 import OperationMessages from '/src/shared/components/OperationMessages.vue'; import Discussion from '/src/features/projects/IssueDiscussion.vue'; import Settings from '/src/features/projects/ProjectSettings.vue'; import Detail from '/src/features/projects/IssueDetail.vue'; import Assets from '/src/features/projects/ProjectAssets.vue'; import '/src/shared/styles/style.css';
 const router=createRouter({history:createWebHistory(),routes:[{path:'/:pathMatch(.*)*',component:{render:()=>null}}]}); await router.push(location.pathname+location.search); await router.isReady();
 const kind=new URLSearchParams(location.search).get('fixture'); const component={discussion:Discussion,settings:Settings,issue:Detail,assets:Assets}[kind];
 const currentProject=ref(${JSON.stringify(project)}), permissions=ref(${JSON.stringify(permissions)});
-createApp({render:()=>h('div',[h(OperationMessages),kind==='settings'?h('button',{onClick:()=>{currentProject.value={...currentProject.value,name:'父级刷新名称',revision:currentProject.value.revision+1}}},'模拟父级刷新'):null,kind==='discussion'?h('button',{onClick:()=>{permissions.value=permissions.value.includes('collaboration.view')?['issue.view']: ${JSON.stringify(permissions)}}},'切换讨论权限'):null,h(component,{project:currentProject.value,projectId:'p',issueId:'i',endpoint:'/projects/p/issues/i',permissions:permissions.value})])}).use(router).mount('#app');`;
+createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),kind==='settings'?h('button',{onClick:()=>{currentProject.value={...currentProject.value,name:'父级刷新名称',revision:currentProject.value.revision+1}}},'模拟父级刷新'):null,kind==='discussion'?h('button',{onClick:()=>{permissions.value=permissions.value.includes('collaboration.view')?['issue.view']: ${JSON.stringify(permissions)}}},'切换讨论权限'):null,h(component,{project:currentProject.value,projectId:'p',issueId:'i',endpoint:'/projects/p/issues/i',permissions:permissions.value})])}).use(router).use(i18n).mount('#app');`;
   const server = await createServer({ configFile: false, root: path.resolve("web"), logLevel: "error", plugins: [vue(), { name: "editing-fixture", resolveId(id) { if (id === "virtual:editing") return "\0editing"; }, load(id) { if (id === "\0editing") return source; }, configureServer(server) { server.middlewares.use(async (req, res, next) => { if (!req.url.startsWith("/fixture")) return next(); res.setHeader("Content-Type", "text/html"); res.end(await server.transformIndexHtml(req.url, '<html><body><main id="app"></main><script type="module" src="/@id/virtual:editing"></script></body></html>')); }); } }], server: { host: "127.0.0.1", port: 0 } });
   let browser;
   try {
@@ -142,6 +143,7 @@ createApp({render:()=>h('div',[h(OperationMessages),kind==='settings'?h('button'
     await page.getByRole('button', { name: '保存资产' }).click(); await assetPending;
     assert.ok(writes.at(-1).pathname.endsWith('/assets/a')); releaseAsset();
     await page.getByRole('button', { name: '编辑资产', exact: true }).waitFor();
+    await require('./i18n.test.cjs').verifyI18n({page,origin,writes});
     assert.deepEqual(errors, []); console.log("Project editing fake-API browser checks passed.");
   } finally { await browser?.close(); await server.close(); }
 }

@@ -117,6 +117,10 @@ npm start -- --host 127.0.0.1 --port 4317
 
 ### 项目生命周期
 
+- 工作台查询使用 `GET /api/workbench/issues|tasks|deliveries`，支持分页、搜索和项目范围。事项要求 `issue.view`；开发队列要求 `session.view` 且仅查询当前执行人；交付同时要求 `collaboration.view` 和 `issue.view`。汇总查询返回前复核全部计数来源项目的权限，指定无权项目返回 403。
+- 事项新增 `dueDate`（可空、有效 `YYYY-MM-DD` 日历日期）和 `tags`（最多 12 项、每项 30 字）。日期没有时区转换语义；两者进入内容修订和字段冲突处理。
+- 交付发布保存标题、说明、提交引用和当时的验收清单；不共享私人会话。`GET /api/projects/:id/deliveries/:deliveryId` 读取授权详情，`POST .../review` 接受修订号、核对项和通过／退回结论。通过须完整核对，退回必填原因，仅待验证交付可操作。验收记录及可选的显式事项流转在同一事务完成；独立验收不隐式修改事项或执行 Agent。归档只读、撤权和并发修改由服务端再次验证。
+
 - 发布版本使用项目权限 `release.manage`，部门限定上限，项目分配授权。需求／Bug 流程是系统设置，仅当前有效系统管理员可以修改和发布；删除项目权限 `workflow.manage`，不允许项目覆盖系统流程。
 - 事项绑定项目 `releaseId` 和不可变的系统 `workflowVersionId`，状态为该版本节点 ID。流程草稿保存与发布使用 revision；发布校验唯一初始节点、节点可达且均能到达终态、权限白名单，完成／取消节点禁止开发。所有项目的新事项使用该类型当前系统发布版本，在途事项不切换。
 - `/api/system/workflows/:type` 和 `/:type/publish` 由 `SystemWorkflowServices` 复核管理员身份；`GET /api/projects/:id/issue-workflows/:type` 按 `issue.view` 仅返回已发布版本，不公开草稿。旧 `/api/projects/:id/workflows` 管理接口删除，不保留路由别名。系统流程表和版本表不含 projectId。

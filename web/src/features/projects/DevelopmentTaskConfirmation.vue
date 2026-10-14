@@ -56,24 +56,24 @@ onUnmounted(() => {
     @cancel.prevent="close"
   >
     <div class="workspace-dialog-heading">
-      <h2 id="development-confirmation-title">{{ copy.title }}</h2>
-      <button :disabled="busy" aria-label="关闭确认" @click="close">
-        关闭
+      <h2 id="development-confirmation-title">{{ $t(copy.title) }}</h2>
+      <button :disabled="busy" :aria-label="$t(&quot;关闭确认&quot;)" @click="close">
+        {{ $t("关闭") }}
       </button>
     </div>
     <p class="development-confirmation-target">{{ title }}</p>
-    <p>{{ copy.description }}</p>
+    <p>{{ $t(copy.description) }}</p>
     <p v-if="disabled && !busy" class="warning">
-      任务状态已变化，请关闭窗口并刷新任务。
+      {{ $t("任务状态已变化，请关闭窗口并刷新任务。") }}
     </p>
     <div class="actions">
-      <button autofocus :disabled="busy" @click="close">返回</button
+      <button autofocus :disabled="busy" @click="close">{{ $t("返回") }}</button
       ><button
         :class="action === 'complete' ? 'primary' : 'danger-button'"
         :disabled="busy || disabled"
         @click="emit('confirm')"
       >
-        {{ busy ? "正在提交…" : copy.button }}
+        {{ busy ? $t("正在提交…") : copy.button }}
       </button>
     </div>
   </dialog>

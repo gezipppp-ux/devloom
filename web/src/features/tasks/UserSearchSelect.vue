@@ -80,7 +80,7 @@ onUnmounted(() => {
 
 <template>
   <div class="user-search">
-    <label :for="inputId" class="sr-only">{{ label }}</label>
+    <label :for="inputId" class="sr-only">{{ $t(label) }}</label>
     <a-select
       :id="inputId"
       :value="modelValue || undefined"
@@ -92,7 +92,7 @@ onUnmounted(() => {
       :loading="loading"
       :disabled="disabled || !workspace"
       :not-found-content="emptyText"
-      placeholder="输入姓名或拼音搜索"
+      :placeholder="$t(&quot;输入姓名或拼音搜索&quot;)"
       style="width: 100%"
       @search="search"
       @change="(value) => emit('update:modelValue', value || '')"

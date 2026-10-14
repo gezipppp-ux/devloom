@@ -73,44 +73,44 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="session-git" :aria-busy="loading" aria-label="Worktree Git 状态">
+  <section class="session-git" :aria-busy="loading" :aria-label="$t(&quot;Worktree Git 状态&quot;)">
     <div class="session-git-summary">
       <span class="git-summary-title"
         ><BranchesOutlined aria-hidden="true" /> Worktree</span
       >
-      <span v-if="deleted" class="git-state-chip">已删除 · 历史只读</span>
+      <span v-if="deleted" class="git-state-chip">{{ $t("已删除 · 历史只读") }}</span>
       <span v-else-if="partial" class="git-stale"
-        >目录已删除 · 本地分支待清理</span
+        >{{ $t("目录已删除 · 本地分支待清理") }}</span
       >
       <template v-else-if="git">
-        <span class="git-state-chip">未提交 {{ uncommitted }}</span>
-        <span v-if="git.unpublished" class="git-state-chip">分支尚未发布</span>
+        <span class="git-state-chip">{{ $t("未提交") }} {{ uncommitted }}</span>
+        <span v-if="git.unpublished" class="git-state-chip">{{ $t("分支尚未发布") }}</span>
         <template v-else>
-          <span class="git-state-chip">待推送 {{ git.ahead ?? "未知" }}</span>
+          <span class="git-state-chip">{{ $t("待推送") }} {{ git.ahead ?? $t("未知") }}</span>
           <span v-if="git.behind !== 0" class="git-state-chip"
-            >落后远端 {{ git.behind ?? "未知" }}</span
+            >{{ $t("落后远端") }} {{ git.behind ?? $t("未知") }}</span
           >
         </template>
-        <span v-if="error" class="git-stale">状态已过期</span>
+        <span v-if="error" class="git-stale">{{ $t("状态已过期") }}</span>
       </template>
       <span v-else class="muted">{{
-        loading ? "正在读取 Git 状态…" : "Git 状态暂不可用"
+        loading ? $t("正在读取 Git 状态…") : $t("Git 状态暂不可用")
       }}</span>
     </div>
     <div class="session-git-body">
       <dl class="git-facts">
-        <dt>当前分支</dt>
+        <dt>{{ $t("当前分支") }}</dt>
         <dd>
           <code>{{ currentBranch }}</code>
         </dd>
-        <dt>Worktree 目录</dt>
+        <dt>{{ $t("Worktree 目录") }}</dt>
         <dd>
-          <code>{{ git?.path || worktree?.path || "准备中" }}</code>
+          <code>{{ git?.path || worktree?.path || $t("准备中") }}</code>
         </dd>
-        <dt v-if="!deleted">上游分支</dt>
+        <dt v-if="!deleted">{{ $t("上游分支") }}</dt>
         <dd v-if="!deleted">
           {{
-            git?.upstream || (git?.unpublished ? "尚未设置上游分支" : "未知")
+            git?.upstream || (git?.unpublished ? $t("尚未设置上游分支") : $t("未知"))
           }}
         </dd>
       </dl>
@@ -119,10 +119,10 @@ onUnmounted(() => {
         Codex。
       </p>
       <p v-if="deleted" class="notice" role="status">
-        Worktree 文件与本地分支已删除。会话记录仍可查看。
+        {{ $t("Worktree 文件与本地分支已删除。会话记录仍可查看。") }}
       </p>
       <p v-else-if="partial" class="git-feedback warning">
-        目录已删除，本地分支尚未删除。可重新打开删除确认，继续清理本地分支。
+        {{ $t("目录已删除，本地分支尚未删除。可重新打开删除确认，继续清理本地分支。") }}
       </p>
       <FeedbackMessage :message="error" type="error" />
       <p
@@ -134,7 +134,7 @@ onUnmounted(() => {
       </p>
       <div class="git-panel-actions">
         <button type="button" :disabled="loading" @click="refresh">
-          <ReloadOutlined aria-hidden="true" /> 刷新 Git 状态
+          <ReloadOutlined aria-hidden="true" /> {{ $t("刷新 Git 状态") }}
         </button>
         <button
           v-if="!deleted && canOperate"
@@ -143,13 +143,13 @@ onUnmounted(() => {
           :disabled="loading || active || !git?.canDelete || Boolean(error)"
           @click="deleteDialog.open()"
         >
-          <DeleteOutlined aria-hidden="true" /> 删除 Worktree…
+          <DeleteOutlined aria-hidden="true" /> {{ $t("删除 Worktree…") }}
         </button>
       </div>
       <p v-if="!deleted && (active || git?.deleteReason)" class="git-hint">
         {{
           active
-            ? "任务执行期间不能删除 Worktree，请先停止当前任务。"
+            ? $t("任务执行期间不能删除 Worktree，请先停止当前任务。")
             : git.deleteReason
         }}
       </p>

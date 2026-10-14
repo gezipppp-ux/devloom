@@ -22,7 +22,7 @@ function projectVisual(workspaceId) {
   function response(url) {
     const endpoint = url.pathname;
     if (endpoint.endsWith('/prompts')) return { projectTemplates: getPromptTemplates(), overrides: {}, templates: getPromptTemplates(), projectRevision: 1, personalRevision: 1, canConfigure: true, canPersonalize: true, catalog: promptTemplateCatalog, maxLength: MAX_PROMPT_TEMPLATE_LENGTH };
-    if (endpoint === '/api/projects') return { projects: [project, { ...project, id: 'operations', name: '运营后台', description: '运营指标、客户跟进与业务配置。' }], canCreateProjects: true };
+    if (endpoint === '/api/projects') return { projects: [{ ...project, permissions }, { ...project, permissions, id: 'operations', name: '运营后台', description: '运营指标、客户跟进与业务配置。' }], canCreateProjects: true };
     if (endpoint === '/api/admin/departments') return { departments: [department] };
     if (endpoint === '/api/projects/00000000-0000-4000-8000-000000000001') return { project, permissions, space: { status: 'ready', workspaceId, gitAccountId: 'fixture-account' } };
     if (endpoint.endsWith('/releases')) return { items: releases.filter(item => url.searchParams.get('includeArchived') === 'true' || item.status !== 'archived') };

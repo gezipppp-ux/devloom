@@ -24,6 +24,8 @@ Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install
 
 - For visual changes, read [ui-design.md](./ui-design.md). Use shared design tokens and form sections across pages; validate responsive screenshots with fixture data.
 
+- [B 方案 UI 重构](../prd/ui-refactor.md)已获用户确认并接入正式 Vue。新的 UI skills 依据选定方案重写；跨项目聚合、交付验收和国际化遵循[实施记录](../prd/ui-refactor-implementation.md)。
+
 - Read `README.md` and the task PRD/design for CLI and configuration contracts.
 - For Web CLI changes, read [web-cli.md](./web-cli.md) for session identity, streaming, approval and HTTP contracts.
 - For source integration, settings or portability changes, read [channels-and-settings.md](./channels-and-settings.md).

@@ -438,5 +438,6 @@ Windows 浏览器测试默认使用本机 Edge；Linux/macOS 默认使用 Playwr
 | [账号与数据库](docs/engineering/accounts-and-database.md) | 当前账号归属、设置范围、PostgreSQL、认证与数据库升级契约 |
 | [工程契约索引](docs/engineering/index.md) | 开发前需要阅读的行为约定 |
 | [模块与目录规范](docs/engineering/architecture.md) | 模块职责、依赖边界、目录与测试命名 |
-| [UI 设计契约](docs/engineering/ui-design.md) | 浅绿工作台设计变量、组件与响应式规范 |
+| [UI 设计契约](docs/engineering/ui-design.md) | B 方案中性协作设计、共享组件与响应式规范 |
+| [B 方案 UI 重构 PRD](docs/prd/ui-refactor.md) | 中性导航、完整设计图册、已确认原型与正式实施记录 |
 | [平台验证说明](docs/engineering/platform-verification.md) | Windows / Linux 测试环境与 Jenkins 配置 |

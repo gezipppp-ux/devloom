@@ -37,14 +37,14 @@ onUnmounted(() => { alive = false; observer?.disconnect(); clearMessages(); });
 </script>
 <template>
   <Teleport :to="target">
-    <div ref="host" popover="manual" class="operation-messages" aria-label="操作提示">
+    <div ref="host" popover="manual" class="operation-messages" :aria-label="$t(&quot;操作提示&quot;)">
       <div v-for="item in operationMessages" :key="item.id" class="operation-message" :data-type="item.type"
         :role="['error', 'warning'].includes(item.type) ? 'alert' : 'status'" aria-atomic="true"
         @mouseenter="pauseMessage(item.id)" @mouseleave="resume($event, item.id)"
         @focusin="pauseMessage(item.id)" @focusout="resume($event, item.id)">
         <component :is="icons[item.type]" class="operation-message-icon" aria-hidden="true" />
-        <span class="operation-message-text">{{ item.message }}</span>
-        <button type="button" class="operation-message-close" aria-label="关闭提示" @click="dismissMessage(item.id)"><CloseOutlined aria-hidden="true" /></button>
+        <span class="operation-message-text">{{ $t(item.message) }}</span>
+        <button type="button" class="operation-message-close" :aria-label="$t(&quot;关闭提示&quot;)" @click="dismissMessage(item.id)"><CloseOutlined aria-hidden="true" /></button>
       </div>
     </div>
   </Teleport>

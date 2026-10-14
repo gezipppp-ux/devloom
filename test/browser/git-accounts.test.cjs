@@ -128,7 +128,7 @@ async function verifyGitAccounts(page, output) {
   const pending = new Promise(resolve => { hold = resolve; });
   await verify.click();
   await pending;
-  await page.getByRole("button", { name: "全部项目", exact: true }).click();
+  await page.getByRole("navigation", { name: "主导航", exact: true }).getByRole("button", { name: "项目", exact: true }).click();
   await page.getByRole("heading", { name: "全部项目", exact: true }).waitFor();
   const completed = page.waitForResponse(response => response.url().endsWith("/verify"));
   gate();

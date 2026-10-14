@@ -17,6 +17,8 @@ const { GitAccountServices } = require("../application/git-account-services.cjs"
 const { presentError } = require("../application/error-presenter.cjs");
 const { ProjectServices } = require("../application/project-services.cjs");
 const { ProjectContentServices } = require("../application/project-content-services.cjs");
+const { WorkbenchServices } = require("../application/workbench-services.cjs");
+const { serveWorkbench } = require("./workbench-api.cjs");
 const { ProjectDevelopmentServices } = require("../application/project-development-services.cjs");
 const { ProjectLifecycleServices } = require("../application/project-lifecycle-services.cjs");
 const { SystemWorkflowServices } = require("../application/system-workflow-services.cjs");
@@ -130,6 +132,7 @@ function createWebServer({
   let systemServices;
   let projects;
   let projectContent;
+  let workbench;
   let projectDevelopment;
   let projectLifecycle;
   let systemWorkflows;
@@ -154,6 +157,7 @@ function createWebServer({
       workspaceClones ||= new WorkspaceCloneManager(accounts.database, workspaces);
       projects = new ProjectServices(accounts.database, { workspaces, onRevoke: value => events.revoke(value) });
       projectContent = new ProjectContentServices(accounts.database, projects);
+      workbench = new WorkbenchServices(accounts.database, projects);
       projectDevelopment = new ProjectDevelopmentServices(accounts.database, projects, workspaces);
       projectLifecycle = new ProjectLifecycleServices(accounts.database, projects);
       systemWorkflows = new SystemWorkflowServices(accounts.database, accounts, projects);
@@ -390,6 +394,7 @@ function createWebServer({
       if (agentSuppliers && await serveAgentSuppliers(request.raw, response, url, { services: agentSuppliers, actor, input, authorize })) return;
       if (projectLifecycle && await serveProjectLifecycle(request.raw, response, url, { services: projectLifecycle, actor, input })) return;
       if (projectBranches && await serveProjectBranches(request.raw, response, url, { services: projectBranches, actor })) return;
+      if (workbench && await serveWorkbench(request.raw, response, url, { services: workbench, actor })) return;
       if (projectContent && await serveProjectContent(request.raw, response, url, { services: projectContent, actor, input })) return;
       if (projectDevelopment && await serveProjectDevelopment(request.raw, response, url, { services: projectDevelopment, actor, input })) return;
       if (url.pathname === "/api/account/settings") {

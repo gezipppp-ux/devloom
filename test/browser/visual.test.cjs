@@ -31,7 +31,6 @@ async function main() {
   const output = path.resolve("state/browser/unified");
   fs.mkdirSync(output, { recursive: true });
   const captures = [];
-  let departmentContentWidth;
   const projects = projectVisual(workspace.id);
   const errors = [];
   const filePath = "web/src/views/marketing/hotspot-creation-workspace.vue";
@@ -427,6 +426,7 @@ async function main() {
       await load();
     }
     async function captureSystemSettings(suffix) {
+      if (page.viewportSize().width < 768) await page.getByRole("button", { name: "打开导航", exact: true }).click();
       await page.getByRole("button", { name: "系统设置", exact: true }).click();
       await page.getByRole("textbox", { name: "成员目录基础路径", exact: true }).waitFor();
       await capture("03-system-settings-" + suffix);
@@ -483,7 +483,7 @@ async function main() {
       await page.getByRole("button", { name: "Worktree Git", exact: true }).click();
       assert.equal(await drawer.isVisible(), false, "clicking the active entry collapses the drawer");
       await info.click();
-      await page.locator(".account-bar").click({ position: { x: 4, y: 4 } });
+      await page.locator(".ui-topbar").click({ position: { x: 4, y: 4 } });
       assert.equal(await drawer.isVisible(), false, "clicking outside collapses the drawer");
       assert.equal(await input.inputValue(), "打开资料时保留这段草稿");
       await input.fill("");
@@ -506,7 +506,7 @@ async function main() {
       for (const width of [1440, 1100, 768, 390, 320]) {
         scenario = "session";
         await page.setViewportSize({ width, height: 1000 });
-        await page.goto(origin);
+        await page.goto(origin + '/projects');
         await page.locator('.project-card').first().waitFor();
         const directoryHeading = await page.locator('.page-heading').boundingBox();
         await capture('10-project-directory-' + width);
@@ -585,7 +585,8 @@ async function main() {
         await page.getByRole('group', { name: '提示词作用域' }).getByRole('button', { name: '项目默认', exact: true }).click();
         await page.getByRole('group', { name: '提示词类型' }).getByRole('button', { name: '需求提示词', exact: true }).click();
         await capture('17-project-prompts-default-' + width);
-        await page.getByLabel('账号导航').getByRole('button', { name: '部门可用功能', exact: true }).click();
+        if (width < 768) await page.getByRole('button', { name: '打开导航', exact: true }).click();
+        await page.getByRole('navigation', { name: width < 768 ? '移动主导航' : '账号导航', exact: true }).getByRole('button', { name: '部门可用功能', exact: true }).click();
         await page.getByLabel('部门名称', { exact: true }).waitFor();
         const departmentHeading = await page.locator('.page-heading').boundingBox();
         assert.ok(Math.abs(directoryHeading.x - departmentHeading.x) < 1 &&
@@ -598,8 +599,7 @@ async function main() {
         await capture('18-department-details-' + width, '.permission-details');
         await page.getByRole('searchbox', { name: '搜索权限', exact: true }).fill('不存在的权限');
         await capture('18-department-empty-' + width, '.permission-details');
-        if (width === 1440) departmentContentWidth = (await page.locator('.page-heading').boundingBox()).width;
-        await page.getByLabel('账号导航').getByRole('button', { name: '全部项目', exact: true }).click();
+        await page.getByRole('navigation', { name: width < 768 ? '移动端导航' : '主导航', exact: true }).getByRole('button', { name: '项目', exact: true }).click();
         await page.locator('.project-card').first().waitFor();
         const returnedHeading = await page.locator('.page-heading').boundingBox();
         assert.ok(Math.abs(returnedHeading.x - departmentHeading.x) < 1 &&
@@ -613,6 +613,7 @@ async function main() {
         await capture('20-manual-development-' + width);
       }
     }
+    await require('./workbench.test.cjs').verifyWorkbench(browser);
     await captureProjects();
     await page.setViewportSize({ width: 1440, height: 1200 });
     await load();
@@ -633,14 +634,16 @@ async function main() {
       return {
         pageHeight: document.documentElement.scrollHeight,
         timelineHeight: timeline.clientHeight,
+        conversationHeight: document.querySelector(".session-conversation").clientHeight,
+        conversationWidth: parseFloat(style.getPropertyValue("--conversation-width")),
         messageWidth: timeline.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
         composerWidth: composer.width,
         composerBottom: composer.bottom,
       };
     });
     assert.ok(wideLayout.pageHeight <= 1082, "desktop conversation fits the viewport without a second page scrollbar");
-    assert.ok(wideLayout.timelineHeight >= 750, "the full HD viewport gives most vertical space to history");
-    assert.ok(Math.abs(wideLayout.messageWidth - departmentContentWidth) <= 2, "wide conversations use the same content width as department administration");
+    assert.ok(wideLayout.timelineHeight >= wideLayout.conversationHeight * 0.75, "history occupies at least three quarters of the conversation below navigation");
+    assert.ok(Math.abs(wideLayout.messageWidth - wideLayout.conversationWidth) <= 2, "wide conversation text keeps the design token's readable line width");
     assert.ok(Math.abs(wideLayout.messageWidth - wideLayout.composerWidth) <= 2, "history and composer remain aligned");
     assert.ok(wideLayout.composerBottom <= 1080, "the input stays reachable within the full HD viewport");
     await captureLongSessionTitle("1920x1080");

@@ -62,6 +62,7 @@ async function main() {
         return send({ settings: savedSettings.get(activeUser.id) });
       }
       if (endpoint === "/api/projects") return send({ projects: [], canCreateProjects: false });
+      if (endpoint.startsWith("/api/workbench/")) return send({ items: [], people: [], total: 0, nextOffset: null });
       if (endpoint === "/api/admin/departments") return send({ departments });
       if (endpoint === "/api/account/preferences") return send({ preferences: { unreadRunKeys: [] } });
       if (endpoint === "/api/account/git-accounts") return send({ accounts: [] });
@@ -108,7 +109,7 @@ async function main() {
     await page.getByRole("alert").filter({ hasText: "账号或密码错误" }).waitFor();
     await page.getByLabel("密码", { exact: true }).fill("fixture-password-123");
     await page.getByRole("button", { name: "登录", exact: true }).click();
-    await page.getByRole("heading", { name: "全部项目", exact: true }).waitFor();
+    await page.getByRole("heading", { name: "工作台", exact: true }).waitFor();
     assert.equal(await page.locator(".operation-message").count(), 0, "sign-in clears messages from the previous account generation");
     await openWorkspace(page, users[0]);
     await page.getByText("admin 的私有回复", { exact: true }).waitFor();
@@ -125,8 +126,8 @@ async function main() {
     await page.getByLabel("显示名称", { exact: true }).fill("  管理员显示名  ");
     await page.getByRole("button", { name: "保存显示名称", exact: true }).click();
     await page.getByText("显示名称已保存。", { exact: true }).waitFor();
-    assert.equal(await page.locator(".account-identity").innerText(), "管理员显示名");
-    assert.equal(await page.locator(".account-identity").getAttribute("title"), "admin");
+    assert.equal(await page.locator(".ui-avatar").innerText(), "管");
+    assert.equal(await page.locator(".ui-avatar").getAttribute("title"), "管理员显示名");
     assert.equal(await page.getByLabel("登录账号", { exact: true }).inputValue(), "admin");
     assert.deepEqual(writesTo("/api/account/profile").at(-1).body, { displayName: "管理员显示名" });
     await page.getByLabel("Codex 模型", { exact: true }).selectOption("fixture-model");
@@ -242,7 +243,7 @@ async function main() {
     await newPassword.fill("next12");
     await passwordConfirmation.fill("next12");
     await page.getByRole("button", { name: "修改密码", exact: true }).click();
-    await page.getByRole("heading", { name: "我的项目", exact: true }).waitFor();
+    await page.getByRole("heading", { name: "工作台", exact: true }).waitFor();
     await openWorkspace(page, users[1]);
     await page.getByText("member 的私有回复", { exact: true }).waitFor();
     assert.equal(writesTo("/api/auth/password").at(-1).body.password, "next12");

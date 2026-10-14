@@ -14,14 +14,16 @@ async function verifyAccountProfileRaces(browser, origin) {
   // Import the real browser modules in an isolated page so generation and token
   // preservation can be checked without adding test exports to the product.
   await page.route("**/profile-fixture/**", route => {
-    const name = new URL(route.request().url()).pathname.split("/").at(-1);
-    if (name === "index.html") return route.fulfill({ contentType: "text/html", body: '<script type="importmap">{"imports":{"vue":"/profile-fixture/vue.js"}}</script><script type="module">import * as account from "/profile-fixture/account-session.js"; window.account = account; await account.loadAccountSession(); window.ready = true;</script>' });
-    const file = name === "vue.js" ? "node_modules/vue/dist/vue.esm-browser.prod.js" : `web/src/shared/api/${name}`;
-    assert.ok(["vue.js", "account-session.js", "api.js"].includes(name));
+    const name = new URL(route.request().url()).pathname.slice('/profile-fixture/'.length);
+    if (name === "index.html") return route.fulfill({ contentType: "text/html", body: '<script type="importmap">{"imports":{"vue":"/profile-fixture/vue.js","vue-i18n":"/profile-fixture/vue-i18n.js"}}</script><script type="module">import * as account from "/profile-fixture/api/account-session.js"; window.account = account; await account.loadAccountSession(); window.ready = true;</script>' });
+    const vendor = { 'vue.js': 'node_modules/vue/dist/vue.esm-browser.prod.js', 'vue-i18n.js': 'node_modules/vue-i18n/dist/vue-i18n.esm-browser.prod.js' };
+    assert.ok(vendor[name] || /^(api\/(account-session|api)|i18n\/(index|en(?:-common|-actions|-details|-dynamic|-parameters|-feedback)?))\.js$/.test(name));
+    const file = vendor[name] || `web/src/shared/${name}`;
     return route.fulfill({ contentType: "text/javascript", body: fs.readFileSync(path.resolve(file), "utf8") });
   });
   await page.route("**/api/**", async route => {
     const request = route.request(), endpoint = new URL(request.url()).pathname;
+    if (!endpoint.startsWith('/api/')) return route.fallback();
     const body = request.method() === "POST" ? request.postDataJSON() : undefined;
     requests.push({ endpoint, body, token: request.headers()["x-csrf-token"] });
     let result;

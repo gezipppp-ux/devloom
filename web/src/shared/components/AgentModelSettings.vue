@@ -39,7 +39,7 @@ function changeModel(settings) {
 </script>
 
 <template>
-  <FormSection title="执行偏好" number="02">
+  <FormSection :title="$t(&quot;执行偏好&quot;)" number="02">
     <template #action>
       <button
         class="text-button"
@@ -47,7 +47,7 @@ function changeModel(settings) {
         :disabled="disabled || loading"
         @click="refresh"
       >
-        <ReloadOutlined aria-hidden="true" /> 刷新模型列表
+        <ReloadOutlined aria-hidden="true" /> {{ $t("刷新模型列表") }}
       </button>
     </template>
     <AgentModelControls
@@ -59,12 +59,12 @@ function changeModel(settings) {
       :disabled="disabled"
       @change="changeModel"
     />
-    <p v-if="permissions.nextSupplier.value" class="field-hint">系统供应商：{{ permissions.nextSupplier.value.name }}</p>
-    <p v-if="modelUnavailable" class="error" role="alert">当前模型或思考强度不受系统供应商支持，请重新选择。</p>
+    <p v-if="permissions.nextSupplier.value" class="field-hint">{{ $t("系统供应商：") }}{{ permissions.nextSupplier.value.name }}</p>
+    <p v-if="modelUnavailable" class="error" role="alert">{{ $t("当前模型或思考强度不受系统供应商支持，请重新选择。") }}</p>
     <p class="field-hint">
-      选择具体模型后可设置其支持的思考强度。创建后仍可在会话输入区修改，从下一轮生效。
+      {{ $t("选择具体模型后可设置其支持的思考强度。创建后仍可在会话输入区修改，从下一轮生效。") }}
     </p>
-    <a-form-item label="执行权限" layout="vertical">
+    <a-form-item :label="$t(&quot;执行权限&quot;)" layout="vertical">
       <PermissionSelect
         refreshable
         :refreshing="permissions.loading.value"
@@ -75,20 +75,20 @@ function changeModel(settings) {
         @update:model-value="emit('update:permissionMode', $event)"
       />
     </a-form-item>
-    <FeedbackMessage :message="permissions.error.value ? `权限选项加载失败：${permissions.error.value}。确认权限可用后才能创建任务。 ${permissions.errorHint.value}` : ''" type="error" />
+    <FeedbackMessage :message="permissions.error.value ? $t(&quot;权限选项加载失败：{p0}。确认权限可用后才能创建任务。 {p1}&quot;, { p0: permissions.error.value, p1: permissions.errorHint.value }) : ''" type="error" />
     <div v-if="permissions.error.value"><button
         type="button"
         class="text-button"
         :disabled="permissions.loading.value"
         @click="permissions.refresh"
       >
-        刷新权限选项
+        {{ $t("刷新权限选项") }}
       </button></div>
-    <p v-if="!permissions.loading.value && !permissions.error.value && !permissions.isAvailable(permissionMode)" role="alert" class="error">当前权限模式不可用，请选择可用的权限模式。</p>
-    <p v-if="loading" role="status" class="field-hint">正在读取可用模型…</p>
+    <p v-if="!permissions.loading.value && !permissions.error.value && !permissions.isAvailable(permissionMode)" role="alert" class="error">{{ $t("当前权限模式不可用，请选择可用的权限模式。") }}</p>
+    <p v-if="loading" role="status" class="field-hint">{{ $t("正在读取可用模型…") }}</p>
     <p v-if="!loading && !error && !models.length" class="field-hint">
-      {{ permissions.agent.value?.label || 'Agent' }} 未返回可选模型，可使用默认配置或稍后刷新。
+      {{ permissions.agent.value?.label || 'Agent' }} {{ $t("未返回可选模型，可使用默认配置或稍后刷新。") }}
     </p>
-    <FeedbackMessage :message="error ? `模型列表加载失败：${error}。当前选择会保留。` : ''" type="error" />
+    <FeedbackMessage :message="error ? $t(&quot;模型列表加载失败：{p0}。当前选择会保留。&quot;, { p0: error }) : ''" type="error" />
   </FormSection>
 </template>

@@ -217,21 +217,21 @@ const preview = computed(() => workflowConnection(nodes.value, connection.value?
 </script>
 
 <template>
-  <section ref="frame" class="workflow-canvas" :class="{ 'is-editable': editable, 'is-fullscreen': fullscreen, 'fallback-fullscreen': fallbackFullscreen }" :role="fallbackFullscreen ? 'dialog' : undefined" :aria-modal="fallbackFullscreen ? true : undefined" aria-label="流程画布" @keydown="canvasKey" @keydown.capture="fullscreenKey">
-    <div class="workflow-toolbar" aria-label="画布视图">
-      <div class="workflow-zoom"><button aria-label="缩小流程图" title="缩小" :disabled="zoom <= .15" @click="changeZoom(-.1)"><ZoomOutOutlined /></button><output aria-label="画布缩放比例">{{ Math.round(zoom * 100) }}%</output><button aria-label="放大流程图" title="放大" :disabled="zoom >= 2" @click="changeZoom(.1)"><ZoomInOutlined /></button><button @click="fit">适应画布</button></div>
-      <button ref="fullscreenButton" :aria-label="fullscreen ? '退出全屏' : '全屏画布'" :aria-pressed="fullscreen" :disabled="fullscreenChanging" @click="toggleFullscreen"><FullscreenExitOutlined v-if="fullscreen" aria-hidden="true" /><FullscreenOutlined v-else aria-hidden="true" />{{ fullscreen ? '退出全屏' : '全屏画布' }}</button>
+  <section ref="frame" class="workflow-canvas" :class="{ 'is-editable': editable, 'is-fullscreen': fullscreen, 'fallback-fullscreen': fallbackFullscreen }" :role="fallbackFullscreen ? 'dialog' : undefined" :aria-modal="fallbackFullscreen ? true : undefined" :aria-label="$t(&quot;流程画布&quot;)" @keydown="canvasKey" @keydown.capture="fullscreenKey">
+    <div class="workflow-toolbar" :aria-label="$t(&quot;画布视图&quot;)">
+      <div class="workflow-zoom"><button :aria-label="$t(&quot;缩小流程图&quot;)" :title="$t(&quot;缩小&quot;)" :disabled="zoom <= .15" @click="changeZoom(-.1)"><ZoomOutOutlined /></button><output :aria-label="$t(&quot;画布缩放比例&quot;)">{{ Math.round(zoom * 100) }}%</output><button :aria-label="$t(&quot;放大流程图&quot;)" :title="$t(&quot;放大&quot;)" :disabled="zoom >= 2" @click="changeZoom(.1)"><ZoomInOutlined /></button><button @click="fit">{{ $t("适应画布") }}</button></div>
+      <button ref="fullscreenButton" :aria-label="fullscreen ? $t(&quot;退出全屏&quot;) : $t(&quot;全屏画布&quot;)" :aria-pressed="fullscreen" :disabled="fullscreenChanging" @click="toggleFullscreen"><FullscreenExitOutlined v-if="fullscreen" aria-hidden="true" /><FullscreenOutlined v-else aria-hidden="true" />{{ fullscreen ? $t("退出全屏") : $t("全屏画布") }}</button>
     </div>
-    <div class="workflow-legend" aria-label="状态类型图例">
-      <span v-for="(name, kind) in kinds" :key="kind" :class="`tone-${kind}`"><i />{{ name }}</span>
-      <span class="workflow-count">{{ nodes.length }} 个状态 · {{ definition.transitions.length }} 条连线</span>
+    <div class="workflow-legend" :aria-label="$t(&quot;状态类型图例&quot;)">
+      <span v-for="(name, kind) in kinds" :key="kind" :class="`tone-${kind}`"><i />{{ $t(name) }}</span>
+      <span class="workflow-count">{{ nodes.length }} {{ $t("个状态 ·") }} {{ definition.transitions.length }} {{ $t("条连线") }}</span>
     </div>
-    <p v-if="editable" class="workflow-guide">拖动空白平移 · 滚轮平移，Ctrl／⌘ + 滚轮缩放 · 双击空白新增状态 · 拖动节点调整位置 · 拖动或依次点击连接点连线 · 点击节点／连线编辑</p>
+    <p v-if="editable" class="workflow-guide">{{ $t("拖动空白平移 · 滚轮平移，Ctrl／⌘ + 滚轮缩放 · 双击空白新增状态 · 拖动节点调整位置 · 拖动或依次点击连接点连线 · 点击节点／连线编辑") }}</p>
     <div class="workflow-body">
-      <div ref="scroll" class="workflow-scroll" :class="{ 'is-panning': panning }" :style="{ backgroundPosition: `${-camera.x * zoom}px ${-camera.y * zoom}px`, backgroundSize: `${gridSize}px ${gridSize}px` }" tabindex="0" aria-label="流程图，拖动空白或方向键平移；Insert 新增状态，Delete 删除选中项" @wheel.prevent="wheel">
-        <svg ref="svg" width="100%" height="100%" :viewBox="viewBox" role="group" aria-label="事项流程图" @dblclick="add" @pointerdown.self="pan" @pointermove="move" @pointerup="up" @pointercancel="cancelGesture(); connection = null" @lostpointercapture="cancelGesture">
+      <div ref="scroll" class="workflow-scroll" :class="{ 'is-panning': panning }" :style="{ backgroundPosition: `${-camera.x * zoom}px ${-camera.y * zoom}px`, backgroundSize: `${gridSize}px ${gridSize}px` }" tabindex="0" :aria-label="$t(&quot;流程图，拖动空白或方向键平移；Insert 新增状态，Delete 删除选中项&quot;)" @wheel.prevent="wheel">
+        <svg ref="svg" width="100%" height="100%" :viewBox="viewBox" role="group" :aria-label="$t(&quot;事项流程图&quot;)" @dblclick="add" @pointerdown.self="pan" @pointermove="move" @pointerup="up" @pointercancel="cancelGesture(); connection = null" @lostpointercapture="cancelGesture">
           <defs><marker :id="markerId" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke" /></marker></defs>
-          <g v-for="edge in routes" :key="edge.id" class="workflow-edge" :class="[`tone-${tone(edge)}`, { selected: edge.id === selectedEdge, highlighted: edge.from === (selected || current) }]" :tabindex="editable ? 0 : undefined" :role="editable ? 'button' : undefined" :aria-label="`连线：${edge.name}，${point(edge.from)?.name} → ${point(edge.to)?.name}`" @click.stop="editable && emit('select-edge', edge.id)" @keydown.enter.prevent="editable && emit('select-edge', edge.id)" @keydown.space.prevent="editable && emit('select-edge', edge.id)">
+          <g v-for="edge in routes" :key="edge.id" class="workflow-edge" :class="[`tone-${tone(edge)}`, { selected: edge.id === selectedEdge, highlighted: edge.from === (selected || current) }]" :tabindex="editable ? 0 : undefined" :role="editable ? 'button' : undefined" :aria-label="$t(&quot;连线：{p0}，{p1} → {p2}&quot;, { p0: edge.name, p1: point(edge.from)?.name, p2: point(edge.to)?.name })" @click.stop="editable && emit('select-edge', edge.id)" @keydown.enter.prevent="editable && emit('select-edge', edge.id)" @keydown.space.prevent="editable && emit('select-edge', edge.id)">
             <title>{{ point(edge.from)?.name }} → {{ point(edge.to)?.name }}：{{ edge.name }}</title>
             <path class="edge-separation" :d="edge.path" />
             <path class="edge-line" :d="edge.path" :marker-end="`url(#${markerId})`" />
@@ -241,19 +241,19 @@ const preview = computed(() => workflowConnection(nodes.value, connection.value?
             <title>{{ edge.name }}</title><rect :x="-edge.label.width / 2" y="-12" :width="edge.label.width" height="24" rx="6" /><text text-anchor="middle" y="4">{{ [...edge.name].length > 10 ? [...edge.name].slice(0, 9).join('') + '…' : edge.name }}</text>
           </g>
           <path v-if="preview" class="connection-preview" :d="preview" />
-          <g v-for="node in nodes" :key="node.id" class="workflow-node" :data-node-id="node.id" :transform="`translate(${node.x}, ${node.y})`" :class="[`tone-${node.kind}`, { active: node.id === current, selected: node.id === selected, editable, 'connection-target': connection && connection.from !== node.id }]" tabindex="0" role="button" :aria-label="`${node.name}${node.id === current ? '，当前状态' : ''}`" :aria-pressed="node.id === selected" @pointerdown.stop="down($event, node)" @click.stop="!editable && select(node)" @keydown="key($event, node)">
-            <title>{{ node.name }} · {{ kinds[node.kind] }}{{ node.allowDevelopment ? ' · 可开发' : '' }}</title>
+          <g v-for="node in nodes" :key="node.id" class="workflow-node" :data-node-id="node.id" :transform="`translate(${node.x}, ${node.y})`" :class="[`tone-${node.kind}`, { active: node.id === current, selected: node.id === selected, editable, 'connection-target': connection && connection.from !== node.id }]" tabindex="0" role="button" :aria-label="`${node.name}${node.id === current ? $t(&quot;，当前状态&quot;) : ''}`" :aria-pressed="node.id === selected" @pointerdown.stop="down($event, node)" @click.stop="!editable && select(node)" @keydown="key($event, node)">
+            <title>{{ node.name }} · {{ $t(kinds[node.kind]) }}{{ node.allowDevelopment ? $t(" · 可开发") : '' }}</title>
             <rect class="node-card" :width="NODE_WIDTH" :height="NODE_HEIGHT" rx="12" />
             <rect class="node-accent" x="0" y="16" width="4" height="40" rx="2" />
             <text class="node-name" x="16" y="29">{{ [...node.name].length > 9 ? [...node.name].slice(0, 8).join('') + '…' : node.name }}</text>
-            <text class="node-hint" x="16" y="53">{{ kinds[node.kind] }}{{ node.allowDevelopment ? ' · 可开发' : '' }}{{ node.id === current ? ' · 当前' : '' }}</text>
-            <g v-if="editable" class="node-port" :transform="`translate(${NODE_WIDTH}, ${NODE_HEIGHT / 2})`" tabindex="0" role="button" :aria-label="`连接 ${node.name}`" @pointerdown.stop="connect($event, node)" @keydown.enter.stop.prevent="connectKey(node)" @keydown.space.stop.prevent="connectKey(node)"><circle class="port-hit" r="18" /><circle class="port-dot" r="6" /></g>
+            <text class="node-hint" x="16" y="53">{{ $t(kinds[node.kind]) }}{{ node.allowDevelopment ? $t(" · 可开发") : '' }}{{ node.id === current ? $t(" · 当前") : '' }}</text>
+            <g v-if="editable" class="node-port" :transform="`translate(${NODE_WIDTH}, ${NODE_HEIGHT / 2})`" tabindex="0" role="button" :aria-label="$t(&quot;连接 {p0}&quot;, { p0: node.name })" @pointerdown.stop="connect($event, node)" @keydown.enter.stop.prevent="connectKey(node)" @keydown.space.stop.prevent="connectKey(node)"><circle class="port-hit" r="18" /><circle class="port-dot" r="6" /></g>
           </g>
         </svg>
       </div>
-      <aside v-if="$slots.inspector && (selected || selectedEdge)" class="workflow-inspector" aria-label="画布内属性编辑"><slot name="inspector" /></aside>
+      <aside v-if="$slots.inspector && (selected || selectedEdge)" class="workflow-inspector" :aria-label="$t(&quot;画布内属性编辑&quot;)"><slot name="inspector" /></aside>
     </div>
-    <div v-if="editable" class="workflow-footer"><span>键盘：Enter 选取 · 方向键移动 · Insert 新增 · Delete 删除 · Esc 取消</span><span role="status">{{ connection ? `从「${point(connection.from)?.name}」连接：选择目标状态，Esc 取消。` : '修改后保存草稿' }}</span></div>
+    <div v-if="editable" class="workflow-footer"><span>{{ $t("键盘：Enter 选取 · 方向键移动 · Insert 新增 · Delete 删除 · Esc 取消") }}</span><span role="status">{{ connection ? $t("从「{p0}」连接：选择目标状态，Esc 取消。", { p0: point(connection.from)?.name }) : $t("修改后保存草稿") }}</span></div>
     <div v-if="$slots.actions" class="workflow-actions"><slot name="actions" :fullscreen="fullscreen" /></div>
   </section>
 </template>

@@ -1,3 +1,4 @@
+import { translate } from "../i18n/index.js";
 let token;
 let workspaceId = "";
 let generation = 0;
@@ -13,7 +14,7 @@ function assertCurrent(expected) {
 }
 function responseError(response, result, url = "") {
   if (response.status === 401 && !url.endsWith("/auth/login")) authenticationFailure();
-  return Object.assign(new Error(result?.error || `请求失败（HTTP ${response.status}）`), {
+  return Object.assign(new Error(result?.error || translate('请求失败（HTTP {status}）', { status: response.status })), {
     status: response.status, code: result?.code,
   });
 }
@@ -38,7 +39,7 @@ export async function uploadSessionImage(url, file, signal) {
   try {
     result = await response.json();
   } catch {
-    throw new Error(`图片上传失败（HTTP ${response.status}），请重试`);
+    throw new Error(translate('图片上传失败（HTTP {status}），请重试', { status: response.status }));
   }
   assertCurrent(expected);
   if (!response.ok) throw responseError(response, result, url);
@@ -90,7 +91,7 @@ async function request(url, data) {
       new Error(
         response.ok
           ? "服务返回了无效的 JSON 响应"
-          : `请求失败（HTTP ${response.status} ${response.statusText}）`,
+          : translate('请求失败（HTTP {status}）', { status: response.status + ' ' + response.statusText }),
       ),
       { status: response.status },
     );

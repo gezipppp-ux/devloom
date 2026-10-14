@@ -279,11 +279,11 @@ defineExpose({ captureInsertion, insertMarkdown, focus, canInsert });
   <div class="visual-markdown-editor" :style="{ '--editor-rows': rows }">
     <template v-if="incompatible">
       <p class="visual-markdown-compatibility" role="status">
-        这段内容含有需保留的 Markdown 语法，已保留原文。<button
+        {{ $t("这段内容含有需保留的 Markdown 语法，已保留原文。") }}<button
           type="button"
           @click="emit('source-request')"
         >
-          使用 Markdown 源码编辑
+          {{ $t("使用 Markdown 源码编辑") }}
         </button>
       </p>
       <MarkdownContent :content="modelValue" :images="images" />
@@ -292,14 +292,14 @@ defineExpose({ captureInsertion, insertMarkdown, focus, canInsert });
       <div
         class="visual-markdown-toolbar"
         role="toolbar"
-        :aria-label="`${label}格式`"
+        :aria-label="$t(&quot;{p0}格式&quot;, { p0: label })"
       >
         <button
           v-for="control in controls"
           :key="control.name"
           type="button"
-          :aria-label="control.name"
-          :title="control.name"
+          :aria-label="$t(control.name)"
+          :title="$t(control.name)"
           :aria-pressed="control.active"
           :disabled="disabled || control.disabled"
           @mousedown.prevent

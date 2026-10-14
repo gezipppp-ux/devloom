@@ -69,7 +69,7 @@
 .session-changed-files button.file-list-entry { display: flex; width: 100%; text-align: left; gap: 8px; margin-top: 6px; font-size: 12px; }
 .file-list-entry span:last-child { overflow-wrap: anywhere; min-width: 0; }
 @media (max-width: 1100px) {
-  .session-file-panel, .session-body.file-panel-wide .session-file-panel { position: absolute; inset: 0 56px 0 0; width: auto; border-left: 0; box-shadow: -8px 0 24px #203e3412; }
+  .session-file-panel, .session-body.file-panel-wide .session-file-panel { position: absolute; inset: 0 56px 0 0; width: auto; border-left: 0; box-shadow: -8px 0 24px #26223712; }
   .file-expand { display: none; }
 }
 @media (max-width: 600px) {

@@ -31,19 +31,19 @@ const selected = computed(() =>
 
 <template>
   <fieldset class="workspace-icon-editor" :disabled="disabled">
-    <legend>工作区图标</legend>
+    <legend>{{ $t("工作区图标") }}</legend>
     <div class="icon-preview-row">
-      <div class="workspace-icon-preview" aria-label="图标预览">
+      <div class="workspace-icon-preview" :aria-label="$t(&quot;图标预览&quot;)">
         <component
           :is="workspaceIcon(modelValue)"
           v-if="workspaceIcon(modelValue)"
           aria-hidden="true"
         />
-        <span v-else>{{ Array.from(name.trim())[0] || "项" }}</span>
+        <span v-else>{{ Array.from(name.trim())[0] || $t("项") }}</span>
       </div>
       <div class="icon-preview-caption">
-        <strong>{{ selected?.label || "名称首字" }}</strong
-        ><small>左侧工作区栏显示的图标</small>
+        <strong>{{ selected?.label || $t("名称首字") }}</strong
+        ><small>{{ $t("左侧工作区栏显示的图标") }}</small>
       </div>
       <button
         ref="trigger"
@@ -51,30 +51,30 @@ const selected = computed(() =>
         aria-haspopup="dialog"
         @click="open"
       >
-        选择图标
+        {{ $t("选择图标") }}
       </button>
     </div>
   </fieldset>
   <Teleport to="body">
-    <dialog ref="dialog" class="workspace-dialog workspace-icon-dialog" aria-label="选择工作区图标" @cancel.prevent="close">
+    <dialog ref="dialog" class="workspace-dialog workspace-icon-dialog" :aria-label="$t(&quot;选择工作区图标&quot;)" @cancel.prevent="close">
       <div class="workspace-dialog-heading">
-        <h2>选择工作区图标</h2>
-        <button type="button" aria-label="关闭图标选择" @click="close">×</button>
+        <h2>{{ $t("选择工作区图标") }}</h2>
+        <button type="button" :aria-label="$t(&quot;关闭图标选择&quot;)" @click="close">×</button>
       </div>
     <input
       ref="searchInput"
       v-model="query"
-      aria-label="搜索图标"
-      placeholder="搜索图标，例如：代码、测试、rocket"
+      :aria-label="$t(&quot;搜索图标&quot;)"
+      :placeholder="$t(&quot;搜索图标，例如：代码、测试、rocket&quot;)"
       type="search"
     />
-    <div class="icon-presets" aria-label="可选工作区图标">
+    <div class="icon-presets" :aria-label="$t(&quot;可选工作区图标&quot;)">
       <button
         v-for="icon in filtered"
         :key="icon.id"
         type="button"
         :title="icon.label"
-        :aria-label="`图标：${icon.label}`"
+        :aria-label="$t(&quot;图标：{p0}&quot;, { p0: icon.label })"
         :aria-pressed="modelValue === icon.id"
         @click="choose(icon.id)"
       >
@@ -83,12 +83,12 @@ const selected = computed(() =>
         }}</span>
       </button>
       <p v-if="!filtered.length" class="muted">
-        没有匹配的图标，试试其他关键词。
+        {{ $t("没有匹配的图标，试试其他关键词。") }}
       </p>
     </div>
       <div class="actions">
-        <button type="button" :aria-pressed="!modelValue" @click="choose(null)">恢复默认</button>
-        <button type="button" @click="close">取消</button>
+        <button type="button" :aria-pressed="!modelValue" @click="choose(null)">{{ $t("恢复默认") }}</button>
+        <button type="button" @click="close">{{ $t("取消") }}</button>
       </div>
     </dialog>
   </Teleport>

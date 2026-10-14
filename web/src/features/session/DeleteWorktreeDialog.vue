@@ -105,15 +105,15 @@ defineExpose({ open });
     <dialog
       ref="dialog"
       class="workspace-dialog delete-worktree-dialog"
-      aria-label="删除 Worktree"
+      :aria-label="$t(&quot;删除 Worktree&quot;)"
       @cancel.prevent="close"
     >
       <div class="workspace-dialog-heading">
-        <h2>删除 Worktree</h2>
+        <h2>{{ $t("删除 Worktree") }}</h2>
         <button
           type="button"
           class="workspace-menu"
-          aria-label="关闭删除确认"
+          :aria-label="$t(&quot;关闭删除确认&quot;)"
           :disabled="busy"
           @click="close"
         >
@@ -125,7 +125,7 @@ defineExpose({ open });
         目录及其中所有文件，并删除对应的本地分支。会话历史保留为只读，远程分支保留。
       </p>
       <p v-if="loading" class="muted" role="status">
-        正在检查文件、提交和分支状态…
+        {{ $t("正在检查文件、提交和分支状态…") }}
       </p>
       <template v-if="snapshot">
         <p v-if="snapshot.warning" class="git-feedback warning" role="status">
@@ -135,14 +135,14 @@ defineExpose({ open });
           v-if="snapshot.deletion?.status === 'partial'"
           class="git-feedback warning"
         >
-          目录已删除，本地分支尚未删除。本次操作将继续清理本地分支。
+          {{ $t("目录已删除，本地分支尚未删除。本次操作将继续清理本地分支。") }}
         </p>
         <dl class="git-facts">
-          <dt>删除目录</dt>
+          <dt>{{ $t("删除目录") }}</dt>
           <dd>
             <code>{{ snapshot.path }}</code>
           </dd>
-          <dt>删除本地分支</dt>
+          <dt>{{ $t("删除本地分支") }}</dt>
           <dd>
             <code>{{ snapshot.branch }}</code>
           </dd>
@@ -153,40 +153,40 @@ defineExpose({ open });
             .env、依赖和构建产物），不能通过工作台撤销。
           </p>
           <p>
-            已跟踪文件的修改：{{
-              snapshot.changedFiles ?? "未知"
-            }}；未跟踪文件：{{
-              snapshot.untrackedFiles ?? "未知"
-            }}；忽略条目：{{ snapshot.ignoredFiles ?? "未知" }}。
+            {{ $t("已跟踪文件的修改：") }}{{
+              snapshot.changedFiles ?? $t("未知")
+            }}{{ $t("；未跟踪文件：") }}{{
+              snapshot.untrackedFiles ?? $t("未知")
+            }}{{ $t("；忽略条目：") }}{{ snapshot.ignoredFiles ?? $t("未知") }}。
           </p>
           <p v-if="snapshot.unpublished">
-            此分支尚未发布，删除本地分支可能丢失尚未保存在远端的提交。
+            {{ $t("此分支尚未发布，删除本地分支可能丢失尚未保存在远端的提交。") }}
           </p>
           <p v-else>
-            待推送提交：{{
-              snapshot.ahead ?? "未知"
-            }}。数量按最近获取的远端记录计算；删除前请确认需要的提交已保留。
+            {{ $t("待推送提交：") }}{{
+              snapshot.ahead ?? $t("未知")
+            }}{{ $t("。数量按最近获取的远端记录计算；删除前请确认需要的提交已保留。") }}
           </p>
         </div>
         <p v-if="!snapshot.canDelete || active" class="error">
           {{
             active
-              ? "任务正在执行，请先停止任务再删除。"
+              ? $t("任务正在执行，请先停止任务再删除。")
               : snapshot.deleteReason
           }}
         </p>
         <form @submit.prevent="remove">
           <label for="delete-worktree-confirm"
-            >输入以下完整本地分支名以确认删除</label
+            >{{ $t("输入以下完整本地分支名以确认删除") }}</label
           >
           <p id="delete-worktree-confirm-hint" class="field-hint">
-            请准确输入：<code>{{ snapshot.branch }}</code>
+            {{ $t("请准确输入：") }}<code>{{ snapshot.branch }}</code>
           </p>
           <input
             id="delete-worktree-confirm"
             ref="confirmInput"
             v-model="confirmation"
-            aria-label="确认删除的本地分支"
+            :aria-label="$t(&quot;确认删除的本地分支&quot;)"
             aria-describedby="delete-worktree-confirm-hint"
             :disabled="busy"
             :placeholder="snapshot.branch"
@@ -195,21 +195,21 @@ defineExpose({ open });
           />
           <label v-if="hasRisk" class="git-risk-confirm">
             <input v-model="discardChanges" type="checkbox" :disabled="busy" />
-            <span>我确认放弃此目录中的文件，以及尚未推送或发布的提交。</span>
+            <span>{{ $t("我确认放弃此目录中的文件，以及尚未推送或发布的提交。") }}</span>
           </label>
           <div class="actions">
-            <button type="button" :disabled="busy" @click="close">取消</button>
+            <button type="button" :disabled="busy" @click="close">{{ $t("取消") }}</button>
             <button type="submit" class="danger-button" :disabled="!canDelete">
-              {{ busy ? "正在删除…" : "删除文件与本地分支" }}
+              {{ busy ? $t("正在删除…") : $t("删除文件与本地分支") }}
             </button>
           </div>
         </form>
       </template>
       <FeedbackMessage :message="error" type="error" />
       <div v-if="!snapshot && !loading" class="actions">
-        <button type="button" @click="close">取消</button>
+        <button type="button" @click="close">{{ $t("取消") }}</button>
         <button type="button" :disabled="busy" @click="refresh">
-          重新检查删除条件
+          {{ $t("重新检查删除条件") }}
         </button>
       </div>
     </dialog>

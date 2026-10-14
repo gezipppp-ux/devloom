@@ -15,8 +15,8 @@ async function load() {
 onMounted(load); onUnmounted(() => { disposed = true; });
 </script>
 <template>
-  <p v-if="loading" role="status">正在读取初始化记录…</p>
+  <p v-if="loading" role="status">{{ $t("正在读取初始化记录…") }}</p>
   <FeedbackMessage :message="error" type="error" />
-  <button v-if="error" :disabled="loading" @click="load">重新加载</button>
-  <template v-if="state"><p v-if="state.status === 'not_required'" class="notice">此部署已有业务配置，无需运行首次初始化向导。可通过账号、部门及项目管理调整配置。</p><template v-else><p class="muted">{{ state.status === 'completed' ? '初始化已完成，以下为已保存的配置记录。' : '初始化尚未完成，请继续剩余步骤。' }}</p><SetupSummary :state="state" /><button v-if="state.status === 'pending'" class="primary" @click="$emit('continue')">继续初始化</button></template></template>
+  <button v-if="error" :disabled="loading" @click="load">{{ $t("重新加载") }}</button>
+  <template v-if="state"><p v-if="state.status === 'not_required'" class="notice">{{ $t("此部署已有业务配置，无需运行首次初始化向导。可通过账号、部门及项目管理调整配置。") }}</p><template v-else><p class="muted">{{ state.status === 'completed' ? $t("初始化已完成，以下为已保存的配置记录。") : $t("初始化尚未完成，请继续剩余步骤。") }}</p><SetupSummary :state="state" /><button v-if="state.status === 'pending'" class="primary" @click="$emit('continue')">{{ $t("继续初始化") }}</button></template></template>
 </template>

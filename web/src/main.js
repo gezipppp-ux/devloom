@@ -1,11 +1,15 @@
 /* global document, getComputedStyle */
 import { createApp, h } from "vue";
 import { ConfigProvider, Form, FormItem } from "antdv-next";
+import enUS from "antdv-next/locale/en_US";
+import zhCN from "antdv-next/locale/zh_CN";
 import App from "./app/App.vue";
 import { router } from "./app/router.js";
+import { i18n, setLocale } from "./shared/i18n/index.js";
 import "./shared/styles/style.css";
 
 const tokens = getComputedStyle(document.documentElement);
+setLocale(i18n.global.locale.value);
 const token = (name) => tokens.getPropertyValue(name).trim();
 const theme = {
   token: {
@@ -31,9 +35,10 @@ const theme = {
 };
 
 createApp({
-  render: () => h(ConfigProvider, { theme }, { default: () => h(App) }),
+  render: () => h(ConfigProvider, { theme, locale: i18n.global.locale.value === "en" ? enUS : zhCN }, { default: () => h(App) }),
 })
   .use(router)
+  .use(i18n)
   .component("AForm", Form)
   .component("AFormItem", FormItem)
   .mount("#app");

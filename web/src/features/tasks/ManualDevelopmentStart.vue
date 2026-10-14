@@ -68,24 +68,24 @@ async function start() {
 
 <template>
   <section class="page-layout manual-development-start">
-    <header class="page-heading"><h1>手动开启开发</h1><p>在当前项目中直接启动独立开发，不关联需求或 Bug。填写内容仅在点击启动后提交。</p></header>
+    <header class="page-heading"><h1>{{ $t("手动开启开发") }}</h1><p>{{ $t("在当前项目中直接启动独立开发，不关联需求或 Bug。填写内容仅在点击启动后提交。") }}</p></header>
     <a-form :model="form" :rules="{ title: [{ required: true, whitespace: true, message: '请填写任务标题' }] }" layout="vertical" @finish="start">
-      <FormSection title="开发目标">
-        <label>任务类型<select v-model="form.taskType" aria-label="任务类型" :disabled="locked || uploading"><option v-for="entry in taskTypes" :key="entry.value" :value="entry.value">{{ entry.label }}</option></select></label>
-        <a-form-item label="任务标题" name="title"><input v-model="form.title" aria-label="任务标题" maxlength="200" :disabled="locked" required placeholder="例如：新增登录入口" /></a-form-item>
+      <FormSection :title="$t(&quot;开发目标&quot;)">
+        <label>{{ $t("任务类型") }}<select v-model="form.taskType" :aria-label="$t(&quot;任务类型&quot;)" :disabled="locked || uploading"><option v-for="entry in taskTypes" :key="entry.value" :value="entry.value">{{ $t(entry.label) }}</option></select></label>
+        <a-form-item :label="$t(&quot;任务标题&quot;)" name="title"><input v-model="form.title" :aria-label="$t(&quot;任务标题&quot;)" maxlength="200" :disabled="locked" required :placeholder="$t(&quot;例如：新增登录入口&quot;)" /></a-form-item>
         <ManualDevelopmentContent v-model="form.content" v-model:image-ids="form.images" :disabled="locked"
           @uploading="uploading = $event" @validity-change="attachmentsReady = $event" />
       </FormSection>
-      <FormSection title="起始分支"><slot name="branch-select" :value="form.baseBranch" :disabled="locked || uploading" :update="value => form.baseBranch = value" /></FormSection>
+      <FormSection :title="$t(&quot;起始分支&quot;)"><slot name="branch-select" :value="form.baseBranch" :disabled="locked || uploading" :update="value => form.baseBranch = value" /></FormSection>
       <AgentModelSettings v-model:model="form.model" v-model:reasoning-effort="form.reasoningEffort" v-model:permission-mode="form.permissionMode" :disabled="locked || uploading" @validity-change="permissionsReady = $event" />
       <FeedbackMessage :message="error" type="error" />
-      <p v-if="uncertain" role="status">正在确认原启动请求；检查结果只读取记录，不会再次执行。</p>
-      <p v-if="accepted" role="status">启动请求已记录，结果需要确认。{{ accepted.error || '请查看原开发任务记录，不要重复启动。' }}</p>
+      <p v-if="uncertain" role="status">{{ $t("正在确认原启动请求；检查结果只读取记录，不会再次执行。") }}</p>
+      <p v-if="accepted" role="status">{{ $t("启动请求已记录，结果需要确认。") }}{{ accepted.error || $t("请查看原开发任务记录，不要重复启动。") }}</p>
       <div class="actions page-actions">
-        <button type="button" :disabled="starting || uploading" @click="emit('cancel')">{{ accepted || uncertain ? '返回会话' : '取消' }}</button>
-        <button v-if="accepted" type="button" class="primary" :disabled="starting" @click="emit('open-record', accepted.id)">查看开发任务记录</button>
-        <button v-else-if="uncertain" type="button" class="primary" :disabled="starting" @click="check">{{ starting ? '正在检查…' : '检查启动结果' }}</button>
-        <button v-else class="primary" type="submit" :disabled="locked || uploading || !attachmentsReady || !permissionsReady || !form.baseBranch">{{ starting ? '正在启动…' : '启动独立开发' }}</button>
+        <button type="button" :disabled="starting || uploading" @click="emit('cancel')">{{ accepted || uncertain ? $t("返回会话") : $t("取消") }}</button>
+        <button v-if="accepted" type="button" class="primary" :disabled="starting" @click="emit('open-record', accepted.id)">{{ $t("查看开发任务记录") }}</button>
+        <button v-else-if="uncertain" type="button" class="primary" :disabled="starting" @click="check">{{ starting ? $t("正在检查…") : $t("检查启动结果") }}</button>
+        <button v-else class="primary" type="submit" :disabled="locked || uploading || !attachmentsReady || !permissionsReady || !form.baseBranch">{{ starting ? $t("正在启动…") : $t("启动独立开发") }}</button>
       </div>
     </a-form>
   </section>

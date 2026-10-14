@@ -46,21 +46,21 @@ function resolve(merged) {
 }
 </script>
 <template>
-  <FormSection title="提示词模板" description="Bug 和需求按事项类型生成开发指令；任务补充提示词使用补充模板。已保存的执行快照不受后续修改影响。">
+  <FormSection :title="$t(&quot;提示词模板&quot;)" :description="$t(&quot;Bug 和需求按事项类型生成开发指令；任务补充提示词使用补充模板。已保存的执行快照不受后续修改影响。&quot;)">
     <FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="notice" type="success" />
-    <p v-if="loading" role="status">正在加载提示词模板…</p>
-    <button v-if="!data && !loading" @click="reload">重新加载提示词模板</button>
+    <p v-if="loading" role="status">{{ $t("正在加载提示词模板…") }}</p>
+    <button v-if="!data && !loading" @click="reload">{{ $t("重新加载提示词模板") }}</button>
     <template v-if="data">
-      <div class="page-tabs" role="group" aria-label="提示词作用域"><button :disabled="busy || Boolean(latest)" :class="{ active: scope === 'project' }" :aria-pressed="scope === 'project'" @click="scope = 'project'">项目默认</button><button v-if="data.personalRevision" :disabled="busy || Boolean(latest)" :class="{ active: scope === 'personal' }" :aria-pressed="scope === 'personal'" @click="scope = 'personal'">我的配置</button></div>
-      <p class="field-hint">{{ scope === 'personal' ? '仅用于你在此项目执行的任务，不影响其他成员。未自定义的类型始终跟随项目默认。' : '项目提供 Bug、需求和补充默认模板。修改后供未自定义该类型的成员使用。' }}</p>
-      <p v-if="!editable" class="field-hint">当前配置只读。</p>
-      <div class="page-tabs" role="group" aria-label="提示词类型"><button v-for="(definition, name) in data.catalog" :key="name" :class="{ active: type === name }" :aria-pressed="type === name" @click="type = name">{{ definition.label }}提示词{{ drafts[scope][name] !== baselines[scope][name] ? ' · 未保存' : '' }}</button></div>
+      <div class="page-tabs" role="group" :aria-label="$t(&quot;提示词作用域&quot;)"><button :disabled="busy || Boolean(latest)" :class="{ active: scope === 'project' }" :aria-pressed="scope === 'project'" @click="scope = 'project'">{{ $t("项目默认") }}</button><button v-if="data.personalRevision" :disabled="busy || Boolean(latest)" :class="{ active: scope === 'personal' }" :aria-pressed="scope === 'personal'" @click="scope = 'personal'">{{ $t("我的配置") }}</button></div>
+      <p class="field-hint">{{ scope === 'personal' ? $t("仅用于你在此项目执行的任务，不影响其他成员。未自定义的类型始终跟随项目默认。") : $t("项目提供 Bug、需求和补充默认模板。修改后供未自定义该类型的成员使用。") }}</p>
+      <p v-if="!editable" class="field-hint">{{ $t("当前配置只读。") }}</p>
+      <div class="page-tabs" role="group" :aria-label="$t(&quot;提示词类型&quot;)"><button v-for="(definition, name) in data.catalog" :key="name" :class="{ active: type === name }" :aria-pressed="type === name" @click="type = name">{{ $t(definition.label) }}{{ $t("提示词") }}{{ drafts[scope][name] !== baselines[scope][name] ? $t(" · 未保存") : '' }}</button></div>
       <EditConflict v-if="latest" :key="`${scope}-${latest.revision}`" :base="baselines[scope]" :draft="drafts[scope]" :latest="latestFields" @resolve="resolve" @discard="resolve(latestFields)" />
       <form class="project-form" @submit.prevent="submit">
-        <label v-if="scope === 'personal'" class="prompt-override"><input type="checkbox" :checked="!inherited" :disabled="busy || !editable" @change="customize" />自定义此提示词，仅对我生效</label>
-        <p v-if="inherited" class="field-hint">当前跟随项目默认；勾选后可独立编辑。</p>
+        <label v-if="scope === 'personal'" class="prompt-override"><input type="checkbox" :checked="!inherited" :disabled="busy || !editable" @change="customize" />{{ $t("自定义此提示词，仅对我生效") }}</label>
+        <p v-if="inherited" class="field-hint">{{ $t("当前跟随项目默认；勾选后可独立编辑。") }}</p>
         <PromptTemplateEditor v-model="template" :definition="data.catalog[type]" :max-length="data.maxLength" :disabled="busy || !editable || inherited" />
-        <div class="actions prompt-actions"><button type="button" :disabled="busy || !editable" @click="reset">{{ scope === 'personal' ? '恢复跟随项目' : '恢复内置默认' }}</button><button type="button" :disabled="busy" @click="loadLatest">保留草稿，加载最新配置</button><button type="submit" class="primary" :disabled="busy || !editable || !dirty || Boolean(latest)">{{ scope === 'personal' ? '保存我的提示词' : '保存项目提示词' }}</button></div>
+        <div class="actions prompt-actions"><button type="button" :disabled="busy || !editable" @click="reset">{{ scope === 'personal' ? $t("恢复跟随项目") : $t("恢复内置默认") }}</button><button type="button" :disabled="busy" @click="loadLatest">{{ $t("保留草稿，加载最新配置") }}</button><button type="submit" class="primary" :disabled="busy || !editable || !dirty || Boolean(latest)">{{ scope === 'personal' ? $t("保存我的提示词") : $t("保存项目提示词") }}</button></div>
       </form>
     </template>
   </FormSection>

@@ -67,18 +67,18 @@ onUnmounted(() => {
 
 <template>
   <FormSection
-    title="成员项目与任务目录"
-    description="统一设置成员项目克隆目录和任务 Worktree 的共同基础路径。"
+    :title="$t(&quot;成员项目与任务目录&quot;)"
+    :description="$t(&quot;统一设置成员项目克隆目录和任务 Worktree 的共同基础路径。&quot;)"
   >
     <form @submit.prevent="save">
       <label for="member-storage-root" class="storage-field-label"
-        >成员目录基础路径</label
+        >{{ $t("成员目录基础路径") }}</label
       >
       <div class="directory-path-row">
         <input
           id="member-storage-root"
           v-model="memberStorageRoot"
-          aria-label="成员目录基础路径"
+          :aria-label="$t(&quot;成员目录基础路径&quot;)"
           :placeholder="platform === 'win32' ? 'D:\\wt' : '/srv/wt'"
           :disabled="loading || saving || savedStorageRoot === null"
           required
@@ -88,20 +88,20 @@ onUnmounted(() => {
           :disabled="loading || saving || savedStorageRoot === null"
           @click="directoryPicker.open(memberStorageRoot)"
         >
-          <FolderOpenOutlined aria-hidden="true" /> 浏览服务器目录
+          <FolderOpenOutlined aria-hidden="true" /> {{ $t("浏览服务器目录") }}
         </button>
       </div>
       <p class="field-hint">
-        填写运行服务主机上的绝对路径，也可浏览并选择已有目录。成员项目和任务按 Git 仓库名、登录用户名分隔，同名仓库的后创建项目自动加短后缀。
+        {{ $t("填写运行服务主机上的绝对路径，也可浏览并选择已有目录。成员项目和任务按 Git 仓库名、登录用户名分隔，同名仓库的后创建项目自动加短后缀。") }}
       </p>
       <p class="field-hint">
-        建议使用较短路径{{
-          platform === "win32" ? "，例如 D:\\wt" : "，例如 /srv/wt"
-        }}，减少项目内深层文件路径过长的风险。
+        {{ $t("建议使用较短路径") }}{{
+          platform === "win32" ? $t("，例如 D:\\wt") : $t("，例如 /srv/wt")
+        }}{{ $t("，减少项目内深层文件路径过长的风险。") }}
       </p>
       <div class="storage-path-example">
         <strong
-          >基础目录 / projects / 仓库目录名 / members / 登录用户名</strong
+          >{{ $t("基础目录 / projects / 仓库目录名 / members / 登录用户名") }}</strong
         >
         <code>{{
           platform === "win32"
@@ -113,18 +113,18 @@ onUnmounted(() => {
         </p>
       </div>
       <p class="field-hint" :class="{ error: git && !git.installed }">
-        Git 环境：{{
+        {{ $t("Git 环境：") }}{{
           git
             ? git.installed
-              ? `已安装（${git.version}）`
-              : "未检测到 Git，请安装后再创建工作区。"
-            : "正在检测…"
+              ? $t("已安装（{p0}）", { p0: git.version })
+              : $t("未检测到 Git，请安装后再创建工作区。")
+            : $t("正在检测…")
         }}
       </p>
       <p class="field-hint">
-        修改后对所有工作区的新任务生效；已有任务继续使用记录的路径，不会移动目录。
+        {{ $t("修改后对所有工作区的新任务生效；已有任务继续使用记录的路径，不会移动目录。") }}
       </p>
-      <p v-if="loading" class="muted" role="status">正在加载基础目录…</p>
+      <p v-if="loading" class="muted" role="status">{{ $t("正在加载基础目录…") }}</p>
       <FeedbackMessage :message="error" type="error" />
       <FeedbackMessage :message="saved ? '基础目录已保存，后续新任务将使用新的路径配置。' : ''" type="success" />
       <div class="actions">
@@ -133,14 +133,14 @@ onUnmounted(() => {
           type="button"
           @click="load"
         >
-          重新加载
+          {{ $t("重新加载") }}
         </button>
         <button
           class="primary"
           type="submit"
           :disabled="loading || saving || !dirty || !memberStorageRoot.trim()"
         >
-          {{ saving ? "正在保存…" : "保存基础目录" }}
+          {{ saving ? $t("正在保存…") : $t("保存基础目录") }}
         </button>
       </div>
     </form>

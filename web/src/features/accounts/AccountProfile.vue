@@ -21,12 +21,12 @@ async function save() {
 }
 </script>
 <template>
-  <FormSection title="个人资料" description="显示名称用于成员、评论和负责人展示，登录账号保持不变。">
+  <FormSection :title="$t(&quot;个人资料&quot;)" :description="$t(&quot;显示名称用于成员、评论和负责人展示，登录账号保持不变。&quot;)">
     <form class="project-form" @submit.prevent="save">
-      <label>登录账号<input :value="accountSession.user.username" readonly /></label>
-      <label>显示名称<input v-model="displayName" required maxlength="80" :disabled="busy" /></label>
+      <label>{{ $t("登录账号") }}<input :value="accountSession.user.username" readonly /></label>
+      <label>{{ $t("显示名称") }}<input v-model="displayName" required maxlength="80" :disabled="busy" /></label>
       <FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="notice" type="success" />
-      <button type="submit" class="primary" :disabled="busy || !displayName.trim()">{{ busy ? '正在保存…' : '保存显示名称' }}</button>
+      <button type="submit" class="primary" :disabled="busy || !displayName.trim()">{{ busy ? $t("正在保存…") : $t("保存显示名称") }}</button>
     </form>
   </FormSection>
 </template>

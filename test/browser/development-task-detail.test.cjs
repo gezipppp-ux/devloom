@@ -19,13 +19,14 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
   const planned = () => ({ ...structuredClone(initial), revision: 1, status: "planned", execution: null, runKey: null, baseBranch: "", baseCommit: null, fetchedAt: null, additions: [], canStart: true, canEdit: true, canComplete: false, canCancel: true, canOpenSession: false });
   const started = (status = "completed") => ({ ...structuredClone(initial), execution: { status, sessionId: "fixture-session" }, canComplete: status === "completed", canCancel: status === "completed" });
   task = planned();
-  page.on("pageerror", error => errors.push(error.message));
+  page.on("pageerror", error => { errors.push(error.message); console.error(error.message); });
   await page.route("**/*", async route => {
     const request = route.request(), url = new URL(request.url()), endpoint = url.pathname;
     const send = (json, status = 200) => route.fulfill({ status, json });
     if (endpoint.startsWith("/api/")) {
       if (endpoint === "/api/auth/session") return send({ user: { id: "visual-admin", username: "visual-admin", displayName: "演示管理员", role: "admin", status: "active", mustChangePassword: false }, token: "fixture", settings: {} });
       if (endpoint === "/api/account/git-accounts") return send({ accounts: [] });
+      if (endpoint === "/api/bootstrap") return send({ token: "fixture", workspaces: [] });
       if (endpoint === '/api/workspaces/fixture-workspace/models') return send({ models: [{ model: 'fixture-model', label: '测试模型', reasoningEfforts: ['low', 'high'] }] });
       if (endpoint === '/api/workspaces/fixture-workspace/execution-options') return send({ permissionModes: require('../../shared/agent-permissions.json').map(mode => ({ ...mode, available: permissionsAvailable })) });
       if (endpoint === `/api${base}`) {
@@ -89,7 +90,7 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
   };
   try {
     await page.goto(taskUrl);
-    await button("去准备开发环境").waitFor();
+    await button("去准备开发环境").waitFor().catch(async error => { console.error(await page.locator('body').innerText()); throw error; });
     assert.equal(await page.getByLabel("任务标题", { exact: true }).count(), 0);
     assert.equal(await page.getByText("Codex：尚未启动", { exact: true }).count(), 1);
     await capture("prepare");

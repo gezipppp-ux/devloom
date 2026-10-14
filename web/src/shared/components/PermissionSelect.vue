@@ -142,19 +142,19 @@ onUnmounted(() => {
       ref="trigger"
       type="button"
       role="combobox"
-      aria-label="权限模式"
+      :aria-label="$t(&quot;权限模式&quot;)"
       aria-haspopup="listbox"
       :aria-controls="menuId"
       :aria-expanded="expanded"
       :disabled="disabled"
       class="permission-trigger"
       :data-permission="modelValue"
-      :title="selected?.description"
+      :title="$t(selected?.description || '')"
       @click="expanded ? close() : open()"
       @keydown.down.prevent="open"
     >
       <SafetyOutlined aria-hidden="true" /><span>{{
-        selected?.label || modelValue
+        $t(selected?.label || modelValue)
       }}</span>
       <DownOutlined aria-hidden="true" />
     </button>
@@ -167,7 +167,7 @@ onUnmounted(() => {
       <div
         :id="menuId"
         role="listbox"
-        aria-label="执行权限选项"
+        :aria-label="$t(&quot;执行权限选项&quot;)"
         @keydown="navigate"
       >
         <button
@@ -182,10 +182,10 @@ onUnmounted(() => {
           @click="choose(option)"
         >
           <span class="permission-option-content"
-            ><strong>{{ option.label }}</strong>
-            <span>{{ option.description }}</span
+            ><strong>{{ $t(option.label) }}</strong>
+            <span>{{ $t(option.description) }}</span
             ><small v-if="!option.available">{{
-              option.reason || "当前服务不可用"
+              option.reason || $t("当前服务不可用")
             }}</small>
           </span>
           <CheckOutlined v-if="modelValue === option.id" aria-hidden="true" />
@@ -199,7 +199,7 @@ onUnmounted(() => {
         @click="emit('refresh')"
       >
         <ReloadOutlined aria-hidden="true" />{{
-          refreshing ? "正在刷新权限选项…" : "刷新权限选项"
+          refreshing ? $t("正在刷新权限选项…") : $t("刷新权限选项")
         }}
       </button>
     </div>

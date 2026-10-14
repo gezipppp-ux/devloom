@@ -27,20 +27,20 @@ function status(tool) {
 </script>
 <template>
   <div>
-    <p class="muted">检查运行 Web Coding 的服务器。已有合格版本保持不变，缺失工具按下方计划依次安装。</p>
-    <p v-if="loading || checking" role="status">{{ checking ? '正在查询可安装版本…' : '正在检测工具版本和认证状态…' }}</p>
+    <p class="muted">{{ $t("检查运行 Web Coding 的服务器。已有合格版本保持不变，缺失工具按下方计划依次安装。") }}</p>
+    <p v-if="loading || checking" role="status">{{ checking ? $t("正在查询可安装版本…") : $t("正在检测工具版本和认证状态…") }}</p>
     <FeedbackMessage :message="error" type="error" />
-    <p v-if="busy" class="notice" role="status">{{ job?.status === 'running' ? `正在安装 ${job.id} ${job.version}。` : '正在核对安装计划。' }} 已受理的安装离开页面后仍会继续，请保持服务运行。</p>
+    <p v-if="busy" class="notice" role="status">{{ job?.status === 'running' ? $t("正在安装 {p0} {p1}。", { p0: job.id, p1: job.version }) : $t("正在核对安装计划。") }} {{ $t("已受理的安装离开页面后仍会继续，请保持服务运行。") }}</p>
     <p v-else-if="batch && ['failed', 'restart-required'].includes(batch.status)" class="notice">{{ batch.message }}</p>
     <p v-else-if="job && ['failed', 'restart-required'].includes(job.status)" class="notice">{{ job.message }}</p>
-    <FormSection v-if="report" title="开发所需工具">
-      <div v-for="tool in tools" :key="tool.id" class="setup-tool-row"><div><strong>{{ tool.name }}</strong><p class="field-hint">{{ tool.version ? `已检测到 ${tool.version}` : tool.missing ? '尚未安装' : '版本未知' }}</p><p class="field-hint">{{ tool.detail }}</p><p v-if="tool.missing && tool.installVersion" class="field-hint">安装目标 {{ tool.installVersion }} · {{ tool.installSource }}</p><p v-if="tool.missing && !tool.installAvailable" class="field-hint">{{ tool.updateReason }}</p><p v-if="tool.latestError" class="error">版本查询失败：{{ tool.latestError }}</p><button v-if="!tool.missing && !tool.binaryReady && tool.updateAvailable && tool.latestStatus === 'available'" type="button" :disabled="locked" @click="update(tool)">修复到 {{ tool.latest }}</button></div><span class="setup-tool-status" :class="{ pass: tool.status === 'pass' }">{{ status(tool) }}</span></div>
-      <div class="setup-prerequisites"><span><CheckOutlined aria-hidden="true" /> PostgreSQL 已连接</span><span v-for="tool in report.tools.filter(item => ['node', 'npm'].includes(item.id))" :key="tool.id">{{ tool.name }} {{ tool.version || '未知' }} · {{ tool.status === 'pass' ? '可用' : '需处理' }}</span></div>
+    <FormSection v-if="report" :title="$t(&quot;开发所需工具&quot;)">
+      <div v-for="tool in tools" :key="tool.id" class="setup-tool-row"><div><strong>{{ tool.name }}</strong><p class="field-hint">{{ tool.version ? $t("已检测到 {p0}", { p0: tool.version }) : tool.missing ? $t("尚未安装") : $t("版本未知") }}</p><p class="field-hint">{{ tool.detail }}</p><p v-if="tool.missing && tool.installVersion" class="field-hint">{{ $t("安装目标") }} {{ tool.installVersion }} · {{ tool.installSource }}</p><p v-if="tool.missing && !tool.installAvailable" class="field-hint">{{ tool.updateReason }}</p><p v-if="tool.latestError" class="error">{{ $t("版本查询失败：") }}{{ tool.latestError }}</p><button v-if="!tool.missing && !tool.binaryReady && tool.updateAvailable && tool.latestStatus === 'available'" type="button" :disabled="locked" @click="update(tool)">{{ $t("修复到") }} {{ tool.latest }}</button></div><span class="setup-tool-status" :class="{ pass: tool.status === 'pass' }">{{ $t(status(tool)) }}</span></div>
+      <div class="setup-prerequisites"><span><CheckOutlined aria-hidden="true" /> {{ $t("PostgreSQL 已连接") }}</span><span v-for="tool in report.tools.filter(item => ['node', 'npm'].includes(item.id))" :key="tool.id">{{ tool.name }} {{ tool.version || $t("未知") }} · {{ tool.status === 'pass' ? $t("可用") : $t("需处理") }}</span></div>
       <p v-for="check in report.checks.filter(item => item.name !== '成员目录可写' && item.status !== 'pass')" :key="check.name" class="error">{{ check.name }}：{{ check.detail }}</p>
-      <div class="actions"><button v-if="missing.length" type="button" class="primary" :disabled="locked || !installable" @click="installMissing(missing)"><DownloadOutlined aria-hidden="true" /> 安装缺失工具</button><button type="button" :disabled="locked" @click="load()"><ReloadOutlined aria-hidden="true" />重新检测</button><button type="button" :disabled="locked" @click="load(true)">检查安装版本</button></div>
+      <div class="actions"><button v-if="missing.length" type="button" class="primary" :disabled="locked || !installable" @click="installMissing(missing)"><DownloadOutlined aria-hidden="true" /> {{ $t("安装缺失工具") }}</button><button type="button" :disabled="locked" @click="load()"><ReloadOutlined aria-hidden="true" />{{ $t("重新检测") }}</button><button type="button" :disabled="locked" @click="load(true)">{{ $t("检查安装版本") }}</button></div>
     </FormSection>
-    <button v-else-if="!loading && !checking" type="button" :disabled="locked" @click="load()">重新检测</button>
-    <FormSection v-if="needsLogin" title="Codex 认证" description="在实际运行服务的账号下登录；也可以先完成团队配置。"><code>codex login</code><p class="field-hint">完成认证后重新检测。选择稍后登录时，开始开发前仍会检查认证状态。</p><button type="button" :disabled="locked" @click="load()">已完成登录，重新检测</button></FormSection>
+    <button v-else-if="!loading && !checking" type="button" :disabled="locked" @click="load()">{{ $t("重新检测") }}</button>
+    <FormSection v-if="needsLogin" :title="$t(&quot;Codex 认证&quot;)" :description="$t(&quot;在实际运行服务的账号下登录；也可以先完成团队配置。&quot;)"><code>codex login</code><p class="field-hint">{{ $t("完成认证后重新检测。选择稍后登录时，开始开发前仍会检查认证状态。") }}</p><button type="button" :disabled="locked" @click="load()">{{ $t("已完成登录，重新检测") }}</button></FormSection>
   </div>
 </template>
 <style scoped>

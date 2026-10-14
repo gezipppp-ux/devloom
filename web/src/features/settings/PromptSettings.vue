@@ -128,20 +128,20 @@ async function save() {
   <FormSection
     id="prompt-settings"
     class="prompt-settings"
-    title="提示词模板"
-    description="维护发送给 Codex 的提示词，创建任务或追加需求时自动填充占位符。"
+    :title="$t(&quot;提示词模板&quot;)"
+    :description="$t(&quot;维护发送给 Codex 的提示词，创建任务或追加需求时自动填充占位符。&quot;)"
     :aria-busy="busy"
   >
     <p class="prompt-scope">
-      对当前工作区的新任务和新追加资料生效；已有资料快照与会话保持原样。各模板独立保存。
+      {{ $t("对当前工作区的新任务和新追加资料生效；已有资料快照与会话保持原样。各模板独立保存。") }}
     </p>
-    <p v-if="loading" role="status">正在加载提示词模板…</p>
+    <p v-if="loading" role="status">{{ $t("正在加载提示词模板…") }}</p>
     <FeedbackMessage :message="error" type="error" />
     <button v-if="!loaded && !loading" type="button" @click="load">
-      重新加载提示词模板
+      {{ $t("重新加载提示词模板") }}
     </button>
     <form v-if="loaded" @submit.prevent="save">
-      <div class="prompt-types" role="group" aria-label="提示词类型">
+      <div class="prompt-types" role="group" :aria-label="$t(&quot;提示词类型&quot;)">
         <button
           v-for="(_, name) in catalog"
           :key="name"
@@ -150,21 +150,21 @@ async function save() {
           :disabled="busy"
           @click="selectType(name)"
         >
-          {{ catalog[name].label }}
+          {{ $t(catalog[name].label) }}
           <span
             v-if="resetDrafts[name] || drafts[name] !== savedTemplates[name]"
             class="prompt-draft-marker"
-          >（未保存）</span>
+          >{{ $t("（未保存）") }}</span>
         </button>
       </div>
       <label class="prompt-editor-label" for="prompt-template-editor">
-        {{ current.label }}提示词模板
+        {{ $t(current.label) }}{{ $t("提示词模板") }}
       </label>
       <textarea
         id="prompt-template-editor"
         ref="editor"
         v-model="drafts[type]"
-        aria-label="提示词模板内容"
+        :aria-label="$t(&quot;提示词模板内容&quot;)"
         aria-describedby="prompt-template-hint prompt-template-count"
         rows="13"
         :maxlength="maxLength"
@@ -174,42 +174,42 @@ async function save() {
       />
       <div class="prompt-editor-hints">
         <p id="prompt-template-hint" class="field-hint">
-          双花括号中的名称会替换为任务资料。保留所有必填占位符，图片和补充说明包含完整说明块。
+          {{ $t("双花括号中的名称会替换为任务资料。保留所有必填占位符，图片和补充说明包含完整说明块。") }}
         </p>
         <span id="prompt-template-count" class="prompt-character-count">
           {{ drafts[type].length }} / {{ maxLength }}
         </span>
       </div>
       <details class="prompt-placeholders" open>
-        <summary>可用占位符 · 点击插入</summary>
+        <summary>{{ $t("可用占位符 · 点击插入") }}</summary>
         <ul>
           <li v-for="placeholder in current.placeholders" :key="placeholder.name">
             <button
               type="button"
               :disabled="busy"
-              :aria-label="`插入占位符 ${placeholder.name}`"
+              :aria-label="$t(&quot;插入占位符 {p0}&quot;, { p0: placeholder.name })"
               @mousedown.prevent
               @click="insertPlaceholder(placeholder.name)"
             >
               <code>{{ placeholderToken(placeholder.name) }}</code>
             </button>
-            <span class="prompt-placeholder-label">{{ placeholder.label }}</span>
-            <span v-if="placeholder.required" class="prompt-required">必填</span>
+            <span class="prompt-placeholder-label">{{ $t(placeholder.label) }}</span>
+            <span v-if="placeholder.required" class="prompt-required">{{ $t("必填") }}</span>
           </li>
         </ul>
       </details>
       <details class="prompt-preview">
-        <summary>示例预览</summary>
-        <p class="field-hint">使用示例资料预览填充结果，实际任务会使用自己的需求资料。</p>
-        <pre aria-label="提示词示例预览">{{ preview }}</pre>
+        <summary>{{ $t("示例预览") }}</summary>
+        <p class="field-hint">{{ $t("使用示例资料预览填充结果，实际任务会使用自己的需求资料。") }}</p>
+        <pre :aria-label="$t(&quot;提示词示例预览&quot;)">{{ preview }}</pre>
       </details>
       <FeedbackMessage :message="message" type="success" />
       <div class="actions">
         <button type="button" :disabled="busy" @click="reset">
-          恢复当前类型默认模板
+          {{ $t("恢复当前类型默认模板") }}
         </button>
         <button class="primary" type="submit" :disabled="busy || !dirty">
-          {{ saving ? "正在保存提示词…" : "保存提示词模板" }}
+          {{ saving ? $t("正在保存提示词…") : $t("保存提示词模板") }}
         </button>
       </div>
     </form>

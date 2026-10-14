@@ -65,7 +65,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <label :for="inputId" class="sr-only">新任务开发分支</label>
+  <label :for="inputId" class="sr-only">{{ $t("新任务开发分支") }}</label>
   <a-select
     :id="inputId"
     :value="modelValue"
@@ -79,7 +79,7 @@ onUnmounted(() => {
     :not-found-content="
       loading ? '正在读取远端分支…' : '无匹配分支，可输入远端短分支名'
     "
-    placeholder="选择或输入远端短分支名"
+    :placeholder="$t(&quot;选择或输入远端短分支名&quot;)"
     style="width: 100%"
     @search="(value) => (query = value)"
     @change="
@@ -90,9 +90,9 @@ onUnmounted(() => {
     "
   />
   <p v-if="!repository.trim()" :id="`${inputId}-hint`" class="base-branch-hint">
-    项目仓库由创建工作区时的 Git 地址生成；加载后会显示已获取的 origin 分支。
+    {{ $t("项目仓库由创建工作区时的 Git 地址生成；加载后会显示已获取的 origin 分支。") }}
   </p>
-  <FeedbackMessage :message="error ? `分支加载失败：${error}` : ''" type="error" />
+  <FeedbackMessage :message="error ? $t(&quot;分支加载失败：{p0}&quot;, { p0: error }) : ''" type="error" />
 </template>
 
 <style scoped>

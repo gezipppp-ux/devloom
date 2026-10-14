@@ -57,33 +57,33 @@ watch(() => props.contextKey, () => { generation++; mode.value = "write"; select
 onBeforeUnmount(() => { generation++; });
 </script>
 <template>
-  <div class="markdown-editor" :class="{ 'is-disabled': disabled }" role="group" :aria-label="`${label}编辑器`">
-    <label :for="mode === 'preview' ? undefined : id" @click="focusEditor">{{ label }}</label>
+  <div class="markdown-editor" :class="{ 'is-disabled': disabled }" role="group" :aria-label="$t(&quot;{p0}编辑器&quot;, { p0: $t(label) })">
+    <label :for="mode === 'preview' ? undefined : id" @click="focusEditor">{{ $t(label) }}</label>
     <div class="markdown-editor-surface">
       <div class="markdown-editor-toolbar">
-        <div class="markdown-editor-modes" :aria-label="`${label}编辑模式`">
-          <button v-for="[value, title] in modes" :key="value" type="button" :aria-pressed="mode === value" :disabled="busy" @click="mode = value">{{ title }}</button>
+        <div class="markdown-editor-modes" :aria-label="$t(&quot;{p0}编辑模式&quot;, { p0: $t(label) })">
+          <button v-for="[value, title] in modes" :key="value" type="button" :aria-pressed="mode === value" :disabled="busy" @click="mode = value">{{ $t(title) }}</button>
         </div>
-        <button class="markdown-attach-button" type="button" :disabled="!canAttach" @click="picker.click()"><PaperClipOutlined aria-hidden="true" />{{ busy ? '读取附件中…' : attachButtonLabel }}</button>
+        <button class="markdown-attach-button" type="button" :disabled="!canAttach" @click="picker.click()"><PaperClipOutlined aria-hidden="true" />{{ busy ? $t("读取附件中…") : $t(attachButtonLabel) }}</button>
         <input ref="picker" type="file" :accept="accept" multiple hidden :disabled="!canAttach" @change="filesSelected($event.target.files); $event.target.value = ''" />
       </div>
-      <VisualMarkdownEditor v-show="mode === 'write'" ref="visual" :model-value="modelValue" :label="label" :input-id="id" :active="mode === 'write'" :images="images" :disabled="disabled" :busy="busy" :rows="rows" :context-key="contextKey" @update:model-value="emit('update:modelValue', $event)" @files="emit('files', $event)" @source-request="mode = 'source'" />
-      <textarea v-if="mode === 'source'" :id="id" ref="textarea" class="markdown-source" :value="modelValue" :aria-label="label" :disabled="disabled || busy" :required="required" :rows="rows" maxlength="60000" spellcheck="false" @input="emit('update:modelValue', $event.target.value)" @select="remember" @click="remember" @keyup="remember" @blur="remember" @paste="paste"></textarea>
-      <div v-if="mode === 'preview'" class="markdown-editor-preview"><MarkdownContent v-if="modelValue" :content="modelValue" :images="images" /><span v-else class="muted">暂无内容</span></div>
+      <VisualMarkdownEditor v-show="mode === 'write'" ref="visual" :model-value="modelValue" :label="$t(label)" :input-id="id" :active="mode === 'write'" :images="images" :disabled="disabled" :busy="busy" :rows="rows" :context-key="contextKey" @update:model-value="emit('update:modelValue', $event)" @files="emit('files', $event)" @source-request="mode = 'source'" />
+      <textarea v-if="mode === 'source'" :id="id" ref="textarea" class="markdown-source" :value="modelValue" :aria-label="$t(label)" :disabled="disabled || busy" :required="required" :rows="rows" maxlength="60000" spellcheck="false" @input="emit('update:modelValue', $event.target.value)" @select="remember" @click="remember" @keyup="remember" @blur="remember" @paste="paste"></textarea>
+      <div v-if="mode === 'preview'" class="markdown-editor-preview"><MarkdownContent v-if="modelValue" :content="modelValue" :images="images" /><span v-else class="muted">{{ $t("暂无内容") }}</span></div>
     </div>
-    <span class="markdown-editor-help">{{ mode === 'source' ? '正在编辑 Markdown 源码，可切回写作查看图片。' : '直接粘贴图片，或添加附件；图片与文字一起编辑。' }}</span>
+    <span class="markdown-editor-help">{{ mode === 'source' ? $t("正在编辑 Markdown 源码，可切回写作查看图片。") : $t("直接粘贴图片，或添加附件；图片与文字一起编辑。") }}</span>
     <div v-if="attachments.length" class="markdown-attachment-section">
-      <div class="markdown-attachment-heading"><span>{{ attachmentLabel }}</span><span>{{ attachments.length }} 个 · {{ attachmentHint }}</span></div>
+      <div class="markdown-attachment-heading"><span>{{ $t(attachmentLabel) }}</span><span>{{ attachments.length }} {{ $t("个 ·") }} {{ $t(attachmentHint) }}</span></div>
       <ul class="markdown-attachments">
         <li v-for="item in attachments" :key="item.id">
           <img v-if="item.previewUrl" class="markdown-attachment-thumbnail" :src="item.previewUrl" alt="" />
           <span v-else class="markdown-attachment-icon"><FileTextOutlined aria-hidden="true" /></span>
           <span class="markdown-attachment-info"><strong :title="item.name">{{ item.name }}</strong><small>{{ sizeLabel(item.size) }}</small></span>
-          <button class="markdown-remove-attachment" type="button" :disabled="disabled || busy" :aria-label="`移除附件 ${item.name}`" :title="`移除附件 ${item.name}`" @click="emit('remove', item.id)"><CloseOutlined aria-hidden="true" /></button>
+          <button class="markdown-remove-attachment" type="button" :disabled="disabled || busy" :aria-label="$t(&quot;移除附件 {p0}&quot;, { p0: item.name })" :title="$t(&quot;移除附件 {p0}&quot;, { p0: item.name })" @click="emit('remove', item.id)"><CloseOutlined aria-hidden="true" /></button>
         </li>
       </ul>
     </div>
-    <span class="markdown-editor-help markdown-upload-limit">{{ uploadHint }}</span>
+    <span class="markdown-editor-help markdown-upload-limit">{{ $t(uploadHint) }}</span>
     <FeedbackMessage :message="error" type="error" />
   </div>
 </template>

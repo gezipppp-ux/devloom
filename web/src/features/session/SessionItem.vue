@@ -43,11 +43,11 @@ const pretty = (value) =>
     :class="{ 'from-user': item.type === 'userMessage' }"
   >
     <div class="message-role">
-      {{ item.type === "userMessage" ? "你" : agentLabel
+      {{ item.type === "userMessage" ? $t("你") : agentLabel
       }}<span
         v-if="item.type === 'agentMessage' && item.status === 'inProgress'"
         class="writing"
-        >正在回复</span
+        >{{ $t("正在回复") }}</span
       >
     </div>
     <!-- Only sanitized Markdown output is rendered as HTML. -->
@@ -61,14 +61,14 @@ const pretty = (value) =>
     <div v-else-if="item.text || !images.length" class="message-text">
       {{ item.text || "…" }}
     </div>
-    <div v-if="images.length" class="message-images" aria-label="消息图片">
+    <div v-if="images.length" class="message-images" :aria-label="$t(&quot;消息图片&quot;)">
       <a
         v-for="(image, index) in images"
         :key="`${image.url}-${index}`"
         :href="image.url"
         target="_blank"
         rel="noopener noreferrer"
-        :aria-label="`查看消息图片 ${index + 1}`"
+        :aria-label="$t(&quot;查看消息图片 {p0}&quot;, { p0: index + 1 })"
         ><img
           :src="image.url"
           :alt="image.name || `消息图片 ${index + 1}`"
@@ -79,23 +79,23 @@ const pretty = (value) =>
   <details v-else class="tool-item" :open="item.status === 'inProgress'">
     <summary>
       <span class="tool-symbol">⌘</span
-      ><span>{{ labels[item.type] || item.name || item.type }}</span
+      ><span>{{ $t(labels[item.type] || item.name || item.type) }}</span
       ><code v-if="item.command">{{ item.command }}</code
       ><small>{{
         item.status === "inProgress"
-          ? "执行中"
+          ? $t("执行中")
           : ["pending", "skipped", "interrupted", "failed"].includes(
                 item.status,
               )
             ? {
-                pending: "等待执行",
-                skipped: "已跳过",
-                interrupted: "已停止",
-                failed: "失败",
+                pending: $t("等待执行"),
+                skipped: $t("已跳过"),
+                interrupted: $t("已停止"),
+                failed: $t("失败"),
               }[item.status]
             : item.exitCode != null
-              ? `退出码 ${item.exitCode}`
-              : "已记录"
+              ? $t("退出码 {p0}", { p0: item.exitCode })
+              : $t("已记录")
       }}</small>
     </summary>
     <pre v-if="item.command">{{ item.command }}</pre>

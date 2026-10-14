@@ -1,4 +1,5 @@
 <script setup>
+import { translate } from "../i18n/index.js";
 import { computed, ref, useId } from "vue";
 import catalog from "../../../../shared/project-permissions.json";
 import presets from "../../../../shared/project-permission-presets.json";
@@ -27,7 +28,7 @@ const hasChanges = computed(() => Boolean(changes.value.added.length || changes.
 const preset = computed(() => presets.find(p => p.id === preview.value));
 function matches(permission) {
   const query = search.value.trim().toLocaleLowerCase();
-  return (!query || `${permission.group} ${permission.label}`.toLocaleLowerCase().includes(query)) && (!onlySelected.value || props.modelValue.includes(permission.id));
+  return (!query || `${translate(permission.group)} ${translate(permission.label)} ${permission.group} ${permission.label}`.toLocaleLowerCase().includes(query)) && (!onlySelected.value || props.modelValue.includes(permission.id));
 }
 function allowed(id) { const permission = catalog.find(p => p.id === id); return props.ceiling.includes(id) && permission.requires.every(allowed); }
 function caution(permission) {
@@ -56,7 +57,7 @@ const effective = computed(() => {
   do { changed = false; for (const permission of catalog) if (selected.has(permission.id) && permission.requires.some(id => !selected.has(id))) { selected.delete(permission.id); changed = true; } } while (changed);
   return items.value.filter(permission => selected.has(permission.id));
 });
-function labels(ids) { return ids.map(id => catalog.find(p => p.id === id)?.label).join("、"); }
+function labels(ids) { return ids.map(id => translate(catalog.find(p => p.id === id)?.label)).join("、"); }
 function apply() { if (coreBlocked.value.length) return; toggleMany(available.value, true); }
 function toggle(id, checked) { toggleMany([id], checked); }
 function toggleMany(ids, checked) {
@@ -71,7 +72,7 @@ function toggleMany(ids, checked) {
   const added = [...selected].filter(id => !props.modelValue.includes(id));
   const removed = props.modelValue.filter(id => !selected.has(id));
   const dependencies = (checked ? added : removed).filter(id => !ids.includes(id));
-  lastChange.value = `${checked ? '已选择' : '已取消'} ${checked ? added.length : removed.length} 项。${dependencies.length ? `${checked ? '自动补齐' : '联动关闭'}：${labels(dependencies)}。` : ''}`;
+  lastChange.value = translate(checked ? '已选择 {count} 项。' : '已取消 {count} 项。', { count: checked ? added.length : removed.length }) + (dependencies.length ? translate(checked ? '自动补齐' : '联动关闭') + ': ' + labels(dependencies) : '');
   emit("update:modelValue", [...selected]);
 }
 function resetFilters() { search.value = ""; onlySelected.value = false; }
@@ -83,59 +84,59 @@ function revert() {
 </script>
 <template>
   <div class="project-permission-editor">
-    <p class="field-hint">{{ department ? '启用可用功能仅扩大部门上限，不会自动授予任何项目权限。项目负责人仍需在具体项目分配成员工作。' : administratorAccess ? '管理员已有全局协作管理权限。这里维护额外的项目授权，开发和敏感资产仍需部门许可及完整的项目依赖授权。' : '实际可用权限由部门上限与项目授权共同决定。添加组合会保留已选权限，包括项目管理权限。' }}</p>
-    <p v-if="department" class="field-hint">开启功能会补齐必要依赖；关闭功能会同步关闭依赖它的操作。高级设置可只开放查看等细项。</p>
+    <p class="field-hint">{{ department ? $t("启用可用功能仅扩大部门上限，不会自动授予任何项目权限。项目负责人仍需在具体项目分配成员工作。") : administratorAccess ? $t("管理员已有全局协作管理权限。这里维护额外的项目授权，开发和敏感资产仍需部门许可及完整的项目依赖授权。") : $t("实际可用权限由部门上限与项目授权共同决定。添加组合会保留已选权限，包括项目管理权限。") }}</p>
+    <p v-if="department" class="field-hint">{{ $t("开启功能会补齐必要依赖；关闭功能会同步关闭依赖它的操作。高级设置可只开放查看等细项。") }}</p>
     <div v-if="department" class="permission-capabilities">
       <label v-for="capability in capabilities" :key="capability.id" class="permission-capability">
-        <span><input type="checkbox" :aria-label="capability.label" :checked="capabilityState(capability) === '已开放'" :indeterminate="capabilityState(capability) === '部分开放'" :disabled="disabled" @change="toggleMany(capability.permissions, $event.target.checked)" />{{ capability.label }}</span>
-        <small>{{ capabilityState(capability) }} · {{ capability.description }}</small>
+        <span><input type="checkbox" :aria-label="$t(capability.label)" :checked="capabilityState(capability) === '已开放'" :indeterminate="capabilityState(capability) === '部分开放'" :disabled="disabled" @change="toggleMany(capability.permissions, $event.target.checked)" />{{ $t(capability.label) }}</span>
+        <small>{{ $t(capabilityState(capability)) }} · {{ $t(capability.description) }}</small>
       </label>
     </div>
     <div v-else class="permission-preset">
-      <label>权限组合<select v-model="preview" :disabled="disabled" aria-label="权限组合"><option v-for="entry in presets" :key="entry.id" :value="entry.id">{{ entry.label }}</option></select></label>
-      <p>{{ preset.description }}</p><p class="field-hint">将添加：{{ labels(available) || '无可用权限' }}</p>
-      <p v-if="blocked.length" class="field-hint">部门未开放：{{ labels(blocked) }}</p>
-      <p v-if="coreBlocked.length" class="field-hint">组合核心功能未开放：{{ labels(coreBlocked) }}。请联系系统管理员调整部门可用功能后再添加此组合。</p>
-      <button type="button" :disabled="disabled || !available.length || Boolean(coreBlocked.length)" @click="apply">添加{{ preset.label }}组合</button>
+      <label>{{ $t("权限组合") }}<select v-model="preview" :disabled="disabled" :aria-label="$t(&quot;权限组合&quot;)"><option v-for="entry in presets" :key="entry.id" :value="entry.id">{{ $t(entry.label) }}</option></select></label>
+      <p>{{ $t(preset.description) }}</p><p class="field-hint">{{ $t("将添加：") }}{{ labels(available) || $t("无可用权限") }}</p>
+      <p v-if="blocked.length" class="field-hint">{{ $t("部门未开放：") }}{{ labels(blocked) }}</p>
+      <p v-if="coreBlocked.length" class="field-hint">{{ $t("组合核心功能未开放：") }}{{ labels(coreBlocked) }}{{ $t("。请联系系统管理员调整部门可用功能后再添加此组合。") }}</p>
+      <button type="button" :disabled="disabled || !available.length || Boolean(coreBlocked.length)" @click="apply">{{ $t("添加") }}{{ $t(preset.label) }}{{ $t("组合") }}</button>
     </div>
-    <p class="field-hint" aria-live="polite">{{ department ? '部门开放功能' : administratorAccess ? '本次项目授权可用功能' : '保存后实际可用功能' }}：{{ department ? `${effective.length} / ${items.length} 项，可在下方按分类查看` : effective.map(p => p.label).join('、') || '尚未授权' }}</p>
-    <p v-if="!department && !administratorAccess && !modelValue.includes('project.view')" class="field-hint">参与中的成员必须有“查看项目”权限，否则无法进入项目。</p>
-    <details class="permission-details" :open="department"><summary>高级权限细项（{{ modelValue.length }} 项已选）</summary>
-      <p class="field-hint">选中操作会补齐必要依赖；取消基础权限会同时取消相关操作。</p>
+    <p class="field-hint" aria-live="polite">{{ department ? $t("部门开放功能") : administratorAccess ? $t("本次项目授权可用功能") : $t("保存后实际可用功能") }}：{{ department ? $t("{p0} / {p1} 项，可在下方按分类查看", { p0: effective.length, p1: items.length }) : effective.map(p => p.label).join('、') || $t("尚未授权") }}</p>
+    <p v-if="!department && !administratorAccess && !modelValue.includes('project.view')" class="field-hint">{{ $t("参与中的成员必须有“查看项目”权限，否则无法进入项目。") }}</p>
+    <details class="permission-details" :open="department"><summary>{{ $t("高级权限细项（") }}{{ modelValue.length }} {{ $t("项已选）") }}</summary>
+      <p class="field-hint">{{ $t("选中操作会补齐必要依赖；取消基础权限会同时取消相关操作。") }}</p>
       <div class="permission-toolbar">
-        <label class="permission-search">搜索权限<input v-model="search" type="search" placeholder="搜索功能或权限名称" @keydown.enter.prevent /></label>
-        <label class="permission-filter"><input v-model="onlySelected" type="checkbox" />{{ department ? '只看已开放' : '只看已选' }}</label>
+        <label class="permission-search">{{ $t("搜索权限") }}<input v-model="search" type="search" :placeholder="$t(&quot;搜索功能或权限名称&quot;)" @keydown.enter.prevent /></label>
+        <label class="permission-filter"><input v-model="onlySelected" type="checkbox" />{{ department ? $t("只看已开放") : $t("只看已选") }}</label>
       </div>
       <div class="permission-workbench">
-        <nav class="permission-categories" aria-label="权限分类">
-          <button v-for="group in groups" :key="group.name" type="button" :aria-label="group.name" :aria-pressed="activeGroup?.name === group.name" :disabled="!group.matches.length" @click="selectedGroup = group.name">
-            <span>{{ group.name }}</span><small>{{ group.selected }} / {{ group.permissions.length }}</small>
+        <nav class="permission-categories" :aria-label="$t(&quot;权限分类&quot;)">
+          <button v-for="group in groups" :key="group.name" type="button" :aria-label="$t(group.name)" :aria-pressed="activeGroup?.name === group.name" :disabled="!group.matches.length" @click="selectedGroup = group.name">
+            <span>{{ $t(group.name) }}</span><small>{{ group.selected }} / {{ group.permissions.length }}</small>
           </button>
         </nav>
-        <section class="permission-pane" :aria-label="activeGroup ? `${activeGroup.name}权限` : '权限搜索结果'">
+        <section class="permission-pane" :aria-label="activeGroup ? $t(&quot;{p0}权限&quot;, { p0: $t(activeGroup.name) }) : $t(&quot;权限搜索结果&quot;)">
           <template v-if="activeGroup">
-            <header class="permission-pane-heading"><h3>{{ activeGroup.name }}</h3><span>{{ activeGroup.selected }} / {{ activeGroup.permissions.length }} 项{{ department ? '已开放' : '已选' }}</span></header>
+            <header class="permission-pane-heading"><h3>{{ $t(activeGroup.name) }}</h3><span>{{ activeGroup.selected }} / {{ activeGroup.permissions.length }} {{ $t("项") }}{{ department ? $t("已开放") : $t("已选") }}</span></header>
             <div class="permission-group-actions">
-              <label class="permission-filter"><input type="checkbox" :checked="allSelected" :indeterminate="partlySelected" :disabled="disabled || !selectable.length" @change="toggleMany(selectable.map(p => p.id), $event.target.checked)" />{{ filtering ? '全选筛选结果' : '本组全选' }}</label>
-              <button type="button" class="permission-quiet" :disabled="disabled || !selectedVisible.length" @click="toggleMany(selectedVisible.map(p => p.id), false)">{{ filtering ? '清空筛选结果' : '清空本组' }}</button>
+              <label class="permission-filter"><input type="checkbox" :checked="allSelected" :indeterminate="partlySelected" :disabled="disabled || !selectable.length" @change="toggleMany(selectable.map(p => p.id), $event.target.checked)" />{{ filtering ? $t("全选筛选结果") : $t("本组全选") }}</label>
+              <button type="button" class="permission-quiet" :disabled="disabled || !selectedVisible.length" @click="toggleMany(selectedVisible.map(p => p.id), false)">{{ filtering ? $t("清空筛选结果") : $t("清空本组") }}</button>
             </div>
             <div class="permission-rows">
               <label v-for="permission in visiblePermissions" :key="permission.id" class="permission-detail-row">
-                <input type="checkbox" :aria-label="permission.label" :aria-describedby="`${editorId}-${permission.id}`" :checked="modelValue.includes(permission.id)" :disabled="disabled || (!allowed(permission.id) && !modelValue.includes(permission.id))" @change="toggle(permission.id, $event.target.checked)" />
-                <span><span class="permission-label">{{ permission.label }}</span><span :id="`${editorId}-${permission.id}`" class="permission-description">
-                  <small v-if="!allowed(permission.id)" class="permission-caution">部门未开放或缺少依赖</small>
-                  <small>{{ permission.requires.length ? `依赖：${labels(permission.requires)}` : '项目访问的基础权限' }}</small>
-                  <small v-if="caution(permission)" class="permission-caution">{{ caution(permission) }}</small>
+                <input type="checkbox" :aria-label="$t(permission.label)" :aria-describedby="`${editorId}-${permission.id}`" :checked="modelValue.includes(permission.id)" :disabled="disabled || (!allowed(permission.id) && !modelValue.includes(permission.id))" @change="toggle(permission.id, $event.target.checked)" />
+                <span><span class="permission-label">{{ $t(permission.label) }}</span><span :id="`${editorId}-${permission.id}`" class="permission-description">
+                  <small v-if="!allowed(permission.id)" class="permission-caution">{{ $t("部门未开放或缺少依赖") }}</small>
+                  <small>{{ permission.requires.length ? $t("依赖：{p0}", { p0: labels(permission.requires) }) : $t("项目访问的基础权限") }}</small>
+                  <small v-if="caution(permission)" class="permission-caution">{{ $t(caution(permission)) }}</small>
                 </span></span>
               </label>
             </div>
           </template>
-          <div v-else class="permission-empty"><p>{{ onlySelected && !modelValue.length ? '尚未选择任何权限' : '没有匹配的权限' }}</p><button type="button" @click="resetFilters">清除筛选</button></div>
+          <div v-else class="permission-empty"><p>{{ onlySelected && !modelValue.length ? $t("尚未选择任何权限") : $t("没有匹配的权限") }}</p><button type="button" @click="resetFilters">{{ $t("清除筛选") }}</button></div>
         </section>
       </div>
-      <p v-if="lastChange" class="permission-change" role="status">{{ lastChange }}</p>
+      <p v-if="lastChange" class="permission-change" role="status">{{ $t(lastChange) }}</p>
     </details>
-    <div class="permission-changes"><p aria-live="polite">{{ hasChanges ? `待保存：新增 ${changes.added.length} 项 · 取消 ${changes.removed.length} 项` : '当前权限未修改' }}</p><button type="button" class="permission-quiet" :disabled="disabled || !hasChanges" @click="revert">撤销权限修改</button></div>
+    <div class="permission-changes"><p aria-live="polite">{{ hasChanges ? $t("待保存：新增 {p0} 项 · 取消 {p1} 项", { p0: changes.added.length, p1: changes.removed.length }) : $t("当前权限未修改") }}</p><button type="button" class="permission-quiet" :disabled="disabled || !hasChanges" @click="revert">{{ $t("撤销权限修改") }}</button></div>
   </div>
 </template>
 <style scoped>

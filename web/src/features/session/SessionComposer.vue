@@ -100,14 +100,14 @@ function send() {
 </script>
 
 <template>
-  <section class="composer-wrap session-composer" aria-label="会话输入区">
+  <section class="composer-wrap session-composer" :aria-label="$t(&quot;会话输入区&quot;)">
     <p v-if="nextSupplier" class="execution-settings-hint" role="status">
-      <span v-if="running && activeSupplier">本轮供应商：{{ activeSupplier.name }} · </span>
-      {{ running && supplierPending ? '下一轮供应商' : '系统供应商' }}：{{ nextSupplier.name }}
+      <span v-if="running && activeSupplier">{{ $t("本轮供应商：") }}{{ activeSupplier.name }} · </span>
+      {{ running && supplierPending ? $t("下一轮供应商") : $t("系统供应商") }}：{{ nextSupplier.name }}
     </p>
     <FeedbackMessage :message="error" type="error" />
     <FeedbackMessage :message="notice" type="success" />
-    <p v-if="modelUnavailable" class="error" role="alert">当前模型或思考强度不受下一轮供应商支持，请重新选择后发送。{{ running ? '本轮补充指令仍使用原配置。' : '' }}</p>
+    <p v-if="modelUnavailable" class="error" role="alert">{{ $t("当前模型或思考强度不受下一轮供应商支持，请重新选择后发送。") }}{{ running ? $t("本轮补充指令仍使用原配置。") : '' }}</p>
     <a-form
       ref="formRef"
       class="composer"
@@ -117,14 +117,14 @@ function send() {
       <a-form-item name="text">
         <textarea
           :value="modelValue"
-          :aria-label="`发送给 ${agentLabel} 的指令`"
+          :aria-label="$t(&quot;发送给 {p0} 的指令&quot;, { p0: agentLabel })"
           :disabled="!canSend"
           :placeholder="
             readOnlyReason
-              ? '此会话为只读'
+              ? $t(&quot;此会话为只读&quot;)
               : running
-                ? '补充指令，调整当前执行方向…'
-                : '输入指令，继续这个 session…'
+                ? $t(&quot;补充指令，调整当前执行方向…&quot;)
+                : $t(&quot;输入指令，继续这个 session…&quot;)
           "
           rows="2"
           maxlength="60000"
@@ -136,15 +136,15 @@ function send() {
       <ul
         v-if="images.length"
         class="composer-image-list"
-        aria-label="待发送图片"
+        :aria-label="$t(&quot;待发送图片&quot;)"
       >
         <li v-for="image in images" :key="image.localId" class="composer-image">
           <img :src="image.preview" :alt="image.name" />
           <button
             type="button"
             class="composer-image-remove"
-            :aria-label="`移除图片 ${image.name}`"
-            :title="`移除图片 ${image.name}`"
+            :aria-label="$t(&quot;移除图片 {p0}&quot;, { p0: image.name })"
+            :title="$t(&quot;移除图片 {p0}&quot;, { p0: image.name })"
             :disabled="busy"
             @click="emit('images-remove', image.localId)"
           >
@@ -157,23 +157,23 @@ function send() {
             v-if="image.status === 'uploading'"
             class="composer-image-status"
             role="status"
-            >正在上传…</span
+            >{{ $t("正在上传…") }}</span
           >
           <span
             v-else-if="image.status === 'ready'"
             class="composer-image-status"
-            >待发送</span
+            >{{ $t("待发送") }}</span
           >
           <template v-else>
             <FeedbackMessage :message="image.error" type="error" />
             <button
               type="button"
               class="text-button composer-image-retry"
-              :aria-label="`重试上传 ${image.name}`"
+              :aria-label="$t(&quot;重试上传 {p0}&quot;, { p0: image.name })"
               :disabled="!canSend || !supportsImages"
               @click="emit('images-retry', image.localId)"
             >
-              重试上传
+              {{ $t("重试上传") }}
             </button>
           </template>
         </li>
@@ -184,7 +184,7 @@ function send() {
         class="composer-image-feedback muted"
         role="status"
       >
-        图片上传完成后即可发送。
+        {{ $t("图片上传完成后即可发送。") }}
       </p>
       <div class="composer-footer composer-toolbar">
         <div class="composer-permissions">
@@ -194,15 +194,15 @@ function send() {
             type="file"
             accept="image/png,image/jpeg,image/webp"
             multiple
-            aria-label="选择会话图片"
+            :aria-label="$t(&quot;选择会话图片&quot;)"
             :disabled="!canSend || !supportsImages"
             @change="chooseImages"
           />
           <button
             type="button"
             class="composer-add-images"
-            aria-label="添加图片"
-            title="添加图片（PNG / JPEG / WebP，最多 20 张，每张 10 MiB）"
+            :aria-label="$t(&quot;添加图片&quot;)"
+            :title="$t(&quot;添加图片（PNG / JPEG / WebP，最多 20 张，每张 10 MiB）&quot;)"
             :disabled="!canSend || !supportsImages || images.length >= 20"
             @click="imageInput?.click()"
           >
@@ -238,8 +238,8 @@ function send() {
               type="button"
               class="stop composer-stop"
               :disabled="busy || !online"
-              aria-label="■ 停止"
-              title="停止当前一轮"
+              :aria-label="$t(&quot;■ 停止&quot;)"
+              :title="$t(&quot;停止当前一轮&quot;)"
               @click="emit('stop')"
             >
               <StopOutlined aria-hidden="true" />
@@ -257,37 +257,37 @@ function send() {
         </div>
       </div>
     </a-form>
-    <FeedbackMessage :message="settingsError ? `执行偏好保存失败：${settingsError}` : ''" type="error" />
-    <FeedbackMessage :message="catalog.error.value ? `模型列表加载失败：${catalog.error.value}。当前选择会保留。` : ''" type="error" />
+    <FeedbackMessage :message="settingsError ? $t(&quot;执行偏好保存失败：{p0}&quot;, { p0: settingsError }) : ''" type="error" />
+    <FeedbackMessage :message="catalog.error.value ? $t(&quot;模型列表加载失败：{p0}。当前选择会保留。&quot;, { p0: catalog.error.value }) : ''" type="error" />
     <div v-if="catalog.error.value"><button
         type="button"
         class="text-button"
         :disabled="catalog.loading.value"
         @click="catalog.refresh"
       >
-        刷新模型列表
+        {{ $t("刷新模型列表") }}
       </button></div>
-    <FeedbackMessage :message="permissions.error.value ? `权限选项加载失败：${permissions.error.value}。${running ? '当前轮仍可补充指令，启动下一轮前需要确认权限。' : '确认权限可用后才能发送。'} ${permissions.errorHint.value}` : ''" type="error" />
+    <FeedbackMessage :message="permissions.error.value ? $t(&quot;权限选项加载失败：{p0}。{p1} {p2}&quot;, { p0: permissions.error.value, p1: running ? '当前轮仍可补充指令，启动下一轮前需要确认权限。' : '确认权限可用后才能发送。', p2: permissions.errorHint.value }) : ''" type="error" />
     <div v-if="permissions.error.value"><button
         type="button"
         class="text-button"
         :disabled="permissions.loading.value"
         @click="permissions.refresh"
       >
-        刷新权限选项
+        {{ $t("刷新权限选项") }}
       </button></div>
-    <p v-if="permissionUnavailable" role="alert" class="error composer-catalog-error">{{ running ? '下一轮权限模式不可用；当前轮仍可补充指令，请在启动下一轮前重新选择。' : '当前权限模式不可用，请选择可用的权限模式后发送。' }}</p>
+    <p v-if="permissionUnavailable" role="alert" class="error composer-catalog-error">{{ running ? $t("下一轮权限模式不可用；当前轮仍可补充指令，请在启动下一轮前重新选择。") : $t("当前权限模式不可用，请选择可用的权限模式后发送。") }}</p>
     <div class="composer-hints">
       <p v-if="!settingsError" class="execution-settings-hint" role="status">
         {{
           settingsBusy
-            ? "正在保存执行偏好…"
+            ? $t("正在保存执行偏好…")
             : settingsPending
-              ? "已保存，下一轮生效；补充当前轮指令仍使用本轮设置。"
-              : "模型、思考和权限从下一轮生效。"
+              ? $t("已保存，下一轮生效；补充当前轮指令仍使用本轮设置。")
+              : $t("模型、思考和权限从下一轮生效。")
         }}
       </p>
-      <div class="composer-note">Enter 发送 · Shift + Enter 换行 · Ctrl + V 粘贴图片</div>
+      <div class="composer-note">{{ $t("Enter 发送 · Shift + Enter 换行 · Ctrl + V 粘贴图片") }}</div>
     </div>
   </section>
 </template>

@@ -1,6 +1,7 @@
 <script setup>
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed } from "vue";
+import { translate } from "../../shared/i18n/index.js";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import { appApi } from "../../shared/api/api.js";
 import { accountSession } from "../../shared/api/account-session.js";
@@ -13,6 +14,7 @@ import ProjectSettings from "./ProjectSettings.vue";
 import ProjectDevelopment from "./ProjectDevelopment.vue";
 import ProjectReleases from "./ProjectReleases.vue";
 import ProjectTasks from "./ProjectTasks.vue";
+import WorkQueue from "./WorkQueue.vue";
 
 const props = defineProps({ projectId: { type: String, required: true }, tab: { type: String, default: "overview" } });
 const emit = defineEmits(["tab", "open-workspace"]);
@@ -27,6 +29,7 @@ const tabs = computed(() => [
   { id: "bugs", label: "Bug", show: can("issue.view") },
   { id: "tasks", label: "开发任务", show: can("issue.view") },
   { id: "releases", label: "版本", show: can("issue.view") },
+  { id: "deliveries", label: "交付", show: can("collaboration.view") && can("issue.view") },
   { id: "development", label: "代码与环境", show: can("code.view") },
   { id: "assets", label: "资产", show: can("asset.view") },
   { id: "members", label: "成员", show: true },
@@ -39,7 +42,7 @@ const capabilityLabels = [
   ["code.view", "代码"], ["session.view", "Agent 会话"], ["asset.view", "项目资产"],
   ["project.members.manage", "成员授权"], ["project.configure", "项目配置"],
 ];
-const available = permissions => capabilityLabels.filter(([id]) => permissions?.includes(id)).map(([, label]) => label).join("、") || "仅查看项目信息";
+const available = permissions => capabilityLabels.filter(([id]) => permissions?.includes(id)).map(([, label]) => translate(label)).join("、") || translate("仅查看项目信息");
 const managementOnly = computed(() => can("project.members.manage") && !["issue.view", "code.view", "asset.view"].some(can));
 const developmentReason = computed(() => {
   if (can("session.start")) return "已获开发权限；准备好个人 Git 和仓库后，可在开发任务中开始开发。";
@@ -60,39 +63,40 @@ function returnToIssue() {
 <template>
   <section class="page-layout project-page">
     <FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="notice" type="success" />
-    <p v-if="loading && !data" role="status">正在读取项目…</p>
+    <p v-if="loading && !data" role="status">{{ $t("正在读取项目…") }}</p>
     <template v-if="data">
       <header class="page-heading project-heading">
-        <div><h1>{{ data.project.name }}</h1><p v-if="archived" class="warning">项目已归档，内容只读。</p></div>
-        <button :disabled="loading" @click="reload">刷新项目</button>
+        <div><h1>{{ data.project.name }}</h1><p v-if="archived" class="warning">{{ $t("项目已归档，内容只读。") }}</p></div>
+        <button :disabled="loading" @click="reload">{{ $t("刷新项目") }}</button>
       </header>
-      <nav class="page-tabs project-navigation" aria-label="项目功能"><button v-for="item in tabs" :key="item.id" :class="{ active: currentTab === item.id }" :aria-current="currentTab === item.id ? 'page' : undefined" @click="emit('tab', item.id)">{{ item.label }}</button></nav>
-      <p v-if="currentTab !== tab" class="warning" role="status">当前项目状态或你的分工未开放所选功能，可在下方查看当前权限。</p>
+      <nav class="page-tabs project-navigation" :aria-label="$t(&quot;项目功能&quot;)"><button v-for="item in tabs" :key="item.id" :class="{ active: currentTab === item.id }" :aria-current="currentTab === item.id ? 'page' : undefined" @click="emit('tab', item.id)">{{ $t(item.label) }}</button></nav>
+      <p v-if="currentTab !== tab" class="warning" role="status">{{ $t("当前项目状态或你的分工未开放所选功能，可在下方查看当前权限。") }}</p>
       <template v-if="currentTab === 'overview'">
-        <section v-if="managementOnly && !archived" class="project-setup-callout" aria-label="完成项目配置">
-          <h2>下一步：分配项目工作</h2><p>你是项目负责人，已具备配置和成员管理权限。请为自己及参与者选择工作内容，需求、资产和开发入口会按授权显示。</p>
-          <button class="primary" @click="emit('tab', 'members')">配置本人及成员分工</button>
+        <section v-if="managementOnly && !archived" class="project-setup-callout" :aria-label="$t(&quot;完成项目配置&quot;)">
+          <h2>{{ $t("下一步：分配项目工作") }}</h2><p>{{ $t("你是项目负责人，已具备配置和成员管理权限。请为自己及参与者选择工作内容，需求、资产和开发入口会按授权显示。") }}</p>
+          <button class="primary" @click="emit('tab', 'members')">{{ $t("配置本人及成员分工") }}</button>
         </section>
         <div class="project-detail">
-          <h2>项目概览</h2><p class="project-text">{{ data.project.description || '尚未填写项目说明。' }}</p>
-          <dl class="project-facts"><dt>代码仓库</dt><dd>{{ data.project.remoteUrl }}</dd><dt>项目状态</dt><dd>{{ archived ? '已归档' : '进行中' }}</dd></dl>
-          <section class="project-section" aria-label="我的项目权限">
-            <h3>我在此项目可以做什么</h3><p>{{ available(data.permissions) }}</p>
-            <p v-if="data.permissionContext?.administratorAccess" class="field-hint">你以系统管理员身份管理此项目，可维护成员、配置、需求/Bug、评论、交付及普通资产。代码、Agent 会话和敏感字段仍按本人部门及项目授权开放。</p>
-            <p v-else-if="data.permissionContext" class="field-hint">我的部门：{{ data.permissionContext.departmentName }}。部门允许：{{ available(data.permissionContext.ceiling) }}。项目分工决定上述功能中哪些授予你。</p>
-            <p v-if="!archived && (can('code.view') || can('project.members.manage'))" class="field-hint">{{ developmentReason }}</p>
+          <h2>{{ $t("项目概览") }}</h2><p class="project-text">{{ data.project.description || $t("尚未填写项目说明。") }}</p>
+          <dl class="project-facts"><dt>{{ $t("代码仓库") }}</dt><dd>{{ data.project.remoteUrl }}</dd><dt>{{ $t("项目状态") }}</dt><dd>{{ archived ? $t("已归档") : $t("进行中") }}</dd></dl>
+          <section class="project-section" :aria-label="$t(&quot;我的项目权限&quot;)">
+            <h3>{{ $t("我在此项目可以做什么") }}</h3><p>{{ available(data.permissions) }}</p>
+            <p v-if="data.permissionContext?.administratorAccess" class="field-hint">{{ $t("你以系统管理员身份管理此项目，可维护成员、配置、需求/Bug、评论、交付及普通资产。代码、Agent 会话和敏感字段仍按本人部门及项目授权开放。") }}</p>
+            <p v-else-if="data.permissionContext" class="field-hint">{{ $t("我的部门：") }}{{ data.permissionContext.departmentName }}{{ $t("。部门允许：") }}{{ available(data.permissionContext.ceiling) }}{{ $t("。项目分工决定上述功能中哪些授予你。") }}</p>
+            <p v-if="!archived && (can('code.view') || can('project.members.manage'))" class="field-hint">{{ $t(developmentReason) }}</p>
             <div v-if="!archived" class="actions">
-              <button v-if="can('project.members.manage')" @click="emit('tab', 'members')">调整项目分工</button>
-              <button v-if="can('code.operate') && data.space?.status !== 'ready'" @click="emit('tab', 'development')">准备我的开发环境</button>
-              <RouterLink v-if="accountSession.user?.role === 'admin'" to="/departments">管理部门可用功能</RouterLink>
+              <button v-if="can('project.members.manage')" @click="emit('tab', 'members')">{{ $t("调整项目分工") }}</button>
+              <button v-if="can('code.operate') && data.space?.status !== 'ready'" @click="emit('tab', 'development')">{{ $t("准备我的开发环境") }}</button>
+              <RouterLink v-if="accountSession.user?.role === 'admin'" to="/departments">{{ $t("管理部门可用功能") }}</RouterLink>
             </div>
           </section>
-          <details v-if="can('project.archive')"><summary>项目归档管理</summary><p>归档保留历史并禁止新开发任务。现有工作目录会保留。</p><button :disabled="saving" @click="archive">{{ archived ? '恢复项目' : '确认归档项目' }}</button></details>
+          <details v-if="can('project.archive')"><summary>{{ $t("项目归档管理") }}</summary><p>{{ $t("归档保留历史并禁止新开发任务。现有工作目录会保留。") }}</p><button :disabled="saving" @click="archive">{{ archived ? $t("恢复项目") : $t("确认归档项目") }}</button></details>
         </div>
       </template>
       <ProjectIssues v-else-if="currentTab === 'issues' || currentTab === 'bugs'" :key="currentTab" :project-id="projectId" :type="currentTab === 'bugs' ? 'bug' : 'requirement'" :permissions="contentPermissions" @open-task="task => task.runKey ? emit('open-workspace', task.workspaceId, task.runKey) : router.push({ query: { tab: 'tasks', task: task.id } })" />
       <ProjectTasks v-else-if="currentTab === 'tasks'" :project-id="projectId" :workspace-id="data.space?.workspaceId || ''" :space-ready="data.space?.status === 'ready'" :can-assign="contentPermissions.includes('issue.assign')" :can-continue="contentPermissions.includes('session.continue')" :read-only-reason="archived ? '项目已归档，开发任务只读。' : ''" @prepare-development="prepareDevelopment" @open-workspace="(id, key) => emit('open-workspace', id, key)" />
       <ProjectReleases v-else-if="currentTab === 'releases'" :project-id="projectId" :can-manage="contentPermissions.includes('release.manage')" />
+      <WorkQueue v-else-if="currentTab === 'deliveries'" kind="deliveries" :project-id="projectId" :can-publish="contentPermissions.includes('deliverable.create')" />
       <ProjectAssets v-else-if="currentTab === 'assets'" :project-id="projectId" :permissions="contentPermissions" />
       <ProjectMembers v-else-if="currentTab === 'members'" :project-id="projectId" :can-manage="can('project.members.manage') && !archived" @saved="reload" />
       <ProjectPromptSettings v-else-if="currentTab === 'prompts'" :key="projectId" :project-id="projectId" @saved="reload" />

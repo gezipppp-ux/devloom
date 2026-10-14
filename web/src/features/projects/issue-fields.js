@@ -1,8 +1,8 @@
-export const issueContentFields = ["releaseId", "title", "description", "priority", "acceptanceCriteria", "reproductionSteps", "expectedResult", "actualResult", "severity"];
+export const issueContentFields = ["releaseId", "title", "description", "priority", "acceptanceCriteria", "reproductionSteps", "expectedResult", "actualResult", "severity", "dueDate", "tags"];
 export const issueMarkdownFields = ["description", "acceptanceCriteria", "reproductionSteps", "expectedResult", "actualResult"];
 
 export function emptyIssue() {
-  return { releaseId: null, title: "", description: "", priority: "normal", acceptanceCriteria: "", reproductionSteps: "", expectedResult: "", actualResult: "", severity: "normal", assigneeId: null, participantIds: [] };
+  return { releaseId: null, title: "", description: "", priority: "normal", acceptanceCriteria: "", reproductionSteps: "", expectedResult: "", actualResult: "", severity: "normal", dueDate: null, tags: [], assigneeId: null, participantIds: [] };
 }
 
 export function issueFieldsInput(form, { edit = true, assign = true } = {}) {

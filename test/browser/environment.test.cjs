@@ -57,7 +57,9 @@ async function verifyEnvironment(page, output) {
   for (const width of [1440, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, `environment overflow at ${width}`);
-    assert.equal(await page.locator('.account-bar nav button').evaluateAll(buttons => buttons.every(button => button.scrollWidth <= button.clientWidth + 1)), true, `navigation labels fit at ${width}`);
+    const navigation = page.locator(width < 768 ? '.ui-bottom-nav button' : '.ui-sidebar nav button');
+    assert.ok(await navigation.count(), 'the responsive navigation is present');
+    assert.equal(await navigation.evaluateAll(buttons => buttons.every(button => button.scrollWidth <= button.clientWidth + 1)), true, `navigation labels fit at ${width}`);
     await page.screenshot({ path: path.join(output, `environment-${width}.png`), fullPage: true });
   }
   assert.equal(await page.getByRole("button", { name: "更新指引" }).count(), 0);

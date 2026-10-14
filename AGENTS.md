@@ -2,7 +2,7 @@
 
 Standalone Node.js 22.13+ CommonJS backend and Vue 3 Web console for requirement channels and Codex sessions.
 
-- For implementation, refactoring and code review, apply the repository skill [.agents/skills/web-coding-engineering/SKILL.md](.agents/skills/web-coding-engineering/SKILL.md). For Vue UI work, also apply [.agents/skills/web-coding-ui/SKILL.md](.agents/skills/web-coding-ui/SKILL.md) and the project visual reference [.agents/skills/sage-workbench/SKILL.md](.agents/skills/sage-workbench/SKILL.md); they use repository-owned design tokens and do not require a personal skill installation.
+- For implementation, refactoring and code review, apply the repository skill [.agents/skills/web-coding-engineering/SKILL.md](.agents/skills/web-coding-engineering/SKILL.md). For Vue UI work, also apply [.agents/skills/web-coding-ui/SKILL.md](.agents/skills/web-coding-ui/SKILL.md) and the project visual reference [.agents/skills/neutral-workbench/SKILL.md](.agents/skills/neutral-workbench/SKILL.md); they use repository-owned design tokens and do not require a personal skill installation.
 - Read `README.md`, `docs/engineering/index.md`, and the relevant engineering contracts before editing.
 - Current production account ownership, Fastify/PostgreSQL persistence and settings scopes follow `docs/engineering/accounts-and-database.md`, which supersedes historical anonymous HTTP and JSON/JSONL storage descriptions.
 - Keep channel-specific behavior in `src/channels/`; execution, worktrees and session transport remain generic.

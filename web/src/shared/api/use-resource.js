@@ -33,7 +33,15 @@ export function useResource(load, { immediate = true, interval = 0 } = {}) {
       // receives new props. Publish while this request still owns the result.
       showMessage(message, "success");
       return result;
-    } catch (failure) { if (alive) error.value = failure.message; }
+    } catch (failure) {
+      if (alive) {
+        error.value = failure.message;
+        if ([401, 403, 404].includes(failure.status)) {
+          // A read started before this denial must not restore restricted data.
+          generation++; loading.value = false; data.value = null;
+        }
+      }
+    }
     finally { if (alive) saving.value = false; }
   }
   function save(url, input, accept, message) { return perform(() => appApi(url, input), accept, message); }

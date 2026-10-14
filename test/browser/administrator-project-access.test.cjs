@@ -12,7 +12,7 @@ async function verifyAdministratorProjectAccess({ page, origin, projects, accoun
     assert.ok(response.ok(), `${name}: ${response.status()} ${await response.text()}`);
     return response.json();
   };
-  await page.getByLabel("账号导航").getByRole("button", { name: "全部项目", exact: true }).click();
+  await page.getByRole("navigation", { name: "主导航", exact: true }).getByRole("button", { name: "项目", exact: true }).click();
   await page.getByRole("heading", { name: "全部项目", exact: true }).waitFor();
   await page.getByRole("button", { name: /管理员未加入的项目/ }).click();
   await page.getByRole("heading", { name: project.name, exact: true }).waitFor();

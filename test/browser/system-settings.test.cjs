@@ -21,6 +21,8 @@ async function verifySystemSettings(browser, { origin, output, errors, directory
   const readWorkspace = async () => (await page.request.get(settingsEndpoint)).json();
   const readSystem = async () => (await page.request.get(`${origin}/api/system/settings`)).json();
   const openSystem = async () => {
+    const menu = page.getByRole("button", { name: "打开导航", exact: true });
+    if (await menu.isVisible()) await menu.click();
     await page.getByRole("button", { name: "系统设置", exact: true }).click();
     await baseField.waitFor();
   };

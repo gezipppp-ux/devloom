@@ -1,4 +1,5 @@
 <script setup>
+import { formatDate } from "../../shared/i18n/index.js";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { showMessage } from "../../shared/components/operation-messages.js";
 import { computed, nextTick, ref, watch } from "vue";
@@ -58,50 +59,50 @@ function closeDeletion() {
   });
 }
 function dateLabel(value) {
-  return new Date(value).toLocaleString("zh-CN", { hour12: false });
+  return formatDate(value, { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 watch(() => props.revision, () => { if (opened.value) void refresh(); });
 </script>
 
 <template>
   <button ref="trigger" type="button" class="settings-link archived-sessions-trigger" :disabled="disabled" @click="open">
-    <InboxOutlined aria-hidden="true" />已归档会话
+    <InboxOutlined aria-hidden="true" />{{ $t("已归档会话") }}
   </button>
   <Teleport to="body">
-    <dialog ref="dialog" class="workspace-dialog archived-sessions-dialog" aria-label="已归档会话" @cancel.prevent="close">
+    <dialog ref="dialog" class="workspace-dialog archived-sessions-dialog" :aria-label="$t(&quot;已归档会话&quot;)" @cancel.prevent="close">
       <div class="workspace-dialog-heading">
-        <h2>已归档会话</h2>
-        <button type="button" class="workspace-menu" aria-label="关闭已归档会话" :disabled="locked" @click="close">×</button>
+        <h2>{{ $t("已归档会话") }}</h2>
+        <button type="button" class="workspace-menu" :aria-label="$t(&quot;关闭已归档会话&quot;)" :disabled="locked" @click="close">×</button>
       </div>
-      <p class="muted">恢复后会话重新显示在需求列表中，保留原有历史和代码状态。</p>
-      <label for="archived-session-search">搜索会话名称</label>
-      <input id="archived-session-search" ref="searchInput" v-model="query" type="search" placeholder="输入会话名称" />
-      <FeedbackMessage :message="restoreError ? `恢复失败：${restoreError}` : ''" type="error" />
-      <p v-if="loading" class="muted" role="status">正在加载已归档会话…</p>
+      <p class="muted">{{ $t("恢复后会话重新显示在需求列表中，保留原有历史和代码状态。") }}</p>
+      <label for="archived-session-search">{{ $t("搜索会话名称") }}</label>
+      <input id="archived-session-search" ref="searchInput" v-model="query" type="search" :placeholder="$t(&quot;输入会话名称&quot;)" />
+      <FeedbackMessage :message="restoreError ? $t(&quot;恢复失败：{p0}&quot;, { p0: restoreError }) : ''" type="error" />
+      <p v-if="loading" class="muted" role="status">{{ $t("正在加载已归档会话…") }}</p>
       <div v-else-if="error">
-        <FeedbackMessage :message="`加载失败：${error}`" type="error" />
-        <button type="button" @click="refresh"><ReloadOutlined aria-hidden="true" /> 重试</button>
+        <FeedbackMessage :message="$t(&quot;加载失败：{p0}&quot;, { p0: error })" type="error" />
+        <button type="button" @click="refresh"><ReloadOutlined aria-hidden="true" /> {{ $t("重试") }}</button>
       </div>
-      <ul v-else-if="filtered.length" class="archived-session-list" aria-label="已归档会话列表">
+      <ul v-else-if="filtered.length" class="archived-session-list" :aria-label="$t(&quot;已归档会话列表&quot;)">
         <li v-for="run in filtered" :key="run.key">
           <div class="archived-session-info">
             <h3>{{ run.title }}</h3>
-            <p class="field-hint">归档于 <time :datetime="run.archivedAt">{{ dateLabel(run.archivedAt) }}</time></p>
+            <p class="field-hint">{{ $t("归档于") }} <time :datetime="run.archivedAt">{{ dateLabel(run.archivedAt) }}</time></p>
           </div>
           <div class="archived-session-actions">
-            <button type="button" :disabled="locked" :aria-label="`恢复会话：${run.title}`" @click="recover(run)">
-              <UndoOutlined aria-hidden="true" />{{ restoring === run.key ? "恢复中…" : "恢复" }}
+            <button type="button" :disabled="locked" :aria-label="$t(&quot;恢复会话：{p0}&quot;, { p0: run.title })" @click="recover(run)">
+              <UndoOutlined aria-hidden="true" />{{ restoring === run.key ? $t("恢复中…") : $t("恢复") }}
             </button>
-            <button type="button" class="danger-button" :disabled="locked" :aria-label="`永久删除会话：${run.title}`" @click="requestDelete(run, $event)">
-              <DeleteOutlined aria-hidden="true" />删除
+            <button type="button" class="danger-button" :disabled="locked" :aria-label="$t(&quot;永久删除会话：{p0}&quot;, { p0: run.title })" @click="requestDelete(run, $event)">
+              <DeleteOutlined aria-hidden="true" />{{ $t("删除") }}
             </button>
           </div>
         </li>
       </ul>
-      <p v-else class="empty-inline">{{ query.trim() ? "没有匹配的已归档会话。" : "暂无已归档会话。" }}</p>
+      <p v-else class="empty-inline">{{ query.trim() ? $t("没有匹配的已归档会话。") : $t("暂无已归档会话。") }}</p>
       <div class="actions">
-        <button type="button" :disabled="loading || locked" @click="refresh"><ReloadOutlined aria-hidden="true" /> 刷新列表</button>
-        <button type="button" class="primary" :disabled="locked" @click="close">完成</button>
+        <button type="button" :disabled="loading || locked" @click="refresh"><ReloadOutlined aria-hidden="true" /> {{ $t("刷新列表") }}</button>
+        <button type="button" class="primary" :disabled="locked" @click="close">{{ $t("完成") }}</button>
       </div>
     </dialog>
   </Teleport>

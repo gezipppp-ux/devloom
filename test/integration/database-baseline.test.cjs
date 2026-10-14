@@ -51,7 +51,7 @@ test("fresh baseline matches Prisma, preserves database constraints and publishe
   await fixture.deploy();
   await fixture.deploy();
   const database = await fixture.open();
-  assert.deepEqual(readPostgresMigrations().map(row => row.name), ["20261012200000_baseline", "20261013070000_mcp_access", "20261013110000_agent_suppliers", "20261013150000_initialization_guide", "20261013180000_project_directory_names"]);
+  assert.deepEqual(readPostgresMigrations().map(row => row.name), ["20261012200000_baseline", "20261013070000_mcp_access", "20261013110000_agent_suppliers", "20261013150000_initialization_guide", "20261013180000_project_directory_names", "20261013210000_neutral_workbench"]);
   const workflows = await database.client.systemWorkflow.findMany({ include: { versions: true }, orderBy: { type: "asc" } });
   assert.deepEqual(workflows.map(row => row.type), ["bug", "requirement"]);
   for (const row of workflows) {
@@ -65,8 +65,9 @@ test("fresh baseline matches Prisma, preserves database constraints and publishe
     WHERE connamespace = $1::regnamespace AND contype = 'c' ORDER BY conname`, [fixture.schema]);
   assert.deepEqual(checks.rows.map(row => row.conname), [
     "agent_supplier_selections_revision_check", "agent_supplier_uses_status_check", "agent_suppliers_mode_check", "agent_suppliers_revision_check",
+    "issue_deliverables_revision_check", "issue_deliverables_status_check",
     "project_assets_nonproduction_secret_check", "project_files_single_parent_check", "project_files_size_check",
-    "project_issues_number_check", "project_releases_status_check", "projects_directory_key_check", "projects_issue_sequence_check",
+    "project_issues_due_date", "project_issues_number_check", "project_releases_status_check", "projects_directory_key_check", "projects_issue_sequence_check",
     "system_setup_singleton_check", "system_setup_status_check", "system_workflows_type_check", "user_git_accounts_auth_type_check", "users_role_check", "users_status_check",
   ]);
   const cli = path.join(path.dirname(require.resolve("prisma/package.json")), "build/index.js");

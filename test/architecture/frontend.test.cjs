@@ -9,7 +9,7 @@ const root = path.resolve(__dirname, "../..");
 const sourceRoot = path.join(root, "web/src");
 const catalogRoot = path.join(root, "shared");
 const features = new Set(["accounts", "workspaces", "tasks", "session", "settings", "projects", "setup"]);
-const sharedGroups = new Set(["api", "components", "styles"]);
+const sharedGroups = new Set(["api", "components", "styles", "i18n"]);
 
 function filesIn(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

@@ -129,24 +129,24 @@ function refresh() {
       "
     />
     <header class="project-heading">
-      <h2>{{ issueId ? "关联开发任务" : "开发任务" }}</h2>
-      <button :disabled="loading" @click="refresh">刷新任务</button>
+      <h2>{{ issueId ? $t("关联开发任务") : $t("开发任务") }}</h2>
+      <button :disabled="loading" @click="refresh">{{ $t("刷新任务") }}</button>
     </header>
     <FeedbackMessage :message="error" type="error" />
-    <p v-if="loading" role="status">正在读取开发任务…</p>
-    <nav v-if="!issueId" class="page-tabs" aria-label="开发任务范围">
+    <p v-if="loading" role="status">{{ $t("正在读取开发任务…") }}</p>
+    <nav v-if="!issueId" class="page-tabs" :aria-label="$t(&quot;开发任务范围&quot;)">
       <button
         :class="{ active: scope === 'mine' }"
         :aria-pressed="scope === 'mine'"
         @click="changeScope('mine')"
       >
-        我的开发任务</button
+        {{ $t("我的开发任务") }}</button
       ><button
         :class="{ active: scope === 'all' }"
         :aria-pressed="scope === 'all'"
         @click="changeScope('all')"
       >
-        项目全部任务
+        {{ $t("项目全部任务") }}
       </button>
     </nav>
     <div v-if="!issueId && !readOnlyReason" class="project-development-action">
@@ -155,9 +155,9 @@ function refresh() {
         :disabled="loading || Boolean(mergeError)"
         @click="merging = true"
       >
-        合并所选任务（{{ selectedTasks.length }}）</button
+        {{ $t("合并所选任务（") }}{{ selectedTasks.length }}）</button
       ><span class="field-hint">{{
-        mergeError || "所选任务将共用一个 Codex 会话，合并后再开始开发。"
+        mergeError || $t("所选任务将共用一个 Codex 会话，合并后再开始开发。")
       }}</span>
     </div>
     <ul class="project-issue-list">
@@ -167,17 +167,17 @@ function refresh() {
           v-model="selectedTasks"
           type="checkbox"
           :value="task.id"
-          :aria-label="`选择开发任务 ${task.title}`"
+          :aria-label="$t(&quot;选择开发任务 {p0}&quot;, { p0: task.title })"
           :disabled="loading || !task.canMerge"
         /><button class="project-issue-link" @click="open(task)">
-          <span>{{ labels[task.status] || task.status }}</span
+          <span>{{ $t(labels[task.status] || task.status) }}</span
           ><strong>{{ task.title }}</strong
           ><small
-            >{{ task.executor?.displayName || "未分配" }} ·
-            {{ task.release?.name || "未排期" }} ·
-            {{ task.baseBranch || "基线未记录" }} ·
-            {{ task.kind === 'manual' ? '独立开发' : `${task.issueIds.length} 条事项` }}<span v-if="task.execution">
-              · Codex：{{ statusLabel(task.execution.status) }}</span
+            >{{ task.executor?.displayName || $t("未分配") }} ·
+            {{ task.release?.name || $t("未排期") }} ·
+            {{ task.baseBranch || $t("基线未记录") }} ·
+            {{ task.kind === 'manual' ? $t("独立开发") : $t("{p0} 条事项", { p0: task.issueIds.length }) }}<span v-if="task.execution">
+              · Codex：{{ $t(statusLabel(task.execution.status)) }}</span
             ></small
           >
         </button>
@@ -186,15 +186,15 @@ function refresh() {
     <p v-if="data && !data.tasks.length" class="muted">
       {{
         scope === "mine"
-          ? "暂无我的开发任务，请先认领需求或缺陷，或由项目成员指派给你。"
-          : "暂无开发任务。"
+          ? $t("暂无我的开发任务，请先认领需求或缺陷，或由项目成员指派给你。")
+          : $t("暂无开发任务。")
       }}
     </p>
     <div class="actions">
       <button v-if="offset" @click="page(Math.max(0, offset - 30))">
-        上一页</button
+        {{ $t("上一页") }}</button
       ><button v-if="data?.nextOffset != null" @click="page(data.nextOffset)">
-        下一页
+        {{ $t("下一页") }}
       </button>
     </div>
   </section>

@@ -1,6 +1,12 @@
 const { json } = require("./messages.cjs");
 
 async function serveProjectContent(request, response, url, { services, actor, input }) {
+  const delivery = /^\/api\/projects\/([^/]+)\/deliveries\/([^/]+)(\/review)?$/.exec(url.pathname);
+  if (delivery) {
+    if (request.method === "GET" && !delivery[3]) { json(response, 200, await services.readDeliverable(delivery[1], delivery[2], actor)); return true; }
+    if (request.method === "POST" && delivery[3]) { json(response, 200, await services.reviewDeliverable(delivery[1], delivery[2], actor, input)); return true; }
+    return false;
+  }
   const route = /^\/api\/projects\/([^/]+)\/(issues|assets|files)(?:\/([^/]+))?(?:\/(.*))?$/.exec(url.pathname);
   if (!route) return false;
   const [, projectId, resource, id, action] = route;

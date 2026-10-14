@@ -64,40 +64,40 @@ async function persist(publish = false) {
 
 <template>
   <section class="project-detail workflow-settings">
-    <header class="project-heading"><h2>流程编排</h2><select v-model="type" aria-label="流程类型" :disabled="saving"><option value="requirement">需求流程</option><option value="bug">Bug 流程</option></select></header>
+    <header class="project-heading"><h2>{{ $t("流程编排") }}</h2><select v-model="type" :aria-label="$t(&quot;流程类型&quot;)" :disabled="saving"><option value="requirement">{{ $t("需求流程") }}</option><option value="bug">{{ $t("Bug 流程") }}</option></select></header>
     <FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="notice" type="success" />
-    <p v-if="loading" role="status">正在读取流程…</p>
-    <button v-if="error" :disabled="loading || saving" @click="reload">重新读取流程</button>
+    <p v-if="loading" role="status">{{ $t("正在读取流程…") }}</p>
+    <button v-if="error" :disabled="loading || saving" @click="reload">{{ $t("重新读取流程") }}</button>
     <template v-if="data">
-      <div class="workflow-intro"><p>系统统一维护需求和 Bug 两套流程，发布后用于所有项目的新事项。</p><span>已发布 v{{ data.workflow.publishedVersion }}</span></div>
+      <div class="workflow-intro"><p>{{ $t("系统统一维护需求和 Bug 两套流程，发布后用于所有项目的新事项。") }}</p><span>{{ $t("已发布 v") }}{{ data.workflow.publishedVersion }}</span></div>
       <WorkflowGraph :key="type" ref="graph" :definition="definition" :selected="selected" :selected-edge="selectedEdge" :editable="!saving && !loading" @select="selectNode" @select-edge="selectEdge" @move="moveNode" @add="addNode" @connect="addEdge" @clear="clear" @delete="requestDelete">
         <template #inspector>
           <fieldset ref="editor" :disabled="saving || loading" class="canvas-properties" @keydown.esc.stop.prevent="deleting ? cancelDelete() : closeEditor()">
             <template v-if="node">
-              <header><h3>状态属性</h3><span>即时修改草稿</span></header>
-              <label>状态名称<input v-model="node.name" maxlength="80" /></label>
-              <label>状态类型<select v-model="node.kind" aria-label="状态类型" @change="changeKind"><option value="initial">初始</option><option value="normal">普通</option><option value="completed">完成</option><option value="cancelled">取消</option></select></label>
-              <label class="permission-choice"><input v-model="node.allowDevelopment" type="checkbox" :disabled="terminal" />允许开始开发</label>
-              <p v-if="terminal" class="field-hint">完成、取消状态不允许开始开发。</p>
+              <header><h3>{{ $t("状态属性") }}</h3><span>{{ $t("即时修改草稿") }}</span></header>
+              <label>{{ $t("状态名称") }}<input v-model="node.name" maxlength="80" /></label>
+              <label>{{ $t("状态类型") }}<select v-model="node.kind" :aria-label="$t(&quot;状态类型&quot;)" @change="changeKind"><option value="initial">{{ $t("初始") }}</option><option value="normal">{{ $t("普通") }}</option><option value="completed">{{ $t("完成") }}</option><option value="cancelled">{{ $t("取消") }}</option></select></label>
+              <label class="permission-choice"><input v-model="node.allowDevelopment" type="checkbox" :disabled="terminal" />{{ $t("允许开始开发") }}</label>
+              <p v-if="terminal" class="field-hint">{{ $t("完成、取消状态不允许开始开发。") }}</p>
             </template>
             <template v-else-if="edge">
-              <header><h3>连线属性</h3><span>即时修改草稿</span></header>
-              <label>操作名称<input v-model="edge.name" maxlength="80" /></label>
-              <label>来源状态<select v-model="edge.from" aria-label="来源状态"><option v-for="item in definition.nodes" :key="item.id" :value="item.id" :disabled="item.id === edge.to">{{ item.name }}</option></select></label>
-              <label>目标状态<select v-model="edge.to" aria-label="目标状态"><option v-for="item in definition.nodes" :key="item.id" :value="item.id" :disabled="item.id === edge.from">{{ item.name }}</option></select></label>
-              <label>所需权限<select v-model="edge.permission" aria-label="所需权限"><option value="issue.transition">事项流转</option><option value="issue.accept">事项验收</option></select></label>
-              <label class="permission-choice"><input v-model="edge.requiresReason" type="checkbox" />必须填写原因</label>
+              <header><h3>{{ $t("连线属性") }}</h3><span>{{ $t("即时修改草稿") }}</span></header>
+              <label>{{ $t("操作名称") }}<input v-model="edge.name" maxlength="80" /></label>
+              <label>{{ $t("来源状态") }}<select v-model="edge.from" :aria-label="$t(&quot;来源状态&quot;)"><option v-for="item in definition.nodes" :key="item.id" :value="item.id" :disabled="item.id === edge.to">{{ item.name }}</option></select></label>
+              <label>{{ $t("目标状态") }}<select v-model="edge.to" :aria-label="$t(&quot;目标状态&quot;)"><option v-for="item in definition.nodes" :key="item.id" :value="item.id" :disabled="item.id === edge.from">{{ item.name }}</option></select></label>
+              <label>{{ $t("所需权限") }}<select v-model="edge.permission" :aria-label="$t(&quot;所需权限&quot;)"><option value="issue.transition">{{ $t("事项流转") }}</option><option value="issue.accept">{{ $t("事项验收") }}</option></select></label>
+              <label class="permission-choice"><input v-model="edge.requiresReason" type="checkbox" />{{ $t("必须填写原因") }}</label>
             </template>
             <div v-if="deleting" class="canvas-delete" role="alert">
-              <p>删除「{{ node?.name || edge?.name }}」{{ node && references ? `及其 ${references} 条连线` : '' }}？保存草稿后生效，已发布版本不变。</p>
-              <div class="actions"><button data-cancel-delete @click="cancelDelete">取消删除</button><button class="danger" @click="remove">确认删除</button></div>
+              <p>{{ $t("删除「") }}{{ node?.name || edge?.name }}」{{ node && references ? $t('及其 {count} 条连线', { count: references }) : '' }}{{ $t("？保存草稿后生效，已发布版本不变。") }}</p>
+              <div class="actions"><button data-cancel-delete @click="cancelDelete">{{ $t("取消删除") }}</button><button class="danger" @click="remove">{{ $t("确认删除") }}</button></div>
             </div>
-            <button v-else class="canvas-remove" @click="requestDelete">{{ node ? '删除状态' : '删除连线' }}</button>
+            <button v-else class="canvas-remove" @click="requestDelete">{{ node ? $t("删除状态") : $t("删除连线") }}</button>
           </fieldset>
         </template>
-        <template #actions="{ fullscreen }"><p v-if="fullscreen && (error || notice)" class="canvas-feedback" :class="{ 'is-error': error }" :role="error ? 'alert' : 'status'">{{ error || notice }}</p><div class="actions"><button :disabled="loading || saving" @click="persist()">保存流程草稿</button><button class="primary" :disabled="loading || saving" @click="persist(true)">{{ saving ? '正在保存…' : '校验并发布流程' }}</button></div></template>
+        <template #actions="{ fullscreen }"><p v-if="fullscreen && (error || notice)" class="canvas-feedback" :class="{ 'is-error': error }" :role="error ? 'alert' : 'status'">{{ error || notice }}</p><div class="actions"><button :disabled="loading || saving" @click="persist()">{{ $t("保存流程草稿") }}</button><button class="primary" :disabled="loading || saving" @click="persist(true)">{{ saving ? $t("正在保存…") : $t("校验并发布流程") }}</button></div></template>
       </WorkflowGraph>
-      <p class="field-hint">修改先保留为草稿；发布不会改变已有事项绑定的流程。</p>
+      <p class="field-hint">{{ $t("修改先保留为草稿；发布不会改变已有事项绑定的流程。") }}</p>
     </template>
   </section>
 </template>

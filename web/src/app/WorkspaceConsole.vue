@@ -218,11 +218,11 @@ async function refreshCurrentSession() {
     <aside class="sidebar">
       <div class="brand">
         <span v-if="!$slots['workspace-rail']" class="brand-mark">t_</span>
-        <div>需求 <b>×</b> AGENT<small>开发工作台</small></div>
+        <div>{{ $t("需求") }} <b>×</b> AGENT<small>{{ $t("开发工作台") }}</small></div>
       </div>
       <div v-if="props.workspaceName" class="workspace-heading">
         <h2 :title="props.workspaceName">{{ props.workspaceName }}</h2>
-        <button v-if="props.projectId" type="button" class="workspace-project-return" @click="emit('return-project')"><ArrowLeftOutlined aria-hidden="true" />返回项目协作</button>
+        <button v-if="props.projectId" type="button" class="workspace-project-return" @click="emit('return-project')"><ArrowLeftOutlined aria-hidden="true" />{{ $t("返回项目协作") }}</button>
         <button
           v-if="!props.projectId"
           type="button"
@@ -230,8 +230,8 @@ async function refreshCurrentSession() {
           :class="{ active: settingsOpen }"
           :disabled="workspaceLoading"
           :aria-pressed="settingsOpen"
-          aria-label="工作区设置"
-          title="工作区设置"
+          :aria-label="$t(&quot;工作区设置&quot;)"
+          :title="$t(&quot;工作区设置&quot;)"
           @click="
             settingsOpen = true;
             repositoryOpen = false;
@@ -251,7 +251,7 @@ async function refreshCurrentSession() {
         "
       >
         <SettingOutlined aria-hidden="true" />
-        执行设置
+        {{ $t("执行设置") }}
       </button>
       <button
         v-if="allowed('code.view')"
@@ -266,7 +266,7 @@ async function refreshCurrentSession() {
           creating = false;
         "
       >
-        <BranchesOutlined aria-hidden="true" />代码仓库
+        <BranchesOutlined aria-hidden="true" />{{ $t("代码仓库") }}
       </button>
       <button
         v-if="!props.projectId && allowed('session.start')"
@@ -278,11 +278,11 @@ async function refreshCurrentSession() {
           repositoryOpen = false;
         "
       >
-        ＋ 从需求启动
+        {{ $t("＋ 从需求启动") }}
       </button>
       <div v-if="props.projectId && allowed('session.start')" class="development-start-actions">
-        <button type="button" class="new-task" @click="emit('open-project', 'issues')">从项目事项</button>
-        <button type="button" :disabled="workspaceLoading" @click="creating = true; settingsOpen = false; repositoryOpen = false"><PlusOutlined aria-hidden="true" />手动开启</button>
+        <button v-if="allowed('deliverable.create')" type="button" @click="emit('open-project', 'deliveries')">{{ $t('整理交付') }}</button><button type="button" class="new-task" @click="emit('open-project', 'issues')">{{ $t("从项目事项") }}</button>
+        <button type="button" :disabled="workspaceLoading" @click="creating = true; settingsOpen = false; repositoryOpen = false"><PlusOutlined aria-hidden="true" />{{ $t("手动开启") }}</button>
       </div>
       <TaskList
         :runs="runs"
@@ -299,9 +299,9 @@ async function refreshCurrentSession() {
         </template>
       </ArchivedSessions>
       <div class="sidebar-footer">
-        <FeedbackMessage :message="preferenceError ? `未读状态同步失败：${preferenceError}` : ''" type="error" />
+        <FeedbackMessage :message="preferenceError ? $t(&quot;未读状态同步失败：{p0}&quot;, { p0: preferenceError }) : ''" type="error" />
         <span :class="['connection', { online }]"></span
-        >{{ online ? "服务已连接" : "正在重连服务" }}
+        >{{ online ? $t("服务已连接") : $t("正在重连服务") }}
       </div>
     </aside>
     <main>
@@ -330,11 +330,11 @@ async function refreshCurrentSession() {
       />
       <RepositoryGitPanel v-else-if="repositoryOpen" :can-operate="allowed('code.operate')" />
       <template v-else-if="session">
-        <header class="session-header" aria-label="会话工具栏">
-          <div class="page-breadcrumb" aria-label="当前位置">
-            <span :title="props.workspaceName || '开发工作台'">{{ props.workspaceName || "开发工作台" }}</span>
+        <header class="session-header" :aria-label="$t(&quot;会话工具栏&quot;)">
+          <div class="page-breadcrumb" :aria-label="$t(&quot;当前位置&quot;)">
+            <span :title="props.workspaceName || $t(&quot;开发工作台&quot;)">{{ props.workspaceName || $t("开发工作台") }}</span>
             <span aria-hidden="true">/</span>
-            <strong>需求会话</strong>
+            <strong>{{ $t("需求会话") }}</strong>
           </div>
           <SessionTitleEditor
             v-if="allowed('session.continue')"
@@ -351,30 +351,30 @@ async function refreshCurrentSession() {
               >{{ session.agent?.label || 'Agent' }} ·
               {{
                 waitingForInput
-                  ? "等待你的输入"
+                  ? $t("等待你的输入")
                   : statusLabel(session.status)
               }}</span
             >
             <button :disabled="loading" @click="refreshCurrentSession">
-              <ReloadOutlined aria-hidden="true" /> 刷新
+              <ReloadOutlined aria-hidden="true" /> {{ $t("刷新") }}
             </button>
           </div>
         </header>
         <div class="session-body" :class="{ 'with-file-panel': fileRequest, 'file-panel-wide': fileRequest && fileWide }">
           <div class="session-conversation">
             <div v-if="!online" class="banner warning" role="status">
-              实时连接已断开，正在重连。服务运行时，关闭网页不会停止任务。
+              {{ $t("实时连接已断开，正在重连。服务运行时，关闭网页不会停止任务。") }}
             </div>
             <div v-if="session.readOnlyReason" class="banner">
               {{ session.readOnlyReason }}
             </div>
             <div v-if="session.warning" class="banner warning">
-              历史读取降级：{{ session.warning }}
+              {{ $t("历史读取降级：") }}{{ session.warning }}
             </div>
             <div
               ref="timeline"
               class="timeline"
-              aria-label="会话记录"
+              :aria-label="$t(&quot;会话记录&quot;)"
               :aria-busy="loading"
             >
               <button
@@ -383,13 +383,13 @@ async function refreshCurrentSession() {
                 :disabled="busy || session.agent?.capabilities?.history !== true"
                 @click="older"
               >
-                加载更早记录 ↑
+                {{ $t("加载更早记录 ↑") }}
               </button>
               <p v-if="!session.items.length" class="empty-inline">
                 {{
                   ["preparing", "initializing", "starting"].includes(session.status)
-                    ? "正在抓取需求、下载图片并准备独立工作区…"
-                    : "还没有消息，输入指令继续这个 session。"
+                    ? $t("正在抓取需求、下载图片并准备独立工作区…")
+                    : $t("还没有消息，输入指令继续这个 session。")
                 }}
               </p>
               <SessionItem
@@ -410,11 +410,10 @@ async function refreshCurrentSession() {
               />
               <p v-if="running" class="working-line">
                 <span class="connection online"></span>{{ session.agent?.label || 'Agent' }}
-                {{ waitingForInput ? '等待你的回答或审批，可停止当前一轮。' : '正在执行，可以补充指令或停止当前一轮。' }}
+                {{ waitingForInput ? $t("等待你的回答或审批，可停止当前一轮。") : $t("正在执行，可以补充指令或停止当前一轮。") }}
               </p>
               <p v-if="initializing" class="working-line">
-                <span class="connection online"></span>正在初始化
-                worktree，完成后自动启动 {{ session.agent?.label || 'Agent' }}。
+                <span class="connection online"></span>{{ $t("正在初始化 worktree，完成后自动启动 {agent}。", { agent: session.agent?.label || 'Agent' }) }}
               </p>
             </div>
             <SessionComposer
@@ -477,20 +476,20 @@ async function refreshCurrentSession() {
         :aria-busy="workspaceLoading || loading"
       >
         <div class="empty-mark"><FolderOpenOutlined aria-hidden="true" /></div>
-        <div class="eyebrow">需求 × AGENT</div>
+        <div class="eyebrow">{{ $t("需求 × AGENT") }}</div>
         <h1>
           {{
             workspaceLoading
-              ? "正在加载工作区…"
+              ? $t("正在加载工作区…")
               : loading
-                ? "正在加载会话…"
-                : active ? "指定会话暂时无法打开" : props.projectId ? "尚无开发任务" : "让需求与开发，在这里连起来。"
+                ? $t("正在加载会话…")
+                : active ? $t("指定会话暂时无法打开") : props.projectId ? $t("尚无开发任务") : $t("让需求与开发，在这里连起来。")
           }}
         </h1>
-        <p>{{ active ? '该会话可能尚未启动、已归档或不存在。请返回项目任务查看启动状态，或重试读取。' : '查看执行过程、与 Agent 对话，随时调整下一步。' }}</p>
+        <p>{{ active ? $t("该会话可能尚未启动、已归档或不存在。请返回项目任务查看启动状态，或重试读取。") : $t("查看执行过程、与 Agent 对话，随时调整下一步。") }}</p>
         <FeedbackMessage :message="error" type="error" />
-        <button v-if="active && !loading" @click="refreshCurrentSession">重试读取指定会话</button>
-        <button v-if="props.projectId && active" @click="emit('open-project', 'tasks')">返回项目任务</button>
+        <button v-if="active && !loading" @click="refreshCurrentSession">{{ $t("重试读取指定会话") }}</button>
+        <button v-if="props.projectId && active" @click="emit('open-project', 'tasks')">{{ $t("返回项目任务") }}</button>
         <button
           v-if="!workspaceLoading && !loading && !props.projectId && allowed('session.start')"
           class="primary"
@@ -500,9 +499,9 @@ async function refreshCurrentSession() {
             repositoryOpen = false;
           "
         >
-          从需求启动 →
+          {{ $t("从需求启动 →") }}
         </button>
-        <button v-if="props.projectId && allowed('session.start')" class="primary" @click="emit('open-project', 'issues')">前往项目选择事项</button>
+        <button v-if="props.projectId && allowed('session.start')" class="primary" @click="emit('open-project', 'issues')">{{ $t("前往项目选择事项") }}</button>
       </section>
     </main>
   </div>

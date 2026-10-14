@@ -91,35 +91,35 @@ onUnmounted(() => {
 
 <template>
   <div ref="root" class="session-details">
-    <nav class="session-details-nav" aria-label="会话资料">
+    <nav class="session-details-nav" :aria-label="$t(&quot;会话资料&quot;)">
       <button
         v-for="entry in panels"
         :key="entry.key"
         type="button"
-        :aria-label="entry.title"
-        :title="entry.title"
+        :aria-label="$t(entry.title)"
+        :title="$t(entry.title)"
         :aria-expanded="panel === entry.key"
         :aria-controls="`${id}-${entry.key}`"
         @click="toggle(entry.key, $event)"
       >
         <component :is="entry.icon" aria-hidden="true" />
-        <span>{{ entry.label }}</span>
+        <span>{{ $t(entry.label) }}</span>
       </button>
     </nav>
     <aside
       v-show="panel"
       class="session-drawer"
-      :aria-label="panels.find((entry) => entry.key === panel)?.title"
+      :aria-label="$t(panels.find((entry) => entry.key === panel)?.title || '')"
     >
       <header class="session-drawer-heading">
-        <h2>{{ panels.find((entry) => entry.key === panel)?.title }}</h2>
+        <h2>{{ $t(panels.find((entry) => entry.key === panel)?.title || '') }}</h2>
         <button
           ref="closeButton"
           type="button"
-          aria-label="收起会话资料"
+          :aria-label="$t(&quot;收起会话资料&quot;)"
           @click="close()"
         >
-          <RightOutlined aria-hidden="true" /> 收起
+          <RightOutlined aria-hidden="true" /> {{ $t("收起") }}
         </button>
       </header>
       <div class="session-drawer-content">
@@ -127,27 +127,27 @@ onUnmounted(() => {
           v-show="panel === 'info'"
           :id="`${id}-info`"
           class="session-context"
-          aria-label="会话信息内容"
+          :aria-label="$t(&quot;会话信息内容&quot;)"
         >
           <section class="session-info-section">
-            <h3>任务管理</h3>
+            <h3>{{ $t("任务管理") }}</h3>
             <slot name="metadata" />
           </section>
           <section class="session-info-section">
-            <h3>执行信息</h3>
+            <h3>{{ $t("执行信息") }}</h3>
             <dl>
               <dt>Session</dt>
-              <dd>{{ session.sessionId || "创建中" }}</dd>
-              <dt>创建时模型</dt>
-              <dd>{{ session.agent?.model || `${session.agent?.label || 'Agent'} 默认配置` }}</dd>
-              <dt>创建时思考强度</dt>
-              <dd>{{ session.agent?.reasoningEffort || "默认思考强度" }}</dd>
-              <dt>渠道同步</dt>
+              <dd>{{ session.sessionId || $t("创建中") }}</dd>
+              <dt>{{ $t("创建时模型") }}</dt>
+              <dd>{{ session.agent?.model || $t('{agent} 默认配置', { agent: session.agent?.label || 'Agent' }) }}</dd>
+              <dt>{{ $t("创建时思考强度") }}</dt>
+              <dd>{{ session.agent?.reasoningEffort || $t("默认思考强度") }}</dd>
+              <dt>{{ $t("渠道同步") }}</dt>
               <dd>
                 {{
                   session.transition?.status === "skipped"
-                    ? "无需同步"
-                    : session.transition?.status || "暂无记录"
+                    ? $t("无需同步")
+                    : session.transition?.status || $t("暂无记录")
                 }}
                 {{ session.transition?.error }}
               </dd>
@@ -168,7 +168,7 @@ onUnmounted(() => {
         <section
           v-show="panel === 'git'"
           :id="`${id}-git`"
-          aria-label="Worktree Git 内容"
+          :aria-label="$t(&quot;Worktree Git 内容&quot;)"
         >
           <SessionGitPanel
             v-if="panel === 'git' && session.worktree?.path"
@@ -181,7 +181,7 @@ onUnmounted(() => {
             @deleted="emit('worktree-deleted')"
             @open-file="openFile"
           />
-          <p v-else-if="!session.worktree?.path" class="empty-inline">Worktree 尚未准备完成。</p>
+          <p v-else-if="!session.worktree?.path" class="empty-inline">{{ $t("Worktree 尚未准备完成。") }}</p>
         </section>
         <section v-show="panel === 'requirement'" :id="`${id}-requirement`">
           <RequirementDetails :requirement="session.requirement" :disabled="requirementsDisabled || active" @continue="emit('continue-requirements', $event)" />
