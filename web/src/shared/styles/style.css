@@ -85,7 +85,7 @@ textarea,
 select {
   font: inherit;
 }
-button {
+button:where(:not(.ant-select-clear)) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -104,13 +104,19 @@ button {
     box-shadow 0.15s,
     transform 0.1s;
 }
-button:hover:not(:disabled) {
+button:where(:not(.ant-select-clear)):hover:not(:disabled) {
   background: var(--soft);
   border-color: var(--field-border);
   box-shadow: var(--shadow-xs);
 }
-button:active:not(:disabled) {
+button:where(:not(.ant-select-clear)):active:not(:disabled) {
   transform: translateY(1px);
+}
+/* Select owns its clear icon geometry; remove native button chrome. */
+button.ant-select-clear {
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 button:disabled {
   opacity: 0.5;

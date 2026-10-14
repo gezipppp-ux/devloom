@@ -74,7 +74,7 @@
   .development-panel { padding: 16px; }
   .development-heading h2 { font-size: 21px; }
   .development-next h3 { font-size: 18px; }
-  .development-task-detail button { min-height: 44px; }
+  .development-task-detail button:where(:not(.ant-select-clear)) { min-height: 44px; }
   .development-toolbar { gap: 4px; }
   .development-toolbar > button { padding-inline: 4px; }
 }
@@ -382,6 +382,7 @@
 .development-start-settings { display: grid; gap: 20px; }
 .development-start-settings > h3 { margin-bottom: 0; }
 .development-start-settings .development-branch-select { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px 16px; }
+.development-start-settings .development-branch-select > button { align-self: end; }
 .development-start-settings .development-branch-select > p { grid-column: 1 / -1; margin: 0; }
 .neutral-app .development-start-settings .agent-model-settings-embedded { border: 0; padding: 0; margin: 0; box-shadow: none; background: transparent; }
 .development-start-settings .form-section-heading { margin-bottom: 14px; }

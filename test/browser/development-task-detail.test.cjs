@@ -80,6 +80,26 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
       assert.equal(await page.getByRole("navigation", { name: "项目功能" }).count(), 0, "task details own their page heading");
       if (await page.locator('.development-detail-layout').isVisible()) await page.waitForFunction(() => document.querySelector('.development-info').open === window.matchMedia('(min-width: 1200px)').matches);
       if (await page.locator('.development-detail-layout').isVisible()) assert.equal(await page.locator('.development-info').evaluate(el => el.open), width >= 1200, 'task information is collapsed on medium and small screens');
+      const branchSelect = page.locator('.development-start-settings .development-branch-select');
+      if (await branchSelect.isVisible()) {
+        const layout = await branchSelect.evaluate(el => {
+          const bounds = selector => {
+            const node = el.querySelector(selector);
+            if (!node) return null;
+            const { top, bottom, left, right, width, height } = node.getBoundingClientRect();
+            return { top, bottom, left, right, width, height };
+          };
+          return { select: bounds('.ant-select'), refresh: bounds(':scope > button'), clear: bounds('.ant-select-clear') };
+        });
+        if (width > 767) assert.ok(Math.abs(layout.select.bottom - layout.refresh.bottom) <= 1, `${name}: branch refresh aligns with the select at ${width}`);
+        else assert.ok(layout.refresh.top >= layout.select.bottom, `${name}: branch refresh follows the select at ${width}`);
+        if (layout.clear) {
+          assert.ok(layout.clear.top >= layout.select.top && layout.clear.bottom <= layout.select.bottom, `${name}: clear control stays inside the select at ${width}`);
+          assert.ok(Math.abs((layout.clear.top + layout.clear.bottom) - (layout.select.top + layout.select.bottom)) <= 2, `${name}: clear control is vertically centered at ${width}`);
+          assert.ok(layout.clear.width <= 16 && layout.clear.height <= 16, `${name}: clear icon does not inherit action button sizing at ${width}`);
+          assert.ok(Math.abs(layout.clear.width - layout.clear.height) <= 1, `${name}: clear icon retains square bounds at ${width}`);
+        }
+      }
       const dialog = page.getByRole("dialog");
       if (await dialog.count()) {
         assert.ok(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth), `${name}: dialog overflow at ${width}`);
@@ -141,6 +161,10 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     await page.locator('.development-branch-select .ant-select-clear').click();
     assert.equal(await button('启动 Codex 开发').isDisabled(), true, 'clearing a selected branch blocks startup');
     await selectRemoteBranch(page);
+    await branch.click();
+    await page.locator('.development-branch-select .ant-select').hover();
+    await capture('branch-selected-open');
+    await page.keyboard.press('Escape');
     const supplement = "本轮补充要求\n验证移动端，保留 {{title}} 与 $&";
     const supplementInput = page.getByLabel("补充提示词", { exact: true });
     await supplementInput.fill(supplement);
