@@ -10,6 +10,10 @@ test("published workflows validate reachable nodes, immutable identifiers and pe
   assert.throws(validate(draft => { draft.nodes.forEach(node => { if (["completed", "cancelled"].includes(node.kind)) node.kind = "normal"; }); }), /完成或取消/);
   assert.throws(validate(draft => { draft.transitions[0].permission = "process.exec"; }), /权限/);
   assert.throws(validate(draft => { draft.transitions[0].script = "alert(1)"; }), /权限/);
+  assert.throws(validate(draft => { draft.nodes[0].handler = "watchers"; }), /职责/);
+  assert.throws(validate(draft => { draft.nodes[0].category = "unknown"; }), /类别/);
+  assert.throws(validate(draft => { draft.transitions[0].requiredFields = ["secret"]; }), /字段/);
+  assert.throws(validate(draft => { draft.transitions[0].requireAcceptedDelivery = "true"; }), /门禁/);
   assert.throws(validate(draft => { draft.nodes.splice(1, 1); }), /连线/);
   assert.throws(validate(draft => { draft.nodes[1].id = draft.nodes[0].id; }), /标识/);
   assert.throws(validate(draft => { draft.transitions[1].id = draft.transitions[0].id; }), /连线/);

@@ -1,4 +1,5 @@
 const { SystemWorkflowStore } = require("./system-workflow-store.cjs");
+const { WorkActionStore } = require("./work-action-store.cjs");
 const { ProjectLifecycleStore } = require("./project-lifecycle-store.cjs");
 const { assertIssueWritable } = require("../domain/issue-workflows.cjs");
 const { previewMimeType } = require("../domain/project-files.cjs");
@@ -17,7 +18,7 @@ function hashCreationRequest(data, attachments) {
 }
 const fileMetadata = { id: true, projectId: true, issueId: true, assetId: true, authorId: true, name: true, mimeType: true, size: true, sha256: true, createdAt: true };
 
-const issueRelations = { source: true, release: true, workflowVersion: true, developmentClaim: { select: { task: { select: { id: true, executorId: true, executor: { select: { displayName: true } } } } } } };
+const issueRelations = { actions: { where: { status: { in: ["ready", "active"] } } }, source: true, release: true, workflowVersion: true, developmentClaim: { select: { task: { select: { id: true, executorId: true, executor: { select: { displayName: true } } } } } } };
 
 class ProjectContentStore {
   constructor(database) { this.database = database; }
@@ -28,11 +29,14 @@ class ProjectContentStore {
   async members(projectId, ids) {
     const unique = [...new Set(ids.filter(Boolean))];
     if (!unique.length) return;
-    const count = await this.database.client.projectMember.count({ where: { projectId, userId: { in: unique }, status: "active", user: { status: "active" } } });
-    if (count !== unique.length) throw accountError("负责人和参与人必须是有效项目成员。", 400);
+    const count = await this.database.client.user.count({ where: { id: { in: unique }, status: "active", OR: [{ role: "admin" }, { projectMemberships: { some: { projectId, status: "active" } } }] } });
+    if (count !== unique.length) throw accountError("负责人和关注人必须是有效项目成员。", 400);
   }
   async people(ids) {
     return this.database.client.user.findMany({ where: { id: { in: [...new Set(ids.filter(Boolean))] } }, select: { id: true, username: true, displayName: true } });
+  }
+  async memberCandidates(projectId) {
+    return this.database.client.user.findMany({ where: { status: "active", OR: [{ role: "admin" }, { projectMemberships: { some: { projectId, status: "active" } } }] }, select: { id: true, displayName: true, username: true } });
   }
   async issue(projectId, id) {
     const value = await this.database.client.projectIssue.findFirst({ where: { projectId, id }, include: issueRelations });
@@ -64,6 +68,7 @@ class ProjectContentStore {
     data = { ...data, workflowVersionId: version.id, status: version.definition.nodes.find(node => node.kind === "initial").id };
     const project = await this.database.client.project.update({ where: { id: projectId }, data: { issueSequence: { increment: 1 } }, select: { issueSequence: true } });
     const issue = await this.database.client.projectIssue.create({ data: { ...data, ...(requestId ? { id: requestId } : {}), projectId, number: project.issueSequence, createdById: actorId, updatedById: actorId } });
+    await new WorkActionStore(this.database).syncIssue({ ...issue, workflowVersion: version }, { initial: true });
     await this.issueHistory(projectId, issue.id, actorId, "created", { after: issue, ...(creationRequestHash ? { creationRequestHash } : {}) });
     return this.issue(projectId, issue.id);
   }
@@ -76,6 +81,7 @@ class ProjectContentStore {
     }
     const updated = await this.database.client.projectIssue.updateMany({ where: { id, projectId, revision }, data: { ...data, updatedById: actorId, revision: { increment: 1 } } });
     if (!updated.count) throw conflict();
+    await new WorkActionStore(this.database).syncIssue(await this.issue(projectId, id));
     const after = await this.issue(projectId, id);
     await this.issueHistory(projectId, id, actorId, action, { before, after, ...extra });
     return after;
@@ -105,9 +111,27 @@ class ProjectContentStore {
     return this.database.client.projectDeliverable.create({ data: { projectId, issueId, authorId, ...data } });
   }
   async readDeliverable(projectId, id) {
-    const row = await this.database.client.projectDeliverable.findFirst({ where: { projectId, id } });
+    const row = await this.database.client.projectDeliverable.findFirst({ where: { projectId, id }, include: { next: { select: { id: true } } } });
     if (!row) throw missing();
     return row;
+  }
+  async beginDelivery(projectId, id, actorId, revision) {
+    const changed = await this.database.client.projectDeliverable.updateMany({ where: { projectId, id, reviewerId: actorId, revision, status: "pending", verificationStartedAt: null }, data: { verificationStartedAt: new Date(), revision: { increment: 1 } } });
+    if (!changed.count) throw conflict();
+    await this.audit(actorId, "delivery.verification.started", projectId, id);
+    return this.readDeliverable(projectId, id);
+  }
+  async reassignDelivery(projectId, id, actorId, revision, reviewerId) {
+    const before = await this.readDeliverable(projectId, id);
+    const changed = await this.database.client.projectDeliverable.updateMany({ where: { projectId, id, revision, status: "pending" }, data: { reviewerId, verificationStartedAt: null, revision: { increment: 1 } } });
+    if (!changed.count) throw conflict();
+    if (before.issueId) await this.issueHistory(projectId, before.issueId, actorId, "delivery.reassigned", { deliveryId: id, beforeReviewerId: before.reviewerId, reviewerId });
+    await this.audit(actorId, "delivery.reassigned", projectId, id);
+    return this.readDeliverable(projectId, id);
+  }
+  async hasAcceptedDelivery(projectId, issueId) {
+    const latest = await this.database.client.projectDeliverable.findFirst({ where: { projectId, issueId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { status: true } });
+    return latest?.status === "accepted";
   }
   async reviewDeliverable(projectId, id, actorId, revision, input) {
     const before = await this.readDeliverable(projectId, id);

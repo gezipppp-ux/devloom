@@ -19,6 +19,20 @@ async function fixture(t) {
   return { database, actor, projectId: project.id, lifecycle: new ProjectLifecycleServices(database, projects), content: new ProjectContentServices(database, projects) };
 }
 
+test("release archive refuses unresolved delivery reviews even when its issues are terminal", async t => {
+  const { actor, projectId, lifecycle, content } = await fixture(t);
+  const release = await lifecycle.saveRelease(projectId, null, actor, { name: "v3.1" });
+  let issue = await content.createIssue(projectId, actor, { type: "bug", title: "Completed scope", releaseId: release.id });
+  issue = await content.transitionIssue(projectId, issue.id, actor, { revision: issue.revision, status: "cancelled", reason: "Out of scope" });
+  const delivery = await content.addDeliverable(projectId, actor, { issueId: issue.id, body: "Handover evidence", reviewerId: actor.id });
+  await assert.rejects(lifecycle.archiveRelease(projectId, release.id, actor, { revision: 1 }, true), /交付/);
+  const returned = await content.reviewDeliverable(projectId, delivery.id, actor, { revision: 1, status: "returned", checkedItems: [], reviewNote: "Evidence missing" });
+  await assert.rejects(lifecycle.archiveRelease(projectId, release.id, actor, { revision: 1 }, true), /交付/);
+  const next = await content.addDeliverable(projectId, actor, { issueId: issue.id, body: "Complete evidence", reviewerId: actor.id, supersedesId: delivery.id, previousRevision: returned.revision });
+  await content.reviewDeliverable(projectId, next.id, actor, { revision: 1, status: "accepted", checkedItems: next.checklist.map((_, i) => i) });
+  assert.equal((await lifecycle.archiveRelease(projectId, release.id, actor, { revision: 1 }, true)).status, "archived");
+});
+
 test("release creation and editing reject invalid names without changing persisted data", async t => {
   const { database, actor, projectId, lifecycle } = await fixture(t);
   for (const [index, name] of ["v0.5.9", "v0.1", "v1.0"].entries()) {
@@ -60,7 +74,7 @@ test("release archive gates unfinished work and protects all issue write paths u
     () => content.updateIssue(projectId, issue.id, actor, { revision: issue.revision, releaseId: null }),
     () => content.transitionIssue(projectId, issue.id, actor, { revision: issue.revision, status: "pending", reason: "重开" }),
     () => content.addComment(projectId, issue.id, actor, { body: "评论" }),
-    () => content.addDeliverable(projectId, actor, { issueId: issue.id, body: "交付" }),
+    () => content.addDeliverable(projectId, actor, { reviewerId: actor.id, issueId: issue.id, body: "交付" }),
     () => content.uploadFile(projectId, "issues", issue.id, actor, { name: "readme.txt", mimeType: "text/plain", data: Buffer.from("data") }),
     () => content.createIssue(projectId, actor, { type: "bug", title: "新事项", releaseId: release.id }),
     () => content.saveAsset(projectId, asset.id, actor, { revision: asset.revision, issueIds: [] }),

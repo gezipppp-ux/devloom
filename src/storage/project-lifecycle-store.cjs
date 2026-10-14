@@ -51,6 +51,7 @@ class ProjectLifecycleStore {
   async archiveRelease(projectId, id, revision, archive) {
     await this.release(projectId, id);
     if (archive) {
+      if (await this.database.client.projectDeliverable.count({ where: { projectId, status: { in: ["pending", "returned"] }, next: { is: null }, issue: { releaseId: id } } })) throw accountError("版本仍有待验证或退回的交付，请先完成验收。", 409);
       const issues = await this.database.client.projectIssue.findMany({ where: { projectId, releaseId: id }, include: { workflowVersion: true } });
       if (issues.some(issue => !issueCompleted(issue))) throw accountError("版本仍有未完成或未取消事项。", 409);
       if (await this.database.client.developmentTask.count({ where: { projectId, releaseId: id, status: { notIn: ["completed", "cancelled", "merged"] } } })) throw accountError("版本仍有未结束开发任务。", 409);

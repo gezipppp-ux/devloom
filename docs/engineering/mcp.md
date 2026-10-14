@@ -24,9 +24,9 @@
 | create_release | 新建版本，使用既有 v1.2 / v1.2.3 命名规则 |
 | list_project_members | 有效成员及 canAssign；可筛选具备开发资格的负责人 |
 | search_issues / get_issue | 查重、详情、事项和开发任务修订号、附件与站内链接 |
-| create_issue | 原子创建事项、绑定图片、设置参与人和可选开发负责人 |
-| update_issue | 带 revision 更新内容、版本、参与人和追加图片 |
-| assign_issue | 指派／转派负责人及设置参与人 |
+| create_issue | 原子创建事项、绑定图片、设置职责、关注人和可选开发负责人 |
+| update_issue | 带 revision 更新内容、版本、职责、关注人和追加图片 |
+| assign_issue | 指派／转派负责人及设置关注人 |
 | get_request_result | 响应丢失后读取本人原请求结果 |
 
 列表默认每页 30 条，最多 100 条，按 nextOffset 继续。list_releases 省略 projectIds 时按权限遍历项目；显式提供不可访问项目时整次报错，不伪装为空列表。
@@ -78,9 +78,9 @@ Windows PowerShell：
 
 写工具必须提供稳定 UUIDv4 requestId；它独立于 JSON-RPC 请求 ID。服务端保存用户、项目、操作、规范化输入摘要与原始成功结果，相同请求返回 reused: true，换参数返回 409。相同用户不能把原标识用于另一个项目或操作。更新重试先检查原成功记录，再检查修订，避免已成功请求因旧 revision 再次报错。
 
-事项、正式附件、暂存绑定、参与人、可选负责人及请求结果在同一个 PostgreSQL Serializable 短事务中提交。负责人无效或附件失败时全部回滚，保留有效暂存文件。新建版本也使用同一幂等机制。上传流位于事务外，不在事务中等待网络、Git 或 Agent。
+事项、正式附件、暂存绑定、关注人、可选负责人及请求结果在同一个 PostgreSQL Serializable 短事务中提交。负责人无效或附件失败时全部回滚，保留有效暂存文件。新建版本也使用同一幂等机制。上传流位于事务外，不在事务中等待网络、Git 或 Agent。
 
-一名开发负责人加多名参与人；负责人必须为当前有效且具备 session.start 的项目成员。沿用既有指派逻辑创建 planned 开发任务，不准备 Git、不创建 worktree、不启动 Agent。转派需要事项 revision 和开发任务 taskRevision，只允许未启动的任务；合并任务要求到控制台确认整体转派范围。
+人员字段明确使用 reporterId、businessOwnerId、qaOwnerId、acceptanceOwnerId、watcherIds；create_issue/update_issue 可设置这些职责（需要 issues.assign scope 和 issue.assign 权限）。开发负责人使用 developerId，必须为当前有效且具备 session.start 的项目成员。沿用既有指派逻辑创建 planned 开发任务，不准备 Git、不创建 worktree、不启动 Agent。转派需要事项 revision 和开发任务 taskRevision，只允许未启动的任务；合并任务要求到控制台确认整体转派范围。
 
 get_request_result 返回原操作的成功快照，get_issue 返回最新状态。找不到请求不表示可以换新标识重发，客户端应使用原参数和原标识重试。
 

@@ -144,6 +144,8 @@ async function verifyWorkflowCanvas({ page, origin, output }) {
   const planned = page.getByRole('button', { name: '规划中', exact: true });
   await planned.click();
   await page.getByLabel('状态名称', { exact: true }).fill('画布内规划');
+  await selectOption(page.getByLabel('处理职责', { exact: true }), 'reporter');
+  await selectOption(page.getByLabel('工作类别', { exact: true }), 'planning');
   assert.equal(await page.locator('.workflow-canvas').getByLabel('状态名称', { exact: true }).count(), 1);
   const renamed = page.getByRole('button', { name: '画布内规划', exact: true });
   const previousPosition = await renamed.getAttribute('transform');
@@ -153,11 +155,14 @@ async function verifyWorkflowCanvas({ page, origin, output }) {
   await page.getByRole('button', { name: '退出全屏', exact: true }).click();
   assert.equal(await page.getByLabel('状态名称', { exact: true }).inputValue(), '画布内规划', 'fullscreen keeps the draft and selection');
   await renamed.press('Escape');
+  await page.locator('.workflow-inspector').waitFor({ state: 'hidden' });
   await renamed.hover();
-  const beforeDrag = await renamed.getAttribute('transform'), dragBox = await renamed.boundingBox();
-  const dragStart = { x: dragBox.x + dragBox.width / 4, y: dragBox.y + dragBox.height / 2 };
-  await page.mouse.move(dragStart.x, dragStart.y); await page.mouse.down();
-  await page.mouse.move(dragStart.x, dragStart.y + 96, { steps: 8 }); await page.mouse.up();
+  // Closing the inspector refits the canvas; use a stable, actionable card position.
+  await renamed.locator('.node-card').click({ trial: true });
+  const beforeDrag = await renamed.getAttribute('transform'), dragBox = await renamed.locator('.node-card').boundingBox();
+  const dragX = dragBox.x + dragBox.width / 2, dragY = dragBox.y + dragBox.height / 2;
+  await page.mouse.move(dragX, dragY); await page.mouse.down();
+  await page.mouse.move(dragX, dragY + 96, { steps: 8 }); await page.mouse.up();
   assert.notEqual(await renamed.getAttribute('transform'), beforeDrag, 'pointer dragging moves the state');
   const source = await page.getByRole('button', { name: '连接 画布内规划', exact: true }).boundingBox();
   const target = await page.getByRole('button', { name: '开发中', exact: true }).boundingBox();
@@ -166,6 +171,8 @@ async function verifyWorkflowCanvas({ page, origin, output }) {
   await page.getByLabel('操作名称', { exact: true }).fill('画布连接');
   await page.getByLabel('必须填写原因', { exact: true }).check();
   await selectOption(page.getByLabel('所需权限', { exact: true }), 'issue.accept');
+  await selectOption(page.getByLabel('流转必填资料', { exact: true }), ['acceptanceCriteria', 'qaOwnerId']);
+  await page.getByLabel('必须已有通过验收的交付', { exact: true }).check();
   assert.equal(await graph.locator('.edge-line').count(), 14);
   await verifyCurves();
   await page.getByLabel('操作名称', { exact: true }).press('Escape');
@@ -223,6 +230,10 @@ async function verifyWorkflowCanvas({ page, origin, output }) {
   assert.equal(workflows.requirement.draft.transitions.at(-1).requiresReason, true);
   assert.equal(workflows.requirement.draft.transitions.at(-1).permission, 'issue.accept');
   assert.equal(writes.at(-1).definition.nodes[0].name, '画布内规划');
+  assert.equal(writes.at(-1).definition.nodes[0].handler, 'reporter');
+  assert.equal(writes.at(-1).definition.nodes[0].category, 'planning');
+  assert.deepEqual(workflows.requirement.draft.transitions.at(-1).requiredFields, ['acceptanceCriteria', 'qaOwnerId']);
+  assert.equal(workflows.requirement.draft.transitions.at(-1).requireAcceptedDelivery, true);
   await page.getByRole('group', { name: '流程类型', exact: true }).getByRole('button', { name: 'Bug 流程', exact: true }).click();
   await page.getByRole('button', { name: '待处理', exact: true }).waitFor();
   assert.equal(await page.getByLabel('状态名称', { exact: true }).count(), 0, 'type switch clears inline editor');

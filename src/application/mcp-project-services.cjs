@@ -121,7 +121,7 @@ class McpProjectServices {
     if (ids.length > 20 || new Set(ids).size !== ids.length) throw accountError("附件最多 20 个且不能重复。", 400);
     const files = await this.store.attachments(actor.id, projectId, ids, issueId);
     const value = { ...input };
-    for (const key of ["projectId", "issueId", "attachmentIds", "assigneeId"]) delete value[key];
+    for (const key of ["projectId", "issueId", "attachmentIds", "developerId"]) delete value[key];
     if (issueId) delete value.requestId;
     for (const field of markdownFields) if (typeof value[field] === "string") {
       value[field] = value[field].replace(/attachment:([a-zA-Z0-9_-]+)/g, (_match, id) => {
@@ -133,17 +133,17 @@ class McpProjectServices {
     return { value, ids };
   }
   async createIssue(context, input) {
-    const assigns = Boolean(input.assigneeId || input.participantIds?.length);
+    const assigns = Boolean(input.developerId || input.watcherIds?.length || ["reporterId", "businessOwnerId", "qaOwnerId", "acceptanceOwnerId"].some(key => input[key]));
     return this.write(context, "create_issue", input, ["issue.create", ...(assigns ? ["issue.assign"] : [])], async actor => {
       const { value, ids } = await this.issueInput(actor, input.projectId, input);
       const issue = await this.content.createIssue(input.projectId, actor, value);
-      if (input.assigneeId) await this.development.create(input.projectId, actor, { requestId: input.requestId, issueIds: [issue.id], executorId: input.assigneeId });
+      if (input.developerId) await this.development.create(input.projectId, actor, { requestId: input.requestId, issueIds: [issue.id], executorId: input.developerId });
       await this.store.bind(ids, issue.id);
       return this.issueResult(input.projectId, issue.id, actor);
     });
   }
   async updateIssue(context, input) {
-    return this.write(context, "update_issue", input, ["issue.edit", ...(input.participantIds ? ["issue.assign"] : [])], async actor => {
+    return this.write(context, "update_issue", input, ["issue.edit", ...(["watcherIds", "reporterId", "businessOwnerId", "qaOwnerId", "acceptanceOwnerId"].some(key => Object.hasOwn(input, key)) ? ["issue.assign"] : [])], async actor => {
       const { value, ids } = await this.issueInput(actor, input.projectId, input, input.issueId);
       await this.content.updateIssue(input.projectId, input.issueId, actor, value);
       await this.store.bind(ids, input.issueId);
@@ -154,13 +154,13 @@ class McpProjectServices {
     return this.write(context, "assign_issue", input, ["issue.assign"], async actor => {
       let issue = await this.content.readIssue(input.projectId, input.issueId, actor);
       if (issue.revision !== revision(input.revision)) throw accountError("事项已修改，请重新读取后再指派。", 409);
-      if (input.participantIds) issue = await this.content.updateIssue(input.projectId, issue.id, actor, { revision: issue.revision, participantIds: input.participantIds });
+      if (input.watcherIds) issue = await this.content.updateIssue(input.projectId, issue.id, actor, { revision: issue.revision, watcherIds: input.watcherIds });
       if (issue.development) {
         const { task } = await this.development.read(input.projectId, issue.development.taskId, actor);
         if (task.issueIds.length !== 1) throw accountError("事项属于合并开发任务，请在控制台确认整个任务的转派范围。", 409);
-        await this.development.update(input.projectId, task.id, actor, { revision: input.taskRevision, executorId: input.assigneeId });
+        await this.development.update(input.projectId, task.id, actor, { revision: input.taskRevision, executorId: input.developerId });
       } else {
-        await this.development.create(input.projectId, actor, { requestId: input.requestId, issueIds: [issue.id], executorId: input.assigneeId });
+        await this.development.create(input.projectId, actor, { requestId: input.requestId, issueIds: [issue.id], executorId: input.developerId });
       }
       return this.issueResult(input.projectId, issue.id, actor);
     });

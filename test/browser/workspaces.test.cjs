@@ -295,7 +295,8 @@ async function main() {
     );
     await page.getByRole("combobox", { name: "权限模式", exact: true }).click();
     assert.equal(await page.locator('.ant-select-item-option:has(.app-select-option[data-value="auto"])').getAttribute('aria-selected'), 'true');
-    await page.keyboard.press("Escape");
+    await page.getByRole("combobox", { name: "权限模式", exact: true }).press("Escape");
+    await page.locator(".app-select-popup:visible").waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "■ 停止", exact: true }).click();
     await openSessionContext(page, '会话信息');
     await page.locator(".session-context details summary").click();
@@ -320,8 +321,8 @@ async function main() {
     );
     await page.getByRole("combobox", { name: "权限模式", exact: true }).click();
     assert.equal(await page.locator('.ant-select-item-option:has(.app-select-option[data-value="ask"])').getAttribute('aria-selected'), 'true');
-    await page.keyboard.press("Escape");
-    await page.getByRole("option").first().waitFor({ state: "hidden" });
+    await page.getByRole("combobox", { name: "权限模式", exact: true }).press("Escape");
+    await page.locator(".app-select-popup:visible").waitFor({ state: "hidden" });
     await page.screenshot({
       path: path.join(output, "workspace-rail-desktop.png"),
       fullPage: true,

@@ -118,3 +118,5 @@ ProjectPermissionEditor 在部门模式显示功能上限，在成员模式显�
 开发任务的 `taskStart=1` 查询参数定位独立的开始确认视图，返回详情及语言切换保留同一组件的分支、执行偏好和补充说明草稿。确认勾选随范围修订、分支及执行设置变化失效；只有明确确认并提交后才调用原有启动请求。`use-development-task` 的请求标识与未知结果查询生命周期不因确认视图切换而重建，校验失败保留草稿，已受理或未知结果不能盲目重启。
 
 全局开发列表复用项目内的 `MergeDevelopmentDialog`，仍只允许同项目、同版本、未启动的本人任务合并，最多 20 条事项；合并栏仅在选择后出现。`workbench-presenter` 复用开发任务 presenter 返回关联范围、修订号和真实权限，不从前端状态推断合并及会话访问资格。“项目全部任务”使用顶部所选项目直接进入既有项目列表；“独立开发”“历史会话”先选择获授权项目，有就绪空间时通过 `view=manual|history` 打开既有表单或归档弹窗，尚未就绪时进入代码与环境准备页。入口和环境准备均不自动执行 Agent，归档会话保持本人空间隔离。
+
+2026-10-14 职责与工作台实施：`WorkbenchHome` / `WorkActionQueue` / `WorkActionList` 展示 `/workbench/actions` 的个人动作；资源列表继续用于浏览。`IssueFields` 明确职责与关注关系，`IssueDetail` 显示当前处理人并开始步骤；`SystemWorkflows` 编辑节点职责/类别和连线资料/交付门禁。交付发布选择验证人，`DeliveryDetail` 提供开始验证、转派和保留原记录的重新提交。通知直接使用相同个人动作快照；语言与账号切换继续保留既有请求代际规则。详细业务契约见[流程动作](../../docs/engineering/workflow-actions.md)。

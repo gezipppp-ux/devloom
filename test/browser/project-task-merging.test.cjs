@@ -6,7 +6,7 @@ const { selectRemoteBranch } = require("../support/remote-branch-select.cjs");
 
 async function verifyProjectTaskMerging({ page, origin, project, database, content, admin, output, clients }) {
   const issues = [];
-  for (const title of ["批量分配：搜索需求", "批量分配：搜索结果修复"]) issues.push(await content.createIssue(project.id, admin, { type: "requirement", title }));
+  for (const title of ["批量分配：搜索需求", "批量分配：搜索结果修复"]) issues.push(await content.createIssue(project.id, admin, { type: "requirement", title, qaOwnerId: admin.id }));
   const starts = () => clients.flatMap(client => client.calls).filter(call => call.method === "turn/start").length;
   const before = starts();
   await page.goto(`${origin}/projects/${project.id}?tab=issues&q=${encodeURIComponent("批量分配")}`);
@@ -89,7 +89,7 @@ async function verifyProjectTaskMerging({ page, origin, project, database, conte
     const row = page.locator(".ui-data-table tbody tr").filter({ hasText: issue.title });
     await row.getByText("无进行中的开发任务", { exact: false }).waitFor();
     const text = await row.innerText();
-    assert.ok((await row.locator('td[data-label="负责人"]').innerText()).includes(admin.displayName), "completed development still shows the responsible developer beside the avatar");
+    assert.ok((await row.locator('td[data-label="开发负责人"]').innerText()).includes(admin.displayName), "completed development still shows the responsible developer beside the avatar");
     assert.ok(text.includes("待验证"));
     assert.equal(text.includes("待认领"), false, "no active task does not mean no responsible developer");
   }

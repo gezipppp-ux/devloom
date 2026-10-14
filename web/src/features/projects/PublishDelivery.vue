@@ -7,25 +7,27 @@ import ModalDialog from "../../shared/components/ModalDialog.vue";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import PagePagination from "../../shared/components/PagePagination.vue";
 import DevelopmentTaskConfirmation from "./DevelopmentTaskConfirmation.vue";
-const props = defineProps({ projectId: { type: String, required: true }, runKey: { type: String, default: "" }, canPublish: { type: Boolean, default: true } });
+const props = defineProps({ projectId: { type: String, required: true }, runKey: { type: String, default: "" }, canPublish: { type: Boolean, default: true }, previous: { type: Object, default: null } });
 const emit = defineEmits(["close", "published", "finished"]);
-const form = reactive({ issueId: "", title: "", body: "", verification: "", commit: "", share: false });
+const form = reactive({ issueId: "", title: "", body: "", verification: "", commit: "", reviewerId: "", share: false });
+if (props.previous) Object.assign(form, { issueId: props.previous.issueId || "", title: props.previous.title, body: props.previous.body, commit: props.previous.commit || "", reviewerId: props.previous.reviewerId });
 const query = ref(""), offset = ref(0), selected = ref(null), finishing = ref(false);
 const endpoint = '/projects/' + props.projectId;
-const { data, loading, saving, error, reload, save } = useResource(() => props.runKey
+const reviewers = useResource(() => appApi(endpoint + '/reviewers'));
+const { data, loading, saving, error, reload, save } = useResource(() => props.previous ? { items: [] } : props.runKey
   ? appApi(endpoint + '/tasks/session?' + new URLSearchParams({ runKey: props.runKey }))
   : appApi(endpoint + '/issues?' + new URLSearchParams({ query: query.value, offset: String(offset.value), limit: '30' })));
 const task = computed(() => data.value?.task);
-const independent = computed(() => task.value?.kind === 'manual');
+const independent = computed(() => props.previous ? !props.previous.issueId : task.value?.kind === 'manual');
 const issues = computed(() => task.value ? [...task.value.issues, ...task.value.additions.flatMap(batch => batch.issues || [])] : data.value?.items || []);
 const publishable = computed(() => props.canPublish && (!props.runKey || task.value && ['started', 'completed'].includes(task.value.status) && task.value.release?.status !== 'archived'));
 watch(task, value => { if (!value) return; if (!form.title) form.title = value.title; if (!form.issueId && value.issueIds.length === 1) form.issueId = value.issueIds[0]; });
 function search(next = 0) { offset.value = next; void reload(); }
 function choose() { selected.value = issues.value.find(item => item.id === form.issueId) || selected.value; if (selected.value && !form.title) form.title = selected.value.title; }
 function publish() {
-  if (!publishable.value || !form.share || !form.title.trim() || !form.body.trim() || !independent.value && !form.issueId) return;
-  return save(endpoint + '/deliveries', { title: form.title, body: form.body + (form.verification.trim() ? '\n\n## 验证结果\n\n' + form.verification : ''), commit: form.commit,
-    ...(task.value ? { taskId: task.value.id } : {}), ...(form.issueId ? { issueId: form.issueId } : {}) }, result => emit('published', result), '交付已发布，等待验证。');
+  if (!publishable.value || !form.reviewerId || !form.share || !form.title.trim() || !form.body.trim() || !independent.value && !form.issueId) return;
+  return save(endpoint + '/deliveries', { title: form.title, body: form.body + (form.verification.trim() ? '\n\n## 验证结果\n\n' + form.verification : ''), commit: form.commit, reviewerId: form.reviewerId,
+    ...(props.previous ? { supersedesId: props.previous.id, previousRevision: props.previous.revision, taskId: props.previous.taskId } : task.value ? { taskId: task.value.id } : {}), ...(form.issueId ? { issueId: form.issueId } : {}) }, result => emit('published', result), '交付已发布，等待验证。');
 }
 function finish() {
   if (!task.value?.canComplete) return;
@@ -40,10 +42,11 @@ function close() { if (!saving.value) emit('close'); }
     <form v-if="data" class="delivery-layout project-form" @submit.prevent="publish">
       <section class="delivery-editor"><h2>{{ $t('整理成果') }}</h2><label>{{ $t('交付标题') }}<input v-model="form.title" required maxlength="200" :disabled="saving" /></label><label>{{ $t('交付说明') }}<textarea v-model="form.body" rows="6" required maxlength="50000" :disabled="saving" /></label><label>{{ $t('验证结果') }}<textarea v-model="form.verification" rows="4" maxlength="10000" :disabled="saving" :placeholder="$t('填写已执行的检查、结果与尚待确认的问题。')" /></label><label>{{ $t('提交标识（可选）') }}<input v-model="form.commit" maxlength="2000" :disabled="saving" /></label></section>
       <aside class="delivery-sharing"><h2>{{ $t('发布范围') }}</h2><p>{{ $t('交付说明与填写的验证结果、提交信息将对有协作权限的项目成员可见。') }}</p>
-        <template v-if="independent"><h3>{{ $t('独立开发') }}</h3><p class="muted">{{ $t('本次开发不关联事项，可直接发布项目交付。') }}</p></template>
+        <template v-if="previous"><h3>{{ $t("重新提交交付") }}</h3><p>{{ previous.reviewNote }}</p><p class="field-hint">{{ $t("保留原交付与验收记录，以新版本再次提交验证。") }}</p></template><template v-else-if="independent"><h3>{{ $t('独立开发') }}</h3><p class="muted">{{ $t('本次开发不关联事项，可直接发布项目交付。') }}</p></template>
         <template v-else><div v-if="!runKey" class="ui-filter-bar"><input v-model="query" :aria-label="$t('搜索事项')" :placeholder="$t('搜索标题与描述')" :disabled="saving" @keydown.enter.prevent="search()" /><button type="button" :disabled="saving || loading" @click="search()">{{ $t('搜索') }}</button></div><PagePagination v-if="!runKey" :offset="offset" :next-offset="data?.nextOffset" :disabled="loading || saving" @change="search" /><label>{{ $t('关联事项') }}<AppSelect native-events :aria-label="$t('关联事项')" v-model="form.issueId" required @change="choose" :disabled="loading || saving"><option value="" disabled>{{ $t('选择事项') }}</option><option v-if="selected && !issues.some(item => item.id === selected.id)" :value="selected.id">#{{ selected.number }} {{ selected.title }}</option><option v-for="issue in issues.filter(item => item.release?.status !== 'archived')" :key="issue.id" :value="issue.id">#{{ issue.number }} {{ issue.title }}</option></AppSelect></label></template>
+        <FeedbackMessage :message="reviewers.error.value" type="error" /><button v-if="reviewers.error.value" type="button" @click="reviewers.reload">{{ $t('重新读取验证人') }}</button><label>{{ $t('交付验证人') }}<AppSelect native-events v-model="form.reviewerId" :aria-label="$t('交付验证人')" required :disabled="saving || reviewers.loading.value"><option value="" disabled>{{ $t('选择明确的验证人') }}</option><option v-for="person in reviewers.data.value?.items || []" :key="person.id" :value="person.id">{{ person.displayName }}（{{ person.username }}）</option></AppSelect></label><p class="field-hint">{{ $t('交付将进入指定验证人的待验证列表。') }}</p>
         <label class="ui-check-row"><input v-model="form.share" type="checkbox" :disabled="saving || !publishable" /><span>{{ $t('我确认将以上交付说明与提交信息共享给有协作权限的项目成员。私人会话不会公开。') }}</span></label>
-        <button class="primary" type="submit" :disabled="saving || loading || !publishable || !form.share || !form.title.trim() || !form.body.trim() || !independent && !form.issueId">{{ saving ? $t('正在发布…') : $t('发布交付') }}</button>
+        <button class="primary" type="submit" :disabled="saving || loading || !publishable || !form.reviewerId || !form.share || !form.title.trim() || !form.body.trim() || !independent && !form.issueId">{{ saving ? $t('正在发布…') : $t('发布交付') }}</button>
         <button v-if="task?.canComplete" type="button" :disabled="saving" @click="finishing = true">{{ $t('仅结束个人开发') }}</button><button type="button" :disabled="saving" @click="close">{{ $t(runKey ? '返回会话' : '取消') }}</button>
         <p class="field-hint">{{ $t('发布交付不会合并代码、结束开发或改变事项验收状态。') }}</p>
       </aside>

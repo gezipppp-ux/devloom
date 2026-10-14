@@ -194,7 +194,7 @@ class SessionViews {
         (!request.turnId || request.turnId === runtime.turnId) &&
         this.agent.capabilities?.[request.kind === "user-input" ? "userInput" : "approvals"] === true &&
         ["approval", "user-input"].includes(request.kind),
-      ).map(request => ({ id: String(request.id), kind: request.kind, turnId: request.turnId || runtime.turnId || "" }));
+      ).map(request => ({ id: String(request.id), kind: request.kind, blocking: request.blocking !== false, turnId: request.turnId || runtime.turnId || "" }));
       if (requests.length) result.push({ key: runtime.key, title, updatedAt: runtime.lastActivity || state.updated_at, requests });
     }
     return result;

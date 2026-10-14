@@ -13,7 +13,8 @@ async function verifyWorkbench(browser) {
   const output = path.resolve('state/browser/workbench'); fs.mkdirSync(output, {recursive:true});
   const project = fixture.response(new URL(origin + '/api/projects')).projects[0];
   const issue = { ...fixture.response(new URL(origin + base + '/issues/search')), dueDate: '2026-10-20', tags: ['体验', 'MVP'] };
-  let delivery = { id: 'delivery-1', projectId, issueId: issue.id, title: '客户搜索交付', body: '功能说明与验证记录', status: 'pending', revision: 1, checklist: ['搜索结果符合筛选条件', '移动端可完成操作'], checkedItems: [], authorId: 'visual-admin', commit: 'abc123', createdAt: '2026-10-14T08:00:00Z' };
+  let delivery = { id: 'delivery-1', projectId, issueId: issue.id, title: '客户搜索交付', body: '功能说明与验证记录', status: 'pending', revision: 1, checklist: ['搜索结果符合筛选条件', '移动端可完成操作'], checkedItems: [], authorId: 'visual-admin', reviewerId: 'visual-admin', commit: 'abc123', createdAt: '2026-10-14T08:00:00Z' };
+  let resubmitted;
   const requests = [], errors = [];
   let reviewForbidden = false;
   page.on('pageerror', error => errors.push(error.message));
@@ -31,7 +32,7 @@ async function verifyWorkbench(browser) {
       if (endpoint === '/api/account/git-accounts') return send({ accounts: [{ id: 'git-fixture', name: '工作 Git', authType: 'http', host: 'https://git.example.test', username: 'preview', authorName: '演示成员', authorEmail: 'preview@example.test', revision: 1 }] });
       if (endpoint === '/api/account/mcp-tokens') return send({ tokens: [{ id: 'token-fixture', name: '本机助手', prefix: 'wc_mcp_fixture', status: 'active', allProjects: true, projectIds: [], scopes: ['read'], expiresAt: '2027-01-01T00:00:00Z', lastUsedAt: null }], scopes: require('../../shared/mcp-scopes.json'), projects: [{ id: projectId, name: project.name }] });
       if (endpoint === '/api/system/settings') return send({ memberStorageRoot: 'D:/Workspace', platform: 'win32', git: { installed: true, version: '2.47.0' } });
-      if (['/api/workbench/attention', '/api/workbench/recent-projects'].includes(endpoint)) return send(fixture.response(url));
+      if (['/api/workbench/attention', '/api/workbench/recent-projects', '/api/workbench/actions'].includes(endpoint)) return send(fixture.response(url));
       if (endpoint.startsWith('/api/workbench/')) {
         const kind=endpoint.split('/').at(-1);
         if (kind === 'tasks') {
@@ -51,11 +52,13 @@ async function verifyWorkbench(browser) {
         const second=url.searchParams.get('offset')==='30';
         return send({items:[second ? {...issue,id:'issue-31',number:31,title:'第二页的事项'} : issue],nextOffset:second?null:30});
       }
-      if (endpoint.endsWith('/deliveries') && input) { assert.equal(endpoint,base+'/deliveries'); return send({...delivery,id:'delivery-1',...input}); }
-      if (endpoint === base + '/deliveries/delivery-1') return send({delivery,issue,permissions:fixture.permissions,people:issue.people});
+      if (endpoint.endsWith('/deliveries') && input) { assert.equal(endpoint,base+'/deliveries'); if (input.supersedesId) { resubmitted = { ...delivery, ...input, id: 'delivery-2', status: 'pending', revision: 1, checkedItems: [], reviewedAt: null }; return send(resubmitted); } return send({...delivery,id:'delivery-1',...input}); }
+      if (endpoint === base + '/deliveries/delivery-2') return send({delivery:resubmitted,issue,canReview:true,permissions:fixture.permissions,people:issue.people});
+      if (endpoint === base + '/deliveries/delivery-1') return send({delivery,issue,canReview:true,canResubmit:delivery.status === 'returned',permissions:fixture.permissions,people:issue.people});
+      if (endpoint === base + '/deliveries/delivery-1/start') { delivery = { ...delivery, verificationStartedAt: '2026-10-14T09:00:00Z', revision: delivery.revision + 1 }; return send(delivery); }
       if (endpoint === base + '/deliveries/delivery-1/review') {
         if (reviewForbidden) return send({error:'Review permission revoked'},403);
-        delivery={...delivery,...input,revision:2,reviewedById:'visual-admin',reviewedAt:'2026-10-14T09:00:00Z'};return send({delivery});
+        delivery={...delivery,...input,revision:delivery.revision+1,reviewedById:'visual-admin',reviewedAt:'2026-10-14T09:00:00Z'};return send({delivery});
       }
       const result=fixture.response(url); return result ? send(result) : send({error:'Unexpected fixture API: '+endpoint},404);
     }
@@ -67,11 +70,15 @@ async function verifyWorkbench(browser) {
     await require('./relative-time.test.cjs').verifyRelativeTime(page, origin, projectId);
     await page.goto(origin);
     await page.getByRole('heading',{name:'工作台',exact:true}).waitFor();
-    await page.locator('.ui-work-row').first().waitFor();
+    await page.locator('.work-action').first().waitFor();
+    await page.locator('.ui-home-section').first().getByRole('button', { name: /查看全部/ }).click();
+    await page.waitForURL(url => url.pathname === '/work' && url.searchParams.get('bucket') === 'todo');
+    await page.locator('.work-action').first().waitFor();
+    assert.equal(await page.locator('.work-action').count(), 1, 'home and full queue keep the same action scope');
     for(const locale of ['zh-CN','en']) {
       await selectOption(page.locator('.ui-locale'), locale);
       for(const [name, location, ready] of [
-        ['home', '/', '.ui-work-row'], ['projects', '/projects', '.project-card'],
+        ['home', '/', '.work-action'], ['action-queue', '/work?bucket=verify', '.work-action'], ['projects', '/projects', '.project-card'],
         ['overview', `/projects/${projectId}`, '.project-overview-grid'],
         ['issues', '/issues', '.ui-data-table'], ['development', '/development', '.ui-data-table'],
         ['deliveries', '/deliveries', '.ui-work-row'], ['personal', '/personal', '.ui-profile-settings form'],
@@ -147,6 +154,7 @@ async function verifyWorkbench(browser) {
     await dialog.getByRole('button',{name:'Next',exact:true}).click();
     await selectOption(dialog.getByLabel('Related issue',{exact:true}), 'issue-31');
     await dialog.getByLabel('Delivery notes',{exact:true}).fill('发布内容保留原文 @ {name}');
+    await selectOption(dialog.getByLabel('Delivery reviewer',{exact:true}), 'visual-admin');
     const publish=dialog.getByRole('button',{name:'Publish delivery',exact:true});
     assert.equal(await publish.isEnabled(),false,'sharing requires explicit confirmation');
     await dialog.getByRole('checkbox').check();
@@ -177,6 +185,20 @@ async function verifyWorkbench(browser) {
     await page.getByLabel('Review notes',{exact:true}).waitFor();
     assert.equal(await page.getByLabel('Review notes',{exact:true}).inputValue(),'','access recovery cannot resurrect a revoked draft');
     assert.equal(await page.getByRole('checkbox').nth(0).isChecked(),false);
+    await page.getByRole('button', { name: 'Start review', exact: true }).click();
+    await page.getByText('Review progress：Review in progress', { exact: true }).waitFor();
+    await page.getByLabel('Review notes', { exact: true }).fill('请补充移动端验证证据');
+    await page.getByRole('button', { name: 'Return for changes', exact: true }).click();
+    await page.getByRole('button', { name: 'Revise and resubmit', exact: true }).click();
+    const revisionDialog = page.getByRole('dialog');
+    await revisionDialog.getByLabel('Delivery notes', { exact: true }).fill('已补充移动端验证证据');
+    await revisionDialog.getByRole('checkbox').check();
+    await revisionDialog.getByRole('button', { name: 'Publish delivery', exact: true }).click();
+    await page.waitForURL(url => url.searchParams.get('delivery') === 'delivery-2');
+    assert.equal(resubmitted.supersedesId, 'delivery-1');
+    assert.equal(resubmitted.reviewerId, 'visual-admin');
+    assert.equal(resubmitted.previousRevision, delivery.revision);
+    await page.getByRole('link', { name: 'View original delivery', exact: true }).waitFor();
     assert.deepEqual(errors,[]);
     console.log('Workbench browser checks passed: fourteen bilingual surfaces at seven viewports, whole-card and keyboard project entry, task filtering, search, paged issue selection, explicit sharing and complete acceptance checks.');
   } catch(error) { await page.screenshot({path:'state/browser/ui-refactor/workbench-failure.png'}); console.error(await page.locator('body').innerText()); throw error; } finally {await context.close();}

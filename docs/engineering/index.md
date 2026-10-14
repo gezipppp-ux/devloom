@@ -6,6 +6,8 @@ Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install
 
 ## Before development
 
+- 事项职责、节点处理动作、个人工作台三栏、统一通知和指定交付验证人遵循[流程动作契约](./workflow-actions.md)。这取代旧的参与人/开发负责人混用与首页按资源类别分栏规则。
+
 - 系统供应商、原生直连、密钥及下一轮会话切换遵循 [Agent 供应商](./agent-suppliers.md)；首期仅实现 Codex，不提供路由转换。
 
 - 外部 Agent 的 MCP 接入、个人 Token 和受鉴权 HTTP 图片上传遵循 [MCP 契约](./mcp.md)；不复用浏览器 CSRF token，也不自动启动开发。

@@ -317,7 +317,7 @@ test("assigning separate issues and merging my plans preserves sources and start
   }
   assert.equal((await services.list(project.id, other, { scope: "mine" })).tasks.length, 0);
   assert.equal((await services.list(project.id, actor, { scope: "mine" })).tasks.length, 2);
-  assert.equal((await content.readIssue(project.id, requirement.id, actor)).assigneeId, actor.id);
+  assert.equal((await content.readIssue(project.id, requirement.id, actor)).developerId, actor.id);
   assert.equal((await services.create(project.id, other, input)).reused, true);
   await assert.rejects(services.create(project.id, other, { ...input, issueIds: [requirement.id] }), { statusCode: 409 });
   const merge = { requestId: randomUUID(), title: "统一修复", tasks: tasks.map(({ id, revision }) => ({ id, revision })) };
@@ -355,7 +355,7 @@ test("batch assignment and concurrent merging are atomic and reject stale or for
   const first = await issue("原任务"), second = await issue("第二任务"), third = await issue("未认领");
   const { tasks } = await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [first.id, second.id] });
   await assert.rejects(services.create(project.id, other, { requestId: randomUUID(), issueIds: [third.id, first.id] }), { statusCode: 409 });
-  assert.equal((await database.client.projectIssue.findUnique({ where: { id: third.id } })).assigneeId, null);
+  assert.equal((await database.client.projectIssue.findUnique({ where: { id: third.id } })).developerId, null);
   assert.equal(await database.client.developmentTask.count(), 2);
   const request = { requestId: randomUUID(), title: "原子合并", tasks: tasks.map(({ id, revision }) => ({ id, revision })) };
   await assert.rejects(services.merge(project.id, actor, { ...request, tasks: [request.tasks[0], { ...request.tasks[1], revision: 999 }] }), { statusCode: 409 });
@@ -494,14 +494,14 @@ test("running execution and pending approvals prevent completing a task and rele
   assert.equal(await database.client.issueDevelopmentClaim.count(), 0);
   assert.equal(await database.client.taskIssueLink.count(), 1);
   const listed = await content.listIssues(project.id, actor, {});
-  assert.equal(listed.items[0].assigneeId, actor.id, "completion retains the responsible developer");
+  assert.equal(listed.items[0].developerId, actor.id, "completion retains the responsible developer");
   assert.equal(listed.items[0].development, null, "completion releases only the active task claim");
   assert.equal(listed.people.find(person => person.id === actor.id)?.displayName, actor.displayName);
   const reopened = (await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [selected.id] })).tasks[0];
   await services.finish(project.id, reopened.id, actor, { revision: reopened.revision }, "cancelled");
   const cancelled = await content.listIssues(project.id, actor, {});
-  assert.equal(cancelled.items[0].assigneeId, null, "cancellation clears the responsible developer");
-  assert.deepEqual(cancelled.people, []);
+  assert.equal(cancelled.items[0].developerId, null, "cancellation clears the responsible developer");
+  assert.ok(cancelled.people.some(person => person.id === actor.id), "business owner remains in the people directory");
 });
 
 test("global workflow publication preserves planned task issue versions and applies the same development gates across projects", async t => {

@@ -160,7 +160,7 @@ function createWebServer({
       workspaceClones ||= new WorkspaceCloneManager(accounts.database, workspaces);
       projects = new ProjectServices(accounts.database, { workspaces, onRevoke: value => events.revoke(value) });
       projectContent = new ProjectContentServices(accounts.database, projects);
-      workbench = new WorkbenchServices(accounts.database, projects);
+      workbench = new WorkbenchServices(accounts.database, projects, { workspaces });
       attention = new AttentionServices(accounts.database, { projects, workspaces });
       projectDevelopment = new ProjectDevelopmentServices(accounts.database, projects, workspaces);
       projectLifecycle = new ProjectLifecycleServices(accounts.database, projects);

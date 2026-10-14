@@ -18,6 +18,7 @@ export const router = createRouter({
     { path: "/password", name: "password", component: PasswordPage },
     { path: "/", name: "workspace", component: WorkbenchApp },
     { path: "/projects", name: "projects", component: WorkbenchApp },
+    { path: "/work", name: "work", component: WorkbenchApp },
     { path: "/issues", name: "issues", component: WorkbenchApp },
     { path: "/development", name: "development", component: WorkbenchApp },
     { path: "/deliveries", name: "deliveries", component: WorkbenchApp },

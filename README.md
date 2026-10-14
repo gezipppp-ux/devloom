@@ -428,11 +428,19 @@ node test/browser/visual.test.cjs
 
 Windows 浏览器测试默认使用本机 Edge；Linux/macOS 默认使用 Playwright Chromium。Linux 测试环境一般需要先运行 `npx playwright install --with-deps chromium`；Ubuntu 26.04 的兼容下载设置及 CI 节点准备见 [平台验证说明](docs/engineering/platform-verification.md)。这些浏览器依赖用于自动化测试，不是普通 Web 服务启动的前置步骤。截图输出到忽略的 `state/browser/`，视觉索引为 `state/browser/unified/index.html`。
 
+## 本轮流程实施
+
+个人工作台已按流程分派的动作显示待推进、处理中与待验证；事项明确区分提报、业务、开发、测试、验收及关注职责。系统流程图可以配置处理职责、工作类别、流转必填资料与交付验收门禁，交付支持指定验证人和退回重提。详细规则、接口与部署边界见[流程动作契约](docs/engineering/workflow-actions.md)。
+
+本轮是职责与串行流程的第一阶段，项目独立流程方案、并行编排、迭代与完整测试管理仍在后续计划中。新增迁移不转换旧业务数据，不能直接用于已有事项或已修改流程的数据库；本次没有部署或清理现有业务数据。
+
 ## 更多文档
 
 | 文档 | 内容 |
 | --- | --- |
 | [使用手册](docs/user-guide.md) | 工作区、Git 账号、提示词、权限、开发任务、会话和代码查看 |
+| [研发流程与 TAPD 能力对齐方案](docs/prd/tapd-alignment-and-orchestration.md) | 现状梳理、人员职责及分阶段流程目标；首个职责与工作台切片已实现 |
+| [工作台队列与职责定义](docs/prd/workbench-action-contract.md) | 三栏目标规则与已实现范围；职责分派、交付返工和统一通知已接入 |
 | [部署说明](docs/deployment.md) | 独立安装、Codex 定位、Linux systemd、macOS launchd 与平台差异 |
 | [账号与数据库](docs/engineering/accounts-and-database.md) | 当前账号归属、设置范围、PostgreSQL、认证与数据库升级契约 |
 | [工程契约索引](docs/engineering/index.md) | 开发前需要阅读的行为约定 |

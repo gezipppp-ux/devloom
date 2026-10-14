@@ -43,15 +43,16 @@ test("historical source snapshots and images survive local requirement and bug e
 
 test("project issues enforce membership, assignment, versioned acceptance and revision history without starting execution", async t => {
   const { database, permissions, actor, outsider, project, services, setPermissions } = await fixture(t);
-  const issue = await services.createIssue(project.id, actor, { type: "requirement", title: "可验收需求", participantIds: [actor.id], acceptanceCriteria: "可验证" });
+  const issue = await services.createIssue(project.id, actor, { qaOwnerId: actor.id, type: "requirement", title: "可验收需求", watcherIds: [actor.id], acceptanceCriteria: "可验证" });
   assert.equal(issue.number, 1);
   assert.equal(issue.status, "planned");
   assert.equal(await database.client.developmentTask.count(), 0);
   await assert.rejects(services.readIssue(project.id, issue.id, outsider), { statusCode: 404 });
-  await assert.rejects(services.createIssue(project.id, actor, { type: "bug", title: "缺陷", participantIds: [outsider.id] }), /有效项目成员/);
+  await assert.rejects(services.createIssue(project.id, actor, { type: "bug", title: "缺陷", watcherIds: [outsider.id] }), /有效项目成员/);
   const outcomes = await Promise.allSettled(["甲", "乙"].map(title => services.updateIssue(project.id, issue.id, actor, { title, revision: 1 })));
   assert.equal(outcomes.filter(result => result.status === "fulfilled").length, 1);
   assert.equal(outcomes.find(result => result.status === "rejected").reason.statusCode, 409);
+  await database.client.projectIssue.update({ where: { id: issue.id }, data: { developerId: actor.id } });
   let current = await services.readIssue(project.id, issue.id, actor);
   for (const status of ["developing", "pending_verification", "verifying"]) current = await services.transitionIssue(project.id, issue.id, actor, { status, revision: current.revision });
   await setPermissions(permissions.filter(permission => permission !== "issue.accept"));

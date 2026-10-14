@@ -58,7 +58,7 @@ class ProjectDevelopmentStore {
   }
   async assignIssues(projectId, issues, executorId, actorId) {
     const content = new ProjectContentStore(this.database);
-    for (const issue of issues) if (issue.assigneeId !== executorId) await content.updateIssue(projectId, issue.id, actorId, issue.revision, { assigneeId: executorId }, "assigned");
+    for (const issue of issues) if (issue.developerId !== executorId) await content.updateIssue(projectId, issue.id, actorId, issue.revision, { developerId: executorId }, "assigned");
     return this.issues(projectId, issues.map(issue => issue.id));
   }
   sameRequest(task, input) {

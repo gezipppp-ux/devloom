@@ -20,7 +20,7 @@ test("workbench aggregates only authorized content and delivery reviews are atom
   assert.equal((await workbench.list("issues", actor, { query: "UI" })).total, 1);
   assert.equal((await workbench.list("issues", outsider)).total, 0);
   await assert.rejects(workbench.list("issues", outsider, { projectId: project.id }), { statusCode: 403 });
-  const delivery = await content.addDeliverable(project.id, actor, { issueId: issue.id, body: "Implemented and tested", commit: "abc123" });
+  const delivery = await content.addDeliverable(project.id, actor, { reviewerId: actor.id, issueId: issue.id, body: "Implemented and tested", commit: "abc123" });
   assert.equal(delivery.status, "pending"); assert.equal(delivery.checklist.length, 4);
   assert.equal((await workbench.list("deliveries", actor, { status: "pending" })).total, 1);
   await assert.rejects(content.readDeliverable(project.id, delivery.id, outsider));

@@ -7,8 +7,8 @@ import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 const props = defineProps({ attention: { type: Object, required: true }, compact: Boolean });
 const open = ref(false), router = useRouter();
 const items = computed(() => props.attention.data.value?.items || []);
-const labels = { approval: "执行审批", question: "需要回答", delivery: "待验证交付" };
-function location(item) { return item.kind === "delivery" ? { name: "deliveries", query: { projectId: item.projectId, delivery: item.deliveryId } } : { name: "workspace", query: { workspace: item.workspaceId, task: item.runKey } }; }
+const labels = { approval: "执行审批", question: "需要回答", delivery: "待验证交付", issue: "待推进事项", task: "开发任务", session: "执行审批" };
+function location(item) { if (["issue", "task"].includes(item.kind)) return { name: "project", params: { projectId: item.projectId }, query: item.kind === "issue" ? { tab: "issues", issue: item.issueId } : { tab: "tasks", task: item.taskId } }; return item.kind === "delivery" ? { name: "deliveries", query: { projectId: item.projectId, delivery: item.deliveryId } } : { name: "workspace", query: { workspace: item.workspaceId, task: item.runKey } }; }
 function select(item) { open.value = false; void router.push(location(item)); }
 </script>
 <template>
@@ -18,11 +18,11 @@ function select(item) { open.value = false; void router.push(location(item)); }
     <FeedbackMessage :message="attention.error.value" type="error" />
     <p v-if="attention.loading.value && !attention.data.value" class="muted" role="status">{{ $t('正在读取待处理内容…') }}</p>
     <p v-else-if="!items.length && !attention.error.value" class="attention-empty">{{ $t('暂时没有需要你处理的内容。') }}</p>
-    <ul v-if="items.length" class="attention-list"><li v-for="item in items.slice(0, 5)" :key="item.id"><button @click="select(item)"><span class="attention-kind">{{ $t(labels[item.kind]) }}</span><span class="attention-item"><strong>{{ item.title }}</strong><small>{{ item.projectName }}</small></span><ArrowRightOutlined aria-hidden="true" /></button></li></ul>
+    <ul v-if="items.length" class="attention-list"><li v-for="item in items.slice(0, 5)" :key="item.id"><button @click="select(item)"><span class="attention-kind">{{ $t(item.label || labels[item.kind]) }}</span><span class="attention-item"><strong>{{ item.title }}</strong><small>{{ item.projectName }}</small></span><ArrowRightOutlined aria-hidden="true" /></button></li></ul>
     <button v-if="attention.error.value" :disabled="attention.loading.value" @click="attention.reload()">{{ $t('重新加载') }}</button>
   </section>
   <ModalDialog :open="open" :title="$t('待我处理')" @close="open = false">
-    <div class="attention-modal"><div class="attention-modal-toolbar"><p class="muted">{{ $t('审批和提问仅你可见，交付按项目验收权限显示。') }}</p><button :disabled="attention.loading.value" @click="attention.reload()"><ReloadOutlined aria-hidden="true" />{{ $t('刷新') }}</button></div><FeedbackMessage :message="attention.error.value" type="error" /><p v-if="attention.loading.value && !attention.data.value" role="status">{{ $t('正在读取待处理内容…') }}</p><p v-else-if="!items.length && !attention.error.value" class="attention-empty">{{ $t('暂时没有需要你处理的内容。') }}</p><ul v-if="items.length" class="attention-list"><li v-for="item in items" :key="item.id"><button @click="select(item)"><span class="attention-kind">{{ $t(labels[item.kind]) }}</span><span class="attention-item"><strong>{{ item.title }}</strong><small>{{ item.projectName }}</small></span><ArrowRightOutlined aria-hidden="true" /></button></li></ul></div>
+    <div class="attention-modal"><div class="attention-modal-toolbar"><p class="muted">{{ $t('这里与工作台使用相同的分派规则，只展示轮到你处理的工作。') }}</p><button :disabled="attention.loading.value" @click="attention.reload()"><ReloadOutlined aria-hidden="true" />{{ $t('刷新') }}</button></div><FeedbackMessage :message="attention.error.value" type="error" /><p v-if="attention.loading.value && !attention.data.value" role="status">{{ $t('正在读取待处理内容…') }}</p><p v-else-if="!items.length && !attention.error.value" class="attention-empty">{{ $t('暂时没有需要你处理的内容。') }}</p><ul v-if="items.length" class="attention-list"><li v-for="item in items" :key="item.id"><button @click="select(item)"><span class="attention-kind">{{ $t(item.label || labels[item.kind]) }}</span><span class="attention-item"><strong>{{ item.title }}</strong><small>{{ item.projectName }}</small></span><ArrowRightOutlined aria-hidden="true" /></button></li></ul></div>
   </ModalDialog>
 </template>
 <style scoped>

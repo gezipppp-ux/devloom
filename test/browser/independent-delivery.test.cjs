@@ -27,6 +27,7 @@ async function verifyIndependentDelivery({ page, origin, projectId, output }) {
     await page.getByLabel("交付说明", { exact: true }).fill("完成缓存复用，保留失败反馈。");
     await page.getByLabel("验证结果", { exact: true }).fill("构建已通过；线上耗时待验证。");
     await page.getByLabel("提交标识（可选）", { exact: true }).fill("abc123");
+    await selectOption(page.getByRole("combobox", { name: "交付验证人", exact: true }), "member-2");
     await selectOption(page.locator(".ui-locale"), "en");
     assert.equal(await page.getByLabel("Delivery title", { exact: true }).inputValue(), "启动速度优化成果");
     await selectOption(page.locator(".ui-locale"), "zh-CN");
@@ -45,6 +46,7 @@ async function verifyIndependentDelivery({ page, origin, projectId, output }) {
     await page.getByRole("heading", { name: "启动速度优化成果", exact: true }).waitFor();
     assert.equal(publications.length, 1);
     assert.equal(publications[0].taskId, task.id);
+    assert.equal(publications[0].reviewerId, "member-2");
     assert.equal(Object.hasOwn(publications[0], "issueId"), false);
     assert.match(publications[0].body, /构建已通过；线上耗时待验证/);
     assert.equal(completions.length, 0, "sharing does not finish development");

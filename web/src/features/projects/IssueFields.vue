@@ -27,6 +27,8 @@ const details = computed(() => props.type === "bug"
   </fieldset>
   <fieldset v-if="canAssign" :disabled="disabled">
     <p class="field-hint">{{ $t("保存事项后，通过「认领」或「指派」确定开发负责人并加入其待开发任务。") }}</p>
-    <label>{{ $t("参与人") }}<AppSelect native-events :aria-label="$t('参与人')" multiple @change="update('participantIds', [...$event.target.selectedOptions].map(option => option.value))"><option v-for="p in members" :key="p.userId" :value="p.userId" :selected="modelValue.participantIds.includes(p.userId)">{{ p.displayName }}（{{ p.username }}）</option></AppSelect></label>
+    <label v-for="[key, label] in [['reporterId', '提报人'], ['businessOwnerId', '业务负责人'], ['qaOwnerId', '测试负责人'], ['acceptanceOwnerId', '业务验收人']]" :key="key">{{ $t(label) }}<AppSelect native-events :aria-label="$t(label)" :value="modelValue[key] || ''" @change="update(key, $event.target.value || null)"><option value="" :disabled="Boolean(modelValue.id) && ['reporterId','businessOwnerId'].includes(key)">{{ $t(['reporterId','businessOwnerId'].includes(key) ? '创建时默认本人' : '尚未指定') }}</option><option v-if="modelValue[key] && !members.some(person => person.userId === modelValue[key])" :value="modelValue[key]">{{ modelValue.people?.find(person => person.id === modelValue[key])?.displayName || $t('已指定成员') }}</option><option v-for="p in members" :key="p.userId" :value="p.userId">{{ p.displayName }}（{{ p.username }}）</option></AppSelect></label>
+    <p class="field-hint">{{ $t('业务负责人对结果负责；当前处理人由流程决定；关注人仅用于关注，不生成待办。') }}</p>
+    <label>{{ $t("关注人") }}<AppSelect native-events :aria-label="$t('关注人')" multiple @change="update('watcherIds', [...$event.target.selectedOptions].map(option => option.value))"><option v-for="p in members" :key="p.userId" :value="p.userId" :selected="modelValue.watcherIds.includes(p.userId)">{{ p.displayName }}（{{ p.username }}）</option></AppSelect></label>
   </fieldset>
 </template>

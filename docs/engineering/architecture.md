@@ -79,6 +79,8 @@ docs/engineering/  # 行为契约与架构规则
 | `config/repository.cjs`、`git/` | 配置决定选择哪个仓库；git 负责验证、引用查询和 worktree 操作 |
 | `execution/runner.cjs` | 准备、初始化、执行、渠道同步顺序及记录；通过回调通知调用方，不写终端 |
 | `application/project-services.cjs`、`project-presenter.cjs` | 部门、项目及其仓库地址、成员权限和个人开发空间生命周期；公开字段由 presenter 脱敏 |
+| `application/workbench-services.cjs`、`work-action-presenter.cjs`、`attention-services.cjs` | 按当前分派、真实执行和权限聚合个人动作；首页、完整队列与通知使用同一快照，不把资源列表等同于待办 |
+| `storage/work-action-store.cjs`、`work-action-query-store.cjs`、`domain/workflow-actions.cjs` | 步骤轮次与分派的原子持久化、聚合候选查询、职责与栏目纯规则；详细定义见流程动作契约 |
 | `application/project-content-services.cjs`、`project-content-presenter.cjs` | 按不可变流程版本流转事项、评论／交付、项目附件、资产加密与独立敏感字段授权 |
 | `application/project-lifecycle-services.cjs`、`project-lifecycle-presenter.cjs` | 项目发布版本与归档门禁；storage 拥有事务与修订号 |
 | `application/system-workflow-services.cjs`、`system-workflow-presenter.cjs` | 系统管理员维护需求／Bug 全局流程与不可变发布版本，项目授权读取已发布版本；`domain/issue-workflows.cjs` 拥有图规则，`storage/system-workflow-store.cjs` 拥有无项目归属的流程持久化 |

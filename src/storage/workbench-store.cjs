@@ -25,7 +25,7 @@ class WorkbenchStore {
       table = client.projectIssue;
       where = { ...projects, ...(type ? { type } : {}), ...(priority ? { priority } : {}), ...(status ? { status } : {}), ...(tag ? { tags: { has: tag } } : {}),
         AND: [
-          ...(scope === "mine" ? [{ OR: [{ assigneeId: actorId }, { createdById: actorId }, { participantIds: { has: actorId } }] }] : []),
+          ...(scope === "mine" ? [{ OR: ["developerId", "reporterId", "businessOwnerId", "qaOwnerId", "acceptanceOwnerId", "createdById"].map(field => ({ [field]: actorId })).concat({ watcherIds: { has: actorId } }) }] : []),
           ...(query ? [{ OR: [{ title: { contains: query, mode: "insensitive" } }, { description: { contains: query, mode: "insensitive" } }, { tags: { has: query } }] }] : []),
         ] };
       include = { release: true, workflowVersion: true };
@@ -48,7 +48,7 @@ class WorkbenchStore {
       table.count({ where }),
       table.findMany({ where, include, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: offset, take: limit }),
     ]);
-    const ids = [...new Set(items.flatMap(item => [item.assigneeId, item.authorId, item.executorId]).filter(Boolean))];
+    const ids = [...new Set(items.flatMap(item => [item.developerId, item.authorId, item.executorId]).filter(Boolean))];
     const people = await client.user.findMany({ where: { id: { in: ids } }, select: { id: true, displayName: true } });
     return { items, people, total, nextOffset: offset + items.length < total ? offset + items.length : null };
   }

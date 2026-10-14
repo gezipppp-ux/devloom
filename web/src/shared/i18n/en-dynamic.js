@@ -5,7 +5,7 @@ export const enDynamic = {
   "# 在本地环境变量中配置 WEB_CODING_TOKEN，勿把真实 Token 写入示例文件。": "# Set WEB_CODING_TOKEN in your local environment. Never put real tokens in example files.",
   "$uploadId = [guid]::NewGuid().ToString() # 重试同一文件时保留这个值": "$uploadId = [guid]::NewGuid().ToString() # Keep this value when retrying the same file",
   "<仓库名>": "<repository-name>",
-  "<参与人用户ID>": "<participant-user-id>",
+  "<关注人用户ID>": "<watcher-user-id>",
   "<用户名>": "<username>",
   "<负责人用户ID>": "<owner-user-id>",
   "Agent 会话": "Agent sessions",

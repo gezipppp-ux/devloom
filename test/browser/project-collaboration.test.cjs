@@ -119,7 +119,7 @@ async function main() {
       await setMarkdown(page, "描述", markdown.split("\n\n<script>")[0]);
       await setMarkdown(page, type === "需求" ? "验收标准" : "复现步骤", "首次保存即可重复验证的标准");
       await selectOption(page.getByLabel("优先级", { exact: true }), "high");
-      await selectOption(page.getByLabel("参与人", { exact: true }), [admin.id]);
+      await selectOption(page.getByLabel("关注人", { exact: true }), [admin.id]);
       if (type === "Bug") {
         await setMarkdown(page, "预期结果", "**预期完整显示**");
         await setMarkdown(page, "实际结果", "实际出现错误");
@@ -184,8 +184,8 @@ async function main() {
         assert.equal((await database.client.project.findUnique({ where: { id: project.id } })).issueSequence, 2, "retry consumes no extra issue number");
       }
       assert.equal(stored.priority, "high");
-      assert.equal(stored.assigneeId, null);
-      assert.deepEqual(stored.participantIds, [admin.id]);
+      assert.equal(stored.developerId, null);
+      assert.deepEqual(stored.watcherIds, [admin.id]);
       assert.equal(stored[type === "需求" ? "acceptanceCriteria" : "reproductionSteps"], "首次保存即可重复验证的标准");
       if (type === "Bug") { assert.equal(stored.severity, "major"); assert.equal(stored.expectedResult, "**预期完整显示**"); assert.equal(stored.actualResult, "实际出现错误"); }
       assert.equal(await database.client.projectFile.count({ where: { issueId } }), 2);
@@ -205,7 +205,7 @@ async function main() {
       assert.equal(await editor(page).getByRole("button", { name: "撤销", exact: true }).isDisabled(), true, "opening saved content establishes the history baseline");
       await setMarkdown(page, type === "需求" ? "验收标准" : "复现步骤", "可重复验证的标准");
       await visual(page); await editor(page).locator('img[alt="pasted-proof.png"]').waitFor(); await captureEditor(page, output, `edit-${type === "Bug" ? "bug" : "requirement"}`);
-      await selectOption(page.getByRole("combobox", { name: "参与人", exact: true }), product.id);
+      await selectOption(page.getByRole("combobox", { name: "关注人", exact: true }), product.id);
       await page.getByRole("button", { name: "保存事项", exact: true }).click();
       await page.getByText("可重复验证的标准", { exact: true }).waitFor();
       assert.equal(await database.client.developmentTask.count(), 0, "editing and assignment cannot start Codex");

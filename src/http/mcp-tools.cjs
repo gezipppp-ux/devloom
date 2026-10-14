@@ -8,7 +8,8 @@ const fields = {
   title: z.string().min(1).max(200).optional(), description: text.optional(), releaseId: id.nullable().optional(),
   priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
   acceptanceCriteria: text.optional(), reproductionSteps: text.optional(), expectedResult: text.optional(), actualResult: text.optional(),
-  severity: z.enum(["minor", "normal", "major", "critical"]).optional(), participantIds: z.array(id).max(50).optional(),
+  reporterId: id.optional(), businessOwnerId: id.optional(), qaOwnerId: id.nullable().optional(), acceptanceOwnerId: id.nullable().optional(),
+  severity: z.enum(["minor", "normal", "major", "critical"]).optional(), watcherIds: z.array(id).max(50).optional(),
   attachmentIds: z.array(id).max(20).optional().describe("先通过受鉴权 HTTP 上传；正文用 attachment:附件ID 引用。不可传本地路径或 base64。"),
 };
 const commands = [
@@ -28,15 +29,15 @@ const commands = [
     releaseId: z.union([id, z.literal("unassigned")]).optional(), includeArchived: z.boolean().default(false),
   }, "searchIssues"],
   ["get_issue", "读取事项、修订号、开发任务修订号、正式附件与网页链接。", { projectId: id, issueId: id }, "getIssue"],
-  ["create_issue", "原子发布图文需求或 Bug，可指定一名开发负责人和多名参与人。指派只创建待开发任务，不启动 Agent。", {
-    ...fields, projectId: id, requestId, type: z.enum(["requirement", "bug"]), title: z.string().min(1).max(200), assigneeId: id.optional(),
+  ["create_issue", "原子发布图文需求或 Bug，可指定一名开发负责人和多名关注人。指派只创建待开发任务，不启动 Agent。", {
+    ...fields, projectId: id, requestId, type: z.enum(["requirement", "bug"]), title: z.string().min(1).max(200), developerId: id.optional(),
   }, "createIssue", "issues.write"],
   ["update_issue", "编辑事项及补充 HTTP 上传的图片。携带 get_issue 返回的 revision，冲突后重新读取。", {
     ...fields, projectId: id, issueId: id, requestId, revision: z.number().int().min(1),
   }, "updateIssue", "issues.write"],
-  ["assign_issue", "指派或转派一名开发负责人，可设置多名参与人；已有任务须携带 taskRevision，仅未启动的独立事项任务可转派。", {
-    projectId: id, issueId: id, requestId, revision: z.number().int().min(1), assigneeId: id,
-    participantIds: z.array(id).max(50).optional(), taskRevision: z.number().int().min(1).optional(),
+  ["assign_issue", "指派或转派一名开发负责人，可设置多名关注人；已有任务须携带 taskRevision，仅未启动的独立事项任务可转派。", {
+    projectId: id, issueId: id, requestId, revision: z.number().int().min(1), developerId: id,
+    watcherIds: z.array(id).max(50).optional(), taskRevision: z.number().int().min(1).optional(),
   }, "assignIssue", "issues.assign"],
   ["get_request_result", "响应丢失后按原 requestId 查询本人已成功提交的写操作；未找到时可沿用原参数重试。", {
     projectId: id, requestId,

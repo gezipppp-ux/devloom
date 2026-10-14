@@ -26,7 +26,7 @@ test("independent delivery validates private task ownership, project and source,
   const task = await createTask({});
   assert.equal((await development.readSession(project.id, actor, { runKey: task.runKey })).task.id, task.id);
   await assert.rejects(development.readSession(project.id, other, { runKey: task.runKey }), { statusCode: 404 });
-  const input = { taskId: task.id, title: "Refactor delivery", body: "Completed and checked", commit: "abc123" };
+  const input = { reviewerId: other.id, taskId: task.id, title: "Refactor delivery", body: "Completed and checked", commit: "abc123" };
   for (const invalid of [{}, { projectId: foreign.id }, { executorId: other.id }, { status: "planned", runKey: null }, { status: "unknown" }, { status: "cancelled" }, { snapshot: { kind: "issues", title: "Issue task", issues: [], additions: [] } }]) {
     if (!Object.keys(invalid).length) { await assert.rejects(content.addDeliverable(project.id, actor, { ...input, taskId: undefined }), { statusCode: 400 }); continue; }
     const invalidTask = await createTask(invalid);
@@ -39,9 +39,9 @@ test("independent delivery validates private task ownership, project and source,
   assert.equal((await content.readDeliverable(project.id, delivery.id, other)).issue, null);
   assert.equal((await workbench.list("deliveries", actor, { query: "Refactor" })).items[0].title, input.title);
   assert.equal((await workbench.activity(project.id, actor)).items.find(row => row.deliveryId === delivery.id).title, input.title);
-  assert.ok((await attention.list(actor)).items.some(row => row.deliveryId === delivery.id));
+  assert.ok((await attention.list(other)).items.some(row => row.deliveryId === delivery.id));
   const review = { revision: 1, status: "accepted", checkedItems: delivery.checklist.map((_, index) => index), reviewNote: "Verified" };
-  await assert.rejects(content.reviewDeliverable(project.id, delivery.id, actor, { ...review, transitionId: "complete", issueRevision: 1 }), { statusCode: 400 });
+  await assert.rejects(content.reviewDeliverable(project.id, delivery.id, other, { ...review, transitionId: "complete", issueRevision: 1 }), { statusCode: 400 });
   const where = { projectId_userId: { projectId: project.id, userId: other.id } };
   await database.client.projectMember.update({ where, data: { permissions: permissions.filter(p => p !== "deliverable.review") } });
   await assert.rejects(content.reviewDeliverable(project.id, delivery.id, other, review), { statusCode: 403 });

@@ -11,9 +11,9 @@ async function main() {
   await require("./operation-feedback.test.cjs").operationFeedbackChecks();
   const { createServer } = await import("vite"), { default: vue } = await import("@vitejs/plugin-vue");
   const project = { id: "p", name: "原项目", description: "原说明", ownerUserId: "u", revision: 1, settings: {} };
-  const issue = { id: "i", number: 1, type: "requirement", title: "原事项", description: "原描述", revision: 1, priority: "normal", status: "ready", statusName: "规划中", participantIds: [], assigneeId: null, acceptanceCriteria: "", availableTransitions: [{ id: "develop", name: "开发中", permission: "issue.edit", requiresReason: true }], people: [] };
+  const issue = { id: "i", number: 1, type: "requirement", title: "原事项", description: "原描述", revision: 1, priority: "normal", status: "ready", statusName: "规划中", watcherIds: [], developerId: null, acceptanceCriteria: "", availableTransitions: [{ id: "develop", name: "开发中", permission: "issue.edit", requiresReason: true }], people: [] };
   const asset = { id: "a", title: "测试资产", type: "note", environment: "test", category: "", tags: ["参考"], content: "内容", ownerId: "u", issueIds: ["i"], expiresAt: "2027-01-01T00:00:00Z", revision: 32, people: [{ id: "u", username: "product-member", displayName: "产品成员" }] };
-  const permissions = ["asset.view", "asset.edit", "issue.view", "issue.edit", "collaboration.view", "comment.create", "deliverable.create", "session.start"];
+  const permissions = ["asset.view", "asset.edit", "issue.view", "issue.edit", "issue.accept", "collaboration.view", "comment.create", "deliverable.create", "session.start"];
   const source = `import {i18n} from '/src/shared/i18n/index.js';
 import {createApp,h,ref} from 'vue'; import {createRouter,createWebHistory} from 'vue-router'; import LocaleSelect from '/src/shared/components/LocaleSelect.vue';
 import OperationMessages from '/src/shared/components/OperationMessages.vue'; import Discussion from '/src/features/projects/IssueDiscussion.vue'; import Settings from '/src/features/projects/ProjectSettings.vue'; import Detail from '/src/features/projects/IssueDetail.vue'; import Assets from '/src/features/projects/ProjectAssets.vue'; import '/src/shared/styles/style.css';
@@ -99,6 +99,29 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),kind==='sett
     assert.deepEqual(writes.at(-1).input, { transitionId: "develop", reason: "开始实现已确认的需求", revision: 2 });
     assert.equal(writes.some(write => write.pathname.endsWith("/tasks")), false, "changing status never creates a development task");
     assert.equal(await page.getByLabel("评论内容").inputValue(), "切换编辑时保留讨论草稿");
+    // A general work step may use acceptance permission; category does not grant or deny starting.
+    let stepStarted = false, stepCategory = "work", stepPermissions = ["issue.accept"];
+    const stepIssue = () => ({ ...issue, availableTransitions: [], processing: { canStart: !stepStarted, category: stepCategory, handlerId: "u", status: stepStarted ? "active" : "ready", revision: stepStarted ? 5 : 4, startPermissions: stepPermissions } });
+    const stepRoute = async route => route.fulfill({ json: stepIssue() });
+    await page.route("**/api/projects/p/issues/i", stepRoute);
+    await page.route("**/api/projects/p/issues/i/step/start", async route => {
+      writes.push({ pathname: new URL(route.request().url()).pathname, input: route.request().postDataJSON() });
+      stepStarted = true;
+      await route.fulfill({ json: stepIssue() });
+    });
+    await open("issue");
+    await page.getByRole("button", { name: "开始处理", exact: true }).click();
+    await page.getByRole("button", { name: "开始处理", exact: true }).waitFor({ state: "hidden" });
+    await page.getByText("当前处理人：产品成员 · 处理中", { exact: true }).waitFor();
+    assert.deepEqual(writes.at(-1).input, { revision: 1, actionRevision: 4 });
+    stepStarted = false; stepCategory = "verification"; stepPermissions = ["issue.transition"];
+    await open("issue");
+    await page.getByRole("heading", { name: "原事项", exact: true }).waitFor();
+    assert.equal(await page.getByRole("button", { name: "开始验证", exact: true }).count(), 0, "acceptance permission alone cannot start a verification step configured for transition permission");
+    stepPermissions = ["issue.transition", "issue.accept"];
+    await open("issue");
+    await page.getByRole("button", { name: "开始验证", exact: true }).waitFor();
+    await page.unroute("**/api/projects/p/issues/i", stepRoute);
     // Load revision one for the edit baseline, then the latest version for conflict recovery.
     let issueReads = 0;
     await page.route("**/api/projects/p/issues/i", async route => { if (route.request().method() === "POST") return route.fallback(); await route.fulfill({ json: issueReads++ ? { ...issue, title: "他人事项标题", description: "他人描述", revision: 2 } : issue }); });

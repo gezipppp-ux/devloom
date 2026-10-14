@@ -8,7 +8,7 @@ test("issues validate typed content and never accept arbitrary execution or stat
   assert.equal(issueInput({ type: "requirement", title: "需求" }).type, "requirement");
   assert.equal(issueInput({ type: "bug", title: "缺陷" }).type, "bug");
   assert.throws(() => issueInput({ type: "requirement", title: "需求", status: "done" }), /字段/);
-  assert.throws(() => issueInput({ type: "bug", title: "缺陷", participantIds: ["a", "a"] }), /不同标识/);
+  assert.throws(() => issueInput({ type: "bug", title: "缺陷", watcherIds: ["a", "a"] }), /不同标识/);
   assert.throws(() => issueInput({ revision: 0, title: "修改" }, { type: "bug" }), /修订号/);
   assert.throws(() => pageInput({ limit: 1000 }), /分页/);
 });

@@ -1,5 +1,7 @@
 const { accountError } = require("./account.cjs");
 
+const { handlerFields, actionCategories, requiredFieldNames } = require("./workflow-actions.cjs");
+
 function invalid(message) { throw accountError(message, 400); }
 function workflowDefinition(input, { publish = false } = {}) {
   if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some(key => !["nodes", "transitions"].includes(key)) || !Array.isArray(input.nodes) || !Array.isArray(input.transitions) || input.nodes.length > 100 || input.transitions.length > 500) invalid("流程定义无效。");
@@ -7,15 +9,19 @@ function workflowDefinition(input, { publish = false } = {}) {
   const validId = id => typeof id === "string" && /^[a-zA-Z0-9_-]{1,100}$/.test(id);
   const validName = name => typeof name === "string" && name.trim().length > 0 && name.length <= 100 && !/[\u0000-\u001f]/.test(name);
   const nodes = input.nodes.map(node => {
-    if (!node || Object.keys(node).some(key => !["id", "name", "kind", "allowDevelopment", "x", "y"].includes(key)) || !validId(node.id) || ids.has(node.id) || !validName(node.name) || !["initial", "normal", "completed", "cancelled"].includes(node.kind) || typeof node.allowDevelopment !== "boolean") invalid("流程节点标识、名称或属性无效。");
+    if (!node || Object.keys(node).some(key => !["id", "name", "kind", "allowDevelopment", "x", "y", "handler", "category"].includes(key)) || !validId(node.id) || ids.has(node.id) || !validName(node.name) || !["initial", "normal", "completed", "cancelled"].includes(node.kind) || typeof node.allowDevelopment !== "boolean") invalid("流程节点标识、名称或属性无效。");
     ids.add(node.id);
     if (["completed", "cancelled"].includes(node.kind) && node.allowDevelopment) invalid("完成或取消节点不能允许开发。");
     for (const key of ["x", "y"]) if (node[key] !== undefined && (!Number.isFinite(node[key]) || Math.abs(node[key]) > 100000)) invalid("节点坐标无效。");
-    return { ...node, name: node.name.trim() };
+    const handler = node.handler === undefined ? "businessOwner" : node.handler, category = node.category === undefined ? "work" : node.category;
+    if (!Object.hasOwn(handlerFields, handler) || !actionCategories.includes(category)) invalid("处理职责或工作类别无效。");
+    return { ...node, name: node.name.trim(), handler, category };
   });
   const edgeIds = new Set();
   const transitions = input.transitions.map(edge => {
-    if (!edge || Object.keys(edge).some(key => !["id", "from", "to", "name", "permission", "requiresReason"].includes(key)) || !validId(edge.id) || edgeIds.has(edge.id) || !ids.has(edge.from) || !ids.has(edge.to) || edge.from === edge.to || !validName(edge.name) || !["issue.transition", "issue.accept"].includes(edge.permission) || typeof edge.requiresReason !== "boolean") invalid("流程连线、操作权限或名称无效。");
+    if (!edge || Object.keys(edge).some(key => !["id", "from", "to", "name", "permission", "requiresReason", "requiredFields", "requireAcceptedDelivery"].includes(key)) || !validId(edge.id) || edgeIds.has(edge.id) || !ids.has(edge.from) || !ids.has(edge.to) || edge.from === edge.to || !validName(edge.name) || !["issue.transition", "issue.accept"].includes(edge.permission) || typeof edge.requiresReason !== "boolean") invalid("流程连线、操作权限或名称无效。");
+    if (edge.requiredFields !== undefined && (!Array.isArray(edge.requiredFields) || edge.requiredFields.some(field => !requiredFieldNames.includes(field)) || new Set(edge.requiredFields).size !== edge.requiredFields.length)) invalid("必填字段无效。");
+    if (edge.requireAcceptedDelivery !== undefined && typeof edge.requireAcceptedDelivery !== "boolean") invalid("交付门禁无效。");
     edgeIds.add(edge.id);
     return { ...edge, name: edge.name.trim() };
   });
@@ -33,6 +39,7 @@ function workflowDefinition(input, { publish = false } = {}) {
   return { nodes, transitions };
 }
 function defaultWorkflow(type) {
+  const responsibility = node => ({ handler: ["pending_verification", "verifying", "resolved"].includes(node.id) ? "qaOwner" : node.id === "verified" ? "acceptanceOwner" : ["developing", "processing", "failed"].includes(node.id) ? "developer" : "businessOwner", category: ["pending_verification", "verifying", "resolved", "verified"].includes(node.id) ? "verification" : ["developing", "processing", "failed"].includes(node.id) ? "development" : "planning" });
   if (type === "requirement") {
     const nodes = [
       { id: "planned", name: "规划中", kind: "initial", allowDevelopment: true },
@@ -41,7 +48,7 @@ function defaultWorkflow(type) {
       { id: "verifying", name: "验证中", kind: "normal", allowDevelopment: false },
       { id: "implemented", name: "已实现", kind: "completed", allowDevelopment: false },
       { id: "rejected", name: "已拒绝", kind: "cancelled", allowDevelopment: false },
-    ].map((node, index) => ({ ...node, x: index < 5 ? index * 240 + 40 : 520, y: index < 5 ? 40 : 240 }));
+    ].map((node, index) => ({ ...node, ...responsibility(node), x: index < 5 ? index * 240 + 40 : 520, y: index < 5 ? 40 : 240 }));
     const edges = [
       ["planned", "developing", "开始开发"], ["developing", "pending_verification", "提交验证"],
       ["pending_verification", "verifying", "开始验证"], ["verifying", "implemented", "验证通过"],
@@ -61,7 +68,7 @@ function defaultWorkflow(type) {
     { id: "closed", name: "已关闭", kind: "completed", allowDevelopment: false },
     { id: "failed", name: "失败待处理", kind: "normal", allowDevelopment: true },
     { id: "cancelled", name: "已取消", kind: "cancelled", allowDevelopment: false },
-  ].map((node, index) => ({ ...node, x: index < 5 ? index * 240 + 40 : index === 5 ? 280 : 760, y: index < 5 ? 40 : 240 }));
+  ].map((node, index) => ({ ...node, ...responsibility(node), x: index < 5 ? index * 240 + 40 : index === 5 ? 280 : 760, y: index < 5 ? 40 : 240 }));
   const edges = [
     ["pending", "processing", "开始处理"], ["processing", "resolved", "提交验证"],
     ["resolved", "verified", "验证通过"], ["verified", "closed", "关闭缺陷"],

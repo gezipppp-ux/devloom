@@ -30,7 +30,7 @@ test("attention request projection exposes no prompts or payloads and discards r
   const views = new SessionViews({ store, agent, sessions, assertOpen() {} });
   const result = await views.pendingRequests();
   assert.equal(reads, 1);
-  assert.deepEqual(result, [{ key: "run", title: "Task", updatedAt: runtime.lastActivity, requests: [{ id: "approval", kind: "approval", turnId: "turn" }] }]);
+  assert.deepEqual(result, [{ key: "run", title: "Task", updatedAt: runtime.lastActivity, requests: [{ id: "approval", kind: "approval", turnId: "turn", blocking: true }] }]);
   agent.capabilities.approvals = false;
   assert.deepEqual(await views.pendingRequests(), []);
   agent.capabilities.approvals = true;

@@ -4,7 +4,8 @@ const ISSUE_TYPES = ["requirement", "bug"];
 const PRIORITIES = ["low", "normal", "high", "urgent"];
 const SEVERITIES = ["minor", "normal", "major", "critical"];
 const contentFields = ["releaseId", "title", "description", "priority", "acceptanceCriteria", "reproductionSteps", "expectedResult", "actualResult", "severity", "dueDate", "tags"];
-const assignmentFields = ["participantIds"];
+const responsibilityFields = ["reporterId", "businessOwnerId", "qaOwnerId", "acceptanceOwnerId"];
+const assignmentFields = ["watcherIds", ...responsibilityFields];
 
 function text(value, label, limit, { required = false } = {}) {
   if (typeof value !== "string" || value.length > limit || (required && !value.trim()))
@@ -42,7 +43,7 @@ function issueInput(input, current) {
   object(input, ["attachments", ...contentFields, ...assignmentFields, ...(current ? ["revision"] : ["type", "requestId"])]);
   if (current) revision(input.revision);
   const type = current?.type || choice(input.type, ISSUE_TYPES, "事项类型");
-  const value = current ? {} : { type, title: "", description: "", priority: "normal", severity: "normal", assigneeId: null, participantIds: [], acceptanceCriteria: "", reproductionSteps: "", expectedResult: "", actualResult: "" };
+  const value = current ? {} : { type, title: "", description: "", priority: "normal", severity: "normal", developerId: null, watcherIds: [], acceptanceCriteria: "", reproductionSteps: "", expectedResult: "", actualResult: "" };
   for (const field of contentFields) if (Object.hasOwn(input, field)) {
     value[field] = field === "dueDate" ? issueDueDate(input[field])
       : field === "tags" ? issueTags(input[field])
@@ -52,7 +53,10 @@ function issueInput(input, current) {
         : text(input[field], field === "title" ? "标题" : "内容", field === "title" ? 200 : 60000, { required: field === "title" });
   }
   if (!current && !value.title) throw accountError("请填写事项标题。", 400);
-  if (Object.hasOwn(input, "participantIds")) value.participantIds = identifiers(input.participantIds, "参与人");
+  if (Object.hasOwn(input, "watcherIds")) value.watcherIds = identifiers(input.watcherIds, "关注人");
+  for (const field of responsibilityFields) if (Object.hasOwn(input, field)) {
+    value[field] = input[field] === null && ["qaOwnerId", "acceptanceOwnerId"].includes(field) ? null : identifier(input[field], "职责成员");
+  }
   return value;
 }
 function issueDueDate(value) {
@@ -86,4 +90,4 @@ function pageInput(input = {}) {
   return { limit, offset, query: input.query == null ? "" : text(input.query, "搜索内容", 200) };
 }
 
-module.exports = { issueRequestId, ISSUE_TYPES, PRIORITIES, SEVERITIES, contentFields, assignmentFields, text, object, revision, identifier, identifiers, choice, issueInput, issueTransition, issueTransitions, pageInput };
+module.exports = { issueRequestId, ISSUE_TYPES, PRIORITIES, SEVERITIES, contentFields, assignmentFields, responsibilityFields, text, object, revision, identifier, identifiers, choice, issueInput, issueTransition, issueTransitions, pageInput };

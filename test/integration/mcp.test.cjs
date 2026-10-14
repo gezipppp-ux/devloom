@@ -82,9 +82,9 @@ test("MCP client publishes images, release and assignment atomically with replay
   assert.equal((await f.upload(fileId)).data.attachmentId, fileId);
   assert.equal((await f.upload(fileId, Buffer.concat([png, Buffer.from("changed")]))).status, 409);
   const input = { projectId, requestId: randomUUID(), type: "bug", title: "截图缺陷", description: "截图\n" + uploaded.data.markdown,
-    releaseId: release.release.id, attachmentIds: [fileId], assigneeId: f.members[0].id, participantIds: [f.members[1].id] };
+    releaseId: release.release.id, attachmentIds: [fileId], developerId: f.members[0].id, watcherIds: [f.members[1].id] };
   const published = await call(client, "create_issue", input);
-  assert.equal(published.issue.assigneeId, f.members[0].id);
+  assert.equal(published.issue.developerId, f.members[0].id);
   assert.equal(published.developmentTask.status, "planned");
   assert.match(published.issue.description, /\/api\/projects\/.*\/files\//);
   assert.equal(published.attachments[0].id, fileId);
@@ -99,8 +99,8 @@ test("MCP client publishes images, release and assignment atomically with replay
   await error(client, "create_issue", { ...input, title: "changed" }, 409);
   const detail = await call(client, "get_issue", { projectId, issueId: published.issue.id });
   const reassigned = await call(client, "assign_issue", { projectId, issueId: detail.issue.id, revision: detail.issue.revision,
-    taskRevision: detail.developmentTask.revision, requestId: randomUUID(), assigneeId: f.members[1].id });
-  assert.equal(reassigned.issue.assigneeId, f.members[1].id);
+    taskRevision: detail.developmentTask.revision, requestId: randomUUID(), developerId: f.members[1].id });
+  assert.equal(reassigned.issue.developerId, f.members[1].id);
   const update = { projectId, issueId: detail.issue.id, revision: reassigned.issue.revision, requestId: randomUUID(), title: "修正缺陷" };
   const updated = await call(client, "update_issue", update);
   assert.equal(updated.issue.title, update.title);
@@ -108,7 +108,7 @@ test("MCP client publishes images, release and assignment atomically with replay
   await error(client, "update_issue", { ...update, requestId: randomUUID() }, 409);
   assert.equal((await call(client, "search_issues", { projectId, query: "修正" })).items.length, 1);
   const anotherUpload = await f.upload();
-  const bad = { ...input, requestId: randomUUID(), attachmentIds: [anotherUpload.data.attachmentId], description: anotherUpload.data.markdown, assigneeId: randomUUID() };
+  const bad = { ...input, requestId: randomUUID(), attachmentIds: [anotherUpload.data.attachmentId], description: anotherUpload.data.markdown, developerId: randomUUID() };
   await error(client, "create_issue", bad);
   assert.equal(await f.database.client.projectIssue.count(), 1);
   assert.equal((await f.database.client.mcpUpload.findUnique({ where: { id: anotherUpload.data.attachmentId } })).issueId, null);

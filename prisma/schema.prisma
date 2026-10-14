@@ -472,8 +472,13 @@ model ProjectIssue {
   description        String   @default("")
   priority           String   @default("normal")
   status             String
-  assigneeId         String?  @map("assignee_id")
-  participantIds     String[] @default([]) @map("participant_ids")
+  developerId        String?  @map("developer_id")
+  reporterId         String   @map("reporter_id")
+  businessOwnerId    String   @map("business_owner_id")
+  qaOwnerId          String?  @map("qa_owner_id")
+  acceptanceOwnerId  String?  @map("acceptance_owner_id")
+  watcherIds         String[] @default([]) @map("watcher_ids")
+  actions            WorkAction[]
   acceptanceCriteria String   @default("") @map("acceptance_criteria")
   reproductionSteps  String   @default("") @map("reproduction_steps")
   expectedResult     String   @default("") @map("expected_result")
@@ -539,6 +544,11 @@ model ProjectDeliverable {
   projectId String   @map("project_id")
   issueId   String?  @map("issue_id")
   authorId  String   @map("author_id")
+  reviewerId String @map("reviewer_id")
+  supersedesId String? @unique @map("supersedes_id")
+  previous ProjectDeliverable? @relation("DeliveryRevisions", fields: [supersedesId], references: [id], onDelete: Restrict)
+  next ProjectDeliverable? @relation("DeliveryRevisions")
+  verificationStartedAt DateTime? @map("verification_started_at") @db.Timestamptz(3)
   taskId    String?  @map("task_id")
   body      String
   commit    String?
@@ -558,6 +568,26 @@ model ProjectDeliverable {
   @@index([projectId, issueId, createdAt])
   @@map("project_deliverables")
   @@index([projectId, status, createdAt(sort: Desc)], map: "project_deliverables_project_status")
+}
+
+model WorkAction {
+  id String @id @default(uuid())
+  projectId String @map("project_id")
+  issueId String @map("issue_id")
+  workflowVersionId String @map("workflow_version_id")
+  nodeId String @map("node_id")
+  sequence Int
+  handlerId String @map("handler_id")
+  category String
+  status String @default("ready")
+  revision Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  startedAt DateTime? @map("started_at") @db.Timestamptz(3)
+  endedAt DateTime? @map("ended_at") @db.Timestamptz(3)
+  issue ProjectIssue @relation(fields: [projectId, issueId], references: [projectId, id], onDelete: Restrict)
+  @@unique([issueId, sequence])
+  @@index([handlerId, status, projectId])
+  @@map("work_actions")
 }
 
 model IssueHistory {

@@ -1,5 +1,6 @@
 const { json } = require("./messages.cjs");
 async function serveWorkbench(request, response, url, { services, actor }) {
+  if (request.method === "GET" && url.pathname === "/api/workbench/actions") { json(response, 200, await services.actions(actor, Object.fromEntries(url.searchParams))); return true; }
   if (request.method === "GET" && url.pathname === "/api/workbench/recent-projects") {
     json(response, 200, await services.recentProjects(actor)); return true;
   }

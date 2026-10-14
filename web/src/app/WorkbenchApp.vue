@@ -18,6 +18,7 @@ import PersonalSettings from "../features/accounts/PersonalSettings.vue";
 import ProjectDirectory from "../features/projects/ProjectDirectory.vue";
 import ProjectOverview from "../features/projects/ProjectOverview.vue";
 import WorkbenchHome from "../features/projects/WorkbenchHome.vue";
+import WorkActionQueue from "../features/projects/WorkActionQueue.vue";
 import WorkQueue from "../features/projects/WorkQueue.vue";
 import GlobalSearch from "../features/projects/GlobalSearch.vue";
 import FeedbackMessage from "../shared/components/FeedbackMessage.vue";
@@ -40,7 +41,7 @@ const logoutError = ref(""), menuOpen = ref(false), searchOpen = ref(false), cre
 const createBusy = ref(false), createError = ref("");
 const createTitles = { issues: "选择事项所属项目", development: "选择开发项目", manual: "选择独立开发项目", history: "选择要查看历史会话的项目" };
 const inWorkspace = computed(() => route.name === "workspace" && Boolean(route.query.workspace || standalone.value));
-const active = computed(() => inWorkspace.value || (route.name === "project" && route.query.tab === "tasks") ? "development" : route.name === "project" ? "projects" : route.name);
+const active = computed(() => inWorkspace.value || (route.name === "project" && route.query.tab === "tasks") ? "development" : route.name === "project" ? "projects" : route.name === "work" ? "workspace" : route.name);
 const contextId = computed(() => String(route.params.projectId || route.query.projectId || (inWorkspace.value ? current.value?.projectId || "" : "")));
 const breadcrumb = computed(() => route.name === "project" && route.query.tab === "tasks" ? route.query.taskStart ? "确认并开始开发" : route.query.task ? "开发任务详情" : "开发任务" : ({ workspace: "工作台", projects: "项目", project: "项目概览", issues: "事项", development: "开发", deliveries: "交付", personal: "个人设置", system: "管理中心", accounts: "管理中心", departments: "管理中心" })[route.name] || "工作台");
 const selectedProject = computed(() => projects.value.find(project => project.id === contextId.value));
@@ -97,6 +98,7 @@ watch(() => route.fullPath, () => { menuOpen.value = false; });
         <ProjectOverview v-else-if="route.name === 'project'" :key="route.params.projectId" :project-id="route.params.projectId" :tab="String(route.query.tab || 'overview')" @tab="tab" @open-workspace="navigate" />
         <template v-else-if="inWorkspace"><WorkspaceConsole v-if="ready && (current || standalone) && (!current?.projectId || current?.permissions?.includes('session.view'))" :key="current?.id || 'standalone'" :initial-task="String(route.query.task || '')" :initial-view="String(route.query.view || '')" :workspace-name="current?.name || ''" :project-id="current?.projectId || ''" :permissions="current?.permissions" :notify-unread-result="desktopNotifications.notifyResult" :can-manage-system="admin" @task-change="selectTask" @system-settings="page('system')" @return-project="returnToProject" @open-project="openProject" /><div v-else-if="ready && current?.permissions?.includes('code.view')" :key="current.id" class="workspace project-workspace"><aside class="sidebar"><div class="workspace-heading"><h2>{{ current.name }}</h2><button type="button" class="workspace-project-return" @click="returnToProject"><ArrowLeftOutlined aria-hidden="true" />{{ $t("返回项目协作") }}</button></div></aside><main><RepositoryGitPanel :can-operate="current.permissions.includes('code.operate')" /></main></div><FeedbackMessage v-else-if="error" :message="error" type="error" /><p v-else role="status">{{ $t("正在读取开发空间…") }}</p></template>
         <ProjectDirectory v-else-if="route.name === 'projects'" @open="project" />
+        <WorkActionQueue v-else-if="route.name === 'work'" :key="contextId" :project-id="contextId" />
         <WorkQueue v-else-if="['issues', 'development', 'deliveries'].includes(route.name)" :key="route.name + '/' + contextId" :kind="route.name === 'development' ? 'tasks' : route.name" :project-id="contextId" :can-publish="selectedProject?.permissions.includes('deliverable.create') && selectedProject.status === 'active'" @create="create" @open-workspace="navigate" />
         <WorkbenchHome v-else-if="directory.data.value" :key="contextId" :project-id="contextId" :projects="selectedProject ? [selectedProject] : projects" @create="create" />
       </div>

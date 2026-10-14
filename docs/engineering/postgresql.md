@@ -47,3 +47,7 @@ AsyncLocalStorage 使同一事务中的多个 store 使用同一客户端，并�
 Jenkins 的 Windows／Linux 节点都需由节点环境或受控凭据注入 `TEST_DATABASE_URL`；账号只需要专用测试数据库内的 schema 创建与清理权限。流水线在测试前生成客户端；`CI=true` 时缺少连接配置会使 PostgreSQL 集成测试失败。完整测试套件要求配置 `TEST_DATABASE_URL`；个别 PostgreSQL 专项测试在本地缺少配置时可标为 skipped，但不能据此交付。
 
 项目交付使用 `ProjectDeliverable` / `project_deliverables`，可关联事项或本人已启动的独立任务；不再维护 IssueDeliverable 模型。独立交付无事项外键，必须有任务来源和项目外键。验收权限为 `deliverable.review`，验收写入审计；事项流转单独授权。个人设置的 grouping 字段已删除，无历史字段读取或兼容接口。
+
+## 2026-10-14 流程职责迁移
+
+`20261014200000_workflow_responsibilities` 增加事项职责、work_actions 和交付的指定验证人/返工链。存在事项、交付或自定义流程草稿/发布记录时拒绝变更并回滚；使用新数据库部署，不做历史转换或自动清理。默认模板中规划、开发、验证节点分别解析业务负责人、开发人和 QA/验收人。模型与迁移一致性、部分唯一索引和事务门禁由数据库及流程动作集成测试覆盖；详见[契约](./workflow-actions.md)。

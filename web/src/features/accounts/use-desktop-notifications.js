@@ -38,9 +38,9 @@ export function useDesktopNotifications() {
   function notifyAttention(items) {
     const api = notificationApi();
     if (!api || disposed || permission.value !== "granted" || !enabled.value) return;
-    const labels = { approval: "执行审批", question: "需要回答", delivery: "待验证交付" };
+    const labels = { approval: "执行审批", question: "需要回答", delivery: "待验证交付", issue: "待推进事项", task: "开发任务", session: "执行审批" };
     try {
-      const shown = items.slice(0, 3).map(item => `${translate(labels[item.kind])} · ${item.title}`).join("\n");
+      const shown = items.slice(0, 3).map(item => `${translate(item.label || labels[item.kind])} · ${item.title}`).join("\n");
       new api(translate("新增 {count} 条待处理内容", { count: items.length }), { body: shown, tag: "web-coding-attention" });
     } catch { /* Notification delivery is controlled by the operating system/browser. */ }
   }
