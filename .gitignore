@@ -2,6 +2,7 @@ node_modules/
 web/dist/
 .idea/
 config/*.local.json
+.env
 state/
 runs/
 work/
