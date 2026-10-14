@@ -1,4 +1,5 @@
 <script setup>
+import AppSelect from "../../shared/components/AppSelect.vue";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, onUnmounted, reactive, ref, watch } from "vue";
 import UserSearchSelect from "./UserSearchSelect.vue";
@@ -161,7 +162,7 @@ async function start() {
       <FormSection :title="$t('需求信息')" number="01">
         <div class="form-columns">
           <a-form-item :label="$t('需求渠道')" name="channel"
-            ><select
+            ><AppSelect native-events
               v-model="form.channel"
               :aria-label="$t('需求渠道')"
               :disabled="busy || uploading"
@@ -173,7 +174,7 @@ async function start() {
               >
                 {{ $t(channel.label) }}
               </option>
-            </select></a-form-item
+            </AppSelect></a-form-item
           >
         </div>
         <ManualRequirementFields

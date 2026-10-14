@@ -1,0 +1,121 @@
+.app-select {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0;
+  width: 100%;
+  vertical-align: middle;
+}
+.app-select .ant-select-content {
+  min-height: 1.5em;
+}
+.app-select-control {
+  width: 100%;
+  min-width: 0;
+}
+.app-select-toolbar {
+  width: auto;
+  flex-shrink: 0;
+}
+.app-select-toolbar .ant-select {
+  min-height: 40px;
+  font-size: 12px;
+}
+.app-select-toolbar .ant-select:hover {
+  background: var(--soft);
+  border-radius: var(--radius-control);
+}
+.app-select-icon {
+  width: 40px;
+}
+.app-select-icon .ant-select {
+  padding-inline: 10px;
+  font-size: 18px;
+  color: var(--muted);
+}
+.app-select-icon .ant-select-content {
+  justify-content: center;
+}
+.app-select-popup {
+  min-width: 176px;
+  max-width: min(420px, calc(100vw - 24px));
+  padding: 6px;
+  border: 1px solid var(--field-border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-dialog);
+}
+.app-select-popup .ant-select-item {
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: var(--ink);
+  font-size: 13px;
+}
+.app-select-popup
+  .ant-select-item-option-active:not(.ant-select-item-option-disabled) {
+  background: var(--soft);
+}
+.app-select-popup
+  .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
+  background: var(--selected);
+  color: var(--highlight);
+  font-weight: 500;
+}
+.app-select-popup .ant-select-item-option-disabled {
+  color: var(--muted);
+  opacity: 0.6;
+}
+.app-select-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.app-select-option > .anticon {
+  flex-shrink: 0;
+  font-size: 16px;
+}
+.app-select-option-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.app-select-option-copy small {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.app-select-check {
+  visibility: hidden;
+}
+.app-select-check.is-selected {
+  visibility: visible;
+}
+.app-select-popup .ant-select-item-option-state {
+  display: none;
+}
+.app-select-validation {
+  position: absolute;
+  width: 1px !important;
+  height: 1px;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  clip-path: inset(50%);
+  overflow: hidden;
+}
+@media (max-width: 767px) {
+  .app-select .ant-select,
+  .app-select-popup .ant-select-item {
+    min-height: 44px;
+  }
+  .app-select-icon {
+    width: 44px;
+  }
+}

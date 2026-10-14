@@ -1,4 +1,5 @@
 <script setup>
+import AppSelect from "../../shared/components/AppSelect.vue";
 import { computed, nextTick, ref, watch } from "vue";
 import { createRequestId } from "../../shared/api/request-id.js";
 import { appApi } from "../../shared/api/api.js";
@@ -76,16 +77,16 @@ async function persist(publish = false) {
             <template v-if="node">
               <header><h3>{{ $t("状态属性") }}</h3><span>{{ $t("即时修改草稿") }}</span></header>
               <label>{{ $t("状态名称") }}<input v-model="node.name" maxlength="80" /></label>
-              <label>{{ $t("状态类型") }}<select v-model="node.kind" :aria-label="$t('状态类型')" @change="changeKind"><option value="initial">{{ $t("初始") }}</option><option value="normal">{{ $t("普通") }}</option><option value="completed">{{ $t("完成") }}</option><option value="cancelled">{{ $t("取消") }}</option></select></label>
+              <label>{{ $t("状态类型") }}<AppSelect native-events v-model="node.kind" :aria-label="$t('状态类型')" @change="changeKind"><option value="initial">{{ $t("初始") }}</option><option value="normal">{{ $t("普通") }}</option><option value="completed">{{ $t("完成") }}</option><option value="cancelled">{{ $t("取消") }}</option></AppSelect></label>
               <label class="permission-choice"><input v-model="node.allowDevelopment" type="checkbox" :disabled="terminal" />{{ $t("允许开始开发") }}</label>
               <p v-if="terminal" class="field-hint">{{ $t("完成、取消状态不允许开始开发。") }}</p>
             </template>
             <template v-else-if="edge">
               <header><h3>{{ $t("连线属性") }}</h3><span>{{ $t("即时修改草稿") }}</span></header>
               <label>{{ $t("操作名称") }}<input v-model="edge.name" maxlength="80" /></label>
-              <label>{{ $t("来源状态") }}<select v-model="edge.from" :aria-label="$t('来源状态')"><option v-for="item in definition.nodes" :key="item.id" :value="item.id" :disabled="item.id === edge.to">{{ item.name }}</option></select></label>
-              <label>{{ $t("目标状态") }}<select v-model="edge.to" :aria-label="$t('目标状态')"><option v-for="item in definition.nodes" :key="item.id" :value="item.id" :disabled="item.id === edge.from">{{ item.name }}</option></select></label>
-              <label>{{ $t("所需权限") }}<select v-model="edge.permission" :aria-label="$t('所需权限')"><option value="issue.transition">{{ $t("事项流转") }}</option><option value="issue.accept">{{ $t("事项验收") }}</option></select></label>
+              <label>{{ $t("来源状态") }}<AppSelect native-events v-model="edge.from" :aria-label="$t('来源状态')"><option v-for="item in definition.nodes" :key="item.id" :value="item.id" :disabled="item.id === edge.to">{{ item.name }}</option></AppSelect></label>
+              <label>{{ $t("目标状态") }}<AppSelect native-events v-model="edge.to" :aria-label="$t('目标状态')"><option v-for="item in definition.nodes" :key="item.id" :value="item.id" :disabled="item.id === edge.from">{{ item.name }}</option></AppSelect></label>
+              <label>{{ $t("所需权限") }}<AppSelect native-events v-model="edge.permission" :aria-label="$t('所需权限')"><option value="issue.transition">{{ $t("事项流转") }}</option><option value="issue.accept">{{ $t("事项验收") }}</option></AppSelect></label>
               <label class="permission-choice"><input v-model="edge.requiresReason" type="checkbox" />{{ $t("必须填写原因") }}</label>
             </template>
             <div v-if="deleting" class="canvas-delete" role="alert">

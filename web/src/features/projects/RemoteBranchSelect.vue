@@ -1,7 +1,7 @@
 <script setup>
+import AppSelect from "../../shared/components/AppSelect.vue";
 import { formatDate } from "../../shared/i18n/index.js";
 import { computed, useId } from "vue";
-import { Select as ASelect } from "antdv-next";
 import { appApi } from "../../shared/api/api.js";
 import { useResource } from "../../shared/api/use-resource.js";
 const props = defineProps({
@@ -30,7 +30,7 @@ function refresh() {
   <section class="project-form development-branch-select">
     <div class="development-branch-field">
       <label :for="inputId">{{ $t("起始分支") }}</label>
-      <a-select
+      <AppSelect
         :id="inputId"
         :value="modelValue || undefined"
         :options="branches"

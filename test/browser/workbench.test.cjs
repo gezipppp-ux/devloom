@@ -1,3 +1,4 @@
+const { selectOption } = require("../support/select.cjs");
 /* global document, window */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -68,7 +69,7 @@ async function verifyWorkbench(browser) {
     await page.getByRole('heading',{name:'工作台',exact:true}).waitFor();
     await page.locator('.ui-work-row').first().waitFor();
     for(const locale of ['zh-CN','en']) {
-      await page.locator('.ui-locale').selectOption(locale);
+      await selectOption(page.locator('.ui-locale'), locale);
       for(const [name, location, ready] of [
         ['home', '/', '.ui-work-row'], ['projects', '/projects', '.project-card'],
         ['overview', `/projects/${projectId}`, '.project-overview-grid'],
@@ -89,6 +90,11 @@ async function verifyWorkbench(browser) {
           await page.setViewportSize({width,height});
           assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),`${locale} ${name} overflow at ${width}`);
           await page.screenshot({path:path.join(output,`${name}-${locale}-${width}.png`),fullPage:true});
+          if (locale === 'zh-CN' && [1920, 390].includes(width)) {
+            await selectOption(page.getByRole('combobox', { name: '外观主题', exact: true }), 'dark');
+            await page.screenshot({path:path.join(output,`${name}-dark-${width}.png`),fullPage:true});
+            await selectOption(page.getByRole('combobox', { name: '外观主题', exact: true }), 'light');
+          }
           if (name === 'administration') {
             const management = page.locator('.ui-account-manage').last();
             const trigger = management.locator('summary');
@@ -125,7 +131,7 @@ async function verifyWorkbench(browser) {
     await enteredProject();
     await page.goto(origin + '/development');
     await page.getByRole('button', { name: 'Filters', exact: true }).click();
-    await page.getByLabel('Task status', { exact: true }).selectOption('started');
+    await selectOption(page.getByLabel('Task status', { exact: true }), 'started');
     await page.waitForURL('**status=started**');
     await page.locator('.ui-data-table').waitFor();
     assert.ok(requests.some(request => request.endpoint === '/api/workbench/tasks' && new URLSearchParams(request.search).get('status') === 'started'));
@@ -139,7 +145,7 @@ async function verifyWorkbench(browser) {
     await page.getByRole('button',{name:'Publish delivery',exact:true}).click();
     const dialog=page.getByRole('dialog');
     await dialog.getByRole('button',{name:'Next',exact:true}).click();
-    await dialog.getByLabel('Related issue',{exact:true}).selectOption('issue-31');
+    await selectOption(dialog.getByLabel('Related issue',{exact:true}), 'issue-31');
     await dialog.getByLabel('Delivery notes',{exact:true}).fill('发布内容保留原文 @ {name}');
     const publish=dialog.getByRole('button',{name:'Publish delivery',exact:true});
     assert.equal(await publish.isEnabled(),false,'sharing requires explicit confirmation');

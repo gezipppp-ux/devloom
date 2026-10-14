@@ -172,3 +172,14 @@ test("frontend scanner distinguishes imports from comments, strings and Vue styl
   assert.equal(canImport("features/tasks", "shared"), true);
   assert.equal(canImport("features/tasks", "features/tasks"), true);
 });
+
+test("frontend dropdowns share the accessible themed AppSelect control", () => {
+  for (const file of filesIn(sourceRoot).filter(file => /\.(vue|js)$/.test(file))) {
+    const source = fs.readFileSync(file, "utf8");
+    assert.doesNotMatch(source, /<(?:select|a-select)\b/i, `${file}: use AppSelect for dropdowns`);
+    if (path.basename(file) !== "AppSelect.vue") {
+      assert.doesNotMatch(source, /import\s*\{[^}]*\bSelect\b[^}]*\}\s*from\s*["']antdv-next["']/,
+        `${file}: only AppSelect owns the library dropdown`);
+    }
+  }
+});

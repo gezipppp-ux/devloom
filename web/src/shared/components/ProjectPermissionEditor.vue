@@ -1,4 +1,5 @@
 <script setup>
+import AppSelect from "./AppSelect.vue";
 import { translate } from "../i18n/index.js";
 import { computed, ref, useId } from "vue";
 import catalog from "../../../../shared/project-permissions.json";
@@ -96,7 +97,7 @@ function revert() {
       </label>
     </div>
     <details v-else class="permission-preset-tools" :open="!compact"><summary v-if="compact">{{ $t('权限组合与高级设置') }}</summary><div class="permission-preset">
-      <label>{{ $t("权限组合") }}<select v-model="preview" :disabled="disabled" :aria-label="$t('权限组合')"><option v-for="entry in presets" :key="entry.id" :value="entry.id">{{ $t(entry.label) }}</option></select></label>
+      <label>{{ $t("权限组合") }}<AppSelect native-events v-model="preview" :disabled="disabled" :aria-label="$t('权限组合')"><option v-for="entry in presets" :key="entry.id" :value="entry.id">{{ $t(entry.label) }}</option></AppSelect></label>
       <p>{{ $t(preset.description) }}</p><p class="field-hint">{{ $t("将添加：") }}{{ labels(available) || $t("无可用权限") }}</p>
       <p v-if="blocked.length" class="field-hint">{{ $t("部门未开放：") }}{{ labels(blocked) }}</p>
       <p v-if="coreBlocked.length" class="field-hint">{{ $t("组合核心功能未开放：") }}{{ labels(coreBlocked) }}{{ $t("。请联系系统管理员调整部门可用功能后再添加此组合。") }}</p>

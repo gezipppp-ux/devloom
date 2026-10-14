@@ -1,3 +1,4 @@
+const { selectOption, selectOptions } = require("../support/select.cjs");
 const { openProjectTab } = require("../support/browser-navigation.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
@@ -58,10 +59,10 @@ async function verifyProjectLifecycle({ page, origin, project, database, output,
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`${origin}/projects/${project.id}?tab=issues`);
-  await page.getByLabel("事项状态", { exact: true }).getByRole("option", { name: "需求规划", exact: true }).waitFor({ state: "attached" });
+  assert.ok((await selectOptions(page.getByLabel("事项状态", { exact: true }))).some(option => option.label === "需求规划"));
   await page.getByRole("button", { name: "新建需求", exact: true }).click();
   await page.getByLabel("标题", { exact: true }).fill("版本规划事项");
-  await page.getByLabel("目标版本", { exact: true }).selectOption({ label: "v0.2" });
+  await selectOption(page.getByLabel("目标版本", { exact: true }), { label: "v0.2" });
   await page.getByRole("button", { name: "保存事项", exact: true }).click();
   await page.getByRole("heading", { name: "版本规划事项", exact: true }).waitFor();
   assert.equal(await page.getByRole("group", { name: "事项流程图", exact: true }).count(), 0);
@@ -71,7 +72,7 @@ async function verifyProjectLifecycle({ page, origin, project, database, output,
   const other = (await projects.create(admin, { name: "复用系统流程的另一项目", remoteUrl: project.remoteUrl })).project;
   await page.goto(`${origin}/projects/${other.id}?tab=issues`);
   await page.getByRole("heading", { name: other.name, exact: true }).waitFor();
-  await page.getByLabel("事项状态", { exact: true }).getByRole("option", { name: "需求规划", exact: true }).waitFor({ state: "attached" });
+  assert.ok((await selectOptions(page.getByLabel("事项状态", { exact: true }))).some(option => option.label === "需求规划"));
   await page.getByRole("button", { name: "新建需求", exact: true }).click();
   await page.getByLabel("标题", { exact: true }).fill("跨项目系统流程事项");
   await page.getByRole("button", { name: "保存事项", exact: true }).click();
@@ -96,7 +97,7 @@ async function verifyProjectLifecycle({ page, origin, project, database, output,
   assert.equal((await database.client.developmentTask.findUnique({ where: { id: taskId } })).status, "cancelled");
   const issue = await database.client.projectIssue.findFirst({ where: { projectId: project.id, title: "版本规划事项" } });
   await page.goto(`${origin}/projects/${project.id}?tab=issues&issue=${issue.id}`);
-  await page.getByLabel("目标状态", { exact: true }).selectOption({ label: "拒绝" });
+  await selectOption(page.getByLabel("目标状态", { exact: true }), { label: "拒绝" });
   await page.getByLabel("原因", { exact: true }).fill("本版本取消实现");
   const transition = page.waitForResponse(response => response.url().endsWith(`/issues/${issue.id}/transition`) && response.request().method() === "POST");
   await page.getByRole("button", { name: "更新状态", exact: true }).click();

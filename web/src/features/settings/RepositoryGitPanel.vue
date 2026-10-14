@@ -1,4 +1,5 @@
 <script setup>
+import AppSelect from "../../shared/components/AppSelect.vue";
 import { formatDate } from "../../shared/i18n/index.js";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { onMounted, onUnmounted, ref } from "vue";
@@ -120,7 +121,7 @@ onUnmounted(() => {
       <label class="git-field-label" for="repository-remote"
         >{{ $t("要获取更新的远端") }}</label
       >
-      <select
+      <AppSelect native-events
         id="repository-remote"
         v-model="selectedRemote"
         :aria-label="$t('远端仓库')"
@@ -136,7 +137,7 @@ onUnmounted(() => {
         >
           {{ remote.name }}
         </option>
-      </select>
+      </AppSelect>
       <p class="git-hint">
         {{ $t("「获取远端更新」只更新远程跟踪引用，现有任务文件不变。待推送和落后远端的数量以最近获取结果为准。") }}
       </p>

@@ -1,3 +1,4 @@
+const { selectOption } = require("../support/select.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -56,7 +57,7 @@ async function verifyProjectPromptSettings({ page, origin, project, projects, ad
   await save("保存我的提示词", 409);
   assert.equal(await bug.inputValue(), personal + "\n本地草稿");
   await page.getByRole("button", { name: "保留草稿，加载最新配置", exact: true }).click();
-  await page.getByRole("combobox", { name: "Bug 提示词冲突处理", exact: true }).selectOption("draft");
+  await selectOption(page.getByRole("combobox", { name: "Bug 提示词冲突处理", exact: true }), "draft");
   await page.getByRole("button", { name: "确认合并并继续编辑", exact: true }).click();
   await save("保存我的提示词");
   assert.equal((await read()).overrides.bug, personal + "\n本地草稿");
@@ -98,7 +99,7 @@ async function verifyProjectPromptSettings({ page, origin, project, projects, ad
   await projects.savePrompts(project.id, admin, { scope: "personal", revision: supplementCurrent.personalRevision, templates: { supplement: "其他页面补充 {{content}}" } });
   await save("保存我的提示词", 409);
   await page.getByRole("button", { name: "保留草稿，加载最新配置", exact: true }).click();
-  await page.getByRole("combobox", { name: "补充提示词冲突处理", exact: true }).selectOption("draft");
+  await selectOption(page.getByRole("combobox", { name: "补充提示词冲突处理", exact: true }), "draft");
   await page.getByRole("button", { name: "确认合并并继续编辑", exact: true }).click();
   await save("保存我的提示词");
   assert.equal((await read()).templates.supplement, "个人补充 {{content}}\n本地补充草稿");

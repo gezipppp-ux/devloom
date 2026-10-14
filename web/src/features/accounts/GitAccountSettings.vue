@@ -1,4 +1,5 @@
 <script setup>
+import AppSelect from "../../shared/components/AppSelect.vue";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { ReloadOutlined } from "@antdv-next/icons";
 import { useGitAccounts } from "./use-git-accounts.js";
@@ -112,7 +113,7 @@ const {
         </p>
         </a-form-item
       >
-      <a-form-item :label="$t('认证方式')" html-for="git-account-auth-type"><select id="git-account-auth-type" v-model="form.authType" :disabled="busy" @change="changeAuthType"><option value="http">{{ $t("HTTP/HTTPS · 账号密码或令牌") }}</option><option value="ssh">{{ $t("SSH · 系统生成密钥") }}</option></select></a-form-item>
+      <a-form-item :label="$t('认证方式')" html-for="git-account-auth-type"><AppSelect native-events id="git-account-auth-type" v-model="form.authType" :disabled="busy" @change="changeAuthType"><option value="http">{{ $t("HTTP/HTTPS · 账号密码或令牌") }}</option><option value="ssh">{{ $t("SSH · 系统生成密钥") }}</option></AppSelect></a-form-item>
       <div v-if="form.authType === 'http'" class="form-columns">
         <a-form-item :label="$t('用户名')" html-for="git-account-user"
           ><input
@@ -165,12 +166,12 @@ const {
         </button>
       </a-form-item>
       <a-form-item v-if="form.authType === 'http'" :label="$t('登录验证服务')" html-for="git-login-provider">
-        <select id="git-login-provider" v-model="provider" :disabled="busy" aria-describedby="git-login-hint">
+        <AppSelect native-events id="git-login-provider" v-model="provider" :disabled="busy" aria-describedby="git-login-hint">
           <option value="auto">{{ $t("自动识别 Gitee / GitHub / GitLab 官方主机") }}</option>
           <option value="gitee">Gitee</option>
           <option value="github">GitHub / GitHub Enterprise</option>
           <option value="gitlab">{{ $t("GitLab / 自建 GitLab") }}</option>
-        </select>
+        </AppSelect>
         <p id="git-login-hint" class="field-hint">{{ $t("主机登录验证使用个人访问令牌，需允许读取本人资料；不支持普通密码。自建服务请选择对应类型，其他服务请在准备开发空间时验证。此选项仅用于本次验证。") }}</p>
         <p v-if="/^http:\/\//i.test(form.host.trim())" class="field-hint">{{ $t("HTTP 会以明文传输凭据，建议使用 HTTPS。") }}</p>
       </a-form-item>

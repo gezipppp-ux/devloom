@@ -1,3 +1,4 @@
+const { selectOption } = require("../support/select.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -12,7 +13,7 @@ async function verifyProjectTaskMerging({ page, origin, project, database, conte
   for (const issue of issues) await page.getByRole("checkbox", { name: `选择事项 ${issue.number}`, exact: true }).check();
   await page.getByRole("button", { name: "指派", exact: true }).click();
   const assignment = page.getByRole("dialog", { name: "指派", exact: true });
-  await assignment.getByLabel("开发负责人", { exact: true }).selectOption(admin.id);
+  await selectOption(assignment.getByLabel("开发负责人", { exact: true }), admin.id);
   await assignment.getByRole("button", { name: "确认指派", exact: true }).click();
   await page.getByRole("button", { name: "我的开发任务", exact: true }).click();
   assert.equal(await page.locator('.ui-selection-bar').count(), 0, "merge controls appear only after selection");

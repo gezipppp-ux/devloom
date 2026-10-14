@@ -1,3 +1,4 @@
+const { selectOption } = require("../support/select.cjs");
 const { openSessionContext } = require("../support/browser-navigation.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
@@ -97,7 +98,7 @@ async function verifyGit(browser, { origin, output, errors, directory, workspace
     await capture("git-repository-diverged");
 
     await page.getByRole("button", { name: "独立开发", exact: true }).click();
-    await page.getByLabel("需求渠道", { exact: true }).selectOption("manual");
+    await selectOption(page.getByLabel("需求渠道", { exact: true }), "manual");
     await page.getByLabel("需求标题", { exact: true }).fill("可删除的 Git 测试任务");
     await page.getByLabel("需求内容", { exact: true }).fill("仅使用 FakeClient 验证 Git 管理，不执行真实需求。");
     await page.getByRole("button", { name: "创建 session 并开始开发 →", exact: true }).click();

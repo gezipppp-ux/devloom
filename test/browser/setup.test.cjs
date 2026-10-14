@@ -56,7 +56,7 @@ async function bootstrap(f) {
   const { page } = f;
   await page.goto(`${f.origin}/setup`);
   await page.getByLabel("设置密码", { exact: true }).waitFor();
-  assert.equal(await page.locator("input").count(), 4);
+  assert.equal(await page.locator('input:not([role="combobox"])').count(), 4);
   await capture(page, "administrator");
   await page.getByLabel("设置密码", { exact: true }).fill("fixture-password");
   await page.getByLabel("确认密码", { exact: true }).fill("fixture-password");

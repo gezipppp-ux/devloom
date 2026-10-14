@@ -45,7 +45,7 @@ async function verifySessionSuppliers(browser, origin, manager, client, key, err
     await input.fill("下一轮模型重选后保留的草稿");
     assert.equal(await page.locator(".composer-send").isDisabled(), true);
     await page.getByRole("combobox", { name: "Codex 模型", exact: true }).click();
-    await page.locator('.model-option[data-model="fixture-model-b"]').click();
+    await page.locator('.app-select-option[data-value="fixture-model-b"]').click();
     await warning.waitFor({ state: "hidden" });
     assert.equal(await input.inputValue(), "下一轮模型重选后保留的草稿");
     await page.waitForFunction(() => !document.querySelector(".composer-send").disabled);

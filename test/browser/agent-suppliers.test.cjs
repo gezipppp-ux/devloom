@@ -1,3 +1,4 @@
+const { selectOption, selectValue } = require("../support/select.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -68,7 +69,7 @@ async function verifyAgentSuppliers(page, output) {
   await dialog.getByRole("button", { name: "添加所选模型" }).click();
   await dialog.locator(".supplier-model").getByText("Codex 内置", { exact: true }).waitFor();
   assert.deepEqual(await dialog.locator(".supplier-effort-chips span").allTextContents(), ["low", "medium", "high"]);
-  assert.equal(await dialog.getByLabel("默认思考强度", { exact: true }).inputValue(), "medium");
+  assert.equal(await selectValue(dialog.getByLabel("默认思考强度", { exact: true })), "medium");
   assert.equal(await dialog.getByLabel("显示名称", { exact: true }).inputValue(), "Fixture Codex");
   await search.press("Enter");
   assert.equal(await dialog.isVisible(), true, "search Enter must not submit the supplier form");
@@ -120,7 +121,7 @@ async function verifyAgentSuppliers(page, output) {
   dialog = page.getByRole("dialog");
   await dialog.getByText("未匹配内置目录", { exact: true }).waitFor();
   assert.deepEqual(await dialog.locator(".supplier-effort-chips span").allTextContents(), ["low", "medium", "high"], "missing catalog entries preserve the saved snapshot for an unchanged model");
-  assert.equal(await dialog.getByLabel("默认思考强度", { exact: true }).inputValue(), "medium");
+  assert.equal(await selectValue(dialog.getByLabel("默认思考强度", { exact: true })), "medium");
   await page.keyboard.press("Escape"); catalogMissing = false;
   catalogFailure = true;
   await card.getByRole("button", { name: "编辑 / 检测", exact: true }).click();
@@ -139,7 +140,7 @@ async function verifyAgentSuppliers(page, output) {
   dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: "自定义", exact: true }).click();
   await dialog.getByLabel("支持的思考强度", { exact: true }).fill("high");
-  await dialog.getByLabel("默认思考强度", { exact: true }).selectOption("high");
+  await selectOption(dialog.getByLabel("默认思考强度", { exact: true }), "high");
   await dialog.getByRole("button", { name: "保存供应商", exact: true }).click();
   await dialog.waitFor({ state: "hidden" });
   assert.deepEqual(writes.findLast(entry => entry.endpoint === "/api").input.models[0].reasoningEfforts, ["high"]);
@@ -150,13 +151,13 @@ async function verifyAgentSuppliers(page, output) {
   await card.getByRole("button", { name: "编辑 / 检测", exact: true }).click();
   await dialog.getByRole("button", { name: "使用内置配置", exact: true }).waitFor();
   assert.equal(await dialog.getByLabel("支持的思考强度", { exact: true }).inputValue(), "high");
-  assert.equal(await dialog.getByLabel("默认思考强度", { exact: true }).inputValue(), "high");
+  assert.equal(await selectValue(dialog.getByLabel("默认思考强度", { exact: true })), "high");
   const effortInput = dialog.getByLabel("支持的思考强度", { exact: true });
   await effortInput.press("End");
   await effortInput.pressSequentially(", ");
   assert.equal(await effortInput.inputValue(), "high, ", "typing preserves separators until the next effort is entered");
   await effortInput.pressSequentially("medium");
-  assert.equal(await dialog.getByLabel("默认思考强度", { exact: true }).inputValue(), "high");
+  assert.equal(await selectValue(dialog.getByLabel("默认思考强度", { exact: true })), "high");
   await dialog.getByRole("button", { name: "使用内置配置", exact: true }).click();
   await dialog.getByRole("button", { name: "自定义", exact: true }).click();
   assert.equal(await effortInput.inputValue(), "low, medium, high", "restoring native configuration clears the custom text draft");
@@ -169,7 +170,7 @@ async function verifyAgentSuppliers(page, output) {
   await dialog.getByRole("button", { name: "手动添加", exact: true }).click();
   await dialog.getByLabel("模型 ID", { exact: true }).fill("fixture-code");
   await dialog.locator(".supplier-effort-chips").waitFor();
-  assert.equal(await dialog.getByLabel("默认思考强度", { exact: true }).inputValue(), "medium");
+  assert.equal(await selectValue(dialog.getByLabel("默认思考强度", { exact: true })), "medium");
   await dialog.getByLabel("模型 ID", { exact: true }).fill("fixture-code-latest");
   await dialog.getByText("未匹配内置目录", { exact: true }).waitFor();
   assert.equal(await dialog.getByLabel("支持的思考强度", { exact: true }).inputValue(), "", "model aliases must not inherit capabilities by prefix");
@@ -189,7 +190,7 @@ async function verifyAgentSuppliers(page, output) {
   await dialog.getByLabel("fixture-code", { exact: true }).waitFor();
   assert.equal(await dialog.getByLabel("支持的思考强度", { exact: true }).inputValue(), "high", "late catalog results preserve manually entered values");
   await dialog.getByRole("button", { name: "使用内置配置", exact: true }).click();
-  assert.equal(await dialog.getByLabel("默认思考强度", { exact: true }).inputValue(), "medium");
+  assert.equal(await selectValue(dialog.getByLabel("默认思考强度", { exact: true })), "medium");
   await page.keyboard.press("Escape");
 
   holdCatalog = true;
@@ -207,7 +208,7 @@ async function verifyAgentSuppliers(page, output) {
   assert.equal(await dialog.locator(".supplier-effort-chips").count(), 0);
   await dialog.getByRole("button", { name: "重试读取内置目录", exact: true }).click();
   await dialog.getByText("Codex 内置", { exact: true }).waitFor();
-  assert.equal(await dialog.getByLabel("默认思考强度", { exact: true }).inputValue(), "medium");
+  assert.equal(await selectValue(dialog.getByLabel("默认思考强度", { exact: true })), "medium");
   await page.keyboard.press("Escape");
   await card.getByRole("button", { name: "编辑 / 检测", exact: true }).click();
   holdModels = true;

@@ -1,3 +1,4 @@
+const { selectOption, selectValue, selectOptions } = require("../support/select.cjs");
 const { openSessionList, openSessionContext } = require("../support/browser-navigation.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
@@ -169,39 +170,33 @@ async function main() {
     await page
       .getByRole("button", { name: "独立开发", exact: true })
       .click();
-    assert.deepEqual(await page.getByLabel("需求渠道", { exact: true }).locator("option").evaluateAll(options => options.map(option => option.value)), ["manual"]);
+    assert.deepEqual((await selectOptions(page.getByLabel("需求渠道", { exact: true }))).map(option => option.value), ["manual"]);
     assert.equal(
-      await page.getByLabel("Codex 模型", { exact: true }).inputValue(),
+      await selectValue(page.getByLabel("Codex 模型", { exact: true })),
       "",
     );
     assert.equal(
-      await page.getByLabel("思考强度", { exact: true }).inputValue(),
+      await selectValue(page.getByLabel("思考强度", { exact: true })),
       "",
     );
-    await page
-      .getByLabel("Codex 模型", { exact: true })
-      .selectOption("fixture-model-a");
-    await page.getByLabel("思考强度", { exact: true }).selectOption("high");
+    await selectOption(page
+      .getByLabel("Codex 模型", { exact: true }), "fixture-model-a");
+    await selectOption(page.getByLabel("思考强度", { exact: true }), "high");
     await page.getByRole("combobox", { name: "权限模式", exact: true }).click();
-    await page.locator('.permission-option[data-value="auto"]').click();
-    await page
-      .getByLabel("Codex 模型", { exact: true })
-      .selectOption("fixture-model-b");
+    await page.locator('.ant-select-item-option:has(.app-select-option[data-value="auto"])').click();
+    await selectOption(page
+      .getByLabel("Codex 模型", { exact: true }), "fixture-model-b");
     assert.equal(
-      await page.getByLabel("思考强度", { exact: true }).inputValue(),
+      await selectValue(page.getByLabel("思考强度", { exact: true })),
       "",
     );
     assert.equal(
-      await page
-        .getByLabel("思考强度", { exact: true })
-        .locator('option[value="high"]')
-        .count(),
+      (await selectOptions(page.getByLabel("思考强度", { exact: true }))).filter(option => option.value === "high").length,
       0,
     );
-    await page
-      .getByLabel("Codex 模型", { exact: true })
-      .selectOption("fixture-model-a");
-    await page.getByLabel("思考强度", { exact: true }).selectOption("high");
+    await selectOption(page
+      .getByLabel("Codex 模型", { exact: true }), "fixture-model-a");
+    await selectOption(page.getByLabel("思考强度", { exact: true }), "high");
     await page.route("**/models", (route) =>
       route.fulfill({
         status: 400,
@@ -214,11 +209,11 @@ async function main() {
       .click();
     await page.locator('.operation-message[data-type="error"]').filter({ hasText: '模型列表加载失败：模拟模型列表离线' }).waitFor();
     assert.equal(
-      await page.getByLabel("Codex 模型", { exact: true }).inputValue(),
+      await selectValue(page.getByLabel("Codex 模型", { exact: true })),
       "fixture-model-a",
     );
     assert.equal(
-      await page.getByLabel("思考强度", { exact: true }).inputValue(),
+      await selectValue(page.getByLabel("思考强度", { exact: true })),
       "high",
     );
     await page.unroute("**/models");
@@ -227,10 +222,10 @@ async function main() {
       .click();
     await page.waitForFunction(
       () =>
-        document.querySelector('select[aria-label="思考强度"]')?.disabled ===
+        document.querySelector('input[role="combobox"][aria-label="思考强度"]')?.disabled ===
         false,
     );
-    await page.getByLabel("需求渠道", { exact: true }).selectOption("manual");
+    await selectOption(page.getByLabel("需求渠道", { exact: true }), "manual");
     await page
       .getByLabel("需求标题", { exact: true })
       .fill("工作区 A 的独立任务");
@@ -295,13 +290,11 @@ async function main() {
     await navigateWorkspace(page, a);
     await page.getByText("历史回复", { exact: true }).waitFor();
     assert.equal(
-      await page
-        .getByRole("combobox", { name: "Codex 模型", exact: true })
-        .getAttribute("data-model"),
+      await selectValue(page.getByRole("combobox", { name: "Codex 模型", exact: true })),
       "fixture-model-a",
     );
     await page.getByRole("combobox", { name: "权限模式", exact: true }).click();
-    assert.equal(await page.locator('.permission-option[data-value="auto"]').getAttribute('aria-selected'), 'true');
+    assert.equal(await page.locator('.ant-select-item-option:has(.app-select-option[data-value="auto"])').getAttribute('aria-selected'), 'true');
     await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "■ 停止", exact: true }).click();
     await openSessionContext(page, '会话信息');
@@ -318,15 +311,15 @@ async function main() {
       .getByRole("button", { name: "独立开发", exact: true })
       .click();
     assert.equal(
-      await page.getByLabel("Codex 模型", { exact: true }).inputValue(),
+      await selectValue(page.getByLabel("Codex 模型", { exact: true })),
       "",
     );
     assert.equal(
-      await page.getByLabel("思考强度", { exact: true }).inputValue(),
+      await selectValue(page.getByLabel("思考强度", { exact: true })),
       "",
     );
     await page.getByRole("combobox", { name: "权限模式", exact: true }).click();
-    assert.equal(await page.locator('.permission-option[data-value="ask"]').getAttribute('aria-selected'), 'true');
+    assert.equal(await page.locator('.ant-select-item-option:has(.app-select-option[data-value="ask"])').getAttribute('aria-selected'), 'true');
     await page.keyboard.press("Escape");
     await page.screenshot({
       path: path.join(output, "workspace-rail-desktop.png"),

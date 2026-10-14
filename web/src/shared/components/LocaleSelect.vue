@@ -1,4 +1,6 @@
 <script setup>
 import { i18n, setLocale } from "../i18n/index.js";
+import ToolbarSelect from "./ToolbarSelect.vue";
+const options = [{ value: "zh-CN", label: "简体中文" }, { value: "en", label: "English" }];
 </script>
-<template><select class="ui-locale" :aria-label="$t('界面语言')" :value="i18n.global.locale.value" @change="setLocale($event.target.value)"><option value="zh-CN">简体中文</option><option value="en">English</option></select></template>
+<template><ToolbarSelect class="ui-locale" :label="$t('界面语言')" :model-value="i18n.global.locale.value" :options="options" align-end @update:model-value="setLocale" /></template>

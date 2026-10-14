@@ -1,7 +1,7 @@
 <script setup>
+import AppSelect from "../../shared/components/AppSelect.vue";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, onUnmounted, ref, useId, watch } from "vue";
-import { Select as ASelect } from "antdv-next";
 import { api } from "../../shared/api/api.js";
 
 const props = defineProps({
@@ -66,7 +66,7 @@ onUnmounted(() => {
 
 <template>
   <label :for="inputId" class="sr-only">{{ $t("新任务开发分支") }}</label>
-  <a-select
+  <AppSelect
     :id="inputId"
     :value="modelValue"
     :options="options"

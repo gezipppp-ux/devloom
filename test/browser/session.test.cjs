@@ -1,3 +1,4 @@
+const { selectOption, selectValue } = require("../support/select.cjs");
 const { openSessionList, openSessionContext } = require("../support/browser-navigation.cjs");
 /* global document, window */
 const assert = require('node:assert/strict');
@@ -26,31 +27,27 @@ const { dismissOperationMessages: dismissFeedback } = require('../support/operat
 async function choosePermission(page, mode) {
   await dismissFeedback(page);
   await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
-  await page.locator(`.permission-option[data-value="${mode}"]`).click();
+  await page.locator(`.ant-select-item-option:has(.app-select-option[data-value="${mode}"])`).click();
 }
 
 async function chooseSessionModel(page, model) {
   await dismissFeedback(page);
   await page.getByRole('combobox', { name: 'Codex 模型', exact: true }).click();
-  await page.locator(`.model-option[data-model="${model}"]`).click();
+  await page.locator(`.app-select-option[data-value="${model}"]`).click();
 }
 
 async function chooseSessionEffort(page, effort) {
   await dismissFeedback(page);
   await page.getByRole('combobox', { name: '思考强度', exact: true }).click();
-  await page.locator(`.effort-option[data-effort="${effort}"]`).click();
+  await page.locator(`.app-select-option[data-value="${effort}"]`).click();
 }
 
 async function sessionModel(page) {
-  return page
-    .getByRole('combobox', { name: 'Codex 模型', exact: true })
-    .getAttribute('data-model');
+  return selectValue(page.getByRole('combobox', { name: 'Codex 模型', exact: true }));
 }
 
 async function sessionEffort(page) {
-  return page
-    .getByRole('combobox', { name: '思考强度', exact: true })
-    .getAttribute('data-effort');
+  return selectValue(page.getByRole('combobox', { name: '思考强度', exact: true }));
 }
 
 async function verifyLanManualCreation(browser, directory, errors) {
@@ -89,7 +86,7 @@ async function verifyLanManualCreation(browser, directory, errors) {
     })), { secure: false, randomUUID: 'undefined', getRandomValues: 'function' });
     async function openManual() {
       await page.getByRole('button', { name: '独立开发', exact: true }).click();
-      await page.getByLabel('需求渠道', { exact: true }).selectOption('manual');
+      await selectOption(page.getByLabel('需求渠道', { exact: true }), 'manual');
       await page.getByLabel('需求标题', { exact: true }).fill('LAN HTTP 手动需求');
       await page.getByLabel('需求内容', { exact: true }).fill('仅校验请求标识，不启动真实任务。');
     }
@@ -142,19 +139,20 @@ async function verifyPermissionDiscoveryFailures(browser, origin, client, errors
       .filter({ hasText: surface === 'create' ? '确认权限可用后才能创建任务。' : '确认权限可用后才能发送。' });
     async function verifyOptions(available) {
       await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
-      const automatic = page.locator('.permission-option[data-value="auto"]');
+      const automatic = page.locator('.ant-select-item-option:has(.app-select-option[data-value="auto"])');
       await automatic.waitFor();
       assert.equal(await automatic.isDisabled(), !available, surface);
       for (const mode of ['ask', 'full'])
-        assert.equal(await page.locator(`.permission-option[data-value="${mode}"]`).isDisabled(), !available, surface);
+        assert.equal(await page.locator(`.ant-select-item-option:has(.app-select-option[data-value="${mode}"])`).isDisabled(), !available, surface);
       await page.keyboard.press('Escape');
+      await page.locator('.app-select-popup:visible').waitFor({ state: 'hidden' });
     }
     try {
       await page.goto(origin);
       await page.getByText('历史回复', { exact: true }).waitFor();
       if (surface === 'create') {
         await page.getByRole('button', { name: '独立开发', exact: true }).click();
-        await page.getByLabel('需求渠道', { exact: true }).selectOption('manual');
+        await selectOption(page.getByLabel('需求渠道', { exact: true }), 'manual');
         await page.getByLabel('需求标题', { exact: true }).fill('权限发现失败时保留草稿');
       }
       await alert.waitFor();
@@ -175,13 +173,13 @@ async function verifyPermissionDiscoveryFailures(browser, origin, client, errors
 
       responseMode = 'malformed';
       await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
-      await page.locator('.permission-menu').getByRole('button', { name: '刷新权限选项', exact: true }).click();
+      await page.locator('.app-select-popup').getByRole('button', { name: '刷新权限选项', exact: true }).click();
       await alert.waitFor();
       assert.match(await alert.textContent(), /权限选项响应格式无效/);
       assert.doesNotMatch(await alert.textContent(), /当前服务缺少权限接口/);
       await page.keyboard.press('Escape');
       await verifyOptions(false);
-      assert.equal(await page.getByRole('combobox', { name: '权限模式', exact: true }).getAttribute('data-permission'), 'ask');
+      assert.equal(await selectValue(page.getByRole('combobox', { name: '权限模式', exact: true })), 'ask');
       if (surface === 'create')
         assert.equal(await page.getByLabel('需求标题', { exact: true }).inputValue(), '权限发现失败时保留草稿');
     } finally {
@@ -278,7 +276,7 @@ async function verifyAgentRequests(browser, origin, key, errors) {
         assert.equal(await input.isDisabled(), true);
       } else if (mode === 'unknown-permission') {
         await page.getByRole('alert').filter({ hasText: '当前权限模式不可用' }).waitFor();
-        assert.equal(await page.getByRole('combobox', { name: '权限模式', exact: true }).getAttribute('data-permission'), 'unrecognized');
+        assert.equal(await selectValue(page.getByRole('combobox', { name: '权限模式', exact: true })), 'unrecognized');
         await input.fill('未知权限模式保留草稿');
         assert.equal(await page.locator('.composer-send').isDisabled(), true);
       } else {
@@ -329,7 +327,7 @@ async function verifyExecutionSettings(browser, origin, manager, client, key, er
     await save(() => choosePermission(page, 'full'));
     await page.getByText(/下一轮生效/).first().waitFor();
     await peer.waitForFunction(() =>
-      document.querySelector('[role="combobox"][aria-label="Codex 模型"]')?.dataset.model === 'fixture-model-b');
+      JSON.parse(document.querySelector('[role="combobox"][aria-label="Codex 模型"]')?.closest('.app-select').dataset.value || '""') === 'fixture-model-b');
     assert.equal(await input.inputValue(), '保留尚未发送的草稿');
     assert.deepEqual(client.calls.find((call) => call.method === 'turn/start' && call.params.input[0].text === '设置浏览器回归第一轮'), first);
     await page.getByRole('button', { name: '补充指令 ↑', exact: true }).click();
@@ -641,7 +639,7 @@ async function verifyRefreshConsistency(browser, origin, manager, client, key, e
       model: 'fixture-model-b', reasoningEffort: 'medium', permissionMode: 'full',
     });
     await page.waitForFunction(() =>
-      document.querySelector('[role="combobox"][aria-label="Codex 模型"]')?.dataset.model === 'fixture-model-b');
+      JSON.parse(document.querySelector('[role="combobox"][aria-label="Codex 模型"]')?.closest('.app-select').dataset.value || '""') === 'fixture-model-b');
     await release(settingsSnapshot, 'settings-overlay');
     assert.equal(await sessionModel(page), 'fixture-model-b');
     assert.equal(await sessionEffort(page), 'medium');
@@ -1075,8 +1073,8 @@ async function main() {
     await page.getByRole('button', { name: /模拟缺陷/ }).click();
     await page.getByRole('button', { name: '检索', exact: true }).click();
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.getByLabel('Codex 模型', { exact: true }).selectOption('fixture-model-a');
-    await page.getByLabel('思考强度', { exact: true }).selectOption('high');
+    await selectOption(page.getByLabel('Codex 模型', { exact: true }), 'fixture-model-a');
+    await selectOption(page.getByLabel('思考强度', { exact: true }), 'high');
     await choosePermission(page, 'auto');
 
     await verifyStartTaskLock(page);
@@ -1105,7 +1103,7 @@ async function main() {
     await page
       .getByRole('button', { name: '独立开发', exact: true })
       .click();
-    await page.getByLabel('需求渠道', { exact: true }).selectOption('manual');
+    await selectOption(page.getByLabel('需求渠道', { exact: true }), 'manual');
     await page
       .getByRole('textbox', { name: '需求标题', exact: true })
       .fill('新增登录入口');
@@ -1153,10 +1151,10 @@ async function main() {
       ),
     );
     await page.setViewportSize({ width: 1440, height: 1000 });
-    assert.equal(await page.getByLabel('Codex 模型', { exact: true }).inputValue(), '');
-    assert.equal(await page.getByLabel('思考强度', { exact: true }).inputValue(), '');
-    await page.getByLabel('Codex 模型', { exact: true }).selectOption('fixture-model-b');
-    await page.getByLabel('思考强度', { exact: true }).selectOption('medium');
+    assert.equal(await selectValue(page.getByLabel('Codex 模型', { exact: true })), '');
+    assert.equal(await selectValue(page.getByLabel('思考强度', { exact: true })), '');
+    await selectOption(page.getByLabel('Codex 模型', { exact: true }), 'fixture-model-b');
+    await selectOption(page.getByLabel('思考强度', { exact: true }), 'medium');
     await choosePermission(page, 'full');
     await submit.click();
     await page.getByText('模拟启动失败，请重试', { exact: true }).waitFor();

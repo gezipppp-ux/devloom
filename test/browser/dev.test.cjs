@@ -144,10 +144,14 @@ async function main() {
     await seeding.client.systemSetup.update({ where: { id: "installation" }, data: { status: "not_required" } });
     await seeding.close();
     const port = await availablePort();
-    const origin = `http://127.0.0.1:${port}`;
+    // Exercise the default wildcard bind through a real interface when present.
+    const address = Object.values(os.networkInterfaces()).flat().find(
+      (entry) => entry.family === "IPv4" && !entry.internal,
+    )?.address || "127.0.0.1";
+    const origin = `http://${address}:${port}`;
     child = fork(
       path.join(directory, "src", "cli", "dev-watch.cjs"),
-      ["--host", "127.0.0.1", "--port", String(port)],
+      ["--port", String(port)],
       {
         cwd: directory,
         windowsHide: true,
@@ -171,7 +175,7 @@ async function main() {
       exitCode = code;
     });
     await until(
-      () => output.includes(`Web Coding Dev: ${origin}`),
+      () => output.includes(`监听地址：0.0.0.0:${port}`),
       "The development server did not start.",
     );
     browser = await chromium.launch({
@@ -290,7 +294,7 @@ async function main() {
       "Shutdown must release the development port.",
     );
     process.stdout.write(
-      "Development browser checks passed: Vue HMR, backend restart, token refresh and process cleanup.\n",
+      `Development browser checks passed at ${origin}: default LAN access, Vue HMR, backend restart, token refresh and process cleanup.\n`,
     );
   } catch (error) {
     throw new Error(`${error.message}\nDevelopment server output:\n${output}`, {

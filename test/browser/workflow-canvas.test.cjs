@@ -1,3 +1,4 @@
+const { selectOption } = require("../support/select.cjs");
 /* global document, window */
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -162,7 +163,7 @@ async function verifyWorkflowCanvas({ page, origin, output }) {
   await page.mouse.down(); await page.mouse.move(target.x + 60, target.y + 30, { steps: 10 }); await page.mouse.up();
   await page.getByLabel('操作名称', { exact: true }).fill('画布连接');
   await page.getByLabel('必须填写原因', { exact: true }).check();
-  await page.getByLabel('所需权限', { exact: true }).selectOption('issue.accept');
+  await selectOption(page.getByLabel('所需权限', { exact: true }), 'issue.accept');
   assert.equal(await graph.locator('.edge-line').count(), 14);
   await verifyCurves();
   await page.getByLabel('操作名称', { exact: true }).press('Escape');
@@ -185,7 +186,7 @@ async function verifyWorkflowCanvas({ page, origin, output }) {
   });
   await graph.dblclick({ position: empty });
   await page.getByLabel('状态名称', { exact: true }).fill('在画布新建的状态');
-  await page.getByLabel('状态类型', { exact: true }).selectOption('completed');
+  await selectOption(page.getByLabel('状态类型', { exact: true }), 'completed');
   assert.equal(await page.getByLabel('允许开始开发', { exact: true }).isDisabled(), true);
   await page.getByRole('button', { name: '删除状态', exact: true }).click();
   await page.getByRole('button', { name: '取消删除', exact: true }).click();

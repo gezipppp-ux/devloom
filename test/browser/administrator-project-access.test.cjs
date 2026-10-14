@@ -1,3 +1,4 @@
+const { selectOption } = require("../support/select.cjs");
 const { openProjectTab } = require("../support/browser-navigation.cjs");
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -27,7 +28,7 @@ async function verifyAdministratorProjectAccess({ page, origin, projects, accoun
   await tab("成员");
   await page.getByRole("button", { name: "调整独立项目负责人（independent-owner）权限", exact: true }).waitFor();
   await page.getByRole('button', { name: '添加成员', exact: true }).click();
-  await page.getByLabel("用户", { exact: true }).selectOption(admin.id);
+  await selectOption(page.getByLabel("用户", { exact: true }), admin.id);
   assert.equal(await page.getByRole("button", { name: "保存成员", exact: true }).isEnabled(), true);
   // Inspect member management without adding the administrator to the project.
   await tab("需求");

@@ -1,3 +1,4 @@
+const { selectOption } = require("../support/select.cjs");
 const { openProjectTab } = require("../support/browser-navigation.cjs");
 /* global document, window, PopStateEvent */
 const assert = require("node:assert/strict");
@@ -117,12 +118,12 @@ async function main() {
       assert.equal(await markdownValue(page), markdown, "unsupported source is kept intact rather than silently discarded");
       await setMarkdown(page, "描述", markdown.split("\n\n<script>")[0]);
       await setMarkdown(page, type === "需求" ? "验收标准" : "复现步骤", "首次保存即可重复验证的标准");
-      await page.getByLabel("优先级", { exact: true }).selectOption("high");
-      await page.getByLabel("参与人", { exact: true }).selectOption([admin.id]);
+      await selectOption(page.getByLabel("优先级", { exact: true }), "high");
+      await selectOption(page.getByLabel("参与人", { exact: true }), [admin.id]);
       if (type === "Bug") {
         await setMarkdown(page, "预期结果", "**预期完整显示**");
         await setMarkdown(page, "实际结果", "实际出现错误");
-        await page.getByLabel("严重程度", { exact: true }).selectOption("major");
+        await selectOption(page.getByLabel("严重程度", { exact: true }), "major");
       }
       assert.equal(await page.getByRole("button", { name: "从 TAPD 导入", exact: true }).count(), 0);
       const fileCount = await database.client.projectFile.count();
@@ -203,7 +204,7 @@ async function main() {
       assert.equal(await editor(page).getByRole("button", { name: "撤销", exact: true }).isDisabled(), true, "opening saved content establishes the history baseline");
       await setMarkdown(page, type === "需求" ? "验收标准" : "复现步骤", "可重复验证的标准");
       await visual(page); await editor(page).locator('img[alt="pasted-proof.png"]').waitFor(); await captureEditor(page, output, `edit-${type === "Bug" ? "bug" : "requirement"}`);
-      await page.getByRole("listbox", { name: "参与人", exact: true }).selectOption(product.id);
+      await selectOption(page.getByRole("combobox", { name: "参与人", exact: true }), product.id);
       await page.getByRole("button", { name: "保存事项", exact: true }).click();
       await page.getByText("可重复验证的标准", { exact: true }).waitFor();
       assert.equal(await database.client.developmentTask.count(), 0, "editing and assignment cannot start Codex");
@@ -349,7 +350,7 @@ async function main() {
     const sourceTaskUrl = page.url();
     await page.getByRole("button", { name: "去准备开发环境", exact: true }).click();
     assert.equal(new URL(page.url()).searchParams.get("returnTask"), planned.id);
-    await page.getByRole("combobox", { name: /^个人 Git 账号/ }).selectOption(git.id);
+    await selectOption(page.getByRole("combobox", { name: /^个人 Git 账号/ }), git.id);
     await page.getByRole("button", { name: "验证访问并准备空间", exact: true }).click();
     const deadline = Date.now() + 20000;
     while ((await database.client.developmentSpace.findFirst({ where: { projectId: project.id, userId: admin.id } })).status !== "ready" && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
@@ -454,7 +455,7 @@ async function main() {
     await login("codeonly");
     assert.equal(await page.locator(".project-tab-bar").getByRole("button", { name: "需求", exact: true }).count(), 0);
     await tab("代码与环境");
-    await page.getByRole("combobox", { name: /^个人 Git 账号/ }).selectOption(codeGit.id);
+    await selectOption(page.getByRole("combobox", { name: /^个人 Git 账号/ }), codeGit.id);
     await page.getByRole("button", { name: "验证访问并准备空间", exact: true }).click();
     await page.getByText("已提交空间准备请求。空间可用后，请返回开发任务开始开发。", { exact: true }).waitFor();
     const codeDeadline = Date.now() + 20000;

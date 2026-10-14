@@ -1,4 +1,5 @@
 <script setup>
+import AppSelect from "../../shared/components/AppSelect.vue";
 /* global window */
 import { formatDate } from "../../shared/i18n/index.js";
 import { computed, nextTick, reactive, ref, watch, onMounted, onUnmounted } from "vue";
@@ -277,7 +278,7 @@ async function submitConfirmation() {
               maxlength="200"
               :disabled="saving" /></label
           ><label v-if="canAssign"
-            >{{ $t("开发负责人") }}<select
+            >{{ $t("开发负责人") }}<AppSelect native-events
               v-model="executorId"
               :disabled="
                 saving || members.loading.value || Boolean(members.error.value)
@@ -301,7 +302,7 @@ async function submitConfirmation() {
               >
                 {{ member.displayName }}
               </option>
-            </select></label
+            </AppSelect></label
           >
         </div>
         <p class="field-hint">

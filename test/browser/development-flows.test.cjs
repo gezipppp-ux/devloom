@@ -1,3 +1,4 @@
+const { selectOption, selectOptions } = require("../support/select.cjs");
 const { openSessionList } = require("../support/browser-navigation.cjs");
 /* global window, document */
 const fs = require('node:fs');
@@ -75,7 +76,7 @@ async function main() {
     const projectName = fixture.response(new URL(origin + '/api/projects')).projects[0].name;
     await page.goto(origin + '/development');
     assert.equal(await page.getByRole('button', { name: '项目全部任务', exact: true }).isDisabled(), true, 'all project tasks requires a specific top-navigation project');
-    await page.getByRole('combobox', { name: '当前项目', exact: true }).selectOption(fixture.projectId);
+    await selectOption(page.getByRole('combobox', { name: '当前项目', exact: true }), fixture.projectId);
     await page.getByRole('link', { name: '项目全部任务', exact: true }).click();
     await page.waitForURL(url => url.pathname === projectPath && url.searchParams.get('taskScope') === 'all');
     await page.getByRole('button', { name: '项目全部任务', exact: true }).waitFor();
@@ -112,14 +113,13 @@ async function main() {
     await page.route('**/api/account/git-accounts', fixtureAccounts);
     await page.goto(origin+projectPath+'?tab=development');
     const gitAccounts = page.getByRole('combobox', { name: '个人 Git 账号', exact: true });
-    await gitAccounts.locator('option[value="fixture-ssh"]').waitFor({ state: 'attached' });
-    assert.deepEqual(await gitAccounts.locator('option').allTextContents(), [
+    assert.deepEqual((await selectOptions(gitAccounts)).map(option => option.label), [
       '选择 Git 账号', '演示 Gitee SSH · gitee.com · SSH 密钥', '演示 Gitee HTTPS · https://gitee.com · HTTP/HTTPS 凭据',
     ]);
     await page.getByText('Gitee（gitee.com）默认端口的 HTTPS 与 SSH 仓库地址会按所选账号的认证方式匹配。其他 Git 服务需与项目地址的主机和认证方式一致。', { exact: true }).waitFor();
     const prepare = page.getByRole('button', { name: '验证访问并准备空间', exact: true });
     assert.equal(await prepare.isDisabled(), true);
-    await gitAccounts.selectOption('fixture-ssh');
+    await selectOption(gitAccounts, 'fixture-ssh');
     assert.equal(await prepare.isEnabled(), true);
     for (const width of [1440,768,390,320]) {
       await page.setViewportSize({width,height:1000});

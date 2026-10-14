@@ -23,7 +23,7 @@
 .supplier-auth-type { margin-right: auto; }
 .supplier-card-footer .field-hint { flex-basis: 100%; margin: 4px 0 0; }
 .supplier-dialog { width: 720px; max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); overflow: auto; padding: 24px; color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-dialog); background: var(--surface); box-shadow: var(--shadow-dialog); }
-.supplier-dialog::backdrop { background: rgb(36 37 45 / 25%); }
+.supplier-dialog::backdrop { background: var(--backdrop); }
 .supplier-dialog-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .supplier-dialog-heading h2 { margin: 0; }
 .supplier-fields { border: 0; padding: 0; margin: 0; min-width: 0; }

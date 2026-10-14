@@ -1,3 +1,4 @@
+const { selectOption } = require("../support/select.cjs");
 const { openSessionContext } = require("../support/browser-navigation.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
@@ -44,11 +45,11 @@ async function verifySessionFiles(browser, origin, key, errors, output) {
     assert.equal(await draft.inputValue(), "预览过程中保留草稿");
     await panel.getByRole("button", { name: "变更对比", exact: true }).click();
     await panel.locator(".file-diff-line.removed").waitFor();
-    await panel.getByLabel("差异显示方式").selectOption("split");
+    await selectOption(panel.getByLabel("差异显示方式"), "split");
     await panel.locator(".file-split").waitFor({ state: "visible" });
-    await panel.getByLabel("文件比较范围").selectOption("head");
+    await selectOption(panel.getByLabel("文件比较范围"), "head");
     await panel.getByText("此范围内没有内容差异。", { exact: true }).waitFor();
-    await panel.getByLabel("文件比较范围").selectOption("task");
+    await selectOption(panel.getByLabel("文件比较范围"), "task");
     await panel.locator(".file-split").waitFor();
     await page.screenshot({ path: path.join(output, "file-panel-desktop.png"), fullPage: true });
     await page.keyboard.press("Escape");

@@ -4,6 +4,10 @@
 
 `main.js` 是唯一入口，负责挂载 Vue、注册表单组件，并从共享样式读取主题变量。
 
+所有下拉选择使用 `shared/components/AppSelect.vue`，统一弹层、选中标记、禁用状态、键盘操作和深浅色；顶栏通过 `ToolbarSelect` 提供紧凑与图标样式。组件支持 `v-model`／`value`、`options` 分组、搜索、清空、多选和 `footer` 刷新区域；旧表单可保留 `<option>` 内容并用 `native-events` 接收 `{ target: { value, selectedOptions } }`。`required` 与禁用 fieldset 保留表单校验，弹窗或管理浮层中的选项挂在当前 dialog／popover 内以保持可交互。业务查询与提交仍由各功能组件负责，页面不直接使用原生 select 或组件库 Select。
+
+外观由 `shared/styles/theme.js` 管理：默认跟随系统，也可通过顶栏头像前的 `ThemeSelect` 选择浅色或暗色。选择作为设备偏好保存在本机 `web-coding.theme`，跨标签同步；系统外观变化仅在跟随系统时生效。入口在挂载前应用主题并同步组件库算法和设计变量，卸载时释放监听；切换不重建页面、不清除草稿、不保存业务设置。全站颜色与原生控件 `color-scheme` 位于 `design-tokens.css`。
+
 全局待处理由 `features/accounts/use-attention-notifications.js` 持有一个账号隔离的轮询与去重基线，`AttentionNotifications` 在顶栏和工作台复用同一状态；通知跳转原会话或交付详情，操作仍由原服务重新鉴权。首次静默、失败不重复、静音期间的新项不在重新开启时补发。`AuthenticationLayout` 统一登录与首次改密的品牌和语言入口。
 
 项目概览读取真实项目动态、版本目标日期和完成进度；工作台近期项目读取账号独立的服务端访问记录。进入项目成功读取后只记录一次访问，后台刷新不反复记录。版本范围通过现有按 `releaseId` 查询呈现需求和 Bug，继续使用原详情深链。桌面会话在实际可用区域足够时默认展开执行上下文，保留信息／Git／需求与收起操作，中小屏仍为折叠抽屉，代码与资料互斥且切换不清除草稿。

@@ -25,7 +25,7 @@
 .ui-compact-search:focus-within { border-color: var(--focus); box-shadow: 0 0 0 3px var(--focus-ring); }
 .ui-compact-search input:not([type="checkbox"]):not(.ant-select-input) { width: 100%; min-width: 0; border: 0; padding: 8px 0; background: transparent; font-size: 12px; box-shadow: none; outline: 0; }
 .ui-compact-search > button { min-height: 36px; padding: 0; border: 0; background: transparent; color: var(--muted); }
-.ui-segmented { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: #f0f0f5; border-radius: 7px; }
+.ui-segmented { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: var(--soft); border-radius: 7px; }
 .ui-segmented > :is(button, a) { display: inline-flex; align-items: center; justify-content: center; padding: 7px 16px; min-height: 32px; border: 0; background: transparent; border-radius: 5px; font-size: 12px; color: var(--muted); text-decoration: none; }
 .ui-segmented > [aria-pressed=true] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px #25213608; }
 .ui-filter-panel { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; padding: 20px; margin-bottom: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); }
@@ -33,22 +33,22 @@
 .ui-filter-panel p { margin: 0; }
 .small { font-size: 12px; }
 .ui-person-avatar { display: inline-grid; place-items: center; width: 28px; height: 28px; flex: 0 0 28px; border-radius: 50%; font-size: 12px; background: var(--selected); color: var(--highlight); }
-.ui-person-tone-1 { background: #eaf0f8; color: #6683ac; }
-.ui-person-tone-2 { background: #f7eee7; color: #b7865e; }
+.ui-person-tone-1 { background: var(--tone-blue-soft); color: var(--tone-blue); }
+.ui-person-tone-2 { background: var(--tone-warm-soft); color: var(--tone-warm); }
 .ui-person { display: inline-flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; }
 .ui-avatar-stack { display: flex; align-items: center; gap: 0; min-height: 28px; }
 .ui-avatar-stack .ui-person-avatar { border: 2px solid var(--surface); margin-right: -3px; }
 .ui-avatar-stack > .muted { margin-left: 8px; font-size: 12px; }
 .project-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; margin: 0; }
 .neutral-app .project-card { display: flex; flex-direction: column; padding: 28px; gap: 0; min-height: 315px; }
-.neutral-app .project-card:hover { background: var(--surface); border-color: #cac2e0; }
+.neutral-app .project-card:hover { background: var(--surface); border-color: var(--field-border-hover); }
 .project-entry-card { cursor: pointer; }
 .project-entry-card:has(button:focus-visible) { outline: 2px solid var(--focus); outline-offset: 3px; }
 .project-card-top { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 26px; }
 .project-monogram { display: grid; place-items: center; width: 42px; height: 42px; font-size: 17px; border-radius: 10px; background: var(--selected); color: var(--highlight); }
-.project-tone-0 { background: #efebfa; color: #9172d6; }
-.project-tone-1 { background: #eaf0f8; color: #7698c3; }
-.project-tone-2 { background: #f8f0e9; color: #b98d61; }
+.project-tone-0 { background: var(--selected); color: var(--highlight); }
+.project-tone-1 { background: var(--tone-blue-soft); color: var(--tone-blue); }
+.project-tone-2 { background: var(--tone-warm-soft); color: var(--tone-warm); }
 .project-card h2 { margin: 0 0 8px; font-size: 19px; font-weight: 550; line-height: 1.5; }
 .project-card > p { color: var(--muted); font-size: 12px; min-height: 42px; line-height: 1.8; margin: 0 0 14px; }
 .project-card-meta { display: flex; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: 12px; margin-top: auto; }
@@ -86,10 +86,10 @@
 .ui-activity-icon { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 28px; border-radius: 50%; color: var(--highlight); background: var(--selected); }
 .ui-table-wrap { min-width: 0; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); overflow: hidden; }
 .ui-data-table { width: 100%; border-collapse: collapse; table-layout: fixed; text-align: left; font-size: 12px; }
-.ui-data-table th { padding: 16px 20px; color: var(--muted); font-weight: 400; background: #fdfdfe; border-bottom: 1px solid var(--line); }
+.ui-data-table th { padding: 16px 20px; color: var(--muted); font-weight: 400; background: var(--surface); border-bottom: 1px solid var(--line); }
 .ui-data-table td { padding: 20px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
 .ui-data-table tr:last-child td { border-bottom: 0; }
-.ui-data-table tr:hover td { background: #fcfbfe; }
+.ui-data-table tr:hover td { background: var(--surface-hover); }
 .ui-data-table th.ui-table-title-column { width: 42%; }
 .ui-data-table :is(th, td).ui-table-check { width: 44px; padding-right: 0; }
 .ui-data-table.ui-selectable-table th.ui-table-title-column { width: 38%; }
@@ -111,9 +111,9 @@
 .ui-section-deliveries h2 { border-color: #a5cbbb; }
 .ui-home-section header a { display: inline-flex; align-items: center; gap: 8px; }
 .ui-work-row { padding: 20px 24px; min-height: 90px; gap: 20px; color: var(--ink); font-weight: 400; }
-.ui-work-row:hover:not(:disabled) { background: #fcfbfe; }
-.ui-work-symbol { width: 34px; height: 34px; flex-basis: 34px; border-radius: 8px; font-size: 17px; background: #f6f3fd; }
-.ui-work-symbol-bug { background: #fcf3f0; color: #bf7e73; }
+.ui-work-row:hover:not(:disabled) { background: var(--surface-hover); }
+.ui-work-symbol { width: 34px; height: 34px; flex-basis: 34px; border-radius: 8px; font-size: 17px; background: var(--selected); }
+.ui-work-symbol-bug { background: var(--danger-soft); color: var(--danger); }
 .ui-work-person { display: flex; align-items: center; gap: 7px; width: 106px; flex: 0 0 106px; color: var(--muted); font-size: 12px; }
 .ui-work-date { width: 90px; flex: 0 0 90px; color: var(--muted); font-size: 12px; }
 .ui-row-action { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; min-width: 70px; min-height: 32px; padding: 5px 12px; border: 1px solid var(--field-border); border-radius: 6px; font-size: 12px; font-weight: 400; }

@@ -1,3 +1,4 @@
+const { selectOption } = require("../support/select.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -53,7 +54,7 @@ async function verifyGitAccounts(page, output) {
   await section.getByLabel("密码或访问令牌", { exact: true }).fill('fixture&password|%!"');
   await section.getByLabel("提交作者姓名", { exact: true }).fill("Fixture Author");
   await section.getByLabel("提交作者邮箱", { exact: true }).fill("fixture@example.invalid");
-  await section.getByLabel("登录验证服务", { exact: true }).selectOption("gitlab");
+  await selectOption(section.getByLabel("登录验证服务", { exact: true }), "gitlab");
   const verifying = new Promise(resolve => { hold = resolve; });
   await verify.click();
   await verifying;
@@ -98,7 +99,7 @@ async function verifyGitAccounts(page, output) {
   await captureForms("git-accounts-http");
   await section.getByRole("button", { name: "新建账号", exact: true }).click();
   await section.getByLabel("账号名称", { exact: true }).fill("开发 SSH Git");
-  await section.getByLabel("认证方式", { exact: true }).selectOption("ssh");
+  await selectOption(section.getByLabel("认证方式", { exact: true }), "ssh");
   await section.getByText("填写主机名和可选端口，例如 gitee.com，不要填写 git@gitee.com 或仓库路径。项目仓库由管理员单独维护。", { exact: true }).waitFor();
   assert.equal(await section.getByLabel("Git 主机", { exact: true }).getAttribute("placeholder"), "例如：gitee.com");
   await section.getByLabel("Git 主机", { exact: true }).fill("git.example.test");

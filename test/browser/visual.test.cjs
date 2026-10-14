@@ -1,3 +1,4 @@
+const { selectOption } = require("../support/select.cjs");
 const { openSessionContext } = require("../support/browser-navigation.cjs");
 const { openProjectTab } = require("../support/browser-navigation.cjs");
 /* global document, window */
@@ -347,7 +348,7 @@ async function main() {
           )
             issues.push("overlapping hint");
         }
-        for (const menu of document.querySelectorAll('.permission-menu')) {
+        for (const menu of document.querySelectorAll('.app-select-popup')) {
           if (!menu.getClientRects().length) continue;
           const bounds = menu.getBoundingClientRect();
           if (bounds.left < -1 || bounds.right > window.innerWidth + 1 ||
@@ -418,7 +419,7 @@ async function main() {
       await panel.locator(".file-diff-line.added").waitFor();
       await capture("05-file-diff-" + suffix);
       if (page.viewportSize().width > 1100) {
-        await panel.getByLabel("差异显示方式").selectOption("split");
+        await selectOption(panel.getByLabel("差异显示方式"), "split");
         await capture("05-file-split-wide-" + suffix);
       }
       await page.keyboard.press("Escape");
@@ -604,6 +605,7 @@ async function main() {
         await archiveDialog.waitFor();
         await capture('15-project-releases-confirm-' + width);
         await page.keyboard.press('Escape');
+      await page.locator('.app-select-popup:visible').waitFor({ state: 'hidden' });
         assert.equal(await archiveDialog.isVisible(), false);
         if (width === 1440 || width === 320) await verifyReleaseViewStates({ page, origin, projectId: projects.projectId, capture: state => capture(`15-project-releases-${state}-${width}`) });
         await page.goto(origin + '/system?tab=workflows');
@@ -621,6 +623,7 @@ async function main() {
         await addDialog.waitFor();
         await capture('16-project-members-add-' + width);
         await page.keyboard.press('Escape');
+        await page.locator('.app-select-popup:visible').waitFor({ state: 'hidden' });
         assert.equal(await addDialog.isVisible(), false);
         assert.equal(await addMember.evaluate(element => element === document.activeElement), true);
         await page.getByRole('button', { name: '调整张明（member-1）权限', exact: true }).click();
@@ -668,6 +671,14 @@ async function main() {
     }
     await require('./workbench.test.cjs').verifyWorkbench(browser);
     await captureProjects();
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await load();
+    await selectOption(page.getByRole('combobox', { name: '外观主题', exact: true }), 'dark');
+    await capture('21-dark-session');
+    await captureMarkdown('dark');
+    await captureFiles('dark');
+    await captureSystemSettings('dark');
+    await selectOption(page.getByRole('combobox', { name: '外观主题', exact: true }), 'light');
     await page.setViewportSize({ width: 1440, height: 1200 });
     await load();
     await capture("05-session-desktop");
@@ -720,9 +731,10 @@ async function main() {
     await captureSessionDrawer("desktop");
     await captureGitViews("desktop");
     await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
-    await page.getByRole('listbox', { name: '执行权限选项' }).waitFor();
+    await page.locator('.app-select-popup:visible [role="listbox"]').waitFor();
     await capture('05-permission-menu-desktop');
     await page.keyboard.press('Escape');
+    await page.locator('.app-select-popup:visible').waitFor({ state: 'hidden' });
     await openSessionContext(page, '需求资料');
     await page
       .getByRole("heading", { name: "客户搜索体验", exact: true })
@@ -767,12 +779,13 @@ async function main() {
     await capture('08-settings-pending');
     await load('permission-unavailable');
     await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
-    assert.equal(await page.locator('.permission-option[data-value="auto"]').isDisabled(), true);
+    assert.equal(await page.locator('.ant-select-item-option:has(.app-select-option[data-value="auto"])').isDisabled(), true);
     await capture('08-permission-unavailable');
     await page.keyboard.press('Escape');
+    await page.locator('.app-select-popup:visible').waitFor({ state: 'hidden' });
     await load('settings-error');
     await page.getByRole('combobox', { name: 'Codex 模型', exact: true }).click();
-    await page.locator('.model-option[data-model="example-model"]').click();
+    await page.locator('.app-select-option[data-value="example-model"]').click();
     await page.getByText(/模拟执行设置保存失败，请重试。/).waitFor();
     await capture('08-settings-save-error');
     for (const width of [768, 390, 320]) {
@@ -787,19 +800,22 @@ async function main() {
       const composer = page.locator('.composer-toolbar');
       await composer.scrollIntoViewIfNeeded();
       await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
-      await page.getByRole('listbox', { name: '执行权限选项' }).waitFor();
+      await page.locator('.app-select-popup:visible [role="listbox"]').waitFor();
       await capture('05-permission-menu-' + width);
       await page.keyboard.press('Escape');
+      await page.locator('.app-select-popup:visible').waitFor({ state: 'hidden' });
       await load('long-model');
       await capture('05-long-model-' + width);
       await page.getByRole('combobox', { name: 'Codex 模型', exact: true }).click();
-      await page.getByRole('listbox', { name: 'Codex 模型选项' }).waitFor();
+      await page.locator('.app-select-popup:visible [role="listbox"]').waitFor();
       await capture('05-model-menu-' + width);
       await page.keyboard.press('Escape');
+      await page.locator('.app-select-popup:visible').waitFor({ state: 'hidden' });
       await page.getByRole('combobox', { name: '思考强度', exact: true }).click();
-      await page.getByRole('listbox', { name: '思考强度选项' }).waitFor();
+      await page.locator('.app-select-popup:visible [role="listbox"]').waitFor();
       await capture('05-effort-menu-' + width);
       await page.keyboard.press('Escape');
+      await page.locator('.app-select-popup:visible').waitFor({ state: 'hidden' });
       await captureSystemSettings(width);
     }
     assert.deepEqual(errors, []);

@@ -1,4 +1,5 @@
 <script setup>
+import AppSelect from "../../shared/components/AppSelect.vue";
 import { computed, onBeforeUnmount, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { CloseOutlined, PlusOutlined, DeleteOutlined } from "@antdv-next/icons";
 import { appApi } from "../../shared/api/api.js";
@@ -123,11 +124,11 @@ async function save() {
             <div v-if="entry.reasoningSource === 'codex'" class="supplier-effort-chips" :aria-label="$t('支持的思考强度')"><span v-for="effort in entry.reasoningEfforts" :key="effort">{{ effort }}</span><span v-if="!entry.reasoningEfforts.length" class="muted">{{ $t("目录未提供可选强度") }}</span></div>
             <input v-else :aria-label="$t('支持的思考强度')" :value="effortDrafts.get(entry) ?? entry.reasoningEfforts.join(', ')" :placeholder="$t('例如 low, medium, high')" @input="efforts(entry, $event.target.value)" />
             <p class="field-hint">{{ entry.reasoningSource === 'codex' ? (catalog.match(entry.model) ? $t("已加载 Codex 内置配置；保存后生效。") : $t("保留已保存的内置配置，也可切换为自定义。")) : $t("自定义配置；按上游支持范围填写，已有设置不会被自动覆盖。") }}</p>
-          </div><label>{{ $t("默认思考强度") }}<select v-model="entry.defaultReasoningEffort" :aria-label="$t('默认思考强度')" @change="catalog.custom(entry)"><option value="">{{ $t("默认") }}</option><option v-for="effort in entry.reasoningEfforts" :key="effort" :value="effort">{{ effort }}{{ effort === catalog.match(entry.model)?.defaultReasoningEffort ? $t(" · Codex 默认") : '' }}</option></select></label></div>
+          </div><label>{{ $t("默认思考强度") }}<AppSelect native-events v-model="entry.defaultReasoningEffort" :aria-label="$t('默认思考强度')" @change="catalog.custom(entry)"><option value="">{{ $t("默认") }}</option><option v-for="effort in entry.reasoningEfforts" :key="effort" :value="effort">{{ effort }}{{ effort === catalog.match(entry.model)?.defaultReasoningEffort ? $t(" · Codex 默认") : '' }}</option></AppSelect></label></div>
         </section>
-        <label>{{ $t("默认模型") }}<select v-model="form.defaultModel" :aria-label="$t('默认模型')" required><option value="" disabled>{{ $t("请选择默认模型") }}</option><option v-for="entry in form.models.filter(item => item.model)" :key="entry.model" :value="entry.model">{{ entry.label || entry.model }}</option></select></label>
+        <label>{{ $t("默认模型") }}<AppSelect native-events v-model="form.defaultModel" :aria-label="$t('默认模型')" required><option value="" disabled>{{ $t("请选择默认模型") }}</option><option v-for="entry in form.models.filter(item => item.model)" :key="entry.model" :value="entry.model">{{ entry.label || entry.model }}</option></AppSelect></label>
         <h3>{{ $t("连通检测") }}</h3>
-        <label>{{ $t("检测模型") }}<select v-model="checkModel" :aria-label="$t('检测模型')"><option value="">{{ $t("使用默认模型") }}</option><option v-for="entry in form.models.filter(item => item.model)" :key="entry.model" :value="entry.model">{{ entry.label || entry.model }}</option></select></label>
+        <label>{{ $t("检测模型") }}<AppSelect native-events v-model="checkModel" :aria-label="$t('检测模型')"><option value="">{{ $t("使用默认模型") }}</option><option v-for="entry in form.models.filter(item => item.model)" :key="entry.model" :value="entry.model">{{ entry.label || entry.model }}</option></AppSelect></label>
         <p class="field-hint">{{ $t("检测将发送最小生成请求，可能产生少量费用。获取模型与保存不会发起生成。") }}</p>
         <button type="button" :disabled="busy || !(checkModel || form.defaultModel)" @click="request('check')">{{ checking ? $t("检测中…") : $t("发送检测请求") }}</button>
         <p v-if="result" class="supplier-result" role="status">{{ result }}</p>

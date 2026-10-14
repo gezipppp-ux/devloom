@@ -1,4 +1,5 @@
 <script setup>
+import AppSelect from "../../shared/components/AppSelect.vue";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, reactive, ref, watch } from "vue";
 import { TeamOutlined } from "@antdv-next/icons";
@@ -72,7 +73,7 @@ function archive() {
         <section class="project-config-section">
           <div class="project-config-basics">
             <label>{{ $t('项目名称') }}<input v-model="form.name" required maxlength="80" /></label>
-            <label>{{ $t('负责人') }}<select :aria-label="$t('负责人')" v-model="form.ownerUserId"><option v-for="member in data?.members?.filter(m => m.status === 'active')" :key="member.userId" :value="member.userId">{{ member.displayName }}（{{ member.username }}）</option></select></label>
+            <label>{{ $t('负责人') }}<AppSelect native-events :aria-label="$t('负责人')" v-model="form.ownerUserId"><option v-for="member in data?.members?.filter(m => m.status === 'active')" :key="member.userId" :value="member.userId">{{ member.displayName }}（{{ member.username }}）</option></AppSelect></label>
           </div>
           <label>{{ $t('说明') }}<textarea v-model="form.description" rows="3" /></label>
           <label>{{ $t('Git 仓库地址') }}<input v-model="form.remoteUrl" :aria-label="$t('Git 仓库地址')" required :readonly="!repositoryEditable" :disabled="saving" aria-describedby="project-settings-repository-hint" /><small id="project-settings-repository-hint" class="field-hint">{{ repositoryEditable ? $t('支持 HTTP(S) 或 SSH 克隆地址，请勿填写密码或令牌。') : $t('项目已有开发空间，Git 仓库地址已锁定，不能修改。') }}</small></label>

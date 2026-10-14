@@ -10,7 +10,7 @@ async function main(argv = process.argv.slice(2)) {
   const port = Number(argument("--port", "5173", argv));
   if (!Number.isInteger(port) || port < 0 || port > 65535)
     throw new Error("端口需为 0–65535（0 表示自动分配）。");
-  const host = argument("--host", "127.0.0.1", argv);
+  const host = argument("--host", "0.0.0.0", argv);
   let vite;
   let closePromise;
   const application = createWebServer({

@@ -1,4 +1,5 @@
 <script setup>
+import AppSelect from "../../shared/components/AppSelect.vue";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { SettingOutlined } from "@antdv-next/icons";
@@ -229,7 +230,7 @@ onMounted(() => {
         </a-form-item>
         <template v-if="!renaming">
           <a-form-item :label="$t('Git 账号')" html-for="workspace-git-account">
-            <select
+            <AppSelect native-events
               id="workspace-git-account"
               v-model="gitAccountId"
               :disabled="busy || loadingAccounts || !gitAccounts.length"
@@ -248,7 +249,7 @@ onMounted(() => {
                   account.authType === "ssh" ? $t("SSH 密钥") : $t("HTTP/HTTPS 凭据")
                 }}）
               </option>
-            </select>
+            </AppSelect>
             <p v-if="loadingAccounts" class="field-hint" role="status">
               {{ $t("正在加载 Git 账号…") }}
             </p>

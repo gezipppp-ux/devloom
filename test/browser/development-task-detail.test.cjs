@@ -1,3 +1,4 @@
+const { selectOption, selectValue } = require("../support/select.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -153,10 +154,10 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
     await button('刷新权限选项').click();
     await page.keyboard.press('Escape');
-    await page.getByRole('combobox', { name: 'Agent 模型', exact: true }).selectOption('fixture-model');
-    await page.getByRole('combobox', { name: '思考强度', exact: true }).selectOption('high');
+    await selectOption(page.getByRole('combobox', { name: 'Agent 模型', exact: true }), 'fixture-model');
+    await selectOption(page.getByRole('combobox', { name: '思考强度', exact: true }), 'high');
     await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
-    await page.locator('[role="option"][data-value="auto"]').click();
+    await page.locator('.app-select-option[data-value="auto"]').click();
     await page.locator('.development-branch-select .ant-select').hover();
     await page.locator('.development-branch-select .ant-select-clear').click();
     assert.equal(await button('启动 Codex 开发').isDisabled(), true, 'clearing a selected branch blocks startup');
@@ -205,14 +206,14 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     await capture("ready");
     await button('开始开发').click();
     assert.equal(await supplementInput.inputValue(), supplement, 'returning to the confirmation view preserves the supplement');
-    assert.equal(await page.getByRole('combobox', { name: '思考强度', exact: true }).inputValue(), 'high', 'returning retains execution preferences');
+    assert.equal(await selectValue(page.getByRole('combobox', { name: '思考强度', exact: true })), 'high', 'returning retains execution preferences');
     assert.equal(await button('启动 Codex 开发').isDisabled(), true, 'explicit scope confirmation is required');
     await page.getByRole('checkbox', { name: '我已确认任务范围、起始分支和执行设置。', exact: true }).check();
     await capture('start-confirmation');
-    await page.getByRole('combobox', { name: '界面语言', exact: true }).selectOption('en');
+    await selectOption(page.getByRole('combobox', { name: '界面语言', exact: true }), 'en');
     assert.equal(await page.locator('.development-start-settings textarea').inputValue(), supplement, 'language changes preserve the start draft');
     await capture('start-confirmation-en');
-    await page.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
+    await selectOption(page.getByRole('combobox', { name: 'Interface language', exact: true }), 'zh-CN');
     await button("启动 Codex 开发").click();
     await button("进入 Codex 会话").waitFor();
     assert.equal(await button("标记开发任务完成").count(), 0);
@@ -284,15 +285,15 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     assert.equal(await supplementInput.inputValue(), "", "newly opened task starts with an empty local draft");
     const longSupplement = supplement.repeat(30);
     await supplementInput.fill(longSupplement);
-    await page.getByRole('combobox', { name: 'Agent 模型', exact: true }).selectOption('fixture-model');
-    await page.getByRole('combobox', { name: '思考强度', exact: true }).selectOption('low');
+    await selectOption(page.getByRole('combobox', { name: 'Agent 模型', exact: true }), 'fixture-model');
+    await selectOption(page.getByRole('combobox', { name: '思考强度', exact: true }), 'low');
     assert.equal(await page.getByRole('checkbox', { name: '我已确认任务范围、起始分支和执行设置。', exact: true }).isChecked(), false, 'changing execution settings requires confirmation again');
     await page.getByRole('checkbox', { name: '我已确认任务范围、起始分支和执行设置。', exact: true }).check();
     await button("启动 Codex 开发").click();
     await page.getByRole("alert").filter({ hasText: "启动前校验失败" }).waitFor();
     await page.waitForFunction(() => !document.querySelector('[aria-label="补充提示词"]').disabled);
     assert.equal(await supplementInput.inputValue(), longSupplement, "pre-dispatch failure preserves the start draft");
-    assert.equal(await page.getByRole('combobox', { name: '思考强度', exact: true }).inputValue(), 'low', 'pre-dispatch failure preserves execution preferences');
+    assert.equal(await selectValue(page.getByRole('combobox', { name: '思考强度', exact: true })), 'low', 'pre-dispatch failure preserves execution preferences');
     await capture("start-rejected");
     rejectStart = false;
     await button("启动 Codex 开发").click();
@@ -329,7 +330,7 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     await page.getByRole("heading", { name: "切换后的另一任务", exact: true }).waitFor();
     await button('开始开发').click();
     assert.equal(await supplementInput.inputValue(), "", "task changes cannot inherit another start supplement");
-    assert.equal(await page.getByRole('combobox', { name: 'Agent 模型', exact: true }).inputValue(), '', 'task changes cannot inherit execution preferences');
+    assert.equal(await selectValue(page.getByRole('combobox', { name: 'Agent 模型', exact: true })), '', 'task changes cannot inherit execution preferences');
     releaseSave();
     await page.getByRole("heading", { name: "切换后的另一任务", exact: true }).waitFor();
     assert.equal(await page.getByRole("heading", { name: "旧任务的迟到保存", exact: true }).count(), 0);

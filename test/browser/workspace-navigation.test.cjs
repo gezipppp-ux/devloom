@@ -1,3 +1,4 @@
+const { selectOption } = require("../support/select.cjs");
 const { navigateWorkspace } = require("../support/browser-navigation.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
@@ -114,7 +115,7 @@ async function verifyWorkspaceNavigation(page, { workspaceA, workspaceB, reposit
     await checkUrl(workspaceA);
 
     await page.getByRole("button", { name: "独立开发", exact: true }).click();
-    await page.getByLabel("需求渠道", { exact: true }).selectOption("manual");
+    await selectOption(page.getByLabel("需求渠道", { exact: true }), "manual");
     await page.getByLabel("需求标题", { exact: true }).fill("只属于项目 A 的未提交草稿");
     const delayedUpload = await holdResponse(page, `**/api/workspaces/${workspaceA.id}/channels/manual/images`);
     await page.getByLabel("需求图片", { exact: true }).setInputFiles([
@@ -126,7 +127,7 @@ async function verifyWorkspaceNavigation(page, { workspaceA, workspaceB, reposit
     await settingsReady(page, workspaceB, repository);
     await releaseResponse(page, oldUpload, "old-manual-upload");
     await page.getByRole("button", { name: "独立开发", exact: true }).click();
-    await page.getByLabel("需求渠道", { exact: true }).selectOption("manual");
+    await selectOption(page.getByLabel("需求渠道", { exact: true }), "manual");
     assert.equal(await page.getByLabel("需求标题", { exact: true }).inputValue(), "");
     assert.equal(await page.locator(".manual-images img").count(), 0);
     await select(workspaceA);

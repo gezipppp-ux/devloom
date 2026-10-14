@@ -1,4 +1,5 @@
 <script setup>
+import AppSelect from "../../shared/components/AppSelect.vue";
 import { formatDate, translate } from "../../shared/i18n/index.js";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, reactive, ref } from "vue";
@@ -96,7 +97,7 @@ function person(id) { return data.value?.people?.find(p => p.id === id)?.display
             <h3 class="issue-panel-heading"><SwapOutlined aria-hidden="true" />{{ $t("状态流转") }}</h3>
             <p class="issue-current-status"><span class="muted">{{ $t("当前状态") }}</span><span class="issue-status-badge">{{ data.statusName }}</span></p>
             <form v-if="transitions.length" class="project-form" @submit.prevent="transition">
-              <label>{{ $t("目标状态") }}<select v-model="nextStatus" :aria-label="$t('目标状态')" :disabled="saving" required><option value="" disabled>{{ $t("选择目标状态") }}</option><option v-for="t in transitions" :key="t.id" :value="t.id">{{ t.name }}</option></select></label>
+              <label>{{ $t("目标状态") }}<AppSelect native-events v-model="nextStatus" :aria-label="$t('目标状态')" :disabled="saving" required><option value="" disabled>{{ $t("选择目标状态") }}</option><option v-for="t in transitions" :key="t.id" :value="t.id">{{ t.name }}</option></AppSelect></label>
               <label v-if="nextStatus">{{ $t("原因") }}<textarea v-model="reason" rows="2" :disabled="saving" :required="Boolean(transitions.find(t => t.id === nextStatus)?.requiresReason)" /></label>
               <button class="primary" type="submit" :disabled="saving || !nextStatus">{{ saving ? $t("正在更新…") : $t("更新状态") }}</button>
             </form>

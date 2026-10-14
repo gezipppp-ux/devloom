@@ -1,4 +1,5 @@
 <script setup>
+import AppSelect from "../../shared/components/AppSelect.vue";
 import { formatDate } from "../../shared/i18n/index.js";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 /* global document, navigator */
@@ -62,7 +63,7 @@ onUnmounted(() => document.removeEventListener("keydown", escape));
     <nav class="code-file-list" :aria-label="$t('变更的文件')"><h3>{{ $t('变更的文件') }} <small>{{ list.files.value.length }}</small></h3><p v-if="list.loading.value" role="status">{{ $t('正在加载…') }}</p><button v-for="entry in choices" :key="entry.path" type="button" :aria-pressed="selected === entry.path" @click="choose(entry.path)"><span>{{ entry.path }}</span><small>{{ entry.status }}</small></button><p v-if="!list.loading.value && !list.error.value && !choices.length">{{ $t('此范围内没有变更文件。') }}</p></nav>
     <div class="code-file-content">
     <div class="file-picker">
-      <select :aria-label="$t('预览文件')" :value="selected" @change="choose($event.target.value)"><option v-for="entry in choices" :key="entry.path" :value="entry.path">{{ entry.status }} {{ entry.path }}</option></select>
+      <AppSelect native-events :aria-label="$t('预览文件')" :value="selected" @change="choose($event.target.value)"><option v-for="entry in choices" :key="entry.path" :value="entry.path">{{ entry.status }} {{ entry.path }}</option></AppSelect>
     </div>
     <FeedbackMessage :message="list.error.value ? $t('变更列表：{p0}', { p0: list.error.value }) : ''" type="error" />
     <nav class="file-mode-tabs" :aria-label="$t('文件查看方式')">
@@ -71,8 +72,8 @@ onUnmounted(() => document.removeEventListener("keydown", escape));
       <span v-if="file?.path && !file.comparisonReason" class="file-delta"><span class="file-added">+{{ totals.added }}</span><span class="file-removed">−{{ totals.removed }}</span></span>
     </nav>
     <div class="file-controls">
-      <label>{{ $t("比较范围") }}<select v-model="scope" :aria-label="$t('文件比较范围')"><option value="task">{{ $t("任务累计变更") }}</option><option value="head">{{ $t("未提交变更") }}</option></select></label>
-      <label v-if="mode === 'diff'" class="file-layout-choice">{{ $t("显示方式") }}<select v-model="layout" :aria-label="$t('差异显示方式')"><option value="unified">{{ $t("统一差异") }}</option><option value="split">{{ $t("左右对照") }}</option></select></label>
+      <label>{{ $t("比较范围") }}<AppSelect native-events v-model="scope" :aria-label="$t('文件比较范围')"><option value="task">{{ $t("任务累计变更") }}</option><option value="head">{{ $t("未提交变更") }}</option></AppSelect></label>
+      <label v-if="mode === 'diff'" class="file-layout-choice">{{ $t("显示方式") }}<AppSelect native-events v-model="layout" :aria-label="$t('差异显示方式')"><option value="unified">{{ $t("统一差异") }}</option><option value="split">{{ $t("左右对照") }}</option></AppSelect></label>
       <button v-else type="button" :disabled="!file?.current?.exists || file?.current?.text == null" @click="copy"><CopyOutlined /> {{ $t("复制源码") }}</button>
     </div>
     <FeedbackMessage :message="copied" :type="copied === '已复制' ? 'success' : 'error'" />

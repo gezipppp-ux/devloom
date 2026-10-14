@@ -1,3 +1,4 @@
+const { selectOption, selectValue } = require("../support/select.cjs");
 const { openSessionList } = require("../support/browser-navigation.cjs");
 /* global document, window */
 // All account/workspace APIs are fixtures; this suite never invokes Codex or TAPD.
@@ -15,6 +16,7 @@ const { verifyGitAccounts } = require("./git-accounts.test.cjs");
 const { verifyEnvironment } = require("./environment.test.cjs");
 const { verifyMcpTokens } = require("./mcp-tokens.test.cjs");
 const { verifyAgentSuppliers } = require("./agent-suppliers.test.cjs");
+const { verifyTheme } = require("./theme.test.cjs");
 
 async function main() {
   const staticRoot = path.resolve("web/dist");
@@ -113,6 +115,7 @@ async function main() {
     await page.getByRole("button", { name: "登录", exact: true }).click();
     await page.getByRole("heading", { name: "工作台", exact: true }).waitFor();
     assert.equal(await page.locator(".operation-message").count(), 0, "sign-in clears messages from the previous account generation");
+    await verifyTheme(page, origin, output);
     await openWorkspace(page, users[0]);
     await page.getByText("admin 的私有回复", { exact: true }).waitFor();
     await page.route("**/api/account/execution-options", route => route.fulfill({ status: 503, json: { error: "模拟权限暂不可用" } }), { times: 1 });
@@ -132,8 +135,8 @@ async function main() {
     assert.equal(await page.locator(".ui-avatar").getAttribute("title"), "管理员显示名");
     assert.match(await page.locator(".profile-identity").innerText(), /admin · 登录账号/);
     assert.deepEqual(writesTo("/api/account/profile").at(-1).body, { displayName: "管理员显示名" });
-    await page.getByLabel("Codex 模型", { exact: true }).selectOption("fixture-model");
-    await page.getByLabel("思考强度", { exact: true }).selectOption("high");
+    await selectOption(page.getByLabel("Codex 模型", { exact: true }), "fixture-model");
+    await selectOption(page.getByLabel("思考强度", { exact: true }), "high");
     assert.equal(await page.getByLabel("默认任务分组").count(), 0);
     await page.getByRole("button", { name: "保存个人设置" }).click();
     await page.getByText("个人设置已保存。", { exact: true }).waitFor();
@@ -152,7 +155,7 @@ async function main() {
     await page.getByRole("heading", { name: "账号管理", exact: true }).waitFor();
     while (await page.getByRole("button", { name: "关闭提示", exact: true }).count()) await page.getByRole("button", { name: "关闭提示", exact: true }).first().click();
     await page.getByRole("button", { name: "新建账号", exact: true }).click();
-    await page.getByLabel("账号角色", { exact: true }).selectOption("admin");
+    await selectOption(page.getByLabel("账号角色", { exact: true }), "admin");
     await page.getByLabel("所属部门", { exact: true }).waitFor({ state: "hidden" });
     assert.equal(await page.getByRole("checkbox", { name: "允许创建项目（仍受部门权限上限限制）", exact: true }).count(), 0);
     await page.getByLabel("新账号", { exact: true }).fill("created-admin");
@@ -170,10 +173,10 @@ async function main() {
     await page.locator(".account-list-row").filter({ hasText: "created-admin" }).locator("summary").click();
     assert.equal(await page.getByLabel("created-admin：所属部门", { exact: true }).count(), 0);
     await page.getByRole("button", { name: "新建账号", exact: true }).click();
-    await page.getByLabel("账号角色", { exact: true }).selectOption("member");
+    await selectOption(page.getByLabel("账号角色", { exact: true }), "member");
     await page.getByLabel("新账号", { exact: true }).fill("created-user");
     await page.getByLabel("显示名称", { exact: true }).fill("新建成员");
-    await page.getByLabel("所属部门", { exact: true }).selectOption(departments[0].id);
+    await selectOption(page.getByLabel("所属部门", { exact: true }), departments[0].id);
     const temporaryPassword = page.getByLabel("临时密码", { exact: true });
     await temporaryPassword.fill("short");
     await page.getByRole("button", { name: "创建账号", exact: true }).click();
@@ -184,6 +187,13 @@ async function main() {
     await page.getByText("账号已创建，首次登录需要修改密码。", { exact: true }).waitFor();
     assert.equal(writesTo("/api/admin/accounts").at(-1).body.password, "new123");
     await page.locator(".account-list-row").filter({ hasText: "created-user" }).locator("summary").click();
+    const departmentSelect = page.getByRole("combobox", { name: "created-user：所属部门", exact: true });
+    await departmentSelect.click();
+    await page.locator('.account-row-actions:popover-open .app-select-popup').getByRole('option', { name: '研发', exact: true }).waitFor();
+    await page.keyboard.press("Escape");
+    await page.locator('.app-select-popup:visible').waitFor({ state: 'hidden' });
+    assert.equal(await departmentSelect.isVisible(), true, "Escape closes the dropdown before its containing management menu");
+    await selectOption(departmentSelect, departments[0].id);
     await page.getByRole("button", { name: "created-user：重置密码" }).click();
     const resetPassword = page.getByLabel("created-user 的新临时密码", { exact: true });
     await resetPassword.fill("short");
@@ -224,8 +234,8 @@ async function main() {
     await openWorkspace(page, users[0]);
     await page.getByText("admin 的私有回复", { exact: true }).waitFor();
     await page.getByRole("button", { name: "独立开发", exact: true }).click();
-    assert.equal(await page.getByLabel("Codex 模型", { exact: true }).inputValue(), "fixture-model");
-    assert.equal(await page.getByLabel("思考强度", { exact: true }).inputValue(), "high");
+    assert.equal(await selectValue(page.getByLabel("Codex 模型", { exact: true })), "fixture-model");
+    assert.equal(await selectValue(page.getByLabel("思考强度", { exact: true })), "high");
     await openSessionList(page);
     await page.locator(".session-link").click();
     await page.getByText("admin 的私有回复", { exact: true }).waitFor();
@@ -283,7 +293,7 @@ async function main() {
     assert.equal(await page.getByRole("button", { name: "账号管理", exact: true }).count(), 0);
     await page.goto(`${origin}/accounts`);
     await page.getByRole("heading", { name: "个人设置", exact: true }).waitFor();
-    assert.equal(await page.getByLabel("Codex 模型", { exact: true }).inputValue(), "");
+    assert.equal(await selectValue(page.getByLabel("Codex 模型", { exact: true })), "");
     assert.equal(await page.getByLabel("默认任务分组").count(), 0);
     await verifyAccountPreferenceRaces(browser, origin);
     await verifyAccountProfileRaces(browser, origin);
