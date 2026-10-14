@@ -37,6 +37,16 @@ async function verifyReleaseNameForm({ page, output, endpoint }) {
 }
 
 async function verifyProjectReleases({ page, origin, projectId, output }) {
+  const versions = page.getByRole('list', { name: '版本列表', includeHidden: true });
+  const version = name => versions.getByRole('article', { name, exact: true, includeHidden: true });
+  const back = () => page.getByRole('button', { name: '返回版本', exact: true }).first().click();
+  async function openScope(name) {
+    if (await page.locator('.release-scope-page').isVisible()) await back();
+    await version(name).getByRole('button', { name: '查看范围', exact: true }).click();
+    await page.getByRole('region', { name: '版本范围', exact: true }).waitFor();
+    assert.equal(await page.locator('.project-tab-bar').count(), 0, 'release scope uses the standalone prototype layout');
+    assert.equal(await page.getByRole('button', { name: '保存范围', exact: true }).count(), 0, 'scope editing is outside the confirmed feature range');
+  }
   await page.goto(`${origin}/projects/${projectId}?tab=releases`);
   await page.getByRole("button", { name: "新建版本", exact: true }).click();
   const endpoint = `${origin}/api/projects/${projectId}/releases`;
@@ -53,6 +63,7 @@ async function verifyProjectReleases({ page, origin, projectId, output }) {
     assert.equal(created.status(), 201);
     const release = await created.json();
     await page.getByRole("heading", { name: "v0.5.9", exact: true }).waitFor();
+    await openScope('v0.5.9');
     await page.getByRole("button", { name: "编辑版本", exact: true }).click();
     await name.fill("v1.0-rc");
     await save.click();
@@ -74,20 +85,20 @@ async function verifyProjectReleases({ page, origin, projectId, output }) {
     assert.equal(edited.status(), 200);
     assert.equal((await edited.json()).name, "v1.0");
     await page.getByRole("heading", { name: "v1.0", exact: true }).waitFor();
+    await back();
     await page.getByRole("button", { name: "新建版本", exact: true }).click();
     await name.fill("v1.1");
     await page.getByLabel("版本说明", { exact: true }).fill("第二个版本\n保留分行说明。");
     await save.click();
     await page.getByRole("heading", { name: "v1.1", exact: true }).waitFor();
-    const versions = page.getByRole("navigation", { name: "版本列表" });
-    await versions.getByRole("button", { name: /v1.0/ }).click();
+    await version('v1.0').locator('.release-row-description').filter({ hasText: '暂无版本说明' }).waitFor();
+    await openScope('v1.0');
     await page.getByRole("heading", { name: "v1.0", exact: true }).waitFor();
-    await page.getByRole("button", { name: "刷新版本", exact: true }).click();
+    await page.reload();
     await page.getByRole("heading", { name: "v1.0", exact: true }).waitFor();
-    await page.getByText("暂无版本说明", { exact: true }).waitFor();
     await page.getByRole("button", { name: "编辑版本", exact: true }).click();
     await name.fill("v1.2");
-    assert.equal(await versions.getByRole("button", { name: /v1.1/ }).isDisabled(), true, "version switching cannot discard an edit draft");
+    assert.equal(await page.getByRole('button', { name: '返回版本', exact: true, includeHidden: true }).first().isDisabled(), true, "version navigation cannot discard an edit draft");
     await name.press("Escape");
     assert.equal(await page.getByRole("button", { name: "编辑版本", exact: true }).evaluate(button => button === document.activeElement), true);
     const beforeConfirmation = writes.length;
@@ -100,14 +111,15 @@ async function verifyProjectReleases({ page, origin, projectId, output }) {
     assert.equal(await page.getByRole("button", { name: "归档版本", exact: true }).evaluate(button => button === document.activeElement), true);
     await page.getByRole("button", { name: "归档版本", exact: true }).click();
     await dialog.getByRole("button", { name: "确认归档版本", exact: true }).click();
-    await versions.getByRole("button", { name: /v1.0/ }).waitFor({ state: "detached" });
+    await version('v1.0').waitFor({ state: "detached" });
     await page.getByRole("heading", { name: "v1.1", exact: true }).waitFor();
     await page.getByLabel("包含已归档版本").check();
-    await versions.getByRole("button", { name: /v1.0/ }).click();
+    await openScope('v1.0');
     await page.getByText("归档内容只读", { exact: true }).waitFor();
     assert.equal(await page.getByRole("button", { name: "编辑版本", exact: true }).count(), 0);
     await page.getByRole("button", { name: "恢复版本", exact: true }).click();
     await page.getByRole("button", { name: "编辑版本", exact: true }).waitFor();
+    await back();
     await page.getByLabel("包含已归档版本").uncheck();
     await page.getByRole("heading", { name: "v1.0", exact: true }).waitFor();
   } finally { page.off("request", record); }
@@ -136,7 +148,7 @@ async function verifyReleaseViewStates({ page, origin, projectId, capture }) {
     status = 200; response = { items: [{ id: 'long-release', name: longName, revision: 1, status: 'active', updatedAt: null, description: '长文本版本说明，需要在手机和桌面完整阅读。\n'.repeat(14) + '<img src=x onerror=alert(1)>保持纯文本展示' }] };
     await page.getByRole('button', { name: '刷新版本', exact: true }).click();
     await page.getByRole('heading', { name: longName, exact: true }).waitFor();
-    assert.equal(await page.locator('.release-description img').count(), 0);
+    assert.equal(await page.locator('.release-row-description img').count(), 0);
     await capture('long-content');
   } finally {
     respond();

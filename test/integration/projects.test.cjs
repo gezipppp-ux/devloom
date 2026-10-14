@@ -115,7 +115,7 @@ test("department ceilings and memberships gate operations while administrators c
   await assert.rejects(f.projects.create(f.member, { name: "no", remoteUrl: f.project.remoteUrl }), /资格/);
   const owner = await f.projects.authorize(f.project.id, f.admin, "project.members.manage");
   assert.deepEqual(new Set(owner.permissions), new Set([...administratorPermissions, "project.configure", "project.members.manage"]));
-  await assert.rejects(f.projects.authorize(f.project.id, f.admin, "session.start"), /没有/);
+  await f.projects.authorize(f.project.id, f.admin, "session.start");
   await f.projects.saveMember(f.project.id, f.admin, { userId: f.analyst.id, permissions: productTemplate });
   assert.equal((await f.projects.read(f.project.id, f.analyst)).space, null);
   await assert.rejects(f.projects.space(f.project.id, f.analyst), /没有/);
@@ -171,7 +171,7 @@ test("space preparation checks the actual repository, publishes once and never a
   await f.projects.saveMember(f.project.id, f.admin, { userId: f.member.id, permissions: developerTemplate });
   const git = new GitAccountServices(f.database);
   const account = await git.save(f.member, { name: "personal", authType: "http", host: "https://git.example", username: "login", password: "private", authorName: "Author", authorEmail: "author@example.com" });
-  await assert.rejects(f.projects.prepare(f.project.id, f.admin, { gitAccountId: account.id, requestId: randomUUID() }), /没有/);
+  await assert.rejects(f.projects.prepare(f.project.id, f.admin, { gitAccountId: account.id, requestId: randomUUID() }), /Git 账号不存在/);
   const requestId = randomUUID();
   const accepted = await f.projects.prepare(f.project.id, f.member, { gitAccountId: account.id, requestId });
   const running = f.projects.active.get(accepted.space.id).promise;
@@ -399,14 +399,14 @@ test("project listing explains the same owner prerequisites enforced during crea
   assert.equal(listing.canCreateProjects, true);
   assert.equal(listing.creationReadiness.eligible, true);
   assert.deepEqual(listing.creationReadiness.reasons, []);
-  assert.equal(listing.setup.departmentAssigned, true);
+  assert.equal(listing.setup.departmentAssigned, false);
   await f.projects.create(f.admin, { name: "Allowed", remoteUrl: f.project.remoteUrl });
 });
 
 test("administrator owners retain global management after department changes", async t => {
   const f = await fixture(t);
   await f.accounts.update(f.admin.id, { departmentId: f.product.id }, f.admin);
-  assert.equal((await f.accounts.store.byId(f.admin.id)).departmentId, f.product.id);
+  assert.equal((await f.accounts.store.byId(f.admin.id)).departmentId, null);
   await f.projects.authorize(f.project.id, f.admin, "project.members.manage");
   await f.projects.authorize(f.project.id, f.admin, "project.configure");
 });
@@ -494,9 +494,9 @@ test("administrators manage all collaboration without membership or department a
   assert.ok((await content.assetHistory(f.project.id, asset.id, observer, {})).items.length);
   assert.equal((await content.listFiles(f.project.id, "issues", issue.id, observer, {})).items.length, 1);
   await content.downloadFile(f.project.id, file.id, observer);
-  await assert.rejects(content.readSecret(f.project.id, asset.id, observer), { statusCode: 404 });
+  assert.equal((await content.readSecret(f.project.id, asset.id, observer)).secret, "hidden-secret");
   for (const permission of ["asset.secret.edit", "code.view", "session.view"])
-    await assert.rejects(f.projects.authorize(f.project.id, observer, permission), { statusCode: 404 });
+    await f.projects.authorize(f.project.id, observer, permission);
   await assert.rejects(f.projects.read(randomUUID(), observer), { statusCode: 404 });
   await f.projects.update(f.project.id, observer, { revision: f.project.revision, description: "Managed by administrator" });
   await content.addComment(f.project.id, issue.id, observer, { body: "Administrator comment" });
@@ -529,7 +529,7 @@ test("administrator creation without department preserves an explicit owner memb
   const created = await f.projects.create(admin, { name: "No department", remoteUrl: f.project.remoteUrl });
   assert.equal(created.project.ownerUserId, admin.id);
   assert.equal(created.membership.userId, admin.id);
-  assert.deepEqual(created.membership.permissions, ["project.view", "project.configure", "project.members.manage"]);
+  assert.deepEqual(created.membership.permissions, []);
   assert.equal(created.space, null);
   assert.equal((await f.projects.list(admin)).canCreateProjects, true);
 });
@@ -549,7 +549,7 @@ test("owner succession accepts administrator authority only with an active proje
 });
 
 
-test("administrator owner membership uses global management without granting development or secrets", async t => {
+test("administrator owner has all capabilities with empty grants and no department", async t => {
   const f = await fixture(t);
   await f.accounts.store.update(f.admin.id, { departmentId: null });
   const updated = await f.projects.saveMember(f.project.id, f.admin, { revision: 1, permissions: [] }, f.admin.id);
@@ -567,10 +567,28 @@ test("administrator owner membership uses global management without granting dev
   assert.deepEqual(candidate.grantablePermissions, administratorPermissions);
   await f.projects.authorize(f.project.id, f.admin, "project.members.manage");
   await assert.rejects(f.projects.saveMember(f.project.id, f.admin, { revision: 2, permissions: [], status: "disabled" }, f.admin.id), /接任/);
-  for (const permissions of [["project.view", "code.view", "code.operate"], ["project.view", "asset.view", "asset.secret.view"]])
-    await assert.rejects(f.projects.saveMember(f.project.id, f.admin, { revision: 2, permissions }, f.admin.id), { code: "DEPARTMENT_PERMISSION_LIMIT" });
-  await f.accounts.store.update(f.admin.id, { departmentId: f.department.id });
-  await f.database.client.department.update({ where: { id: f.department.id }, data: { permissions: all.filter(permission => permission !== "project.view") } });
-  await assert.rejects(f.projects.saveMember(f.project.id, f.admin, { revision: 2, permissions: ["project.view", "code.view", "code.operate"] }, f.admin.id), { code: "DEPARTMENT_PERMISSION_LIMIT" });
-  assert.equal(await f.database.client.developmentSpace.count({ where: { userId: f.admin.id } }), 0);
+  for (const permission of administratorPermissions) await f.projects.authorize(f.project.id, f.admin, permission);
+  assert.equal(await f.database.client.developmentSpace.count({ where: { userId: f.admin.id } }), 1);
+});
+
+test("departmentless nonmember administrators can prepare their own space and claim development", async t => {
+  const f = await fixture(t);
+  const admin = await f.accounts.create({ username: "independent-admin", role: "admin", password: "fixture-password" }, f.admin);
+  assert.equal(admin.departmentId, null);
+  const git = await new GitAccountServices(f.database).save(admin, { name: "Admin Git", authType: "http", host: "https://git.example", username: "login", password: "private" });
+  const accepted = await f.projects.prepare(f.project.id, admin, { gitAccountId: git.id, requestId: randomUUID() });
+  await f.projects.active.get(accepted.space.id).promise;
+  const ready = (await f.projects.space(f.project.id, admin)).space;
+  assert.equal(ready.status, "ready", ready.error);
+  assert.equal((await f.projects.read(f.project.id, admin)).membership, null);
+  await f.projects.workspaceAuthorization(ready.workspaceId, admin, "session.start");
+  await assert.rejects(f.projects.workspaceAuthorization(ready.workspaceId, f.admin, "session.view"), { statusCode: 404 });
+  const { ProjectContentServices } = require("../../src/application/project-content-services.cjs");
+  const { ProjectDevelopmentServices } = require("../../src/application/project-development-services.cjs");
+  const issue = await new ProjectContentServices(f.database, f.projects).createIssue(f.project.id, admin, { type: "bug", title: "Admin development" });
+  const services = new ProjectDevelopmentServices(f.database, f.projects);
+  const planned = await services.create(f.project.id, admin, { requestId: randomUUID(), issueIds: [issue.id] });
+  assert.equal(planned.tasks[0].executorId, admin.id);
+  assert.equal(planned.tasks[0].status, "planned");
+  assert.equal((await f.projects.read(f.project.id, admin)).membership, null);
 });

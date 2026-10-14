@@ -1,5 +1,22 @@
 class WorkbenchStore {
   constructor(database) { this.database = database; }
+  async recentProjects(userId, projectIds) {
+    return this.database.client.userProjectVisit.findMany({ where: { userId, projectId: { in: projectIds } },
+      orderBy: [{ lastVisitedAt: "desc" }, { projectId: "asc" }], take: 3 });
+  }
+  async activity(projectId, { deliveries }) {
+    const client = this.database.client;
+    const history = await client.issueHistory.findMany({ where: { projectId, action: { in: ["created", "updated", "transition", ...(deliveries ? ["delivery.reviewed"] : [])] } },
+      include: { issue: { select: { id: true, title: true, type: true, number: true } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 10 });
+    const published = deliveries ? await client.issueDeliverable.findMany({ where: { projectId }, select: { id: true, issueId: true, authorId: true, title: true, createdAt: true,
+      issue: { select: { id: true, title: true, type: true, number: true } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 10 }) : [];
+    const items = [...history.map(row => ({ id: row.id, action: row.action, actorId: row.actorId, createdAt: row.createdAt, issue: row.issue,
+      deliveryId: row.action === "delivery.reviewed" ? row.data?.deliveryId : undefined })),
+    ...published.map(row => ({ id: row.id, action: "delivery.published", actorId: row.authorId, createdAt: row.createdAt, issue: row.issue, deliveryId: row.id }))]
+      .sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id)).slice(0, 10);
+    const people = await client.user.findMany({ where: { id: { in: [...new Set(items.map(row => row.actorId))] } }, select: { id: true, displayName: true } });
+    return { items, people };
+  }
   async list(kind, projectIds, actorId, { limit, offset, query, scope, type, priority, status, tag, active }) {
     const client = this.database.client;
     const projects = { projectId: { in: projectIds } };

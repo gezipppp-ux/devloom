@@ -8,6 +8,7 @@ const path = require("node:path");
 const { createServer } = require("node:http");
 const { chromium } = require("playwright");
 const { verifyAccountProfileRaces } = require("./account-profile.test.cjs");
+const { verifyAttentionNotifications } = require("./attention-notifications.test.cjs");
 const { verifyAccountPreferenceRaces } = require("./account-preferences.test.cjs");
 const { verifyGitAccounts } = require("./git-accounts.test.cjs");
 const { verifyEnvironment } = require("./environment.test.cjs");
@@ -71,7 +72,7 @@ async function main() {
       if (endpoint.endsWith("/execution-options")) return send({ agent: agentDescriptor, permissionModes: ["ask", "auto", "full"].map((id) => ({ id, available: true })) });
       if (endpoint === "/api/admin/accounts") {
         if (activeUser.role !== "admin") return send({ error: "仅管理员可操作。" }, 403);
-        if (request.method() === "POST") { const user = { ...body, id: "created", status: "active", mustChangePassword: true }; delete user.password; users.push(user); return send({ user }, 201); }
+        if (request.method() === "POST") { const user = { ...body, id: body.role === "admin" ? "created-admin" : "created", status: "active", mustChangePassword: true }; delete user.password; users.push(user); return send({ user }, 201); }
         return send({ users });
       }
       if (endpoint.startsWith("/api/admin/accounts/")) { const user = users.find((entry) => entry.id === endpoint.split("/").at(-1)); Object.assign(user, body); return send({ user }); }
@@ -128,7 +129,7 @@ async function main() {
     await page.getByText("显示名称已保存。", { exact: true }).waitFor();
     assert.equal(await page.locator(".ui-avatar").innerText(), "管");
     assert.equal(await page.locator(".ui-avatar").getAttribute("title"), "管理员显示名");
-    assert.equal(await page.getByLabel("登录账号", { exact: true }).inputValue(), "admin");
+    assert.match(await page.locator(".profile-identity").innerText(), /admin · 登录账号/);
     assert.deepEqual(writesTo("/api/account/profile").at(-1).body, { displayName: "管理员显示名" });
     await page.getByLabel("Codex 模型", { exact: true }).selectOption("fixture-model");
     await page.getByLabel("思考强度", { exact: true }).selectOption("high");
@@ -148,7 +149,27 @@ async function main() {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.getByRole("button", { name: "管理中心", exact: true }).click();
     await page.getByRole("heading", { name: "账号管理", exact: true }).waitFor();
+    while (await page.getByRole("button", { name: "关闭提示", exact: true }).count()) await page.getByRole("button", { name: "关闭提示", exact: true }).first().click();
     await page.getByRole("button", { name: "新建账号", exact: true }).click();
+    await page.getByLabel("账号角色", { exact: true }).selectOption("admin");
+    await page.getByLabel("所属部门", { exact: true }).waitFor({ state: "hidden" });
+    assert.equal(await page.getByRole("checkbox", { name: "允许创建项目（仍受部门权限上限限制）", exact: true }).count(), 0);
+    await page.getByLabel("新账号", { exact: true }).fill("created-admin");
+    await page.getByLabel("显示名称", { exact: true }).fill("无部门管理员");
+    await page.getByLabel("临时密码", { exact: true }).fill("admin123");
+    for (const viewport of [{ width: 1920, height: 1080 }, { width: 2560, height: 1440 }, { width: 1440, height: 900 }, { width: 1280, height: 720 }, { width: 768, height: 1024 }, { width: 390, height: 844 }, { width: 320, height: 740 }]) {
+      await page.setViewportSize(viewport);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false);
+      await page.screenshot({ path: path.join(output, `admin-create-${viewport.width}.png`), fullPage: true });
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.getByRole("button", { name: "创建账号", exact: true }).click();
+    await page.getByRole("button", { name: "创建账号", exact: true }).waitFor({ state: "hidden" });
+    assert.equal(writesTo("/api/admin/accounts").at(-1).body.departmentId, null);
+    await page.locator(".account-list-row").filter({ hasText: "created-admin" }).locator("summary").click();
+    assert.equal(await page.getByLabel("created-admin：所属部门", { exact: true }).count(), 0);
+    await page.getByRole("button", { name: "新建账号", exact: true }).click();
+    await page.getByLabel("账号角色", { exact: true }).selectOption("member");
     await page.getByLabel("新账号", { exact: true }).fill("created-user");
     await page.getByLabel("显示名称", { exact: true }).fill("新建成员");
     await page.getByLabel("所属部门", { exact: true }).selectOption(departments[0].id);
@@ -156,7 +177,7 @@ async function main() {
     await temporaryPassword.fill("short");
     await page.getByRole("button", { name: "创建账号", exact: true }).click();
     assert.equal(await temporaryPassword.evaluate((input) => input.validity.tooShort), true);
-    assert.equal(writesTo("/api/admin/accounts").length, 0, "five-character creation passwords must not be submitted");
+    assert.equal(writesTo("/api/admin/accounts").length, 1, "five-character creation passwords must not be submitted");
     await temporaryPassword.fill("new123");
     await page.getByRole("button", { name: "创建账号", exact: true }).click();
     await page.getByText("账号已创建，首次登录需要修改密码。", { exact: true }).waitFor();
@@ -264,6 +285,7 @@ async function main() {
     assert.equal(await page.getByLabel("默认任务分组").inputValue(), "type");
     await verifyAccountPreferenceRaces(browser, origin);
     await verifyAccountProfileRaces(browser, origin);
+    await verifyAttentionNotifications(browser, origin);
     assert.deepEqual(errors, []);
     process.stdout.write("Account browser checks passed: login, password, settings, administration, private state, late responses and cross-tab logout.\n");
   } finally { await browser?.close(); await new Promise((resolve) => server.close(resolve)); }

@@ -24,16 +24,18 @@ async function verifyMcpTokens(page, output) {
     return route.fulfill({ status: 201, json: { token, secret } });
   });
   await page.getByRole("navigation", { name: "个人设置", exact: true }).getByRole("button", { name: "MCP 接入", exact: true }).click();
-  await page.getByRole("button", { name: "管理 MCP Token", exact: true }).click();
   const section = page.locator(".mcp-settings");
   const access = page.locator(".mcp-access");
   await section.getByText("尚未创建 Token", { exact: true }).waitFor();
   assert.equal(await section.getByLabel("Token 名称").count(), 0, "Creation must not crowd the overview");
+  assert.equal(await section.getByLabel("MCP 地址", { exact: true }).inputValue(), new URL("/mcp", page.url()).href);
+  await section.getByRole("button", { name: "连接配置与图片上传", exact: true }).click();
   await section.getByRole("button", { name: "Claude Code", exact: true }).click();
   assert.match(await section.locator(".mcp-code").first().innerText(), /mcpServers/);
   await section.getByRole("button", { name: "Pi", exact: true }).click();
   await section.getByText("在 Pi 使用的 MCP 扩展中配置以上连接参数", { exact: false }).waitFor();
   await section.getByRole("button", { name: "Codex", exact: true }).click();
+  await section.getByRole("button", { name: "返回 MCP 接入", exact: true }).click();
   await access.getByRole("button", { name: "创建 Token", exact: true }).click();
   await section.getByRole("radio", { name: "指定项目", exact: true }).check();
   await section.getByLabel("Token 名称").fill("工作电脑 CLI");
@@ -67,6 +69,7 @@ async function verifyMcpTokens(page, output) {
   assert.equal(await section.locator(".mcp-token").count(), 2);
   await section.getByRole("button", { name: "查看全部", exact: true }).click();
   assert.equal(await section.locator(".mcp-token").count(), 3);
+  await section.getByRole("button", { name: "连接配置与图片上传", exact: true }).click();
   await section.getByRole("button", { name: "查看用法", exact: true }).click();
   const help = section.getByRole("region", { name: "HTTP 上传说明" });
   assert.match(await help.innerText(), /attachmentIds/);

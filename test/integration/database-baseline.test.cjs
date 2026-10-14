@@ -51,7 +51,7 @@ test("fresh baseline matches Prisma, preserves database constraints and publishe
   await fixture.deploy();
   await fixture.deploy();
   const database = await fixture.open();
-  assert.deepEqual(readPostgresMigrations().map(row => row.name), ["20261012200000_baseline", "20261013070000_mcp_access", "20261013110000_agent_suppliers", "20261013150000_initialization_guide", "20261013180000_project_directory_names", "20261013210000_neutral_workbench"]);
+  assert.deepEqual(readPostgresMigrations().map(row => row.name), ["20261012200000_baseline", "20261013070000_mcp_access", "20261013110000_agent_suppliers", "20261013150000_initialization_guide", "20261013180000_project_directory_names", "20261013210000_neutral_workbench", "20261014120000_project_overview", "20261014150000_administrator_permissions"]);
   const workflows = await database.client.systemWorkflow.findMany({ include: { versions: true }, orderBy: { type: "asc" } });
   assert.deepEqual(workflows.map(row => row.type), ["bug", "requirement"]);
   for (const row of workflows) {
@@ -68,7 +68,7 @@ test("fresh baseline matches Prisma, preserves database constraints and publishe
     "issue_deliverables_revision_check", "issue_deliverables_status_check",
     "project_assets_nonproduction_secret_check", "project_files_single_parent_check", "project_files_size_check",
     "project_issues_due_date", "project_issues_number_check", "project_releases_status_check", "projects_directory_key_check", "projects_issue_sequence_check",
-    "system_setup_singleton_check", "system_setup_status_check", "system_workflows_type_check", "user_git_accounts_auth_type_check", "users_role_check", "users_status_check",
+    "system_setup_singleton_check", "system_setup_status_check", "system_workflows_type_check", "user_git_accounts_auth_type_check", "users_administrator_department_check", "users_role_check", "users_status_check",
   ]);
   const cli = path.join(path.dirname(require.resolve("prisma/package.json")), "build/index.js");
   await promisify(execFile)(process.execPath, [cli, "migrate", "diff", "--from-config-datasource",
@@ -102,4 +102,31 @@ test("baseline DDL rolls back entirely on a late table conflict", async t => {
   await admin.query("ROLLBACK");
   assert.equal((await admin.query("SELECT to_regclass('users') AS name")).rows[0].name, null);
   assert.deepEqual((await admin.query("SELECT * FROM system_workflow_versions")).rows, [{ sentinel: "untouched" }]);
+});
+
+test("administrator permission migration clears only admin assignments and preserves project identities", async t => {
+  const { admin, schema } = await postgresFixture(t);
+  await admin.query(`SET search_path TO "${schema}"`);
+  await admin.query('CREATE TABLE "_prisma_migrations" (migration_name TEXT, finished_at TIMESTAMPTZ, rolled_back_at TIMESTAMPTZ)');
+  await admin.query(migration);
+  await admin.query(`INSERT INTO departments (id, name, updated_at) VALUES ('department', 'Members', CURRENT_TIMESTAMP);
+    INSERT INTO users (id, username, display_name, password_hash, role, department_id, can_create_projects, updated_at)
+    VALUES ('administrator', 'admin', 'Admin', 'fixture', 'admin', 'department', true, CURRENT_TIMESTAMP),
+           ('member', 'member', 'Member', 'fixture', 'member', 'department', true, CURRENT_TIMESTAMP);
+    INSERT INTO projects (id, name, owner_user_id, remote_url, updated_at)
+    VALUES ('project', 'Project', 'administrator', 'https://git.example/repo.git', CURRENT_TIMESTAMP);
+    INSERT INTO project_members (project_id, user_id, permissions, updated_at)
+    VALUES ('project', 'administrator', ARRAY['project.view'], CURRENT_TIMESTAMP),
+           ('project', 'member', ARRAY['project.view'], CURRENT_TIMESTAMP)`);
+  const projects = (await admin.query('SELECT * FROM projects')).rows;
+  const member = (await admin.query("SELECT * FROM users WHERE id = 'member'")).rows;
+  const memberGrant = (await admin.query("SELECT * FROM project_members WHERE user_id = 'member'")).rows;
+  const sql = fs.readFileSync(path.join(root, 'prisma/migrations/20261014150000_administrator_permissions/migration.sql'), 'utf8');
+  await admin.query(sql);
+  assert.deepEqual((await admin.query('SELECT * FROM projects')).rows, projects);
+  assert.deepEqual((await admin.query("SELECT * FROM users WHERE id = 'member'")).rows, member);
+  assert.deepEqual((await admin.query("SELECT * FROM project_members WHERE user_id = 'member'")).rows, memberGrant);
+  assert.deepEqual((await admin.query("SELECT department_id, can_create_projects FROM users WHERE id = 'administrator'")).rows, [{ department_id: null, can_create_projects: false }]);
+  assert.deepEqual((await admin.query("SELECT permissions, revision FROM project_members WHERE user_id = 'administrator'")).rows, [{ permissions: [], revision: 2 }]);
+  await assert.rejects(admin.query("UPDATE users SET department_id = 'department' WHERE id = 'administrator'"), /users_administrator_department_check/);
 });

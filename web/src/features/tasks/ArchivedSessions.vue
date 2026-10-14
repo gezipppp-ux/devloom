@@ -62,6 +62,7 @@ function dateLabel(value) {
   return formatDate(value, { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 watch(() => props.revision, () => { if (opened.value) void refresh(); });
+defineExpose({ open });
 </script>
 
 <template>
@@ -108,3 +109,18 @@ watch(() => props.revision, () => { if (opened.value) void refresh(); });
   </Teleport>
   <slot v-if="deleteTarget" name="delete-dialog" :run="deleteTarget" :deleted="deleted" :close="closeDeletion" />
 </template>
+
+<style scoped>
+.archived-sessions-dialog { width: min(820px, calc(100vw - 32px)); }
+.archived-session-list { margin: 24px 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; }
+.archived-session-list li { padding: 22px 24px; margin: 0; border: 0; border-bottom: 1px solid var(--line); background: var(--surface); }
+.archived-session-list li:last-child { border-bottom: 0; }
+.archived-session-info h3 { font-size: 14px; font-weight: 500; line-height: 1.6; }
+.archived-session-actions { gap: 8px; }
+@media (max-width: 767px) {
+  .archived-session-list li { padding: 18px 16px; align-items: flex-start; flex-wrap: wrap; gap: 14px; }
+  .archived-session-info { flex-basis: 100%; }
+  .archived-session-actions { width: 100%; }
+  .archived-session-actions > button { min-height: 44px; }
+}
+</style>

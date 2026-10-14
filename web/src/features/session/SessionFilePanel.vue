@@ -98,3 +98,18 @@ onUnmounted(() => document.removeEventListener("keydown", escape));
     <footer class="file-panel-footer"><span>{{ $t("只读 · 当前 Worktree") }}</span><span v-if="file?.readAt">{{ $t("读取于") }} {{ formatDate(file.readAt, { hour: "2-digit", minute: "2-digit" }) }}</span><small>{{ $t("历史消息链接打开当前文件，不代表该轮结束时的版本。") }}</small></footer>
   </aside>
 </template>
+
+<style scoped>
+.session-file-panel { border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; background: var(--surface); }
+.file-panel-heading { padding: 16px 18px; }
+.file-mode-tabs { gap: 12px; }
+.file-mode-tabs button { font-size: 12px; }
+.file-mode-tabs button[aria-pressed="true"] { color: var(--highlight); border-bottom-color: var(--highlight); background: transparent; }
+.file-controls, .file-picker { background: var(--surface); }
+.file-code-area { padding-block: 8px; }
+.file-panel-footer { padding: 12px 18px; }
+@media (max-width: 767px) {
+  .file-panel-heading { padding: 12px; }
+  .file-panel-heading > button { min-height: 44px; min-width: 44px; }
+}
+</style>

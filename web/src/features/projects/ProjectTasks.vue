@@ -5,10 +5,11 @@ import { useRoute, useRouter } from "vue-router";
 import { appApi, statusLabel } from "../../shared/api/api.js";
 import MergeDevelopmentDialog from "./MergeDevelopmentDialog.vue";
 import DevelopmentTaskDetail from "./DevelopmentTaskDetail.vue";
-import { developmentTaskLabels as labels } from "./development-task-view.js";
 import { useResource } from "../../shared/api/use-resource.js";
+import WorkItemTable from "./WorkItemTable.vue";
 const props = defineProps({
   projectId: { type: String, required: true },
+  projectName: { type: String, default: "" },
   issueId: { type: String, default: "" },
   canContinue: Boolean,
   spaceReady: Boolean,
@@ -56,6 +57,7 @@ const mergeTasks = computed(() =>
     selectedTasks.value.includes(task.id),
   ),
 );
+const taskRows = computed(() => (data.value?.tasks || []).map(task => ({ ...task, selectionDisabled: !task.canMerge })));
 const mergeError = computed(() => {
   const tasks = mergeTasks.value;
   if (tasks.length < 2)
@@ -77,12 +79,13 @@ function changeScope(value) {
 }
 function open(task) {
   return router.push({
-    query: { ...route.query, tab: "tasks", issue: undefined, task: task.id },
+    query: { ...route.query, tab: "tasks", issue: undefined, task: task.id, taskStart: undefined },
   });
 }
 function back() {
   const query = { ...route.query };
   delete query.task;
+  delete query.taskStart;
   return router.push({ query });
 }
 function page(nextOffset) {
@@ -102,6 +105,7 @@ function refresh() {
     :key="`${projectId}/${taskId}`"
     :project-id="projectId"
     :task-id="taskId"
+    :project-name="projectName"
     :space-ready="spaceReady"
     :workspace-id="workspaceId"
     :can-assign="canAssign"
@@ -134,7 +138,7 @@ function refresh() {
     </header>
     <FeedbackMessage :message="error" type="error" />
     <p v-if="loading" role="status">{{ $t("正在读取开发任务…") }}</p>
-    <nav v-if="!issueId" class="page-tabs" :aria-label="$t(&quot;开发任务范围&quot;)">
+    <nav v-if="!issueId" class="ui-segmented development-list-scopes" :aria-label="$t(&quot;开发任务范围&quot;)">
       <button
         :class="{ active: scope === 'mine' }"
         :aria-pressed="scope === 'mine'"
@@ -149,7 +153,7 @@ function refresh() {
         {{ $t("项目全部任务") }}
       </button>
     </nav>
-    <div v-if="!issueId && !readOnlyReason" class="project-development-action">
+    <div v-if="!issueId && !readOnlyReason && selectedTasks.length" class="project-development-action ui-selection-bar">
       <button
         class="primary"
         :disabled="loading || Boolean(mergeError)"
@@ -160,29 +164,9 @@ function refresh() {
         mergeError || $t("所选任务将共用一个 Codex 会话，合并后再开始开发。")
       }}</span>
     </div>
-    <ul class="project-issue-list">
-      <li v-for="task in data?.tasks" :key="task.id">
-        <input
-          v-if="!issueId && !readOnlyReason"
-          v-model="selectedTasks"
-          type="checkbox"
-          :value="task.id"
-          :aria-label="$t(&quot;选择开发任务 {p0}&quot;, { p0: task.title })"
-          :disabled="loading || !task.canMerge"
-        /><button class="project-issue-link" @click="open(task)">
-          <span>{{ $t(labels[task.status] || task.status) }}</span
-          ><strong>{{ task.title }}</strong
-          ><small
-            >{{ task.executor?.displayName || $t("未分配") }} ·
-            {{ task.release?.name || $t("未排期") }} ·
-            {{ task.baseBranch || $t("基线未记录") }} ·
-            {{ task.kind === 'manual' ? $t("独立开发") : $t("{p0} 条事项", { p0: task.issueIds.length }) }}<span v-if="task.execution">
-              · Codex：{{ $t(statusLabel(task.execution.status)) }}</span
-            ></small
-          >
-        </button>
-      </li>
-    </ul>
+    <WorkItemTable v-if="taskRows.length" v-model:selected="selectedTasks" :items="taskRows" kind="tasks" :selectable="!issueId && !readOnlyReason" :disabled="loading" @open="open" @open-session="item => emit('open-workspace', item.workspaceId, item.runKey)">
+      <template #details="{ item }"><p>{{ item.baseBranch || $t('基线未记录') }}<span v-if="item.execution"> · Codex：{{ $t(statusLabel(item.execution.status)) }}</span></p></template>
+    </WorkItemTable>
     <p v-if="data && !data.tasks.length" class="muted">
       {{
         scope === "mine"
@@ -197,5 +181,6 @@ function refresh() {
         {{ $t("下一页") }}
       </button>
     </div>
+    <p class="development-list-note field-hint">{{ $t('认领与合并不会启动执行') }}</p>
   </section>
 </template>

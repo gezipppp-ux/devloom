@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const fs = require("node:fs");
 const { chromium } = require("playwright");
+const { dismissOperationMessages } = require("../support/operation-feedback.cjs");
 const { pasteImage, markdownValue, visual, verifyVisualWriting, captureEditor } = require("../support/issue-markdown.cjs");
 
 async function main() {
@@ -18,7 +19,7 @@ import OperationMessages from '/src/shared/components/OperationMessages.vue'; im
 const router=createRouter({history:createWebHistory(),routes:[{path:'/:pathMatch(.*)*',component:{render:()=>null}}]}); await router.push(location.pathname+location.search); await router.isReady();
 const kind=new URLSearchParams(location.search).get('fixture'); const component={discussion:Discussion,settings:Settings,issue:Detail,assets:Assets}[kind];
 const currentProject=ref(${JSON.stringify(project)}), permissions=ref(${JSON.stringify(permissions)});
-createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),kind==='settings'?h('button',{onClick:()=>{currentProject.value={...currentProject.value,name:'父级刷新名称',revision:currentProject.value.revision+1}}},'模拟父级刷新'):null,kind==='discussion'?h('button',{onClick:()=>{permissions.value=permissions.value.includes('collaboration.view')?['issue.view']: ${JSON.stringify(permissions)}}},'切换讨论权限'):null,h(component,{project:currentProject.value,projectId:'p',issueId:'i',endpoint:'/projects/p/issues/i',permissions:permissions.value})])}).use(router).use(i18n).mount('#app');`;
+createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),kind==='settings'?h('button',{onClick:()=>{currentProject.value={...currentProject.value,name:'父级刷新名称',revision:currentProject.value.revision+1}}},'模拟父级刷新'):null,kind==='discussion'?h('button',{onClick:()=>{permissions.value=permissions.value.includes('collaboration.view')?['issue.view']: ${JSON.stringify(permissions)}}},'切换讨论权限'):null,h(component,{project:currentProject.value,projectId:'p',issueId:'i',endpoint:'/projects/p/issues/i',permissions:permissions.value,canArchive:kind==='settings'})])}).use(router).use(i18n).mount('#app');`;
   const server = await createServer({ configFile: false, root: path.resolve("web"), logLevel: "error", plugins: [vue(), { name: "editing-fixture", resolveId(id) { if (id === "virtual:editing") return "\0editing"; }, load(id) { if (id === "\0editing") return source; }, configureServer(server) { server.middlewares.use(async (req, res, next) => { if (!req.url.startsWith("/fixture")) return next(); res.setHeader("Content-Type", "text/html"); res.end(await server.transformIndexHtml(req.url, '<html><body><main id="app"></main><script type="module" src="/@id/virtual:editing"></script></body></html>')); }); } }], server: { host: "127.0.0.1", port: 0 } });
   let browser;
   try {
@@ -37,6 +38,7 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),kind==='sett
         writes.push({ pathname, input });
         if (pathname.endsWith("/comments")) { pendingComment = true; await new Promise(resolve => { releaseComment = resolve; }); response = {}; }
         else if (pathname === "/api/projects/p") { if (input.revision === 1) { status = 409; response = { error: "项目已修改" }; } else response = { project: { ...project, ...input, revision: 3 } }; }
+        else if (pathname === "/api/projects/p/archive") response = { project: { ...project, status: "archived", revision: 2 } };
         else if (pathname.endsWith("/issues/i")) { if (input.revision === 1) { status = 409; response = { error: "事项已修改" }; } else response = { ...issue, ...input, revision: 3 }; }
         else if (pathname.endsWith("/issues/i/transition")) response = { ...issue, status: "developing", statusName: "开发中", availableTransitions: [], revision: 3 };
       } else if (pathname.endsWith('/comments')) response = { items: [{ id: 'loaded', body: '已有评论缓存' }], people: [] };
@@ -74,7 +76,7 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),kind==='sett
     await page.getByText('暂无记录。', { exact: true }).waitFor();
     await page.getByRole('button', { name: '切换讨论权限' }).click();
     await page.getByRole('button', { name: '交付结果', exact: true }).click(); assert.equal(await page.getByLabel('交付说明').inputValue(), '');
-    await open("settings"); await page.getByRole("button", { name: "模拟父级刷新" }).click(); assert.equal(await page.getByLabel("项目名称", { exact: true }).inputValue(), "父级刷新名称"); await page.getByLabel("项目名称", { exact: true }).fill("待保留草稿"); await page.getByRole("button", { name: "模拟父级刷新" }).click(); await page.getByText(/服务器上的项目已更新/).waitFor(); assert.equal(await page.getByLabel("项目名称", { exact: true }).inputValue(), "待保留草稿");
+    await open("settings"); const archived = page.waitForResponse(response => response.url().endsWith("/api/projects/p/archive") && response.request().method() === "POST"); await page.getByRole("button", { name: "确认归档项目", exact: true }).click(); assert.ok((await archived).ok()); assert.deepEqual(writes.at(-1), { pathname: "/api/projects/p/archive", input: { revision: 1 } }); await page.getByRole("button", { name: "模拟父级刷新" }).click(); assert.equal(await page.getByLabel("项目名称", { exact: true }).inputValue(), "父级刷新名称"); await page.getByLabel("项目名称", { exact: true }).fill("待保留草稿"); await page.getByRole("button", { name: "模拟父级刷新" }).click(); await page.getByText(/服务器上的项目已更新/).waitFor(); assert.equal(await page.getByLabel("项目名称", { exact: true }).inputValue(), "待保留草稿");
     await open("settings"); await page.getByLabel("项目名称", { exact: true }).fill("我的项目名称"); await page.getByRole("button", { name: "保存项目设置" }).click(); await page.locator('.operation-message[data-type="error"]').filter({ hasText: "项目已修改" }).last().waitFor(); await page.getByRole("button", { name: "保留草稿，加载最新内容" }).click(); await page.getByLabel("项目名称冲突处理").selectOption("draft"); await page.getByRole("button", { name: "确认合并并继续编辑" }).click(); assert.equal(await page.getByLabel("说明", { exact: true }).inputValue(), "他人说明"); await page.getByRole("button", { name: "保存项目设置" }).click(); await page.locator('.operation-message[data-type="success"]').filter({ hasText: "已保存。" }).last().waitFor(); assert.equal(writes.at(-1).input.revision, 2); assert.equal(writes.at(-1).input.name, "我的项目名称");
     assert.equal(await page.getByText(/TAPD|清除已保存 Cookie/).count(), 0);
     assert.deepEqual(Object.keys(writes.at(-1).input.settings).sort(), ["initCommands"], "project basics do not overwrite separately saved prompt templates");
@@ -126,12 +128,14 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),kind==='sett
     await page.getByLabel('内容', { exact: true }).fill('等待保存期间的新草稿'); releaseAsset();
     await page.getByRole('button', { name: '保存资产', disabled: false }).waitFor();
     assert.equal(await page.getByLabel('内容', { exact: true }).inputValue(), '等待保存期间的新草稿');
+    await dismissOperationMessages(page);
+    await dismissOperationMessages(page);
     assetPending = new Promise(resolve => { assetStarted = resolve; });
     await page.getByRole('button', { name: '保存资产' }).click(); await assetPending;
     assert.equal(writes.at(-1).input.revision, 33); releaseAsset();
     await page.getByRole('button', { name: '编辑资产', exact: true }).waitFor();
     await page.getByRole("button", { name: "返回资产列表" }).click(); await page.getByRole("textbox", { name: "搜索资产" }).waitFor(); assert.equal(await page.getByRole("textbox", { name: "搜索资产" }).inputValue(), "测试"); assert.ok(!new URL(page.url()).searchParams.has("asset"));
-    await page.getByRole('button', { name: '新增资产' }).click();
+    await page.getByRole('button', { name: '新建资产' }).click();
     await page.getByRole('button', { name: '保存资产', disabled: false }).waitFor();
     await page.getByLabel('标题', { exact: true }).fill('新建资产');
     assetPending = new Promise(resolve => { assetStarted = resolve; });
@@ -139,6 +143,8 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),kind==='sett
     await page.getByLabel('内容', { exact: true }).fill('新建成功之前继续输入'); releaseAsset();
     await page.waitForURL('**asset=a'); await page.getByRole('button', { name: '保存资产', disabled: false }).waitFor();
     assert.equal(await page.getByLabel('内容', { exact: true }).inputValue(), '新建成功之前继续输入');
+    while (await page.getByRole('button', { name: '关闭提示', exact: true }).count()) await page.getByRole('button', { name: '关闭提示', exact: true }).first().click();
+    while (await page.getByRole('button', { name: '关闭提示', exact: true }).count()) await page.getByRole('button', { name: '关闭提示', exact: true }).first().click();
     assetPending = new Promise(resolve => { assetStarted = resolve; });
     await page.getByRole('button', { name: '保存资产' }).click(); await assetPending;
     assert.ok(writes.at(-1).pathname.endsWith('/assets/a')); releaseAsset();

@@ -3,7 +3,7 @@ import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { FolderOpenOutlined } from "@antdv-next/icons";
 import { appApi } from "../../shared/api/api.js";
-import FormSection from "../../shared/components/FormSection.vue";
+import { translate } from "../../shared/i18n/index.js";
 import ServerDirectoryPicker from "./ServerDirectoryPicker.vue";
 
 const directoryPicker = ref();
@@ -15,6 +15,7 @@ const saving = ref(false);
 const error = ref("");
 const saved = ref(false);
 const git = ref(null);
+const directoryPreview = computed(() => `${memberStorageRoot.value || (platform.value === "win32" ? "D:\\wt" : "/srv/wt")}/\n  projects/\n    <${translate("仓库目录名")}>/\n      members/\n        <${translate("登录用户名")}>/\n          repository-<${translate("准备修订号")}>/\n          worktree/<${translate("任务目录")}>/`);
 let disposed = false;
 const dirty = computed(
   () =>
@@ -66,11 +67,10 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <FormSection
-    :title="$t(&quot;成员项目与任务目录&quot;)"
-    :description="$t(&quot;统一设置成员项目克隆目录和任务 Worktree 的共同基础路径。&quot;)"
-  >
-    <form @submit.prevent="save">
+  <section class="member-storage-settings" :aria-label="$t('成员项目与任务目录')">
+    <header class="ui-settings-heading"><div><h2>{{ $t("成员目录") }}</h2><p>{{ $t("统一设置成员项目克隆目录和任务 Worktree 的共同基础路径。") }}</p></div></header>
+    <form class="storage-settings-form" @submit.prevent="save">
+      <section class="storage-form-section">
       <label for="member-storage-root" class="storage-field-label"
         >{{ $t("成员目录基础路径") }}</label
       >
@@ -99,19 +99,9 @@ onUnmounted(() => {
           platform === "win32" ? $t("，例如 D:\\wt") : $t("，例如 /srv/wt")
         }}{{ $t("，减少项目内深层文件路径过长的风险。") }}
       </p>
-      <div class="storage-path-example">
-        <strong
-          >{{ $t("基础目录 / projects / 仓库目录名 / members / 登录用户名") }}</strong
-        >
-        <code>{{
-          platform === "win32"
-            ? "D:\\wt\\projects\\web-coding\\members\\admin"
-            : "/srv/wt/projects/web-coding/members/admin"
-        }}</code>
-        <p>
-          仓库保存在 repository-&lt;准备修订号&gt;，任务保存在 worktree/&lt;任务目录&gt;。重命名不会搬移目录。
-        </p>
-      </div>
+      </section>
+      <section class="storage-form-section storage-preview-section"><h3>{{ $t("目录结构预览") }}</h3><pre class="storage-directory-preview"><code>{{ directoryPreview }}</code></pre>
+      <p class="field-hint">{{ $t("仓库保存在 repository-<准备修订号>，任务保存在 worktree/<任务目录>。重命名不会搬移目录。") }}</p>
       <p class="field-hint" :class="{ error: git && !git.installed }">
         {{ $t("Git 环境：") }}{{
           git
@@ -124,6 +114,8 @@ onUnmounted(() => {
       <p class="field-hint">
         {{ $t("修改后对所有工作区的新任务生效；已有任务继续使用记录的路径，不会移动目录。") }}
       </p>
+      </section>
+      <footer class="storage-form-footer">
       <p v-if="loading" class="muted" role="status">{{ $t("正在加载基础目录…") }}</p>
       <FeedbackMessage :message="error" type="error" />
       <FeedbackMessage :message="saved ? '基础目录已保存，后续新任务将使用新的路径配置。' : ''" type="success" />
@@ -143,10 +135,23 @@ onUnmounted(() => {
           {{ saving ? $t("正在保存…") : $t("保存基础目录") }}
         </button>
       </div>
+      </footer>
     </form>
     <ServerDirectoryPicker
       ref="directoryPicker"
       @select="(path) => (memberStorageRoot = path)"
     />
-  </FormSection>
+  </section>
 </template>
+<style scoped>
+.member-storage-settings { max-width: 1160px; min-width: 0; }
+.storage-settings-form { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; }
+.storage-form-section { padding: 28px; }
+.storage-form-section + .storage-form-section { border-top: 1px solid var(--line); }
+.storage-preview-section h3 { margin: 0 0 20px; font-size: 18px; }
+.storage-directory-preview { margin: 0 0 16px; padding: 20px; background: var(--soft); border-radius: var(--radius-control); font: 12px/1.8 var(--font-code); white-space: pre; overflow: auto; }
+.storage-directory-preview code { padding: 0; background: transparent; }
+.storage-form-footer { border-top: 1px solid var(--line); padding: 20px 28px; }
+.storage-form-footer .actions { justify-content: flex-end; }
+@media (max-width: 767px) { .storage-form-section, .storage-form-footer { padding: 20px; } }
+</style>

@@ -23,6 +23,7 @@ class AccountStore {
   async list() { return (await this.database.client.user.findMany({ orderBy: { username: "asc" } })).map(accountRecord); }
 
   async create(input, { initial = false } = {}) {
+    if (input.role === "admin") input = { ...input, departmentId: null, canCreateProjects: false };
     try {
       return await this.database.transaction(async () => {
         if (initial && await this.count()) throw accountError("管理员已初始化。", 409);
@@ -51,8 +52,9 @@ class AccountStore {
         const current = await this.byId(id);
         if (!current) throw accountError("账号不存在。", 404);
         const next = { ...current, ...patch };
+        if (next.role === "admin") { next.departmentId = null; next.canCreateProjects = false; }
         const authenticationChanged = Object.keys(patch).some(key => key !== "displayName");
-        if (patch.departmentId && !(await this.database.client.department.findFirst({ where: { id: patch.departmentId, status: "active" } }))) throw accountError("部门不存在或已停用。");
+        if (next.role !== "admin" && patch.departmentId && !(await this.database.client.department.findFirst({ where: { id: patch.departmentId, status: "active" } }))) throw accountError("部门不存在或已停用。");
         if ((patch.departmentId !== undefined && patch.departmentId !== current.departmentId) ||
             (patch.role !== undefined && patch.role !== current.role)) {
           const department = next.departmentId && await this.database.client.department.findUnique({ where: { id: next.departmentId } });
@@ -74,6 +76,9 @@ class AccountStore {
           mustChangePassword: Boolean(next.must_change_password), ...(authenticationChanged ? { authVersion: { increment: 1 } } : {}),
           departmentId: next.departmentId, canCreateProjects: Boolean(next.canCreateProjects),
         } });
+        if (next.role === "admin" && current.role !== "admin") await this.database.client.projectMember.updateMany({
+          where: { userId: id }, data: { permissions: [], revision: { increment: 1 } },
+        });
         if (authenticationChanged) await this.database.client.authSession.deleteMany({ where: { userId: id } });
         return accountRecord(row);
       });

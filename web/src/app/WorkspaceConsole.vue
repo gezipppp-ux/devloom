@@ -42,6 +42,7 @@ const SessionFilePanel = defineAsyncComponent(() => import("../features/session/
 const props = defineProps({
   projectId: { type: String, default: "" },
   initialTask: { type: String, default: "" },
+  initialView: { type: String, default: "" },
   permissions: { type: Array, default: null },
   workspaceName: { type: String, default: "" },
   notifyUnreadResult: { type: Function, default: () => {} },
@@ -140,8 +141,18 @@ const {
   onUnreadResult: (result) => props.notifyUnreadResult(result),
 });
 const imageDraft = useSessionImages({ active, canSend });
+const archivedSessions = ref();
+watch([() => props.initialView, workspaceLoading], async ([view, loadingWorkspace]) => {
+  if (loadingWorkspace) return;
+  if (view === "manual" && allowed("session.start")) {
+    creating.value = true; settingsOpen.value = false; repositoryOpen.value = false;
+  } else if (view === "history" && allowed("session.continue")) {
+    await nextTick();
+    if (props.initialView === view && !workspaceLoading.value) archivedSessions.value?.open();
+  }
+}, { immediate: true });
 watch(active, () => { closeFile(false); fileWide.value = false; });
-watch(active, key => { if (key && key !== props.initialTask) emit("task-change", key); });
+watch(active, key => { if (key && key !== props.initialTask && (!props.initialView || !workspaceLoading.value)) emit("task-change", key); });
 
 function readVisibleSession() {
   if (
@@ -290,7 +301,7 @@ async function refreshCurrentSession() {
         :unread-result-keys="unreadResultKeys"
         @open="open"
       />
-      <ArchivedSessions v-if="allowed('session.continue')" :revision="archiveRevision" :disabled="workspaceLoading" @restored="archiveRestored" @deleted="sessionDeleted">
+      <ArchivedSessions ref="archivedSessions" v-if="allowed('session.continue')" :revision="archiveRevision" :disabled="workspaceLoading" @restored="archiveRestored" @deleted="sessionDeleted">
         <template #delete-dialog="{ run, deleted, close }">
           <SessionLifecycleDialog :key="run.key" mode="delete" :task-key="run.key" :title="run.title"
             :worktree="run.worktree" :deletion="run.worktreeDeletion"
@@ -464,6 +475,9 @@ async function refreshCurrentSession() {
             @open-file="openFile"
             @opened="closeFile(false)"
           >
+            <template #context-actions>
+              <button v-if="props.projectId && allowed('deliverable.create')" type="button" class="primary" @click="emit('open-project', 'deliveries')">{{ $t('整理交付') }}</button>
+            </template>
             <template #metadata>
               <TaskMetadataControls v-if="allowed('session.continue')" :task-key="session.key" :metadata="session.metadata" @saved="metadataSaved" />
             </template>
@@ -506,3 +520,44 @@ async function refreshCurrentSession() {
     </main>
   </div>
 </template>
+
+<style scoped>
+.workspace { min-width: 0; }
+.workspace > .sidebar { min-width: 0; background: var(--surface); }
+.workspace > main { min-width: 0; container-type: inline-size; }
+.brand { padding: 22px 20px 10px; font-size: 13px; letter-spacing: .04em; }
+.brand small { font-size: 12px; letter-spacing: 0; }
+.workspace-heading { padding-inline: 16px; }
+.workspace-heading h2 { font-size: 14px; font-weight: 600; }
+.settings-link { margin-inline: 8px; padding-inline: 12px; border-radius: 6px; }
+.development-start-actions { gap: 8px; padding-inline: 16px; }
+.development-start-actions > button { font-size: 12px; border-radius: 6px; }
+.sidebar-footer { padding: 16px; font-size: 12px; }
+.session-header { min-height: 116px; padding: 24px 28px 20px; background: var(--canvas); border-bottom: 0; gap: 10px 20px; }
+.session-header .page-breadcrumb { color: var(--muted); font-size: 12px; }
+.session-header :deep(.session-heading) { font-size: clamp(22px, 2vw, 28px); font-weight: 600; letter-spacing: -.02em; line-height: 1.4; }
+.session-body { margin: 0 28px 28px; gap: 24px; min-width: 0; }
+.session-body.with-file-panel > :deep(.session-file-panel) { flex-basis: calc((100% - 104px) / 2); width: calc((100% - 104px) / 2); }
+.session-body.file-panel-wide > :deep(.session-file-panel) { flex-basis: calc((100% - 104px) * .67); width: calc((100% - 104px) * .67); }
+.session-conversation { border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); overflow: hidden; }
+.timeline { padding: 28px max(32px, calc((100% - var(--conversation-width)) / 2)); scroll-padding-bottom: 24px; }
+.working-line { font-size: 12px; line-height: 1.8; }
+.empty-state { background: var(--canvas); }
+.empty-state h1 { font-size: clamp(24px, 2vw, 32px); }
+@container (max-width: 700px) {
+  .session-header { padding-inline: 20px; }
+  .session-body { margin-inline: 20px; gap: 14px; }
+  .timeline { padding: 24px 20px; }
+}
+@container (max-width: 900px) {
+  .session-body.with-file-panel > :deep(.session-file-panel) { position: absolute; inset: 0 80px 0 0; width: auto; border: 1px solid var(--line); }
+}
+@media (max-width: 767px) {
+  .session-header { min-height: 0; padding: 20px 16px 16px; gap: 10px; }
+  .session-header :deep(.session-heading) { font-size: 22px; }
+  .session-body { margin: 0 16px 20px; gap: 0; }
+  .timeline { padding: 20px 16px; }
+  .session-body.with-file-panel > :deep(.session-file-panel) { position: fixed; inset: 8px; width: auto; }
+  .workspace > .sidebar { padding-bottom: 10px; }
+}
+</style>

@@ -71,14 +71,15 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
   const button = name => page.getByRole("button", { name, exact: true });
   const capture = async name => {
     await page.locator(".operation-message-close").evaluateAll(buttons => buttons.forEach(button => button.click()));
-    for (const width of [1440, 768, 390, 320]) {
-      await page.setViewportSize({ width, height: 1000 });
+    for (const [width, height] of [[1920,1080],[2560,1440],[1440,900],[1280,720],[768,1024],[390,844],[320,740]]) {
+      await page.setViewportSize({ width, height });
+      await page.evaluate(() => window.scrollTo(0, 0));
       // The dropdown portal follows its trigger through ResizeObserver alignment.
       await page.waitForFunction(() => document.documentElement.scrollWidth <= window.innerWidth, null, { timeout: 5000 });
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${name}: overflow at ${width}`);
-      const nav = page.getByRole("navigation", { name: "项目功能" });
-      assert.equal(await page.locator(".project-more summary").textContent(), "开发任务");
-      assert.ok(await nav.getByRole("button").evaluateAll(buttons => buttons.every(button => button.getBoundingClientRect().width >= 44)), "navigation targets stay readable");
+      assert.equal(await page.getByRole("navigation", { name: "项目功能" }).count(), 0, "task details own their page heading");
+      if (await page.locator('.development-detail-layout').isVisible()) await page.waitForFunction(() => document.querySelector('.development-info').open === window.matchMedia('(min-width: 1200px)').matches);
+      if (await page.locator('.development-detail-layout').isVisible()) assert.equal(await page.locator('.development-info').evaluate(el => el.open), width >= 1200, 'task information is collapsed on medium and small screens');
       const dialog = page.getByRole("dialog");
       if (await dialog.count()) {
         assert.ok(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth), `${name}: dialog overflow at ${width}`);
@@ -92,7 +93,7 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     await page.goto(taskUrl);
     await button("去准备开发环境").waitFor().catch(async error => { console.error(await page.locator('body').innerText()); throw error; });
     assert.equal(await page.getByLabel("任务标题", { exact: true }).count(), 0);
-    assert.equal(await page.getByText("Codex：尚未启动", { exact: true }).count(), 1);
+    assert.equal(await page.getByText("尚未启动", { exact: true }).count(), 1);
     await capture("prepare");
     await button("去准备开发环境").click();
     await button("返回待开发任务").waitFor();
@@ -104,6 +105,11 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
 
     spaceReady = true;
     await page.reload();
+    await button('开始开发').waitFor();
+    await capture('ready-scope');
+    await button('开始开发').click();
+    assert.equal(new URL(page.url()).searchParams.get('taskStart'), '1');
+    assert.equal(writes.length, 0, 'opening confirmation never dispatches development');
     const branch = page.getByLabel("起始分支", { exact: true });
     assert.equal(await page.getByText("搜索远端分支", { exact: true }).count(), 0, 'search and selection use one field');
     assert.equal(await button("启动 Codex 开发").isDisabled(), true);
@@ -149,11 +155,12 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     await button("刷新远端分支").click();
     await selectRemoteBranch(page);
 
+    await button('返回任务详情').click();
     await button("编辑任务信息").click();
     assert.equal(await page.getByRole("form", { name: "编辑任务信息", exact: true }).getByLabel("补充提示词", { exact: true }).count(), 0);
     await page.getByLabel("任务标题", { exact: true }).fill("保留编辑中的任务标题");
-    assert.equal(await button("启动 Codex 开发").isDisabled(), true);
-    await button("添加关联事项").click();
+    assert.equal(await button("开始开发").isDisabled(), true);
+    await button("调整范围").click();
     await page.getByLabel("搜索追加事项").fill("补充资料");
     await button("搜索事项").click();
     await page.getByRole("checkbox", { name: /修复导出/ }).check();
@@ -161,7 +168,7 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     await button("刷新状态").waitFor();
     assert.equal(await page.getByLabel("任务标题", { exact: true }).inputValue(), "保留编辑中的任务标题");
     assert.equal(await supplementInput.inputValue(), supplement);
-    assert.equal(await page.getByRole('combobox', { name: '思考强度', exact: true }).inputValue(), 'high', 'refresh retains execution preference draft');
+
     assert.equal(await page.getByRole("checkbox", { name: /修复导出/ }).isChecked(), true);
     await button("保存任务信息").click();
     await page.getByRole("heading", { name: "保留编辑中的任务标题", exact: true }).waitFor();
@@ -172,6 +179,16 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     assert.equal(Object.hasOwn(writes.at(-1).input, "title"), false, "saving issues cannot save information drafts");
     assert.equal(writes.filter(write => write.endpoint.endsWith("/start")).length, 0);
     await capture("ready");
+    await button('开始开发').click();
+    assert.equal(await supplementInput.inputValue(), supplement, 'returning to the confirmation view preserves the supplement');
+    assert.equal(await page.getByRole('combobox', { name: '思考强度', exact: true }).inputValue(), 'high', 'returning retains execution preferences');
+    assert.equal(await button('启动 Codex 开发').isDisabled(), true, 'explicit scope confirmation is required');
+    await page.getByRole('checkbox', { name: '我已确认任务范围、起始分支和执行设置。', exact: true }).check();
+    await capture('start-confirmation');
+    await page.getByRole('combobox', { name: '界面语言', exact: true }).selectOption('en');
+    assert.equal(await page.locator('.development-start-settings textarea').inputValue(), supplement, 'language changes preserve the start draft');
+    await capture('start-confirmation-en');
+    await page.getByRole('combobox', { name: 'Interface language', exact: true }).selectOption('zh-CN');
     await button("启动 Codex 开发").click();
     await button("进入 Codex 会话").waitFor();
     assert.equal(await button("标记开发任务完成").count(), 0);
@@ -218,7 +235,9 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
 
     task = planned(); failStart = true;
     await page.reload();
+    await button('开始开发').click();
     await selectRemoteBranch(page);
+    await page.getByRole('checkbox', { name: '我已确认任务范围、起始分支和执行设置。', exact: true }).check();
     await button("启动 Codex 开发").click();
     await page.getByText("任务：执行结果待确认", { exact: true }).waitFor();
     assert.equal(await button("启动 Codex 开发").count(), 0, "ambiguous dispatch cannot be blindly retried");
@@ -235,12 +254,16 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
 
     task = planned(); rejectStart = true;
     await page.reload();
+    await button('开始开发').click();
     await selectRemoteBranch(page);
+    await page.getByRole('checkbox', { name: '我已确认任务范围、起始分支和执行设置。', exact: true }).check();
     assert.equal(await supplementInput.inputValue(), "", "newly opened task starts with an empty local draft");
     const longSupplement = supplement.repeat(30);
     await supplementInput.fill(longSupplement);
     await page.getByRole('combobox', { name: 'Agent 模型', exact: true }).selectOption('fixture-model');
     await page.getByRole('combobox', { name: '思考强度', exact: true }).selectOption('low');
+    assert.equal(await page.getByRole('checkbox', { name: '我已确认任务范围、起始分支和执行设置。', exact: true }).isChecked(), false, 'changing execution settings requires confirmation again');
+    await page.getByRole('checkbox', { name: '我已确认任务范围、起始分支和执行设置。', exact: true }).check();
     await button("启动 Codex 开发").click();
     await page.getByRole("alert").filter({ hasText: "启动前校验失败" }).waitFor();
     await page.waitForFunction(() => !document.querySelector('[aria-label="补充提示词"]').disabled);
@@ -264,7 +287,9 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
 
     task = planned();
     await page.reload();
+    await button('开始开发').click();
     await supplementInput.fill("旧任务的启动草稿");
+    await button('返回任务详情').click();
     await button("编辑任务信息").click();
     await page.getByLabel("任务标题", { exact: true }).fill("旧任务的迟到保存");
     let releaseSave, saveStarted;
@@ -278,6 +303,7 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     await saving;
     await page.goto(`${origin}${base}?tab=tasks&task=other-task`);
     await page.getByRole("heading", { name: "切换后的另一任务", exact: true }).waitFor();
+    await button('开始开发').click();
     assert.equal(await supplementInput.inputValue(), "", "task changes cannot inherit another start supplement");
     assert.equal(await page.getByRole('combobox', { name: 'Agent 模型', exact: true }).inputValue(), '', 'task changes cannot inherit execution preferences');
     releaseSave();

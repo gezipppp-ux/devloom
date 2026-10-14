@@ -17,15 +17,15 @@ export function useWorkspaceSelection() {
       !["back", "current", "forward", "replaced", "position", "scroll"].includes(key)));
   }
 
-  async function navigate(id, task) {
+  async function navigate(id, task, { view = "", returnTo: requestedReturn = "" } = {}) {
     if (disposed) return;
     const location = route.fullPath;
     try {
       const result = await appApi("/bootstrap");
       if (disposed || route.fullPath !== location) return;
       workspaces.value = result.workspaces || [];
-      const returnTo = route.name === "project" ? route.fullPath : route.query.returnTo;
-      await router.push({ name: "workspace", query: { workspace: id, ...(task ? { task } : {}), ...(returnTo ? { returnTo } : {}) }, state: navigationState() });
+      const returnTo = requestedReturn || (route.name === "project" ? route.fullPath : route.query.returnTo);
+      await router.push({ name: "workspace", query: { workspace: id, ...(task ? { task } : {}), ...(returnTo ? { returnTo } : {}), ...(["manual", "history"].includes(view) ? { view } : {}) }, state: navigationState() });
     } catch (failure) { if (!disposed) error.value = failure.message; }
   }
 

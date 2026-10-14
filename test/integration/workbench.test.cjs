@@ -40,6 +40,15 @@ test("workbench aggregates only authorized content and delivery reviews are atom
   const tasks = await workbench.list("tasks", actor, { query: "Private task" });
   assert.equal(tasks.total, 1); assert.equal(tasks.items[0].executorId, actor.id);
   assert.equal(tasks.items[0].title, "Private task " + actor.id);
+  assert.equal(tasks.items[0].canMerge, true, "the existing merge entry is restricted to the current executor");
+  assert.equal(tasks.items[0].canOpenSession, false, "a planned task has no session to open");
+  assert.deepEqual(tasks.items[0].issueIds, []);
+  await database.client.project.update({ where: { id: project.id }, data: { status: "archived" } });
+  assert.equal((await workbench.list("tasks", actor)).items[0].canMerge, false, "archived projects cannot merge tasks");
+  await database.client.project.update({ where: { id: project.id }, data: { status: "active" } });
+  await database.client.projectMember.update({ where, data: { permissions: permissions.filter(p => p !== "session.start") } });
+  assert.equal((await workbench.list("tasks", actor)).items[0].canMerge, false, "viewing tasks does not grant merge permission");
+  await database.client.projectMember.update({ where, data: { permissions } });
   const list = workbench.store.list.bind(workbench.store);
   workbench.store.list = async (...args) => { const result = await list(...args); await database.client.projectMember.update({ where, data: { permissions: ["project.view"] } }); return result; };
   await assert.rejects(workbench.list("issues", actor), { statusCode: 403 }, "revoke during query must discard rows and totals");

@@ -7,18 +7,19 @@ const { chromium } = require("playwright");
 async function operationFeedbackChecks() {
   const { createServer } = await import("vite");
   const { default: vue } = await import("@vitejs/plugin-vue");
-  const source = `import {i18n} from '/src/shared/i18n/index.js';
+  const source = `import {i18n,setLocale} from '/src/shared/i18n/index.js';
 import {createApp,h,ref,nextTick} from 'vue';
 import OperationMessages from '/src/shared/components/OperationMessages.vue';
 import FeedbackMessage from '/src/shared/components/FeedbackMessage.vue';
 import {showMessage,clearMessages,messageRevision} from '/src/shared/components/operation-messages.js';
 import {useResource} from '/src/shared/api/use-resource.js';
 import '/src/shared/styles/style.css';
+import '/src/shared/styles/workbench.css';
 const visible=ref(true), text=ref(''), type=ref('info');
 const Resource={setup(){const resource=useResource(async()=>{throw new Error('后台读取失败');},{immediate:false});
 window.resource=resource;
 return()=>h('section',{id:'resource'},[h(FeedbackMessage,{message:resource.error.value,type:'error'}),h('button',{id:'save',onClick:()=>resource.perform(async()=>({}),()=>{visible.value=false;},'卸载后仍已保存')},'保存并离开')]);}};
-window.feedback={show:showMessage,clear:clearMessages,revision:()=>messageRevision.value,async bind(message,kind){text.value=message;type.value=kind;await nextTick();},async reset(){text.value='';clearMessages();await nextTick();}};
+window.feedback={show:showMessage,clear:clearMessages,locale:setLocale,revision:()=>messageRevision.value,async bind(message,kind){text.value=message;type.value=kind;await nextTick();},async reset(){text.value='';clearMessages();await nextTick();}};
 createApp({render:()=>h('main',[h(OperationMessages),h(FeedbackMessage,{message:text.value,type:type.value}),h('section',{id:'content',style:'margin:160px 16px 0'},[h('input',{id:'field','aria-label':'原表单'}),h('p','固定页面内容'),visible.value?h(Resource):null]),h('dialog',{id:'modal'},[h('input',{id:'modal-field','aria-label':'弹窗表单'}),h('button',{onClick:()=>document.querySelector('#modal').close()},'关闭弹窗')])])}).use(i18n).mount('#app');`;
   const server = await createServer({ configFile: false, root: path.resolve("web"), logLevel: "error", plugins: [vue(), {
     name: "operation-feedback-fixture",
@@ -37,6 +38,7 @@ createApp({render:()=>h('main',[h(OperationMessages),h(FeedbackMessage,{message:
     await server.listen();
     browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : process.platform === "win32" ? { channel: "msedge" } : {}) });
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    await page.emulateMedia({ reducedMotion: "reduce" });
     const errors = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/feedback`);
@@ -59,13 +61,55 @@ createApp({render:()=>h('main',[h(OperationMessages),h(FeedbackMessage,{message:
     assert.equal(await page.evaluate(() => document.activeElement.id), "field");
     const output = path.resolve("state/browser/operation-feedback");
     fs.mkdirSync(output, { recursive: true });
-    for (const width of [320, 390, 768, 1440]) {
-      await page.setViewportSize({ width, height: 1000 });
+    for (const [width, height] of [[320, 740], [390, 844], [768, 1024], [1280, 720], [1440, 900], [1920, 1080], [2560, 1440]]) {
+      await page.setViewportSize({ width, height });
       const bounds = await cards.first().boundingBox();
-      assert.ok(bounds.y >= 0 && bounds.y < 64 && bounds.x >= 0 && bounds.x + bounds.width <= width);
+      const edge = width < 768 ? 16 : 24;
+      const contentWidth = await page.evaluate(() => document.documentElement.clientWidth);
+      assert.ok(Math.abs(bounds.y + bounds.height - (height - edge)) < 2, "latest message stays above bottom safe edge");
+      assert.ok(bounds.x >= edge && Math.abs(bounds.x + bounds.width - (contentWidth - edge)) < 2, JSON.stringify({ width, bounds }));
+      assert.ok(bounds.width <= 400, "2K keeps the same readable card width");
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
       await page.screenshot({ path: path.join(output, `messages-${width}.png`), fullPage: true });
     }
+    await cards.first().hover();
+    await page.waitForFunction(() => document.querySelector('.operation-messages').dataset.expanded === 'true');
+    const expandedBounds = await cards.evaluateAll(elements => elements.map(element => { const rect = element.getBoundingClientRect(); return { top: rect.top, bottom: rect.bottom }; }));
+    assert.ok(expandedBounds.slice(1).every((rect, index) => rect.bottom < expandedBounds[index].top), "hover reveals every message without overlap");
+    await page.clock.runFor(12000);
+    assert.equal(await cards.count(), 4, "reading the stack pauses every message");
+    await show("阅读期间的新提示", "error");
+    await page.clock.runFor(12000);
+    assert.equal(await cards.count(), 4, "new messages also pause while the stack is being read");
+    await page.screenshot({ path: path.join(output, "messages-expanded.png") });
+    await page.mouse.move(1, 1);
+    await cards.last().getByRole('button').focus();
+    await show("替换已聚焦的最旧提示", "warning");
+    await page.waitForFunction(() => document.querySelector('.operation-messages').dataset.expanded === 'false');
+    await page.clock.runFor(11000);
+    assert.equal(await cards.count(), 0, "evicting a focused message must not leave the remaining timers paused forever");
+    await reset();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => { const nav = document.createElement('nav'); nav.className = 'ui-bottom-nav'; nav.textContent = '工作台 · 项目 · 事项 · 开发 · 交付'; document.body.append(nav); });
+    await show("项目设置已保存");
+    assert.ok((await cards.first().boundingBox()).y + (await cards.first().boundingBox()).height < (await page.locator('.ui-bottom-nav').boundingBox()).y, "message clears mobile navigation");
+    await page.screenshot({ path: path.join(output, "messages-mobile-navigation.png") });
+    await page.evaluate(() => document.querySelector('.ui-bottom-nav').remove());
+    await reset();
+    await page.evaluate(() => window.feedback.locale('en'));
+    await show("Git 账号已保存。准备项目开发空间时会验证实际仓库的访问权限。");
+    await cards.getByRole('button', { name: 'Dismiss notification' }).waitFor();
+    assert.match(await cards.innerText(), /Git/);
+    await page.screenshot({ path: path.join(output, "messages-mobile-en.png") });
+    await reset();
+    await page.evaluate(() => window.feedback.locale('zh-CN'));
+    await page.setViewportSize({ width: 320, height: 400 });
+    await show("LongUnbrokenErrorDetail".repeat(80), "error");
+    const longText = cards.locator('.operation-message-text');
+    assert.equal(await longText.evaluate(element => element.scrollHeight > element.clientHeight && element.scrollWidth <= element.clientWidth), true, "long details scroll vertically without widening the card");
+    assert.ok((await cards.first().boundingBox()).y >= 0);
+    await page.screenshot({ path: path.join(output, "messages-short-long.png") });
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await reset();
     await show('<img src=x onerror="window.feedbackInjected=true">');
     assert.equal(await cards.locator("img").count(), 0);
@@ -108,6 +152,17 @@ createApp({render:()=>h('main',[h(OperationMessages),h(FeedbackMessage,{message:
     await page.locator("#resource").waitFor({ state: "detached" });
     await cards.filter({ hasText: "卸载后仍已保存" }).waitFor();
     assert.deepEqual(errors, []);
+    const touch = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+    await touch.goto(`http://127.0.0.1:${server.httpServer.address().port}/feedback`);
+    await touch.locator('#field').waitFor();
+    await touch.evaluate(() => { window.feedback.show('第一条提示', 'error'); window.feedback.show('第二条提示', 'warning'); });
+    await touch.locator('.operation-message-text').first().tap();
+    await touch.waitForFunction(() => document.querySelector('.operation-messages').dataset.expanded === 'true');
+    await touch.getByRole('button', { name: '关闭提示' }).first().tap();
+    assert.equal(await touch.locator('.operation-message').count(), 1);
+    await touch.locator('#field').tap();
+    await touch.waitForFunction(() => document.querySelector('.operation-messages').dataset.expanded === 'false');
+    await touch.close();
     console.log("Operation feedback fake-API browser checks passed.");
   } finally { await browser?.close(); await server.close(); }
 }

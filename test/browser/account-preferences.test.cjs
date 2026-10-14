@@ -162,7 +162,7 @@ async function verifyAccountPreferenceRaces(browser, origin) {
     assert.equal(requests.filter((entry) => entry.endpoint === "/api/account/preferences" && entry.body).length, writesBefore, "an old account's queued preference write must not be sent after login changes");
 
     await page.getByRole("button", { name: "个人设置", exact: true }).click();
-    await page.getByRole("button", { name: "开启桌面通知", exact: true }).click();
+    await page.getByRole("switch", { name: "需要我处理时提醒", exact: true, checked: false }).click();
     await page.waitForFunction(() => window.preferenceFixture.permissionRequested);
     await page.getByRole("button", { name: "退出登录", exact: true }).click();
     await login("alice");

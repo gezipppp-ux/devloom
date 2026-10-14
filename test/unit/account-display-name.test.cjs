@@ -22,3 +22,13 @@ test("display names reject empty, non-string, long and control-character inputs"
   for (const input of [{}, { displayName: "名字", role: "admin" }, { displayName: "名字", userId: "another" }, { displayName: "名字", username: "other" }])
     assert.throws(() => validateAccountProfile(input), { statusCode: 400 });
 });
+
+test("administrator creation needs no department and discards explicit member eligibility", () => {
+  const input = { username: "admin", password: "password", role: "admin" };
+  for (const extra of [{}, { departmentId: null }, { departmentId: "", canCreateProjects: true }, { departmentId: "11111111-1111-4111-8111-111111111111" }]) {
+    const account = validateAccountCreation({ ...input, ...extra });
+    assert.equal(account.departmentId, null);
+    assert.equal(account.canCreateProjects, false);
+  }
+  assert.throws(() => validateAccountCreation({ ...input, role: "member" }), /有效部门/);
+});

@@ -5,7 +5,7 @@ const catalog = Object.freeze(definitions.map(entry => Object.freeze({
   ...entry, scope: entry.scope || "project", requires: Object.freeze([...entry.requires]),
 })));
 const byId = new Map(catalog.map(entry => [entry.id, entry]));
-const administratorPermissions = Object.freeze(["project.view", "project.configure", "project.members.manage", "project.archive", "issue.view", "issue.create", "issue.edit", "issue.assign", "issue.transition", "issue.accept", "release.manage", "collaboration.view", "comment.create", "deliverable.create", "asset.view", "asset.edit"]);
+const administratorPermissions = Object.freeze(catalog.filter(entry => entry.scope === "project").map(entry => entry.id));
 
 function grantableProjectPermissions(user) {
   if (user?.status !== "active") return [];
@@ -19,7 +19,7 @@ function projectContextPermissions({ user, department, membership, project }) {
   const memberPermissions = membership?.status === "active" && membership.userId === user.id && membership.projectId === project.id &&
     department?.status === "active" && department.id === user.departmentId
     ? effectivePermissions(department.permissions, membership.permissions) : [];
-  // Compute the membership dependency closure before adding the independent administrator baseline.
+  // Administrators receive every project capability independently of member grants.
   const selected = new Set([...memberPermissions, ...(user.role === "admin" ? administratorPermissions : [])]);
   return catalog.filter(entry => selected.has(entry.id)).map(entry => entry.id);
 }
@@ -66,7 +66,7 @@ function assertProjectPermission({ user, department, membership, project }, perm
     throw accountError("未知的项目权限。", 403, "PERMISSION_DENIED");
   if (!user || user.status !== "active") throw accountError("请先登录。", 401, "AUTH_REQUIRED");
   if (project && user.role === "admin" && administratorPermissions.includes(permission)) {
-    if (project.status === "archived" && !permission.endsWith(".view"))
+    if (project.status === "archived" && !permission.endsWith(".view") && permission !== "session.stop")
       throw accountError("项目已归档，不能继续写入或启动开发。", 409, "PROJECT_ARCHIVED");
     return;
   }
@@ -102,7 +102,7 @@ const productTemplate = Object.freeze(catalog.filter(entry =>
 ).map(entry => entry.id));
 const developerTemplate = Object.freeze(catalog.filter(entry =>
   entry.id.startsWith("code.") || entry.id.startsWith("session.") || ["project.view", "issue.view", "issue.transition",
-    "collaboration.view", "comment.create", "deliverable.create"].includes(entry.id),
+    "collaboration.view", "comment.create", "deliverable.create"].includes(entry.id) || entry.group === "资产",
 ).map(entry => entry.id));
 
 module.exports = { projectPermissionCatalog: catalog, validatePermissions, effectivePermissions, projectContextPermissions, administratorPermissions, grantableProjectPermissions,

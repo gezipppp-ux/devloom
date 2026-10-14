@@ -1,0 +1,48 @@
+const { test } = require("node:test");
+const assert = require("node:assert/strict");
+const { temporary } = require("../support/helpers.cjs");
+const { initializeTestDatabase } = require("../support/database.cjs");
+const { ProjectServices } = require("../../src/application/project-services.cjs");
+const { ProjectContentServices } = require("../../src/application/project-content-services.cjs");
+const { AttentionServices } = require("../../src/application/attention-services.cjs");
+const { projectPermissionCatalog } = require("../../src/domain/project-permissions.cjs");
+
+test("attention aggregates only own actionable session requests and deliveries the actor can accept", async t => {
+  const database = await initializeTestDatabase(t, temporary(t));
+  const permissions = projectPermissionCatalog.filter(item => item.scope === "project").map(item => item.id);
+  const department = await database.client.department.create({ data: { name: "Team", permissions } });
+  const actor = await database.client.user.create({ data: { username: "owner", displayName: "Owner", passwordHash: "unused", departmentId: department.id } });
+  const outsider = await database.client.user.create({ data: { username: "other", displayName: "Other", passwordHash: "unused", departmentId: department.id } });
+  const project = await database.client.project.create({ data: { name: "Project", directoryName: "attention", directoryKey: "attention", remoteUrl: "https://example.test/repo.git", ownerUserId: actor.id } });
+  for (const user of [actor, outsider]) await database.client.projectMember.create({ data: { projectId: project.id, userId: user.id, permissions } });
+  const projects = new ProjectServices(database), content = new ProjectContentServices(database, projects);
+  const issue = await content.createIssue(project.id, actor, { type: "requirement", title: "UI review" });
+  const delivery = await content.addDeliverable(project.id, issue.id, outsider, { body: "Check UI" });
+  const workspace = await database.client.workspace.create({ data: { ownerUserId: actor.id, name: "Own space" } });
+  const foreignWorkspace = await database.client.workspace.create({ data: { ownerUserId: outsider.id, name: "Other space" } });
+  for (const [user, row] of [[actor, workspace], [outsider, foreignWorkspace]]) await database.client.developmentSpace.create({ data: { projectId: project.id, userId: user.id, workspaceId: row.id, status: "ready" } });
+  const task = await database.client.developmentTask.create({ data: { projectId: project.id, executorId: actor.id, creatorId: actor.id, workspaceId: workspace.id, runKey: "live-run", requestId: "attention-test", snapshot: { title: "Live", issues: [] }, status: "running" } });
+  const calls = [], workspaces = { async pendingRequests(id, user) {
+    calls.push({ id, userId: user.id });
+    return [{ key: "live-run", title: "Live", updatedAt: "2026-10-14T00:00:00Z", requests: [{ id: "1", kind: "approval", turnId: "turn" }, { id: "2", kind: "user-input", turnId: "turn" }] }];
+  } };
+  const attention = new AttentionServices(database, { projects, workspaces });
+  let result = await attention.list(actor);
+  assert.equal(result.total, 3);
+  assert.deepEqual(result.items.map(row => row.kind).sort(), ["approval", "delivery", "question"]);
+  assert.deepEqual(calls, [{ id: workspace.id, userId: actor.id }]);
+  assert.equal(result.items.find(row => row.kind === "delivery").deliveryId, delivery.id);
+  assert.equal(JSON.stringify(result).includes("Check UI"), false, "notification DTO excludes delivery body");
+  const membership = { projectId_userId: { projectId: project.id, userId: actor.id } };
+  await database.client.projectMember.update({ where: membership, data: { permissions: permissions.filter(permission => permission !== "issue.accept") } });
+  assert.equal((await attention.list(actor)).items.some(row => row.kind === "delivery"), false);
+  await database.client.projectMember.update({ where: membership, data: { permissions } });
+  await database.client.developmentTask.update({ where: { projectId_id: { projectId: project.id, id: task.id } }, data: { status: "completed" } });
+  assert.deepEqual((await attention.list(actor)).items.map(row => row.kind), ["delivery"]);
+  await database.client.project.update({ where: { id: project.id }, data: { status: "archived" } });
+  assert.equal((await attention.list(actor)).total, 0);
+  await database.client.project.update({ where: { id: project.id }, data: { status: "active" } });
+  const list = attention.store.pendingDeliveries.bind(attention.store);
+  attention.store.pendingDeliveries = async ids => { const rows = await list(ids); await database.client.projectMember.update({ where: membership, data: { permissions: ["project.view"] } }); return rows; };
+  await assert.rejects(attention.list(actor), { statusCode: 403 }, "revoked scopes must discard both rows and totals");
+});

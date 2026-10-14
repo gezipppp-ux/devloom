@@ -117,3 +117,16 @@ const groups = computed(() => {
     <p v-if="!runs.length" class="muted">{{ $t("暂无任务，从一个需求开始。") }}</p>
   </nav>
 </template>
+
+<style scoped>
+.task-list-toolbar { padding: 18px 16px 10px; font-size: 12px; color: var(--muted); }
+.task-list-toolbar select { font-size: 12px; border-color: transparent; background: transparent; padding-inline: 4px; }
+.task-list { padding: 0 8px 12px; }
+.task-group summary { padding: 12px 8px; font-size: 12px; color: var(--muted); }
+.session-link { margin-bottom: 4px; padding: 12px; border: 0; border-radius: 7px; background: transparent; box-shadow: none; }
+.session-link.active { color: var(--ink); background: var(--selected); box-shadow: none; }
+.session-title { line-height: 1.6; font-weight: 500; }
+.session-meta { font-size: 12px; }
+.task-tags { margin-top: 8px; gap: 6px; }
+@media (max-width: 767px) { .session-link { min-height: 44px; } }
+</style>

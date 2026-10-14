@@ -8,15 +8,18 @@ async function verifyProjectPermissions({ page, projects, accounts, admin, proje
   const user = await accounts.create({ username: "permission-preview", password: "fixture-password", departmentId: department.id }, admin);
   await page.reload();
   await page.getByRole("navigation", { name: "项目功能" }).getByRole("button", { name: "成员", exact: true }).click();
-  await page.getByRole("heading", { name: "项目分工与授权", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "项目成员", exact: true }).waitFor();
+  await page.getByRole("button", { name: "添加成员", exact: true }).click();
+  await page.getByRole("dialog", { name: "添加成员", exact: true }).waitFor();
   const select = page.getByLabel("用户", { exact: true });
   await select.selectOption(user.id);
   assert.equal(await page.getByRole("button", { name: "保存成员", exact: true }).isEnabled(), true, "new members receive project visibility");
+  await page.getByText('权限组合与高级设置', { exact: true }).click();
   await page.getByLabel("权限组合", { exact: true }).selectOption("agent");
   await page.getByText(/部门未开放：.*启动开发任务/).waitFor();
   assert.equal(await page.getByRole("button", { name: "添加Agent 开发组合", exact: true }).isDisabled(), true, "a blocked core capability cannot masquerade as a successful combination");
-  await page.getByText(/高级权限细项/).click();
-  await page.getByRole("navigation", { name: "权限分类" }).getByRole("button", { name: "Agent", exact: true }).click();
+  await page.getByText('筛选与批量操作', { exact: true }).click();
+  await page.getByRole("navigation", { name: "权限分类" }).getByRole("button", { name: "开发", exact: true }).click();
   assert.equal(await page.getByRole("checkbox", { name: "认领并启动开发任务", exact: true }).isDisabled(), true, "detail editing respects the department ceiling");
   assert.equal(await page.getByRole("checkbox", { name: "本组全选", exact: true }).isDisabled(), true, "bulk selection cannot bypass the department ceiling");
   await page.getByLabel("权限组合", { exact: true }).selectOption("product");
@@ -27,6 +30,7 @@ async function verifyProjectPermissions({ page, projects, accounts, admin, proje
   await page.getByRole("button", { name: "调整permission-preview（permission-preview）权限", exact: true }).waitFor();
   assert.equal(await select.locator(`option[value="${user.id}"]`).count(), 0, "active member is excluded from add candidates");
   await page.getByRole("button", { name: "调整permission-preview（permission-preview）权限", exact: true }).click();
+  await page.getByText('成员状态与授权说明', { exact: true }).click();
   await page.getByLabel("成员状态", { exact: true }).selectOption("disabled");
   await page.getByRole("button", { name: "保存成员", exact: true }).click();
   await page.getByRole("button", { name: "恢复permission-preview（permission-preview）成员", exact: true }).waitFor();
@@ -37,10 +41,8 @@ async function verifyProjectPermissions({ page, projects, accounts, admin, proje
   await page.getByRole("button", { name: "调整permission-preview（permission-preview）权限", exact: true }).waitFor();
   assert.equal((await projects.members(project.id, admin)).members.filter(member => member.userId === user.id).length, 1);
   await page.getByRole("button", { name: "调整admin（admin）权限", exact: true }).click();
-  await page.getByLabel("权限组合", { exact: true }).selectOption("product");
-  await page.getByRole("button", { name: "添加产品协作组合", exact: true }).click();
-  await page.getByText(/高级权限细项/).click();
-  assert.equal(await page.getByRole("checkbox", { name: "管理项目成员", exact: true }).isChecked(), true, "adding work content preserves management");
+  assert.equal(await page.locator(".project-permission-editor").count(), 0, "administrators require no permission editor");
+  await page.getByText("管理员不属于任何部门，自动拥有全部权限，无需分配。", { exact: true }).waitFor();
   for (const width of [1440, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.screenshot({ path: path.join(output, `permissions-${width}.png`), fullPage: true });

@@ -19,13 +19,14 @@ async function verifyAdministratorProjectAccess({ page, origin, projects, accoun
   await page.getByRole("heading", { name: project.name, exact: true }).waitFor();
   assert.equal((await projects.read(project.id, admin)).membership, null);
   for (const name of ["代码与环境"])
-    assert.equal(await page.locator(".project-tab-bar").getByRole("button", { name, exact: true }).count(), 0);
+    assert.equal(await page.locator(".project-tab-bar").getByRole("button", { name, exact: true, includeHidden: true }).count(), 1);
   await tab("设置");
   await page.getByLabel("说明", { exact: true }).fill("管理员跨项目维护配置");
   await save("保存项目设置", "");
   assert.equal((await projects.read(project.id, owner)).project.description, "管理员跨项目维护配置");
   await tab("成员");
   await page.getByRole("button", { name: "调整独立项目负责人（independent-owner）权限", exact: true }).waitFor();
+  await page.getByRole('button', { name: '添加成员', exact: true }).click();
   await page.getByLabel("用户", { exact: true }).selectOption(admin.id);
   assert.equal(await page.getByRole("button", { name: "保存成员", exact: true }).isEnabled(), true);
   // Inspect member management without adding the administrator to the project.
@@ -34,14 +35,14 @@ async function verifyAdministratorProjectAccess({ page, origin, projects, accoun
   await page.getByLabel("标题", { exact: true }).fill("管理员创建协作事项");
   const issue = await save("保存事项", "/issues");
   await page.getByRole("heading", { name: "管理员创建协作事项", exact: true }).waitFor();
-  assert.equal(await page.getByRole("button", { name: "认领", exact: true }).count(), 0);
+  assert.equal(await page.getByRole("button", { name: "认领", exact: true }).count(), 1);
   assert.equal(await page.getByRole("button", { name: "准备开发空间", exact: true }).count(), 0);
   await page.getByRole("button", { name: "编辑事项", exact: true }).click();
   await page.getByLabel("标题", { exact: true }).fill("管理员更新协作事项");
   await save("保存事项", `/issues/${issue.id}`);
   await page.getByRole("heading", { name: "管理员更新协作事项", exact: true }).waitFor();
   await tab("资产");
-  await page.getByRole("button", { name: "新增资产", exact: true }).click();
+  await page.getByRole("button", { name: "新建资产", exact: true }).click();
   await page.getByLabel("标题", { exact: true }).fill("管理员普通资产");
   await page.getByLabel("内容", { exact: true }).fill("跨项目可维护的普通内容");
   const asset = await save("保存资产", "/assets");
@@ -58,10 +59,7 @@ async function verifyAdministratorProjectAccess({ page, origin, projects, accoun
   const managed = (await projects.create(departmentlessAdmin, { name: "无部门管理员负责的项目", remoteUrl })).project;
   await page.goto(`${origin}/projects/${managed.id}?tab=members`);
   await page.getByRole("button", { name: "调整无部门管理员（departmentless-admin）权限", exact: true }).click();
-  await page.getByText("高级权限细项", { exact: false }).click();
-  await page.getByRole("checkbox", { name: "查看项目", exact: true }).uncheck();
-  await page.getByRole("navigation", { name: "权限分类" }).getByRole("button", { name: "代码", exact: true }).click();
-  assert.equal(await page.getByRole("checkbox", { name: /^查看代码与差异/ }).isDisabled(), true);
+  assert.equal(await page.locator(".project-permission-editor").count(), 0, "administrators do not need permission assignments");
   assert.equal(await page.getByRole("button", { name: "保存成员", exact: true }).isEnabled(), true, "an administrator owner without a department may keep empty project grants");
   const pendingMember = page.waitForResponse(response => response.url() === `${origin}/api/projects/${managed.id}/members/${departmentlessAdmin.id}` && response.request().method() === "POST");
   await page.getByRole("button", { name: "保存成员", exact: true }).click();
@@ -71,8 +69,8 @@ async function verifyAdministratorProjectAccess({ page, origin, projects, accoun
   assert.deepEqual(membership.permissions, []);
   assert.equal(membership.administratorAccess, true);
   assert.equal(membership.effectivePermissions.includes("project.members.manage"), true);
-  assert.equal(membership.effectivePermissions.some(permission => permission.startsWith("code.") || permission.startsWith("session.") || permission.startsWith("asset.secret.")), false);
-  assert.equal((await projects.read(managed.id, departmentlessAdmin)).space, null);
+  assert.equal(membership.effectivePermissions.some(permission => permission.startsWith("code.") || permission.startsWith("session.") || permission.startsWith("asset.secret.")), true);
+  assert.equal((await projects.read(managed.id, departmentlessAdmin)).space.status, "awaiting_credentials");
   await page.getByRole("button", { name: "调整无部门管理员（departmentless-admin）权限", exact: true }).waitFor();
   await page.screenshot({ path: path.join(output, "administrator-departmentless-owner.png"), fullPage: true });
 }

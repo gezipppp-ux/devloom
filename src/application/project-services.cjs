@@ -5,7 +5,7 @@ const { ProjectStore } = require("../storage/project-store.cjs");
 const { GitAccountStore } = require("../storage/git-account-store.cjs");
 const { accountError } = require("../domain/account.cjs");
 const { departmentInput, projectInput, projectPromptsInput, memberInput, prepareSpaceInput, projectId, projectRevision } = require("../domain/project-input.cjs");
-const { assertProjectPermission, effectivePermissions, administratorPermissions, grantableProjectPermissions, projectContextPermissions, validatePermissions, canCreateProject, projectCreationReadiness, projectPermissionCatalog, productTemplate, developerTemplate } = require("../domain/project-permissions.cjs");
+const { assertProjectPermission, grantableProjectPermissions, projectContextPermissions, validatePermissions, canCreateProject, projectCreationReadiness, projectPermissionCatalog, productTemplate, developerTemplate } = require("../domain/project-permissions.cjs");
 const { resolveAccountRemote } = require("../domain/git-account.cjs");
 const { memberDirectoryName, validateDirectoryName } = require("../domain/member-project-paths.cjs");
 const { readSystemSettings } = require("../config/system-settings.cjs");
@@ -85,6 +85,13 @@ class ProjectServices {
     const { project, membership, permissions, department, user } = await this.authorize(id, actor, "project.view");
     return { permissionContext: { administratorAccess: user.role === "admin", departmentName: department?.name || "", ceiling: department?.permissions || [], grants: membership?.permissions || [] }, project: presentProject({ ...summary, ...project, _count: summary?._count }, permissions), membership: presentMember(membership && { ...membership, user }), permissions, space: presentSpace(await this.store.space(id, actor.id)) };
   }
+  async recordVisit(id, actor) {
+    await this.store.transaction(async () => {
+      await this.authorize(id, actor, "project.view");
+      await this.store.recordVisit(id, actor.id);
+    });
+    return { recorded: true };
+  }
   settings(input = {}, previous = {}) {
     const value = { initCommands: input.initCommands ?? previous.initCommands ?? [], prompts: getPromptTemplates({ prompt_templates: previous.prompts || {} }) };
     if (input.prompts) {
@@ -126,7 +133,7 @@ class ProjectServices {
     const row = await this.store.transaction(async () => {
       const user = await this.currentUser(actor);
       if (!canCreateProject(user, user.department)) throw accountError("未获得创建项目资格或尚未分配有效部门。", 403);
-      const permissions = validatePermissions(["project.view", "project.configure", "project.members.manage"], { scope: "project", ceiling: user.role === "admin" ? undefined : user.department.permissions });
+      const permissions = user.role === "admin" ? [] : validatePermissions(["project.view", "project.configure", "project.members.manage"], { scope: "project", ceiling: user.department.permissions });
       const project = await this.store.saveProject({ ...value, settings: this.settings(value.settings), ownerUserId: user.id });
       await this.store.saveMember(project.id, user.id, { permissions, status: "active" }, false);
       await this.store.audit(actor, "project.created", { projectId: project.id });
@@ -171,17 +178,15 @@ class ProjectServices {
       const user = await this.store.user(userId);
       if (!user || user.status !== "active" || (user.role !== "admin" && user.department?.status !== "active")) throw accountError("请选择已分配有效部门的账号。");
       const ceiling = user.department?.status === "active" ? user.department.permissions : [];
-      value.permissions = validatePermissions(value.permissions, { scope: "project", ceiling: user.role === "admin" ? [...new Set([...ceiling, ...administratorPermissions])] : ceiling });
+      value.permissions = validatePermissions(value.permissions, { scope: "project", ceiling: user.role === "admin" ? undefined : ceiling });
+      if (user.role === "admin") value.permissions = [];
       const memberStatus = value.status || (updating ? (await this.store.membership(id, userId))?.status : "active");
-      const granted = effectivePermissions(ceiling, value.permissions);
-      if (user.role === "admin" && value.permissions.some(permission => !administratorPermissions.includes(permission) && !granted.includes(permission)))
-        throw accountError("开发与敏感字段权限及其依赖必须满足部门授权上限。", 400, "DEPARTMENT_PERMISSION_LIMIT");
       const effective = projectContextPermissions({ user, department: user.department, membership: { projectId: id, userId, status: memberStatus, permissions: value.permissions }, project });
       if (memberStatus !== "disabled" && !effective.includes("project.view")) throw accountError("参与中的成员必须拥有查看项目权限；请先检查部门上限并授予查看项目权限。", 400, "PROJECT_VIEW_REQUIRED");
       if (project.ownerUserId === userId && (memberStatus === "disabled" || !["project.view", "project.configure", "project.members.manage"].every(permission => effective.includes(permission))))
         throw accountError("请先指定接任负责人，再移除或减少原负责人权限。", 409);
       const membership = await this.store.saveMember(id, userId, value, updating);
-      if (membership.status === "active" && value.permissions.includes("code.operate")) await this.store.allocateSpace(id, userId);
+      if (membership.status === "active" && effective.includes("code.operate")) await this.store.allocateSpace(id, userId);
       await this.store.audit(actor, "project.member.saved", { projectId: id, userId, revision: membership.revision });
       return membership;
     });

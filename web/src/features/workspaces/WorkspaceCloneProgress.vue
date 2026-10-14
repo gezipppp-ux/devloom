@@ -45,3 +45,12 @@ defineExpose({ open });
     </dialog>
   </Teleport>
 </template>
+
+<style scoped>
+.clone-progress-dialog { width: min(680px, calc(100vw - 32px)); }
+.clone-progress-item { padding: 22px 0; margin: 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
+.clone-progress-item h3 { font-size: 14px; font-weight: 600; line-height: 1.6; }
+.clone-progress-item progress { width: 100%; height: 6px; accent-color: var(--highlight); }
+.clone-progress-item .actions { flex-wrap: wrap; gap: 10px; }
+@media (max-width: 767px) { .clone-progress-item { padding-block: 18px; } }
+</style>

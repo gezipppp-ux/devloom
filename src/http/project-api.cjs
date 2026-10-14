@@ -18,6 +18,10 @@ async function serveProjectApi(request, response, url, { projects, actor, input 
     if (request.method === "GET") { json(response, 200, await projects.list(actor)); return true; }
     if (request.method === "POST") { json(response, 201, await projects.create(actor, input)); return true; }
   }
+  const visit = /^\/api\/projects\/([^/]+)\/visit$/.exec(url.pathname);
+  if (visit && request.method === "POST") {
+    json(response, 200, await projects.recordVisit(visit[1], actor)); return true;
+  }
   const project = /^\/api\/projects\/([^/]+)(?:\/(members)(?:\/([^/]+))?|\/(archive|restore|space|prompts)(\/prepare)?)?$/.exec(url.pathname);
   if (!project) return false;
   const [, id, members, userId, action, prepare] = project;

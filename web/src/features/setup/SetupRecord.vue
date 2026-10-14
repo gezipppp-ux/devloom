@@ -15,6 +15,7 @@ async function load() {
 onMounted(load); onUnmounted(() => { disposed = true; });
 </script>
 <template>
+  <header class="ui-settings-heading"><h2>{{ $t("初始化记录") }}</h2></header>
   <p v-if="loading" role="status">{{ $t("正在读取初始化记录…") }}</p>
   <FeedbackMessage :message="error" type="error" />
   <button v-if="error" :disabled="loading" @click="load">{{ $t("重新加载") }}</button>

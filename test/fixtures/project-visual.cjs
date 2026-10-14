@@ -8,7 +8,7 @@ function projectVisual(workspaceId) {
   const members = ['演示管理员', '张明', '李欣'].map((displayName, i) => ({ userId: i ? `member-${i}` : 'visual-admin', username: i ? `member-${i}` : 'visual-admin', displayName, departmentName: department.name, status: 'active', userStatus: 'active', permissions, departmentPermissions: permissions, grantablePermissions: permissions, administratorAccess: !i, effectivePermissions: permissions, revision: 1 }));
   const people = members.map(m => ({ id: m.userId, username: m.username, displayName: m.displayName }));
   Object.assign(project, { memberCount: members.length, memberPreview: people, owner: people[0], issueCount: 3, createdAt: '2026-10-08T08:00:00Z', updatedAt: '2026-10-14T08:00:00Z' });
-  const release = { id: 'release-1', name: 'v0.2', description: '优化客户搜索与筛选体验。\n补充空结果提示，完善移动端交互与验收流程。', revision: 1, status: 'active', createdAt: '2026-10-08T08:00:00Z', updatedAt: '2026-10-12T08:00:00Z' };
+  const release = { id: 'release-1', name: 'v0.2', description: '优化客户搜索与筛选体验。\n补充空结果提示，完善移动端交互与验收流程。', targetDate: '2026-10-23', progress: { total: 3, completed: 0, cancelled: 0 }, revision: 1, status: 'active', createdAt: '2026-10-08T08:00:00Z', updatedAt: '2026-10-12T08:00:00Z' };
   const releases = [release, { ...release, id: 'release-2', name: 'v0.1', description: '项目首个迭代版本。', updatedAt: '2026-10-08T08:00:00Z' }, { ...release, id: 'release-archived', name: 'v0.0.9', status: 'archived', description: '早期验证版本，保留历史记录。' }];
   const issues = [
     { id: 'search', number: 1, type: 'requirement', title: '优化客户搜索体验', status: 'planned', description: '支持按姓名和手机号搜索客户，输入后实时筛选。无匹配结果时显示清晰提示，并保留现有分页行为。', acceptanceCriteria: '支持组合筛选；清空关键词后恢复完整列表；手机上输入与清除按钮均可直接操作。' },
@@ -22,6 +22,10 @@ function projectVisual(workspaceId) {
   const task = { id: 'search-task', revision: 1, releaseId: release.id, release, executorId: 'visual-admin', executor: { id: 'visual-admin', displayName: '演示管理员' }, issueIds: ['search'], canStart: false, canEdit: false, canComplete: true, canCancel: true, baseBranch: 'main', baseCommit: '1234567890abcdef1234567890abcdef12345678', fetchedAt: '2026-10-12T08:00:00Z', title: '客户搜索与空结果提示', status: 'started', canOpenSession: true, workspaceId, runKey: '1-1', execution: { status: 'completed', sessionId: 'fixture-session' }, issues: [issues[0]], additions: [{ requestId: 'append-fixture', status: 'ready', issues: [issues[2]] }] };
   function response(url) {
     const endpoint = url.pathname;
+    if (endpoint === '/api/workbench/attention') return { items: [], total: 0 };
+    if (endpoint === '/api/workbench/recent-projects') return { projects: [{ id: project.id, name: project.name, status: project.status, memberCount: project.memberCount }] };
+    if (endpoint.endsWith('/visit')) return { recorded: true };
+    if (endpoint.endsWith('/activity')) return { items: [{ id: 'created-search', projectId: project.id, action: 'created', actorName: '张明', createdAt: '2026-10-14T08:00:00Z', issue: { id: 'search', title: issues[0].title, type: 'requirement', number: 1 } }] };
     if (endpoint.startsWith('/api/workbench/')) {
       const kind = endpoint.split('/').at(-1);
       const items = kind === 'issues' ? issues : kind === 'tasks' ? [task] : [{ id: 'delivery-1', title: '客户搜索体验交付', status: 'pending', authorId: 'member-1' }];

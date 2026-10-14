@@ -49,7 +49,7 @@ class ProjectDevelopmentServices {
   async authorizePlan(projectId, actor, executorId) {
     await this.authorize(projectId, actor, executorId === actor.id ? "session.start" : "issue.assign");
     const context = await this.projects.authorize(projectId, { id: executorId }, "session.start");
-    if (context.membership?.status !== "active") throw accountError("执行人必须是具备开发资格的有效项目成员。", 403);
+    if (context.user.role !== "admin" && context.membership?.status !== "active") throw accountError("执行人必须是具备开发资格的有效项目成员。", 403);
   }
   assertIssues(issues, releaseId, start = false) {
     for (const issue of issues) {

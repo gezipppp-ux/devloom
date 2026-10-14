@@ -9,13 +9,13 @@
   --shadow-dialog: 0 12px 48px #26223718; --shadow-composer: 0 6px 24px #2622370c;
   --code-keyword: #6752b9; --code-string: #33705b; --code-literal: #97613a;
   --radius-control: 6px; --radius-card: 10px; --radius-dialog: 14px; --radius-composer: 12px; --control-height: 40px;
-  --page-width: 1440px; --page-gutter: clamp(24px, 3vw, 56px); --page-padding-top: 40px; --page-padding-bottom: 64px;
+  --page-gutter: clamp(20px, 3vw, 56px); --page-width: calc(1440px + 2 * var(--page-gutter)); --page-padding-top: 42px; --page-padding-bottom: 72px;
   --content-width: calc(var(--page-width) - 2 * var(--page-gutter)); --conversation-width: 960px; --project-pane-width: 240px;
   --font-size-message: 14px; --font-size-tool: 13px; --font-size-command: 12px; --font-size-session-meta: 12px;
   --font-ui: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; --font-code: "Cascadia Code", Consolas, monospace;
   --shell-sidebar: 208px; --shell-header: 72px;
 }
-@media (min-width: 1920px) { :root { --page-width: 1712px; } }
+@media (min-width: 1920px) { :root { --page-width: calc(1600px + 2 * var(--page-gutter)); } }
 @media (max-width: 1199px) and (min-width: 768px) { :root { --shell-sidebar: 76px; } }
 @media (max-width: 767px) { :root { --page-gutter: 20px; --page-padding-top: 24px; --page-padding-bottom: 40px; --control-height: 44px; --shell-header: 60px; } }
 @media (max-width: 360px) { :root { --page-gutter: 16px; } }

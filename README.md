@@ -54,7 +54,7 @@ CLI Agent 已通过独立适配层接入，目前仅支持 Codex。项目协作�
 
 ### CLI Agent 通过 MCP 发布需求
 
-在「个人设置 → MCP 接入 → 管理 MCP Token」创建个人 Token，复制统一 MCP 地址并配置到 Codex、Claude Code 或 Pi。支持查询项目、版本和成员、新建版本、发布／编辑需求与 Bug、指派负责人，以及查重和发布结果核验。Token 可限定项目、操作权限和有效期，并可随时撤销。
+在「个人设置 → MCP 接入」创建个人 Token，复制统一 MCP 地址并配置到 Codex、Claude Code 或 Pi。「连接配置与图片上传」提供接入指南。支持查询项目、版本和成员、新建版本、发布／编辑需求与 Bug、指派负责人，以及查重和发布结果核验。Token 可限定项目、操作权限和有效期，并可随时撤销。
 
 图片通过带 Bearer Token 的 HTTP POST 上传，正文使用附件 ID 引用；Token 页面提供 curl、PowerShell、客户端配置和发布参数示例。单张最多 10 MiB、每次最多 20 张且合计 20 MiB；暂存有效期为 24 小时。发布与指派不会自动启动开发。
 

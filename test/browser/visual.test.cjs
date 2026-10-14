@@ -361,6 +361,7 @@ async function main() {
       assert.deepEqual(issues, [], name + " layout overflow or overlap");
       await (selector ? page.locator(selector) : page).screenshot({
         path: path.join(output, name + ".png"),
+        animations: 'disabled',
         ...(!selector ? { fullPage: !(await page.locator("dialog[open]").count()) && !(await page.locator(".session-drawer:visible, .session-file-panel:visible").count()) } : {}),
       });
       captures.push(name);
@@ -461,7 +462,19 @@ async function main() {
       const info = page.getByRole("button", { name: "会话信息", exact: true });
       const drawer = page.locator(".session-drawer");
       const input = page.getByRole("textbox", { name: "发送给 Codex 的指令", exact: true });
-      assert.equal(await drawer.isVisible(), false, "session drawers start collapsed");
+      const inline = await page.locator(".session-body").evaluate(el => el.clientWidth >= 1000);
+      await drawer.waitFor({ state: inline ? "visible" : "hidden" });
+      assert.equal(await drawer.isVisible(), inline,
+        "context opens by default only when the workspace has enough available width");
+      if (inline) {
+        const context = await page.locator(".session-details").boundingBox();
+        const conversation = await page.locator(".session-conversation").boundingBox();
+        assert.ok(context.width >= 319 && context.width <= 321, "desktop context keeps its 320px width");
+        assert.ok(context.x >= conversation.x + conversation.width + 20,
+          "desktop context sits beside the conversation without covering messages");
+        await page.getByRole("button", { name: "收起会话资料", exact: true }).click();
+        assert.equal(await drawer.isVisible(), false, "the default context can be collapsed");
+      }
       await input.fill("打开资料时保留这段草稿");
       const before = await page.locator(".session-conversation").boundingBox();
       await page.locator(".timeline").evaluate(el => el.scrollTo({ top: 40, behavior: "instant" }));
@@ -469,7 +482,8 @@ async function main() {
       await info.click();
       const bounds = await drawer.boundingBox();
       const after = await page.locator(".session-conversation").boundingBox();
-      assert.equal(after.width, before.width, "the drawer overlays instead of shrinking the conversation");
+      if (inline) assert.ok(after.width < before.width, "desktop context shares available space with the conversation");
+      else assert.equal(after.width, before.width, "compact context overlays instead of shrinking the conversation");
       assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= page.viewportSize().width);
       assert.equal(await page.locator(".timeline").evaluate(el => el.scrollTop), scrollBefore);
       await capture("05-session-info-" + suffix);
@@ -486,7 +500,9 @@ async function main() {
       assert.equal(await drawer.isVisible(), false, "clicking the active entry collapses the drawer");
       await info.click();
       await page.locator(".ui-topbar").click({ position: { x: 4, y: 4 } });
-      assert.equal(await drawer.isVisible(), false, "clicking outside collapses the drawer");
+      assert.equal(await drawer.isVisible(), inline,
+        "outside clicks keep the desktop context visible and collapse the compact drawer");
+      if (inline) await page.getByRole("button", { name: "收起会话资料", exact: true }).click();
       assert.equal(await input.inputValue(), "打开资料时保留这段草稿");
       await input.fill("");
     }
@@ -495,19 +511,23 @@ async function main() {
         const content = await page.getByRole('region', { name: /^(需求内容|Bug 信息)$/ }).boundingBox();
         const status = await page.getByRole('region', { name: '状态流转', exact: true }).boundingBox();
         const discussion = await page.getByRole('region', { name: '沟通与记录', exact: true }).boundingBox();
-        const files = await page.getByRole('region', { name: '附件', exact: true }).boundingBox();
+        const files = await page.getByRole('region', { name: '参考资料', exact: true }).boundingBox();
+        assert.ok(Math.abs(files.x - content.x) < 1 && files.y >= content.y + content.height + 20,
+          'references follow the main document');
+        assert.ok(Math.abs(discussion.x - content.x) < 1 && discussion.y >= files.y + files.height + 20,
+          'discussion follows attachments in the main document');
         if (width > 768) {
           assert.ok(status.x >= content.x + content.width + 20, `status has a separate sidebar at ${width}`);
-          assert.ok(Math.abs(discussion.x - content.x) < 1 && discussion.y >= content.y + content.height + 20, 'discussion is a separate card below content');
-          assert.ok(Math.abs(files.x - status.x) < 1, 'attachments align with the sidebar');
         } else {
-          assert.ok(content.y >= status.y + status.height + 16, `mobile status and content do not overlap at ${width}`);
-          assert.ok(discussion.y >= files.y + files.height + 16, 'mobile attachments precede discussion');
+          assert.ok(status.y >= discussion.y + discussion.height + 16,
+            `compact layouts place the auxiliary status below the main document at ${width}`);
+          assert.ok(status.x >= 0 && status.x + status.width <= width,
+            'compact status controls stay inside the viewport');
         }
       }
-      for (const width of [1440, 1100, 768, 390, 320]) {
+      for (const width of [2560, 1920, 1440, 1280, 1100, 768, 390, 320]) {
         scenario = "session";
-        await page.setViewportSize({ width, height: 1000 });
+        await page.setViewportSize({ width, height: { 2560: 1440, 1920: 1080, 1440: 900, 1280: 720, 1100: 900, 768: 1024, 390: 844, 320: 740 }[width] });
         await page.goto(origin + '/projects');
         await page.locator('.project-card').first().waitFor();
         const directoryHeading = await page.locator('.ui-page-header').boundingBox();
@@ -520,24 +540,35 @@ async function main() {
         await capture('11-project-overview-' + width);
         const tab = name => openProjectTab(page, name);
         await tab('需求');
-        await page.getByRole('button', { name: /#1 优化客户搜索体验/ }).waitFor();
+        await page.getByRole('button', { name: '优化客户搜索体验', exact: true }).waitFor();
         await capture('12-project-issues-' + width);
         await page.getByRole('button', { name: '新建需求', exact: true }).click();
         await page.getByLabel('标题', { exact: true }).fill('补齐客户详情页面空状态');
         await capture('12-project-issue-create-' + width);
         await page.getByRole('button', { name: '取消', exact: true }).click();
-        await page.getByRole('button', { name: /#1 优化客户搜索体验/ }).click();
+        await page.getByRole('button', { name: '优化客户搜索体验', exact: true }).click();
         await page.getByRole('button', { name: '编辑事项', exact: true }).waitFor();
+        assert.equal(await page.locator('.project-tab-bar').count(), 0, 'issue details use the standalone prototype layout');
+        await page.getByRole('heading', { name: '目标与背景', exact: true }).waitFor();
+        await page.getByRole('region', { name: '关联开发', exact: true }).waitFor();
         await checkIssueCards(width);
         await capture('12-project-issue-detail-' + width);
         await page.getByRole('button', { name: '编辑事项', exact: true }).click();
         await capture('12-project-issue-edit-' + width);
         await tab('Bug');
-        await page.getByRole('button', { name: /#2 修复导出结果/ }).click();
+        await page.getByRole('button', { name: '修复导出结果与筛选条件不一致', exact: true }).click();
         await page.getByRole('heading', { name: '复现步骤', exact: true }).waitFor();
         await checkIssueCards(width);
         await capture('13-project-bug-' + width);
         await tab('资产');
+        await capture('14-project-assets-list-' + width);
+        const assetHeader = page.locator('.project-page > .ui-page-header');
+        assert.equal(await assetHeader.getByRole('button', { name: '新建事项', exact: true }).count(), 0);
+        await assetHeader.getByRole('button', { name: '新建资产', exact: true }).click();
+        await page.getByRole('dialog', { name: '新建资产', exact: true }).waitFor();
+        await page.getByRole('button', { name: '保存资产', exact: true }).waitFor();
+        await capture('14-project-asset-create-' + width);
+        await page.getByRole('button', { name: '取消', exact: true }).click();
         await page.getByRole('button', { name: /测试环境演示账号/ }).click();
         await page.getByRole('button', { name: '显示敏感值', exact: true }).waitFor();
         await capture('14-project-asset-masked-' + width);
@@ -545,24 +576,31 @@ async function main() {
         await page.locator('input[type="password"]').waitFor();
         await capture('14-project-asset-edit-' + width);
         await tab('开发任务');
-        await page.getByRole('button', { name: /客户搜索与空结果提示/ }).click();
+        await page.getByRole('button', { name: '客户搜索与空结果提示', exact: true }).click();
         await page.getByRole('button', { name: '发送资料并继续 Codex', exact: true }).waitFor();
         await capture('15-project-development-' + width);
         await tab('版本');
-        await page.getByRole('heading', { name: '发布版本', exact: true }).waitFor();
+        await page.getByRole('heading', { name: '版本', exact: true }).waitFor();
+        assert.equal(await page.getByRole('button', { name: '新建版本', exact: true }).count(), 1);
+        assert.equal(await page.locator('.project-page > .ui-page-header').getByRole('button', { name: '新建事项', exact: true }).count(), 0);
         await page.getByRole('heading', { name: 'v0.2', exact: true }).waitFor();
         await capture('15-project-releases-' + width);
-        await page.getByRole('navigation', { name: '版本列表' }).getByRole('button', { name: /v0.1/ }).click();
-        await page.getByRole('heading', { name: 'v0.1', exact: true }).waitFor();
-        await page.getByRole('button', { name: '刷新版本', exact: true }).click();
-        await page.getByRole('heading', { name: 'v0.1', exact: true }).waitFor();
+        await page.getByRole('article', { name: 'v0.1', exact: true }).getByRole('button', { name: '查看范围', exact: true }).click();
+        await page.locator('.release-scope-page h1').filter({ hasText: 'v0.1' }).waitFor();
+        await page.getByRole('region', { name: '版本范围', exact: true }).waitFor();
+        await capture('15-project-release-scope-' + width);
+        await page.reload();
+        await page.locator('.release-scope-page h1').filter({ hasText: 'v0.1' }).waitFor();
+        await page.getByRole('button', { name: '返回版本', exact: true }).first().click();
         await page.getByLabel('包含已归档版本').check();
-        await page.getByRole('navigation', { name: '版本列表' }).getByRole('button', { name: /v0.0.9/ }).click();
+        await page.getByRole('article', { name: 'v0.0.9', exact: true }).getByRole('button', { name: '查看范围', exact: true }).click();
         await page.getByText('归档内容只读', { exact: true }).waitFor();
         assert.equal(await page.getByRole('button', { name: '编辑版本', exact: true }).count(), 0);
         await capture('15-project-releases-archived-' + width);
+        await page.getByRole('button', { name: '返回版本', exact: true }).first().click();
         await page.getByLabel('包含已归档版本').uncheck();
         await page.getByRole('heading', { name: 'v0.2', exact: true }).waitFor();
+        await page.getByRole('article', { name: 'v0.2', exact: true }).getByRole('button', { name: '查看范围', exact: true }).click();
         await page.getByRole('button', { name: '归档版本', exact: true }).click();
         const archiveDialog = page.getByRole('dialog', { name: '归档版本', exact: true });
         await archiveDialog.waitFor();
@@ -576,10 +614,23 @@ async function main() {
         await capture('15-system-workflows-' + width);
         await page.goto(origin + '/projects/00000000-0000-4000-8000-000000000001');
         await tab('成员');
+        await capture('16-project-members-list-' + width);
+        const addMember = page.getByRole('button', { name: '添加成员', exact: true });
+        assert.equal(await addMember.count(), 1);
+        assert.equal(await page.locator('.project-page > .ui-page-header').getByRole('button', { name: '新建事项', exact: true }).count(), 0);
+        await addMember.click();
+        const addDialog = page.getByRole('dialog', { name: '添加成员', exact: true });
+        await addDialog.waitFor();
+        await capture('16-project-members-add-' + width);
+        await page.keyboard.press('Escape');
+        assert.equal(await addDialog.isVisible(), false);
+        assert.equal(await addMember.evaluate(element => element === document.activeElement), true);
         await page.getByRole('button', { name: '调整张明（member-1）权限', exact: true }).click();
         await capture('16-project-members-' + width);
         await tab('设置');
+        await page.getByRole('heading', { name: '项目配置', exact: true }).waitFor();
         await page.getByRole('button', { name: '保存项目设置', exact: true }).waitFor();
+        assert.equal(await page.locator('.project-page > .ui-page-header').getByRole('button', { name: '新建事项', exact: true }).count(), 0);
         await capture('17-project-settings-' + width);
         await tab('提示词');
         await page.getByRole('textbox', { name: 'Bug提示词', exact: true }).waitFor();
@@ -646,10 +697,24 @@ async function main() {
       };
     });
     assert.ok(wideLayout.pageHeight <= 1082, "desktop conversation fits the viewport without a second page scrollbar");
-    assert.ok(wideLayout.timelineHeight >= wideLayout.conversationHeight * 0.75, "history occupies at least three quarters of the conversation below navigation");
-    assert.ok(Math.abs(wideLayout.messageWidth - wideLayout.conversationWidth) <= 2, "wide conversation text keeps the design token's readable line width");
-    assert.ok(Math.abs(wideLayout.messageWidth - wideLayout.composerWidth) <= 2, "history and composer remain aligned");
+    assert.ok(wideLayout.timelineHeight >= wideLayout.conversationHeight * 0.65,
+      "history occupies most of the conversation beside the execution context");
+    assert.ok(wideLayout.messageWidth <= wideLayout.conversationWidth + 2 && wideLayout.messageWidth >= 420,
+      "desktop context leaves a readable conversation within the design token's line-width limit");
+    assert.ok(Math.abs(wideLayout.messageWidth - wideLayout.composerWidth) <= 22,
+      "history and composer preserve the prototype's compact inner padding");
     assert.ok(wideLayout.composerBottom <= 1080, "the input stays reachable within the full HD viewport");
+    await captureSessionDrawer("1920x1080");
+    await page.setViewportSize({ width: 2560, height: 1440 });
+    await load();
+    await capture("05-session-2560x1440");
+    await captureSessionDrawer("2560x1440");
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await load();
+    await capture("05-session-1280x720");
+    await captureSessionDrawer("1280x720");
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await load();
     await captureLongSessionTitle("1920x1080");
     await page.setViewportSize({ width: 1920, height: 855 });
     await capture("05-session-wide");

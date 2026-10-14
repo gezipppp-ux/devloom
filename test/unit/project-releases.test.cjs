@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { releaseName } = require("../../src/domain/project-releases.cjs");
+const { releaseName, releaseTargetDate } = require("../../src/domain/project-releases.cjs");
 const { ProjectLifecycleServices } = require("../../src/application/project-lifecycle-services.cjs");
 
 test("release names require a lowercase v and two or three canonical numeric segments", () => {
@@ -17,4 +17,18 @@ test("release service rejects invalid create and update requests before storage"
       await assert.rejects(services.saveRelease("project-id", id, { id: "actor" }, { name, ...(id ? { revision: 1 } : {}) }), { statusCode: 400 });
     }
   }
+});
+
+test("release target dates accept actual calendar dates and explicit clearing", () => {
+  for (const value of ["2024-02-29", "2026-10-23", "0001-01-01", "9999-12-31"])
+    assert.equal(releaseTargetDate(value).toISOString().slice(0, 10), value);
+  for (const value of [null, ""]) assert.equal(releaseTargetDate(value), null);
+  for (const value of [undefined, 1, {}, "2026-02-29", "2026-04-31", "2026-13-01", "2026-00-01", "2026-10-00", "0000-01-01", "2026-1-01", " 2026-10-23", "2026-10-23T00:00:00Z"])
+    assert.throws(() => releaseTargetDate(value), { statusCode: 400 });
+});
+
+test("invalid target dates fail before authorization or storage", async () => {
+  const services = new ProjectLifecycleServices({}, { authorize() { assert.fail("invalid target date must not reach storage"); } });
+  for (const id of [null, "release-id"])
+    await assert.rejects(services.saveRelease("project-id", id, { id: "actor" }, { name: "v1.0", targetDate: "2026-02-29", ...(id ? { revision: 1 } : {}) }), { statusCode: 400 });
 });

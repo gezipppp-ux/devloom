@@ -5,9 +5,11 @@ const path = require("node:path");
 
 async function verifyProjectLifecycle({ page, origin, project, database, output, projects, admin }) {
   const tab = name => openProjectTab(page, name);
-  const releaseName = page.getByRole("navigation", { name: "版本列表" }).getByRole("button", { name: /v0.2/ });
+  const releaseRow = page.getByRole('article', { name: 'v0.2', exact: true });
+  const releaseName = releaseRow.getByRole('button', { name: '查看范围', exact: true });
+  async function openRelease() { if (!(await page.locator('.release-scope-page').isVisible())) await releaseName.click(); }
   async function archiveVersion() {
-    await releaseName.click();
+    await openRelease();
     await page.getByRole("button", { name: "归档版本", exact: true }).click();
     await page.getByRole("dialog", { name: "归档版本", exact: true }).getByRole("button", { name: "确认归档版本", exact: true }).click();
   }
@@ -15,14 +17,26 @@ async function verifyProjectLifecycle({ page, origin, project, database, output,
   await page.getByRole("button", { name: "新建版本", exact: true }).click();
   await page.getByLabel("版本名称", { exact: true }).fill("v0.2");
   await page.getByLabel("版本说明", { exact: true }).fill("隔离数据库中的发布计划");
+  await page.getByLabel("目标日期（可选）", { exact: true }).fill("2026-10-23");
   await page.getByRole("button", { name: "保存版本", exact: true }).click();
   await releaseName.waitFor();
+  const plannedRelease = await database.client.projectRelease.findFirst({ where: { projectId: project.id, name: "v0.2" } });
+  assert.equal(plannedRelease.targetDate.toISOString().slice(0, 10), "2026-10-23");
+  assert.equal(await releaseRow.getByRole("progressbar", { name: "版本完成进度", exact: true }).count(), 0, "empty release never presents a false completion percentage");
+  await openRelease();
+  await page.getByRole("button", { name: "编辑版本", exact: true }).click();
+  assert.equal(await page.getByLabel("目标日期（可选）", { exact: true }).inputValue(), "2026-10-23");
+  await page.getByLabel("目标日期（可选）", { exact: true }).fill("");
+  await page.getByRole("button", { name: "保存版本", exact: true }).click();
+  await page.locator('.release-detail-aside').getByText('暂无目标日期', { exact: true }).waitFor();
+  assert.equal((await database.client.projectRelease.findUnique({ where: { id: plannedRelease.id } })).targetDate, null);
   await archiveVersion();
   await releaseName.waitFor({ state: "hidden" });
   await page.getByRole("checkbox", { name: "包含已归档版本", exact: true }).check();
   await releaseName.click();
   await page.getByRole("button", { name: "恢复版本", exact: true }).click();
   await page.getByRole("button", { name: "编辑版本", exact: true }).waitFor();
+  await page.getByRole('button', { name: '返回版本', exact: true }).first().click();
   assert.equal(await page.getByRole("navigation", { name: "项目功能" }).getByRole("button", { name: "流程", exact: true }).count(), 0);
   await page.getByLabel("账号导航").getByRole("button", { name: "管理中心", exact: true }).click();
   await page.getByRole("navigation", { name: "管理中心", exact: true }).getByRole("button", { name: "流程编排", exact: true }).click();
@@ -97,10 +111,10 @@ async function verifyProjectLifecycle({ page, origin, project, database, output,
   assert.equal(await page.getByRole("button", { name: "发表评论", exact: true }).count(), 0);
   await page.goto(`${origin}/projects/${project.id}?tab=issues`);
   await page.getByRole("button", { name: "查询", exact: true }).waitFor();
-  assert.equal(await page.getByRole("button", { name: /#\d+ 版本规划事项/ }).count(), 0);
+  assert.equal(await page.getByRole("button", { name: "版本规划事项", exact: true }).count(), 0);
   await page.getByRole("checkbox", { name: "包含归档事项", exact: true }).check();
   await page.getByRole("button", { name: "查询", exact: true }).click();
-  await page.getByRole("button", { name: /#\d+ 版本规划事项/ }).waitFor();
+  await page.getByRole("button", { name: "版本规划事项", exact: true }).waitFor();
 }
 
 module.exports = { verifyProjectLifecycle };

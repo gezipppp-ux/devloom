@@ -2,6 +2,7 @@
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { saveState } = require("../../src/storage/run-state.cjs");
+const { dismissOperationMessages } = require("../support/operation-feedback.cjs");
 
 async function verifySessionArchiveTitle(browser, origin, manager, errors, output) {
   const key = "1-98";
@@ -127,6 +128,7 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
     await recover.click();
     await dialog.getByRole("status").filter({ hasText: "已恢复" }).waitFor();
     assert.equal((await manager.store.isArchived(key)), false);
+    await dismissOperationMessages(page);
     await peer.locator(".session-link").filter({ hasText: title }).waitFor();
     await search.fill("");
     await dialog.getByText("暂无已归档会话。", { exact: true }).waitFor();
@@ -182,6 +184,7 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
     await deletion.getByRole("button", { name: "永久删除", exact: true }).click();
     await deletion.waitFor({ state: "hidden" });
     await dialog.getByText(`已永久删除「${title}」。`, { exact: true }).waitFor();
+    await dismissOperationMessages(page);
     assert.equal((await manager.store.hasRun(key)), false);
     await peer.getByRole("button", { name: `恢复会话：${title}`, exact: true }).waitFor({ state: "hidden" });
   } finally {

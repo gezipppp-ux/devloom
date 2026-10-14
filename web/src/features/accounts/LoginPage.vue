@@ -1,5 +1,5 @@
 <script setup>
-import LocaleSelect from "../../shared/components/LocaleSelect.vue";
+import AuthenticationLayout from "../../shared/components/AuthenticationLayout.vue";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { onUnmounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -22,9 +22,8 @@ async function submit() {
 }
 </script>
 <template>
-  <main class="authentication-page">
-    <section class="authentication-card"><div class="ui-auth-language"><LocaleSelect /></div>
-      <div class="welcome-mark" aria-hidden="true">t_</div><div class="eyebrow">{{ $t("需求 × CODEX") }}</div>
+  <AuthenticationLayout>
+      <div class="eyebrow">WEB CODING</div>
       <h1>{{ $t("登录工作台") }}</h1><p class="muted">{{ $t("使用管理员分配的账号，管理你的项目与开发会话。") }}</p>
       <a-form :model="form" layout="vertical" @finish="submit">
         <a-form-item :label="$t(&quot;账号&quot;)"><input v-model="form.username" :aria-label="$t(&quot;账号&quot;)" autocomplete="username" required maxlength="80" :disabled="busy" /></a-form-item>
@@ -32,6 +31,5 @@ async function submit() {
         <FeedbackMessage :message="error || accountSession.error" type="error" />
         <button class="primary" type="submit" :disabled="busy || !form.username.trim() || !form.password">{{ busy ? $t("正在登录…") : $t("登录") }}</button>
       </a-form>
-    </section>
-  </main>
+  </AuthenticationLayout>
 </template>

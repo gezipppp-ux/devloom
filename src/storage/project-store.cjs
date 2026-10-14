@@ -15,6 +15,10 @@ class ProjectStore {
     }
   }
   async user(id) { return this.database.client.user.findUnique({ where: { id }, include: { department: true } }); }
+  async recordVisit(projectId, userId) {
+    return this.database.client.userProjectVisit.upsert({ where: { userId_projectId: { userId, projectId } },
+      create: { userId, projectId }, update: { lastVisitedAt: new Date() } });
+  }
   async departments() { return this.database.client.department.findMany({ orderBy: { name: "asc" } }); }
   summaryInclude() { return { _count: { select: { spaces: true, issues: true, members: { where: { status: "active", user: { status: "active" } } } } }, owner: { select: { id: true, displayName: true } }, members: { where: { status: "active", user: { status: "active" } }, take: 3, orderBy: { createdAt: "asc" }, select: { user: { select: { id: true, displayName: true } } } } }; }
   async project(id, { summary = false } = {}) { return this.database.client.project.findUnique({ where: { id }, include: summary ? this.summaryInclude() : { _count: { select: { spaces: true } } } }); }

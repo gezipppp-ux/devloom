@@ -15,6 +15,13 @@ async function verifyProjectTaskMerging({ page, origin, project, database, conte
   await assignment.getByLabel("开发负责人", { exact: true }).selectOption(admin.id);
   await assignment.getByRole("button", { name: "确认指派", exact: true }).click();
   await page.getByRole("button", { name: "我的开发任务", exact: true }).click();
+  assert.equal(await page.locator('.ui-selection-bar').count(), 0, "merge controls appear only after selection");
+  await page.getByRole("checkbox", { name: `选择开发任务 ${issues[0].title}`, exact: true }).check();
+  assert.equal(await page.getByRole("button", { name: "合并所选任务（1）", exact: true }).isDisabled(), true);
+  await page.getByRole("button", { name: "项目全部任务", exact: true }).click();
+  await page.waitForURL(url => url.searchParams.get("taskScope") === "all");
+  await page.locator('.ui-selection-bar').waitFor({ state: 'hidden' });
+  await page.goto(`${origin}/development?projectId=${project.id}`);
   for (const issue of issues) await page.getByRole("checkbox", { name: `选择开发任务 ${issue.title}`, exact: true }).check();
   const plans = await database.client.developmentTask.findMany({ where: { issueLinks: { some: { issueId: { in: issues.map(issue => issue.id) } } } } });
   assert.equal(plans.length, 2);
@@ -48,13 +55,15 @@ async function verifyProjectTaskMerging({ page, origin, project, database, conte
   await page.goto(`${origin}/projects/${project.id}?tab=issues&issue=${issues[0].id}`);
   const taskLink = page.getByRole("link", { name: "查看开发任务", exact: true });
   await taskLink.waitFor();
-  assert.equal(await page.getByRole("button", { name: "认领", exact: true }).isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: '认领', exact: true, disabled: false }).count(), 0, 'an assigned issue cannot be claimed again');
   assert.equal(await page.getByRole("button", { name: "指派", exact: true }).isDisabled(), true);
   await page.screenshot({ path: path.join(output, "assigned-issue-320.png"), fullPage: true });
   await taskLink.click();
   assert.equal(new URL(page.url()).searchParams.get("task"), id);
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole('button', { name: '开始开发', exact: true }).click();
   await selectRemoteBranch(page);
+  await page.getByRole('checkbox', { name: '我已确认任务范围、起始分支和执行设置。', exact: true }).check();
   await page.getByRole("button", { name: "启动 Codex 开发", exact: true }).click();
   await page.getByRole("button", { name: "进入 Codex 会话", exact: true }).click();
   await page.getByRole("button", { name: "■ 停止", exact: true }).waitFor();
@@ -76,14 +85,14 @@ async function verifyProjectTaskMerging({ page, origin, project, database, conte
   await content.createIssue(project.id, admin, { type: "requirement", title: "批量分配：尚未认领的事项" });
   await page.goto(`${origin}/projects/${project.id}?tab=issues&q=${encodeURIComponent("批量分配")}`);
   for (const issue of issues) {
-    const row = page.locator(".project-issue-link").filter({ hasText: issue.title });
+    const row = page.locator(".ui-data-table tbody tr").filter({ hasText: issue.title });
     await row.getByText("无进行中的开发任务", { exact: false }).waitFor();
     const text = await row.innerText();
-    assert.ok(text.includes(`负责人：${admin.displayName}`), "completed development still shows the responsible developer");
+    assert.ok((await row.locator('td[data-label="负责人"]').innerText()).includes(admin.displayName), "completed development still shows the responsible developer beside the avatar");
     assert.ok(text.includes("待验证"));
     assert.equal(text.includes("待认领"), false, "no active task does not mean no responsible developer");
   }
-  const unassigned = page.locator(".project-issue-link").filter({ hasText: "批量分配：尚未认领的事项" });
+  const unassigned = page.locator(".ui-data-table tbody tr").filter({ hasText: "批量分配：尚未认领的事项" });
   assert.match(await unassigned.innerText(), /待认领/);
   for (const width of [1440, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });

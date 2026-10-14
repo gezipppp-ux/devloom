@@ -1,12 +1,16 @@
 <script setup>
+/* global window */
 import { formatDate } from "../../shared/i18n/index.js";
-import { computed, nextTick, reactive, ref } from "vue";
-import { ArrowLeftOutlined, ReloadOutlined } from "@antdv-next/icons";
+import { computed, nextTick, reactive, ref, watch, onMounted, onUnmounted } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { ArrowLeftOutlined, ReloadOutlined, CheckOutlined, BranchesOutlined, PlayCircleOutlined, FileTextOutlined } from "@antdv-next/icons";
 import { statusLabel, appApi } from "../../shared/api/api.js";
 import { useResource } from "../../shared/api/use-resource.js";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import MarkdownContent from "../../shared/components/MarkdownContent.vue";
 import AgentModelSettings from "../../shared/components/AgentModelSettings.vue";
+import PersonAvatar from "../../shared/components/PersonAvatar.vue";
+import StatusBadge from "../../shared/components/StatusBadge.vue";
 import { accountSession } from "../../shared/api/account-session.js";
 import RemoteBranchSelect from "./RemoteBranchSelect.vue";
 import DevelopmentTaskConfirmation from "./DevelopmentTaskConfirmation.vue";
@@ -20,6 +24,7 @@ import {
 const props = defineProps({
   projectId: { type: String, required: true },
   taskId: { type: String, required: true },
+  projectName: { type: String, default: "" },
   spaceReady: Boolean,
   workspaceId: { type: String, default: "" },
   canAssign: Boolean,
@@ -84,11 +89,37 @@ const canAppend = computed(
 const view = computed(() =>
   task.value ? developmentTaskView(task.value, props) : null,
 );
-const steps = ["准备环境", "选择起始分支", "Codex 开发", "人工确认完成"];
+const infoMedia = window.matchMedia('(min-width: 1200px)');
+const infoExpanded = ref(infoMedia.matches);
+function resizeInfo(event) { infoExpanded.value = event.matches; }
+onMounted(() => infoMedia.addEventListener('change', resizeInfo));
+onUnmounted(() => infoMedia.removeEventListener('change', resizeInfo));
+const route = useRoute(), router = useRouter();
+const starting = computed(() => route.query.taskStart === "1" && canStart.value && props.spaceReady);
+const startConfirmed = ref(false), startHeading = ref(), startButton = ref();
+async function showStart() {
+  if (!canStart.value || !props.spaceReady || busy.value || editing.value) return;
+  startConfirmed.value = false;
+  await router.push({ query: { ...route.query, taskStart: "1" } });
+  await nextTick();
+  startHeading.value?.focus();
+}
+async function closeStart() {
+  if (saving.value) return;
+  await router.push({ query: { ...route.query, taskStart: undefined } });
+  await nextTick();
+  startButton.value?.focus();
+}
+watch([task, canStart], ([value, startAllowed]) => {
+  if (value && !startAllowed && route.query.taskStart) {
+    void router.replace({ query: { ...route.query, taskStart: undefined } });
+  }
+});
 const selection = reactive({ model: accountSession.settings.model || "", reasoningEffort: accountSession.settings.reasoningEffort || "", permissionMode: accountSession.settings.permissionMode || "ask" });
 const permissionsReady = ref(false);
+watch([() => task.value?.revision, baseBranch, supplementaryPrompt, () => selection.model, () => selection.reasoningEffort, () => selection.permissionMode], () => { startConfirmed.value = false; });
 function startDevelopment() {
-  if (!permissionsReady.value || !props.workspaceId || !canStart.value || busy.value || editing.value || !baseBranch.value) return;
+  if (!starting.value || !startConfirmed.value || !props.spaceReady || !permissionsReady.value || !props.workspaceId || !canStart.value || busy.value || editing.value || !baseBranch.value) return;
   return start(baseBranch.value, supplementaryPrompt.value, { ...selection });
 }
 const eligibleMembers = computed(
@@ -204,23 +235,6 @@ async function submitConfirmation() {
       :message="notice"
       type="success"
     />
-    <div class="development-toolbar">
-      <button
-        class="development-quiet-button"
-        :disabled="saving"
-        @click="emit('back')"
-      >
-        <ArrowLeftOutlined aria-hidden="true" />{{ $t("返回任务列表") }}</button
-      ><button
-        class="development-quiet-button"
-        :disabled="busy"
-        @click="reload"
-      >
-        <ReloadOutlined aria-hidden="true" />{{
-          loading ? $t("正在刷新…") : $t("刷新状态")
-        }}
-      </button>
-    </div>
     <p v-if="loading && !task" role="status">{{ $t("正在读取指定开发任务…") }}</p>
     <p v-else-if="!task" role="alert">
       {{ error || $t("指定开发任务不存在或无权访问。") }}
@@ -228,33 +242,17 @@ async function submitConfirmation() {
     <template v-if="task">
       <header class="development-heading">
         <div>
-          <h2>{{ task.title }}</h2>
-          <div class="development-states">
-            <span class="development-task-status"
-              >{{ $t("任务：") }}{{
-                $t(developmentTaskLabels[task.status] || task.status)
-              }}</span
-            ><span class="development-execution-status"
-              >Codex：{{ $t(codexStatus) }}</span
-            >
-          </div>
-          <p class="development-meta">
-            {{ $t("开发负责人：") }}{{ task.executor?.displayName || $t("未分配") }} {{ $t("· 版本：") }}{{
-              task.release?.name || $t("未排期")
-            }}
-          </p>
+          <h2 ref="startHeading" :tabindex="starting ? -1 : undefined">{{ starting ? $t('确认并开始开发') : task.title }}</h2>
+          <p class="development-meta" v-if="starting">{{ $t('确认本次范围与执行设置。') }}</p>
+          <p class="development-meta" v-else><span :title="task.id">#{{ task.id.slice(0, 8) }}</span><span v-if="projectName"> · {{ projectName }}</span> · {{ task.release?.name || $t('未排期') }}</p>
         </div>
-        <button
-          v-if="canEdit"
-          ref="editButton"
-          :disabled="busy || editing"
-          @click="edit"
-        >
-          {{ $t("编辑任务信息") }}
-        </button>
+        <div class="development-toolbar">
+          <button class="development-quiet-button" :disabled="saving" @click="starting ? closeStart() : emit('back')"><ArrowLeftOutlined aria-hidden="true" />{{ starting ? $t('返回任务详情') : $t('返回任务列表') }}</button>
+          <button class="development-quiet-button" :disabled="busy" @click="reload"><ReloadOutlined aria-hidden="true" />{{ loading ? $t('正在刷新…') : $t('刷新状态') }}</button>
+        </div>
       </header>
       <form
-        v-if="editing && canEdit"
+        v-if="editing && canEdit && !starting"
         class="development-panel project-form"
         :aria-label="$t(&quot;编辑任务信息&quot;)"
         @submit.prevent="saveInformation"
@@ -325,128 +323,15 @@ async function submitConfirmation() {
           </button>
         </div>
       </form>
-      <ol v-if="view.step" class="development-steps" :aria-label="$t(&quot;开发操作顺序&quot;)">
-        <li
-          v-for="(step, index) in steps"
-          :key="step"
-          :class="{ active: view.step === index + 1 }"
-          :aria-current="view.step === index + 1 ? 'step' : undefined"
-        >
-          <span>{{ index + 1 }}</span
-          >{{ $t(step) }}
-        </li>
-      </ol>
+      <div v-show="!starting" class="development-detail-layout">
+      <div class="development-detail-main">
       <section
-        class="development-panel development-next"
-        aria-labelledby="development-next-title"
-      >
-        <p class="development-eyebrow">
-          {{
-            ["completed", "cancelled", "merged"].includes(task.status) ||
-            readOnly
-              ? $t("任务记录")
-              : $t("当前步骤")
-          }}
-        </p>
-        <h3 id="development-next-title">{{ $t(view.title) }}</h3>
-        <p>{{ $t(view.description) }}</p>
-        <p
-          v-if="task.error || task.execution?.error"
-          class="error project-text"
-        >
-          {{ task.error || task.execution?.error }}
-        </p>
-        <p
-          v-if="readOnlyReason || task.release?.status === 'archived'"
-          class="warning"
-        >
-          {{ readOnlyReason || $t("版本已归档，开发任务只读。") }}
-        </p>
-        <div v-if="task.mergedIntoTaskId" class="actions">
-          <button @click="emit('open-task', { id: task.mergedIntoTaskId })">
-            {{ $t("查看合并后的任务") }}
-          </button>
-        </div>
-        <template v-else-if="canStart">
-          <div v-if="!spaceReady" class="actions">
-            <button
-              class="primary"
-              :disabled="busy"
-              @click="emit('prepare-development', task)"
-            >
-              {{ $t("去准备开发环境") }}
-            </button>
-          </div>
-          <form
-            v-else
-            class="project-form development-start-form"
-            @submit.prevent="startDevelopment"
-          >
-            <RemoteBranchSelect
-              :project-id="projectId"
-              v-model="baseBranch"
-              :disabled="busy || editing"
-            />
-            <label>
-              {{ $t("补充提示词（可选）") }}
-              <textarea
-                v-model="supplementaryPrompt"
-                :aria-label="$t(&quot;补充提示词&quot;)"
-                rows="5"
-                maxlength="20000"
-                :disabled="busy || editing"
-                :placeholder="$t(&quot;填写本次开发的额外要求、实现约束或验证重点&quot;)"
-              />
-              <small class="field-hint">{{ $t("最多 20000 字，点击启动时按补充模板一并发送给 Codex。") }}</small>
-            </label>
-            <AgentModelSettings :key="workspaceId" :workspace-id="workspaceId"
-              v-model:model="selection.model" v-model:reasoning-effort="selection.reasoningEffort"
-              v-model:permission-mode="selection.permissionMode" :disabled="busy || editing"
-              @validity-change="permissionsReady = $event" />
-            <button
-              class="primary"
-              :disabled="busy || editing || !baseBranch || !workspaceId || !permissionsReady"
-            >
-              {{ saving ? $t("正在提交…") : $t("启动 Codex 开发") }}
-            </button>
-          </form>
-          <p class="field-hint">
-            {{
-              !spaceReady
-                ? $t("准备环境不会自动执行，返回后再选择分支并启动。")
-                : editing
-                  ? $t("请先保存或取消编辑，再启动开发。")
-                  : $t("启动时获取最新代码并创建独立开发目录；所有关联事项需处于允许开发的流程节点。")
-            }}
-          </p>
-        </template>
-        <div v-else class="actions">
-          <button
-            v-if="task.canOpenSession && task.runKey"
-            class="primary"
-            :disabled="busy"
-            @click="emit('open-workspace', task.workspaceId, task.runKey)"
-          >
-            {{ $t(sessionLabel) }}</button
-          ><button
-            v-if="canComplete"
-            :disabled="busy"
-            @click="confirm('complete')"
-          >
-            {{ $t("标记开发任务完成") }}
-          </button>
-        </div>
-        <p v-if="canComplete" class="field-hint">
-          {{ $t("完成后会话转为只读。Codex 本轮结束不代表需求或 Bug 已验收。") }}
-        </p>
-      </section>
-      <section
-        class="development-panel"
+        class="development-panel development-scope"
         aria-labelledby="development-scope-title"
       >
         <header class="development-panel-heading">
           <h3 id="development-scope-title">
-            {{ $t("本次开发范围") }}
+            {{ $t("开发范围") }}
             <span class="development-count"
               >{{ task.kind === 'manual' ? $t("独立开发") : $t("{p0} 条事项", { p0: task.issueIds.length }) }}</span
             >
@@ -454,7 +339,6 @@ async function submitConfirmation() {
           <button
             v-if="canEdit || canAppend"
             ref="addButton"
-            class="development-quiet-button"
             :aria-expanded="adding"
             aria-controls="development-add-issues"
             :disabled="busy"
@@ -464,7 +348,7 @@ async function submitConfirmation() {
               adding
                 ? $t("收起事项选择")
                 : canEdit
-                  ? $t("添加关联事项")
+                  ? $t("调整范围")
                   : $t("追加关联事项")
             }}
           </button>
@@ -531,24 +415,13 @@ async function submitConfirmation() {
           :key="issue.id"
           class="development-issue"
         >
-          <header class="development-panel-heading">
-            <h4>
-              <span class="development-issue-type">{{
-                issue.type === "bug" ? "Bug" : $t("需求")
-              }}</span
-              >#{{ issue.number }} {{ issue.title }}
-            </h4>
-            <button
-              v-if="canEdit && task.issueIds.length > 1"
-              class="development-quiet-button development-danger-text"
-              :disabled="busy"
-              @click="confirm('remove', issue)"
-            >
-              {{ $t("移出此任务") }}
-            </button>
-          </header>
           <details>
-            <summary>{{ $t("查看开发内容与验收标准") }}</summary>
+            <summary class="development-issue-summary">
+              <span class="development-step-icon"><FileTextOutlined aria-hidden="true" /></span>
+              <span class="development-issue-name"><strong role="heading" aria-level="4" :aria-label="`#${issue.number} ${issue.title}`">{{ issue.title }}</strong><small><span v-if="projectName">{{ projectName }} · </span>{{ issue.type === 'bug' ? 'Bug' : $t('需求') }} · #{{ issue.number }}</small></span>
+              <span class="development-scope-view">{{ $t('查看') }}</span>
+            </summary>
+            <h5>{{ $t('查看开发内容与验收标准') }}</h5>
             <MarkdownContent
               :content="issue.description || '暂无描述。'"
             /><template
@@ -564,6 +437,7 @@ async function submitConfirmation() {
                 <MarkdownContent :content="issue[field]" /></template
             ></template>
           </details>
+          <button v-if="canEdit && task.issueIds.length > 1" class="development-quiet-button development-danger-text development-remove-issue" :disabled="busy" @click="confirm('remove', issue)">{{ $t('移出此任务') }}</button>
         </article>
         <section
           v-for="batch in task.additions"
@@ -588,6 +462,93 @@ async function submitConfirmation() {
           </p>
         </section>
       </section>
+      <section v-if="canStart" class="development-preparation" :aria-label="$t('执行准备')">
+        <h3>{{ $t('执行准备') }}</h3>
+        <ol class="development-preparation-list">
+          <li>
+            <span class="development-step-icon"><CheckOutlined aria-hidden="true" /></span>
+            <div><h4>{{ $t('确认任务范围') }}</h4><p>{{ $t('关联 {count} 个事项', { count: task.issueIds.length }) }} · {{ task.release?.name || $t('未排期') }}</p></div>
+            <StatusBadge>{{ $t('已保存') }}</StatusBadge>
+          </li>
+          <li>
+            <span class="development-step-icon"><BranchesOutlined aria-hidden="true" /></span>
+            <div><h4>{{ $t('准备个人环境') }}</h4><p>{{ spaceReady ? $t('个人 Git 账号与开发空间已就绪') : $t('配置个人 Git 账号并准备开发空间') }}</p></div>
+            <button :disabled="busy || editing" @click="emit('prepare-development', task)">{{ spaceReady ? $t('查看环境') : $t('去准备开发环境') }}</button>
+          </li>
+          <li>
+            <span class="development-step-icon"><PlayCircleOutlined aria-hidden="true" /></span>
+            <div><h4>{{ $t('选择分支并开始') }}</h4><p>{{ $t('明确提交后才启动 Agent') }}</p></div>
+            <button ref="startButton" class="primary" :disabled="busy || editing || !spaceReady || !workspaceId" @click="showStart">{{ $t('开始开发') }}</button>
+          </li>
+        </ol>
+        <p v-if="editing" class="field-hint">{{ $t('请先保存或取消编辑，再启动开发。') }}</p>
+        <p v-else-if="!spaceReady" class="field-hint">{{ $t('准备环境不会自动执行，返回后再选择分支并启动。') }}</p>
+      </section>
+      <section
+        v-if="!canStart"
+        class="development-panel development-next"
+        aria-labelledby="development-next-title"
+      >
+        <div class="development-states"><span class="development-task-status">{{ $t('任务：') }}{{ $t(developmentTaskLabels[task.status] || task.status) }}</span><span class="development-execution-status">Codex：{{ $t(codexStatus) }}</span></div>
+        <p class="development-eyebrow">
+          {{
+            ["completed", "cancelled", "merged"].includes(task.status) ||
+            readOnly
+              ? $t("任务记录")
+              : $t("当前步骤")
+          }}
+        </p>
+        <h3 id="development-next-title">{{ $t(view.title) }}</h3>
+        <p>{{ $t(view.description) }}</p>
+        <p
+          v-if="task.error || task.execution?.error"
+          class="error project-text"
+        >
+          {{ task.error || task.execution?.error }}
+        </p>
+        <p
+          v-if="readOnlyReason || task.release?.status === 'archived'"
+          class="warning"
+        >
+          {{ readOnlyReason || $t("版本已归档，开发任务只读。") }}
+        </p>
+        <div v-if="task.mergedIntoTaskId" class="actions">
+          <button @click="emit('open-task', { id: task.mergedIntoTaskId })">
+            {{ $t("查看合并后的任务") }}
+          </button>
+        </div>
+        <div v-else class="actions">
+          <button
+            v-if="task.canOpenSession && task.runKey"
+            class="primary"
+            :disabled="busy"
+            @click="emit('open-workspace', task.workspaceId, task.runKey)"
+          >
+            {{ $t(sessionLabel) }}</button
+          ><button
+            v-if="canComplete"
+            :disabled="busy"
+            @click="confirm('complete')"
+          >
+            {{ $t("标记开发任务完成") }}
+          </button>
+        </div>
+        <p v-if="canComplete" class="field-hint">
+          {{ $t("完成后会话转为只读。Codex 本轮结束不代表需求或 Bug 已验收。") }}
+        </p>
+      </section>
+      </div>
+      <aside class="development-detail-aside" :aria-label="$t('任务信息')">
+        <details class="development-info" :open="infoExpanded">
+        <summary>{{ $t('任务信息') }}</summary>
+        <dl class="ui-meta-list">
+          <dt>{{ $t('任务状态') }}</dt><dd><StatusBadge :tone="task.status === 'completed' ? 'success' : task.status === 'planned' ? 'accent' : 'neutral'">{{ $t(developmentTaskLabels[task.status] || task.status) }}</StatusBadge></dd>
+          <dt>{{ $t('执行者') }}</dt><dd><span class="ui-person"><PersonAvatar :name="task.executor?.displayName || $t('未分配')" />{{ task.executor?.displayName || $t('未分配') }}</span></dd>
+          <dt>{{ $t('目标版本') }}</dt><dd>{{ task.release?.name || $t('未排期') }}</dd>
+          <dt>{{ $t('任务来源') }}</dt><dd>{{ task.kind === 'manual' ? $t('独立开发') : $t('项目事项') }}</dd>
+          <dt>{{ $t('Agent 状态') }}</dt><dd><StatusBadge>{{ $t(codexStatus) }}</StatusBadge></dd>
+        </dl>
+        <button v-if="canEdit" ref="editButton" :disabled="busy || editing" @click="edit">{{ $t('编辑任务信息') }}</button>
       <footer class="development-footer">
         <details class="development-baseline">
           <summary>{{ $t("起始代码与开发记录") }}</summary>
@@ -606,13 +567,38 @@ async function submitConfirmation() {
         </details>
         <button
           v-if="canCancel"
-          class="development-quiet-button development-danger-text"
+          class="development-cancel-button"
           :disabled="busy"
           @click="confirm('cancel')"
         >
           {{ $t("取消任务并释放认领") }}
         </button>
+        <p v-if="canCancel" class="field-hint">{{ $t('取消会释放当前事项的认领；正在运行的任务需先停止。') }}</p>
       </footer>
+        </details>
+      </aside>
+      </div>
+      <div v-if="canStart && spaceReady" v-show="starting" class="development-start-layout">
+        <form class="development-start-sheet project-form" :aria-label="$t('确认并开始开发')" @submit.prevent="startDevelopment">
+          <section class="development-start-summary">
+            <h3>{{ task.title }}</h3>
+            <p class="development-meta">#{{ task.id.slice(0, 8) }} · {{ $t('关联 {count} 个事项', { count: task.issueIds.length }) }} · {{ task.release?.name || $t('未排期') }}</p>
+            <p class="development-environment-ready"><CheckOutlined aria-hidden="true" />{{ $t('个人环境已就绪。') }}</p>
+          </section>
+          <section class="development-start-settings">
+            <h3>{{ $t('分支与执行设置') }}</h3>
+            <RemoteBranchSelect :project-id="projectId" v-model="baseBranch" :disabled="busy || editing" />
+            <AgentModelSettings embedded :key="workspaceId" :workspace-id="workspaceId" v-model:model="selection.model" v-model:reasoning-effort="selection.reasoningEffort" v-model:permission-mode="selection.permissionMode" :disabled="busy || editing" @validity-change="permissionsReady = $event" />
+            <label>{{ $t('补充说明') }}<textarea v-model="supplementaryPrompt" :aria-label="$t('补充提示词')" rows="4" maxlength="20000" :disabled="busy || editing" :placeholder="$t('填写本次开发的额外要求、实现约束或验证重点')" /><small class="field-hint">{{ $t('最多 20000 字，点击启动时按补充模板一并发送给 Codex。') }}</small></label>
+          </section>
+          <section class="development-start-confirmation">
+            <label class="permission-choice"><input type="checkbox" v-model="startConfirmed" :disabled="busy || editing" />{{ $t('我已确认任务范围、起始分支和执行设置。') }}</label>
+            <p class="field-hint">{{ $t('启动时获取最新代码并创建独立开发目录；所有关联事项需处于允许开发的流程节点。') }}</p>
+          </section>
+          <footer class="development-start-actions"><span class="field-hint">{{ $t('明确提交后才启动 Agent') }}</span><button type="button" :disabled="saving" @click="closeStart">{{ $t('取消') }}</button><button class="primary" :aria-label="$t('启动 Codex 开发')" :disabled="busy || editing || !baseBranch || !workspaceId || !permissionsReady || !startConfirmed">{{ saving ? $t('正在提交…') : $t('开始开发') }}</button></footer>
+        </form>
+        <aside class="development-start-aside"><h3>{{ $t('一个任务，一个执行上下文') }}</h3><p>{{ $t('开始后保留本次分支和范围。需要补充目标时，在原会话继续沟通。') }}</p></aside>
+      </div>
       <DevelopmentTaskConfirmation
         v-if="confirmation"
         :action="confirmation.action"

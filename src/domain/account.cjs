@@ -76,11 +76,11 @@ function validateAccountCreation(input, { initial = false } = {}) {
     throw accountError("包含未知账号字段。");
   const role = initial ? "admin" : input.role || "member";
   if (!["admin", "member"].includes(role)) throw accountError("账号角色无效。");
-  if (!initial || input.departmentId !== undefined) departmentId(input.departmentId);
+  if (role !== "admin") departmentId(input.departmentId);
   if (input.canCreateProjects !== undefined && typeof input.canCreateProjects !== "boolean") throw accountError("创建项目资格必须为布尔值。");
   const login = username(input.username);
   return { username: login, displayName: Object.hasOwn(input, "displayName") ? displayName(input.displayName) : login, password: password(input.password), role,
-    departmentId: input.departmentId || null, canCreateProjects: input.canCreateProjects || false };
+    departmentId: role === "admin" ? null : input.departmentId, canCreateProjects: role === "admin" ? false : input.canCreateProjects || false };
 }
 
 function departmentId(value) {
@@ -88,7 +88,7 @@ function departmentId(value) {
   return value;
 }
 
-function validateAccountUpdate(input) {
+function validateAccountUpdate(input, { currentRole } = {}) {
   if (!input || typeof input !== "object" || Array.isArray(input) ||
       Object.keys(input).some((key) => !["displayName", "role", "status", "password", "departmentId", "canCreateProjects"].includes(key)))
     throw accountError("包含未知账号字段。");
@@ -97,7 +97,7 @@ function validateAccountUpdate(input) {
   if (input.status !== undefined && !["active", "disabled"].includes(input.status))
     throw accountError("账号状态无效。");
   if (input.password !== undefined) password(input.password);
-  if (input.departmentId !== undefined) departmentId(input.departmentId);
+  if (input.departmentId !== undefined && (input.role || currentRole) !== "admin") departmentId(input.departmentId);
   if (input.canCreateProjects !== undefined && typeof input.canCreateProjects !== "boolean") throw accountError("创建项目资格必须为布尔值。");
   return { ...input, ...(Object.hasOwn(input, "displayName") ? { displayName: displayName(input.displayName) } : {}) };
 }

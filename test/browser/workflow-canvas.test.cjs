@@ -212,7 +212,7 @@ async function verifyWorkflowCanvas({ page, origin, output }) {
   failSave = false; holdSave = true;
   const started = new Promise(resolve => { saveStarted = resolve; });
   await page.getByRole('button', { name: '保存流程草稿', exact: true }).click(); await started;
-  assert.equal(await page.getByLabel('流程类型', { exact: true }).isDisabled(), true);
+  assert.equal(await page.getByRole('group', { name: '流程类型', exact: true }).getByRole('button', { name: 'Bug 流程', exact: true }).isDisabled(), true);
   assert.equal(await graph.locator('.node-port').count(), 0, 'saving disables canvas connection handles');
   holdSave = false; releaseSave();
   await page.getByRole('button', { name: '保存流程草稿', exact: true, disabled: false }).waitFor();
@@ -220,7 +220,7 @@ async function verifyWorkflowCanvas({ page, origin, output }) {
   assert.equal(workflows.requirement.draft.transitions.at(-1).requiresReason, true);
   assert.equal(workflows.requirement.draft.transitions.at(-1).permission, 'issue.accept');
   assert.equal(writes.at(-1).definition.nodes[0].name, '画布内规划');
-  await page.getByLabel('流程类型', { exact: true }).selectOption('bug');
+  await page.getByRole('group', { name: '流程类型', exact: true }).getByRole('button', { name: 'Bug 流程', exact: true }).click();
   await page.getByRole('button', { name: '待处理', exact: true }).waitFor();
   assert.equal(await page.getByLabel('状态名称', { exact: true }).count(), 0, 'type switch clears inline editor');
   await verifyCurves();

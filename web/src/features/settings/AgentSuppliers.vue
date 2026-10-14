@@ -21,11 +21,10 @@ const actionLabel = pending => pending.action === 'activate' ? '设为默认' : 
     <p v-else-if="!suppliers.length" class="muted">{{ $t("暂无可显示的供应商。请刷新重试。") }}</p>
     <div class="supplier-grid" :aria-busy="loading">
       <article v-for="row in suppliers" :key="row.id" class="supplier-card" :class="{ 'supplier-current': row.id === currentId }">
-        <div class="supplier-toolbar"><span class="supplier-tag">{{ row.builtin ? $t("服务器配置") : 'API Key' }}</span><span class="supplier-tag" :class="{ 'supplier-disabled': !row.enabled }">{{ row.id === currentId ? $t("当前默认") : row.enabled ? $t("已启用") : $t("已停用") }}</span></div>
-        <h3>{{ row.name }}</h3><p class="supplier-address">{{ row.builtin ? $t("使用服务账号原有 Codex 配置与认证") : row.baseUrl }}</p>
+        <div class="supplier-identity"><span class="supplier-symbol" aria-hidden="true"><ApiOutlined /></span><div><div class="supplier-name"><h3>{{ row.name }}</h3><span class="supplier-tag" :class="{ 'supplier-disabled': !row.enabled }">{{ row.id === currentId ? $t("当前默认") : row.enabled ? $t("已启用") : $t("已停用") }}</span></div><p class="supplier-address">{{ row.builtin ? $t("使用服务账号原有 Codex 配置与认证") : row.baseUrl }}</p></div></div>
         <dl><dt>{{ $t("默认模型") }}</dt><dd>{{ row.builtin ? $t("跟随服务器配置") : row.defaultModel }}</dd><dt>{{ $t("认证") }}</dt><dd>{{ row.builtin ? $t("服务器现有认证") : row.hasApiKey ? $t("Key 已配置") : $t("未配置") }}</dd></dl>
         <p v-if="row.notes" class="supplier-notes">{{ row.notes }}</p>
-        <div class="supplier-card-footer">
+        <div class="supplier-card-footer"><span class="supplier-tag supplier-auth-type">{{ row.builtin ? $t("服务器配置") : 'API Key' }}</span>
           <button :class="{ primary: row.id !== currentId }" :disabled="busy || loading || !row.enabled || row.id === currentId" @click="confirm(row, 'activate')">{{ row.id === currentId ? $t("正在使用") : $t("设为默认") }}</button>
           <div v-if="!row.builtin" class="supplier-card-actions"><button :disabled="busy" @click="edit(row)">{{ $t("编辑 / 检测") }}</button><button :disabled="busy" @click="duplicate(row)">{{ $t("复制") }}</button><button :disabled="busy || row.id === currentId" @click="confirm(row, 'toggle')">{{ row.enabled ? $t("停用") : $t("启用") }}</button><button class="danger" :disabled="busy || row.id === currentId" @click="confirm(row, 'delete')">{{ $t("删除") }}</button></div>
           <p v-else class="field-hint">{{ $t("在环境检测中查看服务器认证状态。") }}</p>

@@ -20,18 +20,22 @@ const { verifyStartTaskLock } = require('./start-task.test.cjs');
 const { verifySessionMarkdown } = require('./session-markdown.test.cjs');
 const { verifySessionScroll } = require('./session-scroll.test.cjs');
 const { verifySessionSuppliers } = require('./session-suppliers.test.cjs');
+const { dismissOperationMessages: dismissFeedback } = require('../support/operation-feedback.cjs');
 
 async function choosePermission(page, mode) {
+  await dismissFeedback(page);
   await page.getByRole('combobox', { name: '权限模式', exact: true }).click();
   await page.locator(`.permission-option[data-value="${mode}"]`).click();
 }
 
 async function chooseSessionModel(page, model) {
+  await dismissFeedback(page);
   await page.getByRole('combobox', { name: 'Codex 模型', exact: true }).click();
   await page.locator(`.model-option[data-model="${model}"]`).click();
 }
 
 async function chooseSessionEffort(page, effort) {
+  await dismissFeedback(page);
   await page.getByRole('combobox', { name: '思考强度', exact: true }).click();
   await page.locator(`.effort-option[data-effort="${effort}"]`).click();
 }
@@ -346,6 +350,7 @@ async function verifyExecutionSettings(browser, origin, manager, client, key, er
     await page.getByRole('button', { name: '■ 停止', exact: true }).click();
     await page.getByRole('button', { name: '■ 停止', exact: true }).waitFor({ state: 'hidden' });
     await input.fill('设置浏览器回归第二轮');
+    await dismissFeedback(page);
     await page.getByRole('button', { name: '发送 ↑', exact: true }).click();
     await page.getByRole('button', { name: '■ 停止', exact: true }).waitFor();
     const second = client.calls.findLast((call) => call.method === 'turn/start');
@@ -1080,6 +1085,8 @@ async function main() {
       .getByRole('button', { name: '■ 停止', exact: true })
       .waitFor({ state: 'hidden' });
     await input.fill('继续执行');
+    // Bottom-right feedback occupies the same area as the composer actions until dismissed.
+    await dismissFeedback(page);
     await page.getByRole('button', { name: '发送 ↑', exact: true }).click();
     await page.getByRole('button', { name: '■ 停止', exact: true }).waitFor();
     assert.equal(

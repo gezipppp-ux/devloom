@@ -3,7 +3,7 @@ import { translate } from "../i18n/index.js";
 import { computed, ref, useId } from "vue";
 import catalog from "../../../../shared/project-permissions.json";
 import presets from "../../../../shared/project-permission-presets.json";
-const props = defineProps({ modelValue: { type: Array, default: () => [] }, baseline: { type: Array, default: () => [] }, ceiling: { type: Array, default: () => catalog.map(p => p.id) }, department: Boolean, administratorAccess: Boolean, disabled: Boolean });
+const props = defineProps({ modelValue: { type: Array, default: () => [] }, baseline: { type: Array, default: () => [] }, ceiling: { type: Array, default: () => catalog.map(p => p.id) }, department: Boolean, administratorAccess: Boolean, disabled: Boolean, compact: Boolean });
 const emit = defineEmits(["update:modelValue"]);
 const preview = ref(presets[0].id);
 const editorId = useId();
@@ -11,9 +11,11 @@ const search = ref("");
 const onlySelected = ref(false);
 const selectedGroup = ref(catalog[0].group);
 const lastChange = ref("");
+const toolsOpen = ref(false);
 const items = computed(() => catalog.filter(p => props.department || p.scope !== "department"));
-const groups = computed(() => [...new Set(items.value.map(p => p.group))].map(name => {
-  const permissions = items.value.filter(p => p.group === name);
+const category = permission => props.compact ? ({ "项目": "项目", "需求与 Bug": "事项", "发布版本": "事项", "代码": "开发", "Agent": "开发", "协作": "交付", "资产": "资产" })[permission.group] : permission.group;
+const groups = computed(() => (props.compact ? ['项目', '事项', '开发', '交付', '资产'] : [...new Set(items.value.map(category))]).map(name => {
+  const permissions = items.value.filter(p => category(p) === name);
   return { name, permissions, selected: permissions.filter(p => props.modelValue.includes(p.id)).length, matches: permissions.filter(matches) };
 }));
 const activeGroup = computed(() => groups.value.find(group => group.name === selectedGroup.value && group.matches.length) || groups.value.find(group => group.matches.length));
@@ -83,8 +85,9 @@ function revert() {
 }
 </script>
 <template>
-  <div class="project-permission-editor">
-    <p class="field-hint">{{ department ? $t("启用可用功能仅扩大部门上限，不会自动授予任何项目权限。项目负责人仍需在具体项目分配成员工作。") : administratorAccess ? $t("管理员已有全局协作管理权限。这里维护额外的项目授权，开发和敏感资产仍需部门许可及完整的项目依赖授权。") : $t("实际可用权限由部门上限与项目授权共同决定。添加组合会保留已选权限，包括项目管理权限。") }}</p>
+  <div class="project-permission-editor" :class="{ 'permission-editor-compact': compact }">
+    <p v-if="compact" class="field-hint">{{ $t('授权组合来自部门功能上限，不创建岗位角色。') }}</p>
+    <p v-else class="field-hint">{{ department ? $t("启用可用功能仅扩大部门上限，不会自动授予任何项目权限。项目负责人仍需在具体项目分配成员工作。") : administratorAccess ? $t("管理员自动拥有全部权限，无需分配部门或项目权限。") : $t("实际可用权限由部门上限与项目授权共同决定。添加组合会保留已选权限，包括项目管理权限。") }}</p>
     <p v-if="department" class="field-hint">{{ $t("开启功能会补齐必要依赖；关闭功能会同步关闭依赖它的操作。高级设置可只开放查看等细项。") }}</p>
     <div v-if="department" class="permission-capabilities">
       <label v-for="capability in capabilities" :key="capability.id" class="permission-capability">
@@ -92,21 +95,21 @@ function revert() {
         <small>{{ $t(capabilityState(capability)) }} · {{ $t(capability.description) }}</small>
       </label>
     </div>
-    <div v-else class="permission-preset">
+    <details v-else class="permission-preset-tools" :open="!compact"><summary v-if="compact">{{ $t('权限组合与高级设置') }}</summary><div class="permission-preset">
       <label>{{ $t("权限组合") }}<select v-model="preview" :disabled="disabled" :aria-label="$t(&quot;权限组合&quot;)"><option v-for="entry in presets" :key="entry.id" :value="entry.id">{{ $t(entry.label) }}</option></select></label>
       <p>{{ $t(preset.description) }}</p><p class="field-hint">{{ $t("将添加：") }}{{ labels(available) || $t("无可用权限") }}</p>
       <p v-if="blocked.length" class="field-hint">{{ $t("部门未开放：") }}{{ labels(blocked) }}</p>
       <p v-if="coreBlocked.length" class="field-hint">{{ $t("组合核心功能未开放：") }}{{ labels(coreBlocked) }}{{ $t("。请联系系统管理员调整部门可用功能后再添加此组合。") }}</p>
       <button type="button" :disabled="disabled || !available.length || Boolean(coreBlocked.length)" @click="apply">{{ $t("添加") }}{{ $t(preset.label) }}{{ $t("组合") }}</button>
-    </div>
-    <p class="field-hint" aria-live="polite">{{ department ? $t("部门开放功能") : administratorAccess ? $t("本次项目授权可用功能") : $t("保存后实际可用功能") }}：{{ department ? $t("{p0} / {p1} 项，可在下方按分类查看", { p0: effective.length, p1: items.length }) : effective.map(p => p.label).join('、') || $t("尚未授权") }}</p>
+    </div><p v-if="compact" class="field-hint" aria-live="polite">{{ administratorAccess ? $t('本次项目授权可用功能') : $t('保存后实际可用功能') }}：{{ effective.map(p => $t(p.label)).join('、') || $t('尚未授权') }}</p></details>
+    <p v-if="!compact" class="field-hint" aria-live="polite">{{ department ? $t("部门开放功能") : administratorAccess ? $t("本次项目授权可用功能") : $t("保存后实际可用功能") }}：{{ department ? $t("{p0} / {p1} 项，可在下方按分类查看", { p0: effective.length, p1: items.length }) : effective.map(p => $t(p.label)).join('、') || $t("尚未授权") }}</p>
     <p v-if="!department && !administratorAccess && !modelValue.includes('project.view')" class="field-hint">{{ $t("参与中的成员必须有“查看项目”权限，否则无法进入项目。") }}</p>
-    <details class="permission-details" :open="department"><summary>{{ $t("高级权限细项（") }}{{ modelValue.length }} {{ $t("项已选）") }}</summary>
-      <p class="field-hint">{{ $t("选中操作会补齐必要依赖；取消基础权限会同时取消相关操作。") }}</p>
-      <div class="permission-toolbar">
+    <component :is="compact ? 'div' : 'details'" class="permission-details" :open="department"><summary v-if="!compact">{{ $t("高级权限细项（") }}{{ modelValue.length }} {{ $t("项已选）") }}</summary>
+      <p v-if="!compact" class="field-hint">{{ $t("选中操作会补齐必要依赖；取消基础权限会同时取消相关操作。") }}</p>
+      <details class="permission-filter-tools" :open="!compact" @toggle="toolsOpen = $event.target.open"><summary v-if="compact">{{ $t('筛选与批量操作') }}</summary><div class="permission-toolbar">
         <label class="permission-search">{{ $t("搜索权限") }}<input v-model="search" type="search" :placeholder="$t(&quot;搜索功能或权限名称&quot;)" @keydown.enter.prevent /></label>
         <label class="permission-filter"><input v-model="onlySelected" type="checkbox" />{{ department ? $t("只看已开放") : $t("只看已选") }}</label>
-      </div>
+      </div></details>
       <div class="permission-workbench">
         <nav class="permission-categories" :aria-label="$t(&quot;权限分类&quot;)">
           <button v-for="group in groups" :key="group.name" type="button" :aria-label="$t(group.name)" :aria-pressed="activeGroup?.name === group.name" :disabled="!group.matches.length" @click="selectedGroup = group.name">
@@ -115,8 +118,9 @@ function revert() {
         </nav>
         <section class="permission-pane" :aria-label="activeGroup ? $t(&quot;{p0}权限&quot;, { p0: $t(activeGroup.name) }) : $t(&quot;权限搜索结果&quot;)">
           <template v-if="activeGroup">
-            <header class="permission-pane-heading"><h3>{{ $t(activeGroup.name) }}</h3><span>{{ activeGroup.selected }} / {{ activeGroup.permissions.length }} {{ $t("项") }}{{ department ? $t("已开放") : $t("已选") }}</span></header>
-            <div class="permission-group-actions">
+            <header class="permission-pane-heading"><h3>{{ compact ? $t('{name}可用功能', { name: $t(activeGroup.name) }) : $t(activeGroup.name) }}</h3><span v-if="!compact">{{ activeGroup.selected }} / {{ activeGroup.permissions.length }} {{ $t("项") }}{{ department ? $t("已开放") : $t("已选") }}</span></header>
+            <p v-if="compact" class="field-hint">{{ $t('项目授权不得超出所属部门的功能上限。') }}</p>
+            <div v-if="!compact || toolsOpen" class="permission-group-actions">
               <label class="permission-filter"><input type="checkbox" :checked="allSelected" :indeterminate="partlySelected" :disabled="disabled || !selectable.length" @change="toggleMany(selectable.map(p => p.id), $event.target.checked)" />{{ filtering ? $t("全选筛选结果") : $t("本组全选") }}</label>
               <button type="button" class="permission-quiet" :disabled="disabled || !selectedVisible.length" @click="toggleMany(selectedVisible.map(p => p.id), false)">{{ filtering ? $t("清空筛选结果") : $t("清空本组") }}</button>
             </div>
@@ -125,7 +129,7 @@ function revert() {
                 <input type="checkbox" :aria-label="$t(permission.label)" :aria-describedby="`${editorId}-${permission.id}`" :checked="modelValue.includes(permission.id)" :disabled="disabled || (!allowed(permission.id) && !modelValue.includes(permission.id))" @change="toggle(permission.id, $event.target.checked)" />
                 <span><span class="permission-label">{{ $t(permission.label) }}</span><span :id="`${editorId}-${permission.id}`" class="permission-description">
                   <small v-if="!allowed(permission.id)" class="permission-caution">{{ $t("部门未开放或缺少依赖") }}</small>
-                  <small>{{ permission.requires.length ? $t("依赖：{p0}", { p0: labels(permission.requires) }) : $t("项目访问的基础权限") }}</small>
+                  <small v-if="!compact || toolsOpen">{{ permission.requires.length ? $t("依赖：{p0}", { p0: labels(permission.requires) }) : $t("项目访问的基础权限") }}</small>
                   <small v-if="caution(permission)" class="permission-caution">{{ $t(caution(permission)) }}</small>
                 </span></span>
               </label>
@@ -135,7 +139,7 @@ function revert() {
         </section>
       </div>
       <p v-if="lastChange" class="permission-change" role="status">{{ $t(lastChange) }}</p>
-    </details>
+    </component>
     <div class="permission-changes"><p aria-live="polite">{{ hasChanges ? $t("待保存：新增 {p0} 项 · 取消 {p1} 项", { p0: changes.added.length, p1: changes.removed.length }) : $t("当前权限未修改") }}</p><button type="button" class="permission-quiet" :disabled="disabled || !hasChanges" @click="revert">{{ $t("撤销权限修改") }}</button></div>
   </div>
 </template>
@@ -177,6 +181,24 @@ function revert() {
 .permission-change { padding: 12px 16px; margin: 16px 0 0; background: var(--soft); border-radius: var(--radius-control); font-size: 12px; overflow-wrap: anywhere; }
 .permission-changes { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding-top: 12px; }
 .permission-changes p { margin: 0; color: var(--muted); font-size: 12px; }
+.permission-editor-compact { display: flex; flex-direction: column; gap: 16px; }
+.permission-editor-compact > .field-hint { margin: 0; }
+.permission-editor-compact .permission-details { order: 1; display: flex; flex-direction: column; }
+.permission-editor-compact .permission-workbench { order: 0; grid-template-columns: 140px minmax(0, 1fr); }
+.permission-editor-compact .permission-categories { padding: 16px 12px; border-right: 1px solid var(--line); }
+.permission-editor-compact .permission-categories small { display: none; }
+.permission-editor-compact .permission-categories button[aria-pressed=true] { color: var(--highlight); font-weight: 400; }
+.permission-editor-compact input[type=checkbox] { accent-color: var(--highlight); }
+.permission-editor-compact .permission-pane { padding: 24px; }
+.permission-editor-compact .permission-pane-heading { padding: 0; border: 0; }
+.permission-editor-compact .permission-pane-heading h3 { font-size: 14px; }
+.permission-editor-compact .permission-detail-row { border: 0; padding: 12px 0; }
+.permission-editor-compact .permission-label { font-size: 13px; }
+.permission-editor-compact .permission-filter-tools { order: 1; margin-top: 16px; }
+.permission-editor-compact .permission-preset-tools { order: 2; }
+.permission-editor-compact .permission-change { order: 2; }
+.permission-editor-compact .permission-changes { order: 3; padding: 0; }
+.permission-editor-compact :is(.permission-preset-tools, .permission-filter-tools) > summary { color: var(--muted); font-size: 12px; cursor: pointer; padding-block: 8px; }
 @media (max-width: 600px) {
   .permission-workbench { grid-template-columns: 1fr; }
   .permission-categories { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 8px; }
@@ -184,4 +206,5 @@ function revert() {
   .permission-pane { padding: 16px; }
   .permission-search { flex-basis: 100%; }
 }
+@media (max-width: 480px) { .permission-editor-compact .permission-workbench { grid-template-columns: minmax(0, 1fr); } .permission-editor-compact .permission-categories { border-right: 0; border-bottom: 1px solid var(--line); } .permission-editor-compact .permission-pane { padding: 20px 16px; } }
 </style>

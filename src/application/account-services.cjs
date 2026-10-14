@@ -91,7 +91,7 @@ class AccountServices {
   }
   async update(id, input, actor, authorize) {
     (await this.requireAdmin(actor));
-    input = validateAccountUpdate(input);
+    input = validateAccountUpdate(input, { currentRole: (await this.store.byId(id))?.role });
     const patch = {};
     if (input.displayName !== undefined) patch.displayName = input.displayName;
     if (input.departmentId !== undefined) patch.departmentId = input.departmentId;

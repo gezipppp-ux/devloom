@@ -1,10 +1,24 @@
 const { WorkbenchStore } = require("../storage/workbench-store.cjs");
 const { pageInput, choice, text, ISSUE_TYPES, PRIORITIES } = require("../domain/project-issues.cjs");
 const { accountError } = require("../domain/account.cjs");
-const { presentWorkbenchPage } = require("./workbench-presenter.cjs");
+const { presentWorkbenchPage, presentProjectActivity, presentRecentProjects } = require("./workbench-presenter.cjs");
 
 class WorkbenchServices {
   constructor(database, projects) { this.store = new WorkbenchStore(database); this.projects = projects; }
+  async recentProjects(actor) {
+    const { projects } = await this.projects.list(actor);
+    const visits = await this.store.recentProjects(actor.id, projects.map(project => project.id));
+    for (const visit of visits) await this.projects.authorize(visit.projectId, actor, "project.view");
+    return presentRecentProjects(visits, projects);
+  }
+  async activity(id, actor) {
+    const { permissions } = await this.projects.authorize(id, actor, "issue.view");
+    const deliveries = permissions.includes("collaboration.view");
+    const rows = await this.store.activity(id, { deliveries });
+    await this.projects.authorize(id, actor, "issue.view");
+    if (deliveries) await this.projects.authorize(id, actor, "collaboration.view");
+    return presentProjectActivity(id, rows);
+  }
   async list(kind, actor, input = {}) {
     choice(kind, ["issues", "tasks", "deliveries"], "工作类型");
     const permission = kind === "deliveries" ? "collaboration.view" : kind === "tasks" ? "session.view" : "issue.view";
@@ -20,7 +34,7 @@ class WorkbenchServices {
     const result = await this.store.list(kind, projects.map(p => p.id), actor.id, page);
     // Recheck every scope after the query, including projects contributing only totals.
     for (const project of projects) { await this.projects.authorize(project.id, actor, permission); if (kind === "deliveries") await this.projects.authorize(project.id, actor, "issue.view"); }
-    return presentWorkbenchPage(kind, result, projects);
+    return presentWorkbenchPage(kind, result, projects, actor.id);
   }
 }
 module.exports = { WorkbenchServices };

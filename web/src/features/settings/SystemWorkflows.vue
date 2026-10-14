@@ -63,13 +63,13 @@ async function persist(publish = false) {
 </script>
 
 <template>
-  <section class="project-detail workflow-settings">
-    <header class="project-heading"><h2>{{ $t("流程编排") }}</h2><select v-model="type" :aria-label="$t(&quot;流程类型&quot;)" :disabled="saving"><option value="requirement">{{ $t("需求流程") }}</option><option value="bug">{{ $t("Bug 流程") }}</option></select></header>
+  <section class="workflow-settings" :aria-label="$t('流程编排')">
+    <header class="ui-settings-heading"><div><h2>{{ $t("流程编排") }}</h2><p>{{ $t("系统统一维护需求和 Bug 两套流程，发布后用于所有项目的新事项。") }}</p></div></header>
+    <div class="workflow-page-toolbar"><div class="workflow-type-tabs" role="group" :aria-label="$t('流程类型')"><button type="button" :aria-pressed="type === 'requirement'" :disabled="saving" @click="type = 'requirement'">{{ $t("需求流程") }}</button><button type="button" :aria-pressed="type === 'bug'" :disabled="saving" @click="type = 'bug'">{{ $t("Bug 流程") }}</button></div><span v-if="data" class="workflow-version">{{ $t("已发布 v") }}{{ data.workflow.publishedVersion }}</span></div>
     <FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="notice" type="success" />
     <p v-if="loading" role="status">{{ $t("正在读取流程…") }}</p>
     <button v-if="error" :disabled="loading || saving" @click="reload">{{ $t("重新读取流程") }}</button>
     <template v-if="data">
-      <div class="workflow-intro"><p>{{ $t("系统统一维护需求和 Bug 两套流程，发布后用于所有项目的新事项。") }}</p><span>{{ $t("已发布 v") }}{{ data.workflow.publishedVersion }}</span></div>
       <WorkflowGraph :key="type" ref="graph" :definition="definition" :selected="selected" :selected-edge="selectedEdge" :editable="!saving && !loading" @select="selectNode" @select-edge="selectEdge" @move="moveNode" @add="addNode" @connect="addEdge" @clear="clear" @delete="requestDelete">
         <template #inspector>
           <fieldset ref="editor" :disabled="saving || loading" class="canvas-properties" @keydown.esc.stop.prevent="deleting ? cancelDelete() : closeEditor()">
@@ -104,11 +104,11 @@ async function persist(publish = false) {
 
 <style scoped>
 .workflow-settings { min-width: 0; }
-.project-heading h2 { flex: 1; white-space: nowrap; }
-.project-heading select { width: min(100%, 240px); }
-.workflow-intro { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 16px; color: var(--muted); font-size: 13px; }
-.workflow-intro p { margin: 0; flex: 1 1 240px; }
-.workflow-intro span { background: var(--soft); color: var(--accent); padding: 4px 10px; border-radius: var(--radius-control); white-space: nowrap; }
+.workflow-page-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+.workflow-type-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--surface); }
+.workflow-type-tabs button { border: 0; background: transparent; color: var(--muted); }
+.workflow-type-tabs button[aria-pressed="true"] { background: var(--selected); color: var(--highlight); }
+.workflow-version { padding: 4px 8px; border-radius: 4px; background: var(--soft); font-size: 12px; color: var(--muted); }
 .canvas-properties { display: grid; gap: 16px; padding: 0; margin: 0; border: 0; min-width: 0; }
 .canvas-properties header { display: grid; gap: 4px; }
 .canvas-properties h3 { font-size: 15px; margin: 0; }

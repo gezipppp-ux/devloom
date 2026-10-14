@@ -27,9 +27,23 @@ async function verifyWorkbench(browser) {
       if (endpoint === '/api/account/models') return send({ models: [] });
       if (endpoint === '/api/account/execution-options') return send({ permissionModes: require('../../shared/agent-permissions.json').map(mode => ({ ...mode, available: true })), agent: { label: 'Codex' } });
       if (endpoint === '/api/account/preferences') return send({ preferences: { unreadRunKeys: [] } });
+      if (endpoint === '/api/account/git-accounts') return send({ accounts: [{ id: 'git-fixture', name: '工作 Git', authType: 'http', host: 'https://git.example.test', username: 'preview', authorName: '演示成员', authorEmail: 'preview@example.test', revision: 1 }] });
+      if (endpoint === '/api/account/mcp-tokens') return send({ tokens: [{ id: 'token-fixture', name: '本机助手', prefix: 'wc_mcp_fixture', status: 'active', allProjects: true, projectIds: [], scopes: ['read'], expiresAt: '2027-01-01T00:00:00Z', lastUsedAt: null }], scopes: require('../../shared/mcp-scopes.json'), projects: [{ id: projectId, name: project.name }] });
+      if (endpoint === '/api/system/settings') return send({ memberStorageRoot: 'D:/Workspace', platform: 'win32', git: { installed: true, version: '2.47.0' } });
+      if (['/api/workbench/attention', '/api/workbench/recent-projects'].includes(endpoint)) return send(fixture.response(url));
       if (endpoint.startsWith('/api/workbench/')) {
         const kind=endpoint.split('/').at(-1);
-        const row={ ...issue, projectId, projectName:project.name, releaseName:'v0.2', ...(kind==='tasks'?{id:'task-1',title:'搜索开发任务',status:'planned'}:kind==='deliveries'?{...delivery}:{} ) };
+        if (kind === 'tasks') {
+          const task = fixture.response(new URL(origin + base + '/tasks/search-task')).task;
+          const items = [
+            { ...task, id: 'task-1', title: '统一搜索与项目筛选', status: 'planned', canMerge: true, canOpenSession: false, runKey: null, issueIds: ['search'] },
+            { ...task, id: 'task-2', title: '登录与首次使用体验优化', status: 'started', canMerge: false, issueIds: ['search'] },
+            { ...task, id: 'task-3', title: '修复移动端菜单遮挡', status: 'completed', canMerge: false, issueIds: ['search'] },
+            { ...task, id: 'task-4', title: '资产类型与目录整理', status: 'planned', canMerge: true, canOpenSession: false, runKey: null, issueIds: ['export'] },
+          ].map(item => ({ ...item, projectId, projectName: project.name, kind: 'issues', releaseName: 'v0.2' })).filter(item => !url.searchParams.get('status') || item.status === url.searchParams.get('status'));
+          return send({ items, people: [], total: items.length, nextOffset: null });
+        }
+        const row={ ...issue, projectId, projectName:project.name, releaseName:'v0.2', ...(kind==='deliveries'?{...delivery}:{} ) };
         return send({items:[row],people:issue.people,total:1,nextOffset:null});
       }
       if (endpoint === base + '/issues') {
@@ -49,6 +63,7 @@ async function verifyWorkbench(browser) {
     return route.fulfill({body:fs.readFileSync(file),contentType:file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html'});
   });
   try {
+    await require('./relative-time.test.cjs').verifyRelativeTime(page, origin, projectId);
     await page.goto(origin);
     await page.getByRole('heading',{name:'工作台',exact:true}).waitFor();
     await page.locator('.ui-work-row').first().waitFor();
@@ -61,17 +76,53 @@ async function verifyWorkbench(browser) {
         ['deliveries', '/deliveries', '.ui-work-row'], ['personal', '/personal', '.ui-profile-settings form'],
         ['administration', '/accounts', '.account-list-row'],
         ['prompts', `/projects/${projectId}?tab=prompts`, '.prompt-placeholders'],
+        ['project-settings', `/projects/${projectId}?tab=settings`, '.project-config-actions'],
+        ['personal-git', '/personal?tab=git', '.git-settings-form'],
+        ['personal-mcp', '/personal?tab=mcp', '.mcp-token'],
+        ['system-workflows', '/system?tab=workflows', '.workflow-node'],
+        ['system-storage', '/system', '.storage-directory-preview'],
       ]) {
         await page.goto(origin + location);
         await page.locator(ready).first().waitFor();
+        if (name === 'personal-git') await page.getByRole('button', { name: locale === 'en' ? 'Edit Git account: 工作 Git' : '编辑 Git 账号：工作 Git', exact: true }).click();
         for(const [width,height] of [[2560,1440],[1920,1080],[1440,900],[1280,720],[768,1024],[390,844],[320,740]]) {
           await page.setViewportSize({width,height});
           assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),`${locale} ${name} overflow at ${width}`);
           await page.screenshot({path:path.join(output,`${name}-${locale}-${width}.png`),fullPage:true});
+          if (name === 'administration') {
+            const management = page.locator('.ui-account-manage').last();
+            const trigger = management.locator('summary');
+            await trigger.click();
+            const menu = management.locator('.account-row-actions:popover-open');
+            await menu.waitFor();
+            const bounds = await menu.boundingBox();
+            assert.ok(bounds.x >= 15 && bounds.x + bounds.width <= width - 15 && bounds.y >= 15 && bounds.y + bounds.height <= height - (width < 768 ? 79 : 15), `${locale} account actions stay within the viewport at ${width}`);
+            assert.equal(await page.locator('.account-page-view').evaluate(el => window.getComputedStyle(el).overflowY), 'visible', 'settings use normal page scrolling without a clipping container');
+            await page.screenshot({path:path.join(output,`administration-menu-${locale}-${width}.png`)});
+            await page.keyboard.press('Escape');
+            await menu.waitFor({state:'hidden'});
+            assert.equal(await trigger.evaluate(el => el === document.activeElement), true, 'Escape returns focus to the account action trigger');
+          }
         }
       }
     }
+    const enteredProject = () => page.waitForURL(url => url.pathname === `/projects/${projectId}` && url.searchParams.get('tab') === 'overview');
+    for (const [width, height] of [[1920, 1080], [390, 844]]) {
+      await page.setViewportSize({ width, height });
+      await page.goto(origin + '/projects');
+      await page.locator('.project-entry-card').first().click({ position: { x: 12, y: 12 } });
+      await enteredProject();
+      await page.locator('.project-overview-grid').waitFor();
+    }
     await page.setViewportSize({width:1920,height:1080});
+    await page.goto(origin + '/projects');
+    const projectTitle = page.getByRole('button', { name: project.name, exact: true });
+    await projectTitle.focus();
+    await projectTitle.press('Enter');
+    await enteredProject();
+    await page.goto(origin + '/projects');
+    await page.locator('.project-entry-card').first().getByRole('button', { name: `Open project ${project.name}`, exact: true }).click();
+    await enteredProject();
     await page.goto(origin + '/development');
     await page.getByRole('button', { name: 'Filters', exact: true }).click();
     await page.getByLabel('Task status', { exact: true }).selectOption('started');
@@ -122,7 +173,7 @@ async function verifyWorkbench(browser) {
     assert.equal(await page.getByLabel('Review notes',{exact:true}).inputValue(),'','access recovery cannot resurrect a revoked draft');
     assert.equal(await page.getByRole('checkbox').nth(0).isChecked(),false);
     assert.deepEqual(errors,[]);
-    console.log('Workbench browser checks passed: nine bilingual surfaces at seven viewports, task filtering, search, paged issue selection, explicit sharing and complete acceptance checks.');
-  } finally {await context.close();}
+    console.log('Workbench browser checks passed: fourteen bilingual surfaces at seven viewports, whole-card and keyboard project entry, task filtering, search, paged issue selection, explicit sharing and complete acceptance checks.');
+  } catch(error) { await page.screenshot({path:'state/browser/ui-refactor/workbench-failure.png'}); console.error(await page.locator('body').innerText()); throw error; } finally {await context.close();}
 }
 module.exports={verifyWorkbench};

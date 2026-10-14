@@ -2,23 +2,23 @@
 import { formatDate, translate, formatNumber } from "../../shared/i18n/index.js";
 /* global window, navigator */
 import { computed, nextTick, onUnmounted, reactive, ref } from "vue";
-import { ArrowLeftOutlined, ArrowRightOutlined, DownOutlined, KeyOutlined, PictureOutlined, PlusOutlined, ReloadOutlined } from "@antdv-next/icons";
-import FormSection from "../../shared/components/FormSection.vue";
+import { ArrowLeftOutlined, ArrowRightOutlined, CopyOutlined, DownOutlined, KeyOutlined, PictureOutlined, PlusOutlined, ReloadOutlined } from "@antdv-next/icons";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { appApi } from "../../shared/api/api.js";
 import { useResource } from "../../shared/api/use-resource.js";
 import McpConnectionHelp from "./McpConnectionHelp.vue";
 import McpUploadHelp from "./McpUploadHelp.vue";
 
-const expanded = ref(false), view = ref("overview"), showAll = ref(false), secret = ref("");
+const expanded = ref(true), view = ref("overview"), showAll = ref(false), secret = ref("");
 const revokeTarget = ref(null), confirmation = ref(null), nameInput = ref(null), secretInput = ref(null), createButton = ref(null), manageButton = ref(null), backButton = ref(null);
 const form = reactive({ name: "", expiresInDays: 30, allProjects: true, projectIds: [], scopes: ["read", "issues.write", "issues.assign", "releases.write", "files.upload"] });
-const { data, loading, saving, error, notice, reload, perform } = useResource(() => appApi("/account/mcp-tokens"), { immediate: false });
+const { data, loading, saving, error, notice, reload, perform } = useResource(() => appApi("/account/mcp-tokens"));
 const origin = window.location.origin;
+const endpoint = new URL("/mcp", origin).href;
 const canCreate = computed(() => form.name.trim() && (form.allProjects || form.projectIds.length) && data.value && !loading.value && !saving.value);
 const visibleTokens = computed(() => showAll.value ? data.value?.tokens || [] : (data.value?.tokens || []).slice(0, 2));
-const title = computed(() => ({ overview: "MCP 接入", create: "创建 MCP Token", created: "Token 已创建", upload: "图片上传与发布" })[view.value]);
-const description = computed(() => ({ overview: "让 Agent 访问项目，发布图文需求与 Bug。", create: "按 Agent 或设备区分凭证，方便管理与撤销。", created: "保存凭证后，将它配置到你的客户端。", upload: "使用受鉴权 HTTP 上传，在正文中引用附件 ID。" })[view.value]);
+const title = computed(() => ({ overview: "MCP 接入", guide: "连接配置与图片上传", create: "创建 MCP Token", created: "Token 已创建", upload: "图片上传与发布" })[view.value]);
+const description = computed(() => ({ overview: "让本机工具在明确的范围内访问项目。", guide: "让 Agent 访问项目，发布图文需求与 Bug。", create: "按 Agent 或设备区分凭证，方便管理与撤销。", created: "保存凭证后，将它配置到你的客户端。", upload: "使用受鉴权 HTTP 上传，在正文中引用附件 ID。" })[view.value]);
 let returnFocus, alive = true, copyGeneration = 0;
 function open() { expanded.value = true; view.value = "overview"; void reload(); }
 async function close() {
@@ -67,33 +67,39 @@ function projectLabel(token) { return token.allProjects ? translate("全部可�
 onUnmounted(() => { alive = false; secret.value = ""; copyGeneration++; });
 </script>
 <template>
-  <FormSection :title="$t(title)" :description="$t(description)" class="mcp-access" :class="{ 'mcp-access-expanded': expanded }">
-    <template v-if="expanded" #action>
+  <section class="mcp-access" :aria-label="$t('MCP 接入')">
+    <header class="ui-settings-heading"><div><h2>{{ $t(title) }}</h2><p>{{ $t(description) }}</p></div>
+    <div v-if="expanded">
       <div class="mcp-row">
-        <button v-if="view === 'overview'" ref="createButton" type="button" class="primary" :disabled="!data || loading || saving" @click="navigate('create', $event)"><PlusOutlined aria-hidden="true" />{{ $t("创建 Token") }}</button>
         <button type="button" class="text-button" :disabled="saving" @click="close">{{ $t("收起 MCP 接入") }}</button>
       </div>
-    </template>
+    </div></header>
     <button v-if="!expanded" ref="manageButton" type="button" @click="open">{{ $t("管理 MCP Token") }}</button>
     <div v-else class="mcp-settings">
       <FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="notice" type="success" />
       <button v-if="view !== 'overview'" ref="backButton" type="button" class="text-button mcp-back" :disabled="saving" @click="navigate('overview')"><ArrowLeftOutlined aria-hidden="true" />{{ $t("返回 MCP 接入") }}</button>
       <template v-if="view === 'overview'">
-        <McpConnectionHelp :origin="origin" @copy="copy" />
-        <section class="mcp-card" :aria-label="$t(&quot;我的 Token&quot;)">
-          <header class="mcp-row mcp-between"><h3>{{ $t("我的 Token") }} <span v-if="data" class="mcp-count">{{ data.tokens.length }}</span></h3><div class="mcp-row"><button v-if="data?.tokens.length > 2" type="button" class="text-button" @click="showAll = !showAll">{{ showAll ? $t("收起列表") : $t("查看全部") }}</button><button type="button" class="text-button" :disabled="loading || saving" @click="reload"><ReloadOutlined aria-hidden="true" />{{ $t("刷新") }}</button></div></header>
+        <section class="mcp-card mcp-address-card" :aria-label="$t('连接地址')"><h3>{{ $t("连接地址") }}</h3><div class="mcp-address-row"><input :value="endpoint" readonly :aria-label="$t('MCP 地址')" /><button type="button" :aria-label="$t('复制 MCP 地址')" @click="copy(endpoint)"><CopyOutlined aria-hidden="true" />{{ $t("复制") }}</button></div><button type="button" class="text-button mcp-guide-link" @click="navigate('guide', $event)"><ArrowRightOutlined aria-hidden="true" />{{ $t("连接配置与图片上传") }}</button></section>
+        <section class="mcp-personal-tokens" :aria-label="$t(&quot;个人 Token&quot;)">
+          <header class="mcp-row mcp-between"><h3>{{ $t("个人 Token") }} <span v-if="data" class="mcp-count">{{ data.tokens.length }}</span></h3><div class="mcp-row"><button v-if="data?.tokens.length > 2" type="button" class="text-button" @click="showAll = !showAll">{{ showAll ? $t("收起列表") : $t("查看全部") }}</button><button type="button" class="text-button" :disabled="loading || saving" @click="reload"><ReloadOutlined aria-hidden="true" />{{ $t("刷新") }}</button><button ref="createButton" type="button" class="primary" :disabled="!data || loading || saving" @click="navigate('create', $event)"><PlusOutlined aria-hidden="true" />{{ $t("创建 Token") }}</button></div></header>
+          <div class="mcp-token-panel">
           <p v-if="loading" class="muted" role="status">{{ $t("正在读取 MCP Token…") }}</p>
           <p v-else-if="!data" class="field-hint">{{ $t("Token 列表读取失败，请刷新重试。") }}</p>
           <div v-else-if="!data.tokens.length" class="mcp-empty"><KeyOutlined aria-hidden="true" /><h3>{{ $t("尚未创建 Token") }}</h3><p>{{ $t("为你的 Agent 创建一枚专属访问凭证。") }}</p><button type="button" @click="navigate('create', $event)">{{ $t("创建第一枚 Token") }}</button></div>
           <ul v-if="data?.tokens.length" class="mcp-token-list">
             <li v-for="token in visibleTokens" :key="token.id">
               <details class="mcp-token">
-                <summary><span class="mcp-key"><KeyOutlined aria-hidden="true" /></span><span class="mcp-token-identity"><span class="mcp-row"><strong>{{ token.name }}</strong><span class="mcp-status" :class="{ 'is-active': token.status === 'active' }">{{ $t(statusLabel(token)) }}</span></span><span class="field-hint">{{ projectLabel(token) }} · {{ date(token.expiresAt) }} {{ $t("到期") }}</span></span><span class="mcp-detail-label">{{ $t("详情") }} <DownOutlined aria-hidden="true" /></span></summary>
-                <div class="mcp-token-details"><code>{{ token.prefix }}…</code><p class="field-hint">{{ $t("最近使用：") }}{{ date(token.lastUsedAt) }}</p><p v-if="!token.allProjects" class="field-hint">{{ $t("项目：") }}{{ token.projectIds.map(id => data.projects.find(project => project.id === id)?.name || id).join('、') }}</p><div class="mcp-scope-tags"><span v-for="id in token.scopes" :key="id">{{ $t(data.scopes.find(scope => scope.id === id)?.label || id) }}</span></div><button v-if="!token.revokedAt" type="button" class="danger" :disabled="saving" @click="requestRevoke(token, $event)">{{ $t("撤销") }} {{ token.name }}</button></div>
+                <summary><span class="mcp-key"><KeyOutlined aria-hidden="true" /></span><span class="mcp-token-identity"><strong>{{ token.name }}</strong><span class="field-hint">{{ projectLabel(token) }} · {{ date(token.expiresAt) }} {{ $t("到期") }}</span></span><span class="mcp-status">{{ $t(statusLabel(token)) }}</span><span class="mcp-detail-label">{{ $t("详情") }} <DownOutlined aria-hidden="true" /></span></summary>
+                <div class="mcp-token-details"><code>{{ token.prefix }}…</code><p class="field-hint">{{ $t("最近使用：") }}{{ date(token.lastUsedAt) }}</p><p v-if="!token.allProjects" class="field-hint">{{ $t("项目：") }}{{ token.projectIds.map(id => data.projects.find(project => project.id === id)?.name || id).join('、') }}</p><div class="mcp-scope-tags"><span v-for="id in token.scopes" :key="id">{{ $t(data.scopes.find(scope => scope.id === id)?.label || id) }}</span></div></div>
               </details>
+              <button v-if="!token.revokedAt" type="button" class="text-button mcp-revoke" :aria-label="$t('撤销 {name}', { name: token.name })" :disabled="saving" @click="requestRevoke(token, $event)">{{ $t("撤销") }}</button>
             </li>
           </ul>
+          </div>
         </section>
+      </template>
+      <template v-if="view === 'guide'">
+        <McpConnectionHelp :origin="origin" @copy="copy" />
         <section class="mcp-upload-entry"><PictureOutlined aria-hidden="true" /><div><h3>{{ $t("上传图片，发布完整需求") }}</h3><p>{{ $t("HTTP 上传 → 获取附件 ID → MCP 发布") }}</p></div><button type="button" class="text-button" @click="navigate('upload', $event)">{{ $t("查看用法") }} <ArrowRightOutlined aria-hidden="true" /></button></section>
       </template>
       <form v-if="view === 'create' && data" class="mcp-card mcp-create-form" @submit.prevent="create">
@@ -115,5 +121,38 @@ onUnmounted(() => { alive = false; secret.value = ""; copyGeneration++; });
       <h2 id="mcp-revoke-title">{{ $t("撤销 MCP Token") }}</h2><p>{{ $t("确认撤销「") }}{{ revokeTarget?.name }}{{ $t("」？使用它的 Agent 和 HTTP 上传将立即无法继续访问。") }}</p>
       <div class="actions"><button type="button" :disabled="saving" @click="closeRevoke">{{ $t("取消") }}</button><button type="button" class="primary" :disabled="saving" @click="revoke">{{ saving ? $t("正在撤销…") : $t("确认撤销") }}</button></div>
     </dialog>
-  </FormSection>
+  </section>
 </template>
+<style scoped>
+.mcp-access { min-width: 0; max-width: 1160px; }
+.mcp-settings { gap: 32px; }
+.mcp-address-card { display: grid; gap: 18px; padding: 28px; }
+.mcp-address-card h3 { font-size: 14px; }
+.mcp-address-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-width: 0; }
+.mcp-address-row input { width: min(100%, 440px); min-width: 0; background: var(--soft); border-color: transparent; font: 12px var(--font-code); }
+.mcp-guide-link { justify-self: start; color: var(--highlight); padding-inline: 0; }
+.mcp-personal-tokens > header { margin-bottom: 16px; }
+.mcp-personal-tokens > header h3 { font-size: 20px; }
+.mcp-count { border: 1px solid var(--line); border-radius: 4px; background: var(--surface); padding: 2px 6px; }
+.mcp-token-panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; }
+.mcp-token-panel > p { margin: 24px; }
+.mcp-token-list { margin: 0; }
+.mcp-token-list > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 16px; padding: 4px 24px; }
+.mcp-token { min-width: 0; }
+.mcp-key { color: var(--highlight); background: var(--selected); border: 0; }
+.mcp-status { padding: 4px 8px; background: var(--soft); border-radius: 4px; white-space: nowrap; }
+.mcp-status::before { display: none; }
+.mcp-detail-label { color: var(--muted); }
+.mcp-revoke { margin-top: 18px; font-size: 12px; }
+@media (max-width: 767px) {
+  .mcp-address-card { padding: 20px; }
+  .mcp-token-list > li { padding-inline: 20px; gap: 8px; }
+}
+@media (max-width: 480px) {
+  .mcp-token-list > li { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .mcp-revoke { justify-self: end; margin: 0 0 12px; }
+  .mcp-status { margin-left: 48px; }
+  .mcp-detail-label { margin-left: 0; }
+  .mcp-token-identity { flex-basis: calc(100% - 48px); }
+}
+</style>

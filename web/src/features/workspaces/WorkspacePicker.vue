@@ -296,3 +296,18 @@ onMounted(() => {
     </dialog>
   </Teleport>
 </template>
+
+<style scoped>
+.workspace-choices .workspace-icons { gap: 12px; }
+.workspace-choices .workspace-icon, .workspace-choices .workspace-add { min-height: 44px; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--surface); color: var(--ink); box-shadow: none; }
+.workspace-choices .workspace-icon.active { border-color: var(--field-border); background: var(--selected); color: var(--highlight); }
+.workspace-icon.active { box-shadow: none; }
+.workspace-icon.active::before { background: var(--highlight); }
+.workspace-dialog { width: min(640px, calc(100vw - 32px)); }
+.workspace-dialog-heading h2 { font-size: 20px; font-weight: 600; }
+.workspace-dialog .actions { gap: 12px; }
+@media (max-width: 767px) {
+  .workspace-choices .workspace-icons { display: flex; flex-wrap: wrap; }
+  .workspace-choices .workspace-icon { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+}
+</style>

@@ -90,3 +90,22 @@ async function start() {
     </a-form>
   </section>
 </template>
+
+<style scoped>
+.manual-development-start { width: 100%; max-width: 1040px; margin-inline: auto; }
+.page-heading { margin-bottom: 32px; }
+.page-heading h1 { font-size: clamp(24px, 2.2vw, 32px); font-weight: 600; letter-spacing: -.02em; }
+.page-heading p { max-width: 640px; line-height: 1.8; }
+.manual-development-start > :deep(.ant-form) { padding: 0 32px 24px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); }
+.manual-development-start :deep(.form-section) { margin: 0; padding: 28px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; }
+.manual-development-start :deep(.form-section-heading) { margin-bottom: 24px; }
+.manual-development-start :deep(.form-section-heading h2) { font-size: 16px; }
+.page-actions { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); gap: 12px; }
+@media (max-width: 767px) {
+  .page-heading { margin-bottom: 24px; }
+  .manual-development-start > :deep(.ant-form) { padding: 0 16px 20px; }
+  .manual-development-start :deep(.form-section) { padding-block: 22px; }
+  .page-actions { flex-wrap: wrap; }
+  .page-actions > button { min-height: 44px; }
+}
+</style>

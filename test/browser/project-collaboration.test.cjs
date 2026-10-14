@@ -1,5 +1,5 @@
 const { openProjectTab } = require("../support/browser-navigation.cjs");
-/* global document, window */
+/* global document, window, PopStateEvent */
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -79,6 +79,7 @@ async function main() {
     }
     const tab = name => openProjectTab(page, name);
     await login("product");
+    assert.equal(await page.getByText("我的项目权限", { exact: true }).count(), 0, "项目概览不展示权限说明区");
     await tab("提示词");
     const memberBugPrompt = page.getByRole("textbox", { name: "Bug提示词", exact: true });
     await memberBugPrompt.waitFor();
@@ -196,7 +197,7 @@ async function main() {
       assert.ok(await savedImage.evaluate(image => image.naturalWidth > 0), "persisted image reloads through its authenticated preview URL");
       assert.equal(requests.some(request => request.url.includes("invalid.example")), false, "Markdown never requests remote images");
       await page.goBack();
-      await page.getByRole("button", { name: new RegExp(title) }).click();
+      await page.getByRole("button", { name: title, exact: true }).click();
       assert.equal(page.url(), issueUrl, "browser Back returns to the list and opening restores the issue");
       await page.getByRole("button", { name: "编辑事项", exact: true }).click();
       assert.equal(await editor(page).getByRole("button", { name: "撤销", exact: true }).isDisabled(), true, "opening saved content establishes the history baseline");
@@ -325,7 +326,7 @@ async function main() {
     await page.getByRole("button", { name: "保存成员", exact: true }).waitFor();
     await page.screenshot({ path: path.join(output, "member-permissions.png"), fullPage: true });
     await tab("需求");
-    await page.getByRole("button", { name: /支持验收的需求/ }).click();
+    await page.getByRole("button", { name: "支持验收的需求", exact: true }).click();
     const sourceIssueUrl = page.url();
     await page.getByRole("button", { name: "认领", exact: true }).click();
     const confirmation = page.getByRole("dialog", { name: "认领" });
@@ -358,6 +359,7 @@ async function main() {
     await page.getByRole("button", { name: "返回待开发任务", exact: true }).click();
     assert.equal(new URL(page.url()).searchParams.get("task"), planned.id);
     await page.goto(sourceTaskUrl);
+    await page.getByRole('button', { name: '开始开发', exact: true }).click();
     const branch = page.getByLabel("起始分支", { exact: true });
     await selectRemoteBranch(page);
     assert.equal(await page.locator('.development-branch-select input[type="search"]').count(), 0, "branch search belongs to the dropdown");
@@ -375,6 +377,7 @@ async function main() {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.getByRole("button", { name: "刷新远端分支", exact: true }).click();
     await selectRemoteBranch(page);
+    await page.getByRole('checkbox', { name: '我已确认任务范围、起始分支和执行设置。', exact: true }).check();
     await page.getByRole("button", { name: "启动 Codex 开发", exact: true }).click();
     await page.getByRole("button", { name: "进入 Codex 会话", exact: true }).click();
     await page.getByRole("button", { name: "返回项目协作", exact: true }).waitFor();
@@ -431,7 +434,12 @@ async function main() {
     await page.getByRole("button", { name: "确认认领", exact: true }).click();
     await started;
     // Simulate history navigation during the held request; the native dialog intentionally blocks pointer input.
-    await page.locator(".project-more").getByRole("button", { name: new URL(sourceIssueUrl).searchParams.get("tab") === "bugs" ? "Bug" : "需求", exact: true, includeHidden: true }).evaluate(button => button.click());
+    await page.evaluate(value => {
+      const url = new URL(value);
+      url.searchParams.delete('issue');
+      window.history.pushState({ ...window.history.state }, '', url);
+      window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }));
+    }, sourceIssueUrl);
     await page.getByRole("dialog", { name: "认领" }).waitFor({ state: "detached" });
     const listAfterStart = page.url();
     const lateResponse = page.waitForResponse(response => response.url() === tasksUrl && response.request().method() === "POST");

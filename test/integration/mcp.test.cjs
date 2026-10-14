@@ -69,7 +69,8 @@ test("MCP client publishes images, release and assignment atomically with replay
   assert.equal((await call(client, "whoami")).user.id, f.admin.id);
   assert.deepEqual((await call(client, "list_projects")).items.map(row => row.id), [projectId]);
   const members = (await call(client, "list_project_members", { projectId, assignableOnly: true })).items;
-  assert.equal(members.length, 2);
+  assert.equal(members.length, 3);
+  assert.ok(members.some(member => member.id === f.admin.id), "administrators are assignable without department grants");
   const releaseInput = { requestId: randomUUID(), projectId, name: "v1.2.3" };
   const release = await call(client, "create_release", releaseInput);
   assert.equal((await call(client, "create_release", releaseInput)).reused, true);

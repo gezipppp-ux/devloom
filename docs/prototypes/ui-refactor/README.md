@@ -2,7 +2,7 @@
 
 [打开单文件 HTML](review.html) · [分文件开发入口](index.html) · [PRD](../../prd/ui-refactor.md) · [48 页参考映射](../../prd/ui-refactor-pages.md)
 
-日期：2026-10-13。状态：原型待确认。未替换 Vue 业务页面、未接入生产主题或真实业务 API。
+日期：2026-10-13，状态更新：2026-10-14。状态：原型已确认，正式 Vue 按此风格实施；最新功能边界与验收见[实施记录](../../prd/ui-refactor-implementation.md)。本原型继续独立使用模拟数据，不调用真实业务 API。
 
 ## 打开与评审
 

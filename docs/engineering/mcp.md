@@ -1,6 +1,6 @@
 # MCP 接入与图文发布
 
-控制台入口为「个人设置 → MCP 接入 → 管理 MCP Token」。后端提供同源 /mcp 地址，使用官方 TypeScript SDK 的无状态 Streamable HTTP；只接受 POST，不创建持久 MCP 会话、不提供旧 SSE 传输。支持 HTTP MCP 的 Codex、Claude Code、Pi 可配置此地址。
+控制台入口为「个人设置 → MCP 接入」，默认展示连接地址和个人 Token 列表；「连接配置与图片上传」提供客户端配置和上传指南。后端提供同源 /mcp 地址，使用官方 TypeScript SDK 的无状态 Streamable HTTP；只接受 POST，不创建持久 MCP 会话、不提供旧 SSE 传输。支持 HTTP MCP 的 Codex、Claude Code、Pi 可配置此地址。
 
 接入概览集中展示客户端配置、最近两枚 Token 和图片上传入口；完整列表、权限详情和创建表单按需展开。创建页面保留 HTTP 上传说明，成功后独立显示一次完整 Token，返回其他视图或关闭时清除。Pi 的具体配置方式取决于所使用的 MCP 扩展，控制台只提供通用连接参数。
 

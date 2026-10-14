@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from "vue";
+import { UserOutlined, RobotOutlined } from "@antdv-next/icons";
 import { renderMessage } from "./message-content.js";
 const props = defineProps({ item: { type: Object, required: true }, agentLabel: { type: String, default: "Agent" } });
 const emit = defineEmits(["open-file"]);
@@ -42,6 +43,7 @@ const pretty = (value) =>
     class="message"
     :class="{ 'from-user': item.type === 'userMessage' }"
   >
+    <span class="message-mark" aria-hidden="true"><UserOutlined v-if="item.type === 'userMessage'" /><RobotOutlined v-else /></span>
     <div class="message-role">
       {{ item.type === "userMessage" ? $t("你") : agentLabel
       }}<span
@@ -106,3 +108,21 @@ const pretty = (value) =>
     <p v-if="item.error" class="error">{{ item.error }}</p>
   </details>
 </template>
+
+<style scoped>
+.message { display: grid; grid-template-columns: 30px minmax(0, 1fr); column-gap: 13px; padding: 0; margin-bottom: 30px; }
+.message-mark { grid-column: 1; grid-row: 1 / 4; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--selected); color: var(--highlight); }
+.message-role, .message-text, .message-images { grid-column: 2; min-width: 0; }
+.message-role { margin: 0 0 9px; line-height: 30px; color: var(--ink); font-size: 12px; letter-spacing: 0; }
+.message-text { font-size: 14px; line-height: 1.9; }
+.from-user { margin-top: 0; padding: 0; background: transparent; border: 0; border-radius: 0; }
+.from-user .message-text { padding: 14px 16px; border-radius: 8px; background: var(--soft); }
+.tool-item { margin: 8px 0 20px 43px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
+.tool-item > summary { padding: 10px 12px; min-width: 0; }
+.tool-symbol { color: var(--muted); }
+@media (max-width: 767px) {
+  .message { column-gap: 10px; margin-bottom: 24px; }
+  .from-user .message-text { padding: 12px; }
+  .tool-item { margin-left: 0; }
+}
+</style>

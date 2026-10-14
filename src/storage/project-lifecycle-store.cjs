@@ -1,5 +1,5 @@
 const { accountError } = require("../domain/account.cjs");
-const { issueCompleted } = require("../domain/issue-workflows.cjs");
+const { issueCompleted, issueWorkflowNode } = require("../domain/issue-workflows.cjs");
 
 function conflict() { return accountError("资料已修改，请刷新后重试。", 409); }
 class ProjectLifecycleStore {
@@ -9,7 +9,24 @@ class ProjectLifecycleStore {
     catch (error) { if (["P2034", "P2002"].includes(error.code)) throw conflict(); throw error; }
   }
   async releases(projectId, archived) {
-    return this.database.client.projectRelease.findMany({ where: { projectId, ...(archived ? {} : { status: "active" }) }, orderBy: { createdAt: "desc" } });
+    const rows = await this.database.client.projectRelease.findMany({ where: { projectId, ...(archived ? {} : { status: "active" }) }, orderBy: { createdAt: "desc" } });
+    return this.withProgress(projectId, rows);
+  }
+  async withProgress(projectId, rows) {
+    if (!rows.length) return [];
+    const groups = await this.database.client.projectIssue.groupBy({ by: ["releaseId", "workflowVersionId", "status"], where: { projectId, releaseId: { in: rows.map(row => row.id) } }, _count: { _all: true } });
+    const versions = await this.database.client.systemWorkflowVersion.findMany({ where: { id: { in: [...new Set(groups.map(group => group.workflowVersionId))] } }, select: { id: true, definition: true } });
+    const workflows = new Map(versions.map(version => [version.id, version]));
+    const summaries = new Map(rows.map(row => [row.id, { total: 0, completed: 0, cancelled: 0 }]));
+    for (const group of groups) {
+      const summary = summaries.get(group.releaseId);
+      const count = group._count._all;
+      summary.total += count;
+      const kind = issueWorkflowNode({ status: group.status, workflowVersion: workflows.get(group.workflowVersionId) })?.kind;
+      if (kind === "completed") summary.completed += count;
+      if (kind === "cancelled") summary.cancelled += count;
+    }
+    return rows.map(row => ({ ...row, progress: summaries.get(row.id) }));
   }
   async release(projectId, id) {
     const row = await this.database.client.projectRelease.findFirst({ where: { projectId, id } });

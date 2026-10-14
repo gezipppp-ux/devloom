@@ -44,7 +44,7 @@ async function main() {
           if (request.method() === 'POST') return send({error:'资料已变更，请刷新后重试。'},409);
           const result=fixture.response(url);return send(result);
         }
-        if (endpoint.endsWith('/tasks') || endpoint.endsWith('/tasks/search-task')) {
+        if (endpoint.startsWith(`/api${projectPath}/`) && (endpoint.endsWith('/tasks') || endpoint.endsWith('/tasks/search-task'))) {
           const result=fixture.response(url);
           if(result.task)result.task.execution.status=taskStatus;else for(const task of result.tasks)task.execution.status=taskStatus;
           if (result.tasks) result.nextOffset = url.searchParams.get('offset') === '30' ? null : 30;
@@ -71,6 +71,29 @@ async function main() {
       return route.fulfill({body:fs.readFileSync(path.join(dist,'index.html')),contentType:'text/html'});
     });
 
+    const projectName = fixture.response(new URL(origin + '/api/projects')).projects[0].name;
+    await page.goto(origin + '/development');
+    assert.equal(await page.getByRole('button', { name: '项目全部任务', exact: true }).isDisabled(), true, 'all project tasks requires a specific top-navigation project');
+    await page.getByRole('combobox', { name: '当前项目', exact: true }).selectOption(fixture.projectId);
+    await page.getByRole('link', { name: '项目全部任务', exact: true }).click();
+    await page.waitForURL(url => url.pathname === projectPath && url.searchParams.get('taskScope') === 'all');
+    await page.getByRole('button', { name: '项目全部任务', exact: true }).waitFor();
+    assert.equal(await page.getByRole('dialog').count(), 0, 'the top-navigation project does not require another chooser');
+    await page.goto(origin + '/development');
+    await page.getByRole('button', { name: '历史会话', exact: true }).click();
+    let chooser = page.getByRole('dialog', { name: '选择要查看历史会话的项目', exact: true });
+    await chooser.getByRole('button').filter({ hasText: projectName }).click();
+    const archived = page.getByRole('dialog', { name: '已归档会话', exact: true });
+    await archived.getByText('暂无已归档会话。', { exact: true }).waitFor();
+    assert.ok(requests.some(request => request.endpoint === '/api/workspaces/ux-workspace/runs'), 'history uses the selected personal workspace');
+    await page.keyboard.press('Escape');
+    await archived.waitFor({ state: 'hidden' });
+    await page.goto(origin + '/development');
+    await page.getByRole('button', { name: '独立开发', exact: true }).click();
+    chooser = page.getByRole('dialog', { name: '选择独立开发项目', exact: true });
+    await chooser.getByRole('button').filter({ hasText: projectName }).click();
+    await page.getByRole('heading', { name: '手动开启开发', exact: true }).waitFor();
+    assert.equal(requests.filter(request => request.method === 'POST' && (request.endpoint.endsWith('/start') || request.endpoint.endsWith('/manual-development'))).length, 0, 'development shortcuts only open existing views');
     await page.goto(origin + projectPath + '?tab=releases');
     await page.getByRole('button', { name: '新建版本', exact: true }).click();
     await verifyReleaseNameForm({ page, output, endpoint: origin + '/api' + projectPath + '/releases' });
@@ -109,7 +132,7 @@ async function main() {
     await page.goto(origin+projectPath+'?tab=tasks');
     await page.getByRole('button',{name:'下一页',exact:true}).click();
     assert.equal(new URL(page.url()).searchParams.get('taskOffset'),'30');
-    await page.getByRole('button',{name:/客户搜索与空结果提示/}).click();
+    await page.getByRole('button',{name:"客户搜索与空结果提示",exact:true}).click();
     await page.getByRole('heading',{name:'客户搜索与空结果提示',exact:true}).waitFor();
     assert.equal(new URL(page.url()).searchParams.get('task'), 'search-task');
     await page.reload();

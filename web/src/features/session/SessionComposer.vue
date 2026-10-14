@@ -291,3 +291,20 @@ function send() {
     </div>
   </section>
 </template>
+
+<style scoped>
+.composer-wrap { padding: 18px max(22px, calc((100% - var(--conversation-width)) / 2)); margin-top: auto; border-top: 1px solid var(--line); background: var(--surface-hover); border-radius: 0 0 var(--radius-card) var(--radius-card); }
+.composer { padding: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.composer:focus-within { border: 0; box-shadow: none; }
+.composer textarea { min-height: 76px; max-height: 220px; resize: vertical; font-size: 14px; line-height: 1.7; }
+.composer-footer { gap: 9px; margin-top: 8px; }
+.composer-hints { gap: 6px 16px; margin-top: 10px; }
+.composer-note, .execution-settings-hint { font-size: 12px; line-height: 1.6; }
+.composer-send { border-radius: 6px; box-shadow: none; }
+.composer-add-images { border-color: transparent; background: transparent; }
+@media (max-width: 767px) {
+  .composer-wrap { padding: 16px; }
+  .composer textarea { min-height: 64px; }
+  .composer-footer, .composer-tools { min-width: 0; flex-wrap: wrap; }
+}
+</style>

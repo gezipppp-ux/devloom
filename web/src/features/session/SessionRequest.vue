@@ -50,3 +50,11 @@ const emit = defineEmits(['respond']);
     <p>{{ $t("无法通过当前界面处理，请查看会话状态或停止当前一轮。") }}</p>
   </section>
 </template>
+
+<style scoped>
+.request-panel { padding: 18px; margin: 16px 0 24px 43px; border: 1px solid var(--field-border); border-radius: 9px; background: var(--surface-hover); box-shadow: none; }
+.request-panel .eyebrow { color: var(--highlight); }
+.request-panel h3 { font-size: 14px; margin: 8px 0 10px; }
+.request-panel .actions { margin-top: 16px; gap: 10px; flex-wrap: wrap; }
+@media (max-width: 767px) { .request-panel { margin-left: 0; padding: 16px; } }
+</style>

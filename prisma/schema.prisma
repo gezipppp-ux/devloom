@@ -85,6 +85,7 @@ model User {
   mcpTokens          McpToken[]
   mcpUploads         McpUpload[]
   mcpOperations      McpOperation[]
+  projectVisits      UserProjectVisit[]
 
   @@map("users")
 }
@@ -400,9 +401,22 @@ model Project {
   files         ProjectFile[]
   tasks         DevelopmentTask[]
   developmentClaims IssueDevelopmentClaim[]
+  visits        UserProjectVisit[]
 
   @@index([ownerUserId])
   @@map("projects")
+}
+
+model UserProjectVisit {
+  userId        String   @map("user_id")
+  projectId     String   @map("project_id")
+  lastVisitedAt DateTime @default(now()) @map("last_visited_at") @db.Timestamptz(3)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([userId, projectId])
+  @@index([userId, lastVisitedAt(sort: Desc)])
+  @@map("user_project_visits")
 }
 
 model ProjectMember {
@@ -558,6 +572,7 @@ model IssueHistory {
   issue     ProjectIssue @relation(fields: [projectId, issueId], references: [projectId, id], onDelete: Restrict)
 
   @@index([projectId, issueId, createdAt])
+  @@index([projectId, createdAt(sort: Desc)], map: "issue_history_project_created_at_idx")
   @@map("issue_history")
 }
 
@@ -729,6 +744,7 @@ model ProjectRelease {
   projectId String @map("project_id")
   name String
   description String @default("")
+  targetDate DateTime? @map("target_date") @db.Date
   status String @default("active")
   revision Int @default(1)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)

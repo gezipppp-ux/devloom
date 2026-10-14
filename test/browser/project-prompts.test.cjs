@@ -13,6 +13,7 @@ async function verifyProjectPromptSettings({ page, origin, project, projects, ad
   const toggle = page.getByRole("checkbox", { name: "自定义此提示词，仅对我生效" });
   const read = async () => (await page.request.get(endpoint)).json();
   async function save(name, status = 200) {
+    while (await page.getByRole('button', { name: '关闭提示', exact: true }).count()) await page.getByRole('button', { name: '关闭提示', exact: true }).first().click();
     const response = page.waitForResponse(r => r.url() === endpoint && r.request().method() === "POST");
     await page.getByRole("button", { name, exact: true }).click();
     assert.equal((await response).status(), status);

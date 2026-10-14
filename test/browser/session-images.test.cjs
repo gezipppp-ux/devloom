@@ -1,5 +1,6 @@
 /* global document, window, navigator, ClipboardItem, ClipboardEvent, DataTransfer, File */
 const assert = require('node:assert/strict');
+const { dismissOperationMessages } = require('../support/operation-feedback.cjs');
 const path = require('node:path');
 const { png } = require('../support/helpers.cjs');
 
@@ -226,6 +227,7 @@ async function verifySessionImages(browser, origin, manager, client, key, errors
     await page.getByText('模拟图片消息发送失败', { exact: true }).waitFor();
     assert.equal(await input.inputValue(), '上传中仍可编辑文字');
     await imagesReady(page, 2);
+    await dismissOperationMessages(page);
     await input.fill('');
     await input.press('Enter');
     await page.getByRole('button', { name: '■ 停止', exact: true }).waitFor();
@@ -243,6 +245,7 @@ async function verifySessionImages(browser, origin, manager, client, key, errors
     await pasteImages(page, ['执行中补充.png']);
     await imagesReady(page, 1);
     await input.fill('请参考这张截图修复界面');
+    await dismissOperationMessages(page);
     await page.getByRole('button', { name: '补充指令 ↑', exact: true }).click();
     await page.getByText('补充指令已发送至当前一轮。', { exact: true }).waitFor();
     const steer = client.calls.findLast((call) => call.method === 'turn/steer');
@@ -251,6 +254,7 @@ async function verifySessionImages(browser, origin, manager, client, key, errors
     assert.equal(steer.params.input.filter((item) => item.type === 'localImage').length, 1);
     assert.equal(steer.params.input.find((item) => item.type === 'text').text, '请参考这张截图修复界面');
     assert.equal(await page.locator('.composer-image-list img').count(), 0);
+    await dismissOperationMessages(page);
     await page.getByRole('button', { name: '■ 停止', exact: true }).click();
     await page.getByRole('button', { name: '■ 停止', exact: true }).waitFor({ state: 'hidden' });
 

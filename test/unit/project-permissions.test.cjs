@@ -7,6 +7,8 @@ test("project grants enforce department ceilings, scopes and dependency closure"
   const ceiling = projectPermissionCatalog.map(({ id }) => id);
   assert.deepEqual(validatePermissions(productTemplate), productTemplate);
   assert.deepEqual(validatePermissions(developerTemplate), developerTemplate);
+  assert.deepEqual(developerTemplate.filter(id => id.startsWith("asset.")), projectPermissionCatalog
+    .filter(entry => entry.group === "资产").map(entry => entry.id));
   assert.throws(() => validatePermissions(["session.start"]), /同时授予/);
   assert.throws(() => validatePermissions(["project.view", "invented"]), /未知/);
   assert.throws(() => validatePermissions(["project.view", "project.view"]), /重复/);
@@ -50,29 +52,25 @@ test("work-content permission combinations are dependency complete and project s
 });
 
 
-test("administrator baseline never repairs missing development or sensitive dependencies", () => {
-  const user = { id: "u1", status: "active", role: "admin", departmentId: "d1" };
+test("administrators have all project permissions without departments or grants", () => {
+  assert.deepEqual(administratorPermissions, projectPermissionCatalog.filter(entry => entry.scope === "project").map(entry => entry.id));
+  const user = { id: "u1", status: "active", role: "admin", departmentId: null };
   const project = { id: "p1", status: "active" };
-  for (const department of [null, { id: "d1", status: "disabled", permissions: productTemplate }]) {
+  for (const department of [null, { id: "d1", status: "disabled", permissions: [] }]) {
     const context = { user, project, department, membership: null };
     assert.deepEqual(projectContextPermissions(context), administratorPermissions);
+    assert.deepEqual(grantableProjectPermissions(user), administratorPermissions);
     for (const permission of administratorPermissions) assert.doesNotThrow(() => assertProjectPermission(context, permission));
-    for (const permission of ["asset.secret.view", "code.view", "session.view"])
-      assert.throws(() => assertProjectPermission(context, permission), { statusCode: 404 });
     assert.throws(() => assertProjectPermission({ ...context, project: null }, "project.view"), { statusCode: 404 });
     assert.throws(() => assertProjectPermission({ ...context, user: { ...user, role: "member" } }, "project.view"), { statusCode: 404 });
+    assert.throws(() => assertProjectPermission(context, "invented"), { statusCode: 403 });
   }
-  const context = { user, project: { ...project, status: "active" }, department: { id: "d1", status: "active", permissions: projectPermissionCatalog.map(entry => entry.id).filter(id => id !== "project.view") },
-    membership: { projectId: "p1", userId: "u1", status: "active", permissions: projectPermissionCatalog.map(entry => entry.id) } };
-  assert.deepEqual(projectContextPermissions(context), administratorPermissions);
-  for (const permission of ["code.operate", "session.start", "asset.secret.view", "asset.secret.edit"])
-    assert.throws(() => assertProjectPermission(context, permission), { statusCode: 403 });
 });
 
 test("administrator writes respect archived projects", () => {
   const context = { user: { id: "u", status: "active", role: "admin" }, project: { id: "p", status: "archived" } };
   for (const permission of administratorPermissions) {
-    if (permission.endsWith(".view")) assert.doesNotThrow(() => assertProjectPermission(context, permission));
+    if (permission.endsWith(".view") || permission === "session.stop") assert.doesNotThrow(() => assertProjectPermission(context, permission));
     else assert.throws(() => assertProjectPermission(context, permission), { code: "PROJECT_ARCHIVED" });
   }
 });

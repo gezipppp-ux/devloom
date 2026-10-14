@@ -163,6 +163,10 @@ class SessionManager extends EventEmitter {
     return (await this.views.view(key));
   }
 
+  async pendingRequests() {
+    return await this.views.pendingRequests();
+  }
+
   async exclusive(key, operation) {
     this.assertOpen();
     if (this.operations.has(key))

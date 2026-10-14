@@ -88,3 +88,41 @@ test("release archive racing an issue reopen cannot leave an archived unfinished
     assert.ok(current.release.status !== "archived" || current.status === "cancelled");
   }
 });
+
+test("release dates preserve omitted values, clear explicitly, and retain revision and archive protections", async t => {
+  const { database, actor, projectId, lifecycle } = await fixture(t);
+  let release = await lifecycle.saveRelease(projectId, null, actor, { name: "v5.0", targetDate: "2024-02-29" });
+  assert.equal(release.targetDate, "2024-02-29");
+  assert.deepEqual(release.progress, { total: 0, completed: 0, cancelled: 0 });
+  assert.equal((await database.client.projectRelease.findUnique({ where: { id: release.id } })).targetDate.toISOString(), "2024-02-29T00:00:00.000Z");
+  await assert.rejects(lifecycle.saveRelease(projectId, release.id, actor, { name: release.name, targetDate: "2026-02-29", revision: release.revision }), { statusCode: 400 });
+  release = await lifecycle.saveRelease(projectId, release.id, actor, { name: release.name, description: "仅修改说明", revision: release.revision });
+  assert.equal(release.targetDate, "2024-02-29");
+  await assert.rejects(lifecycle.saveRelease(projectId, release.id, actor, { name: release.name, targetDate: null, revision: release.revision - 1 }), { statusCode: 409 });
+  release = await lifecycle.saveRelease(projectId, release.id, actor, { name: release.name, targetDate: null, revision: release.revision });
+  assert.equal(release.targetDate, null);
+  release = await lifecycle.archiveRelease(projectId, release.id, actor, { revision: release.revision }, true);
+  await assert.rejects(lifecycle.saveRelease(projectId, release.id, actor, { name: release.name, targetDate: "2026-10-23", revision: release.revision }), { statusCode: 409 });
+});
+
+test("release progress uses each issue's recorded workflow and excludes other projects and versions", async t => {
+  const { database, actor, projectId, lifecycle, content } = await fixture(t);
+  const release = await lifecycle.saveRelease(projectId, null, actor, { name: "v6.0" });
+  const otherRelease = await lifecycle.saveRelease(projectId, null, actor, { name: "v6.1" });
+  const requirement = await content.createIssue(projectId, actor, { type: "requirement", title: "已完成需求", releaseId: release.id });
+  const bug = await content.createIssue(projectId, actor, { type: "bug", title: "已完成缺陷", releaseId: release.id });
+  const cancelled = await content.createIssue(projectId, actor, { type: "bug", title: "取消缺陷", releaseId: release.id });
+  await content.createIssue(projectId, actor, { type: "requirement", title: "未完成需求", releaseId: release.id });
+  await content.createIssue(projectId, actor, { type: "requirement", title: "其他版本", releaseId: otherRelease.id });
+  await content.createIssue(projectId, actor, { type: "requirement", title: "未排期" });
+  await database.client.projectIssue.update({ where: { id: requirement.id }, data: { status: "implemented" } });
+  await database.client.projectIssue.update({ where: { id: bug.id }, data: { status: "closed" } });
+  await database.client.projectIssue.update({ where: { id: cancelled.id }, data: { status: "cancelled" } });
+  const { workflowVersion: version } = await database.client.projectIssue.findUnique({ where: { id: requirement.id }, include: { workflowVersion: true } });
+  await database.client.systemWorkflowVersion.create({ data: { workflowId: version.workflowId, version: version.version + 1, definition: { ...version.definition, nodes: version.definition.nodes.map(node => ({ ...node, kind: node.id === "implemented" ? "normal" : node.kind })) } } });
+  const items = (await lifecycle.listReleases(projectId, actor)).items;
+  assert.deepEqual(items.find(item => item.id === release.id).progress, { total: 4, completed: 2, cancelled: 1 });
+  assert.deepEqual(items.find(item => item.id === otherRelease.id).progress, { total: 1, completed: 0, cancelled: 0 });
+  await database.client.projectMember.updateMany({ where: { projectId, userId: actor.id }, data: { permissions: ["project.view"] } });
+  await assert.rejects(lifecycle.listReleases(projectId, actor), { statusCode: 403 });
+});

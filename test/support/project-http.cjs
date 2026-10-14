@@ -4,7 +4,7 @@ const permissions = require("../../shared/project-permissions.json");
 
 async function seedProjectDepartment(database, username = "admin") {
   const department = await database.client.department.create({ data: { name: "Development fixtures", permissions: permissions.map(item => item.id) } });
-  await database.client.user.update({ where: { username }, data: { departmentId: department.id } });
+  await database.client.user.updateMany({ where: { username, role: "member" }, data: { departmentId: department.id } });
   return department;
 }
 
@@ -16,7 +16,7 @@ async function prepareHttpProject(request, { name, remoteUrl, gitAccountId }) {
   };
   const session = await call("/api/auth/session");
   const project = await call("/api/projects", { name, remoteUrl });
-  await call(`/api/projects/${project.project.id}/members/${session.user.id}`, {
+  if (session.user.role !== "admin") await call(`/api/projects/${project.project.id}/members/${session.user.id}`, {
     permissions: permissions.filter(item => item.scope !== "department").map(item => item.id), revision: project.membership.revision,
   });
   const accepted = await request(`/api/projects/${project.project.id}/space/prepare`, { gitAccountId, requestId: randomUUID() });

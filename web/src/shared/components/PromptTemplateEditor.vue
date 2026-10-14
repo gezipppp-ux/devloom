@@ -28,14 +28,16 @@ async function insert(name) {
 <style scoped>
 .prompt-template-editor { min-width: 0; }
 label { display: grid; gap: 8px; }
-textarea { width: 100%; min-width: 0; font-family: var(--font-code); line-height: 1.7; }
+textarea { width: 100%; min-width: 0; min-height: 320px; padding: 16px; background: var(--canvas); font-family: var(--font-code); line-height: 1.8; tab-size: 2; }
 .prompt-editor-hints { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; margin: 8px 0 20px; color: var(--muted); font-size: 12px; }
 .prompt-editor-hints p { margin: 0; }
 details { border-top: 1px solid var(--line); padding: 12px 0; }
 summary { cursor: pointer; min-height: var(--control-height); padding: 8px 0; font-weight: 600; }
-ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; padding: 0; list-style: none; }
+ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; margin: 12px 0 4px; padding: 0; list-style: none; }
 li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
-.prompt-required { color: var(--accent); }
+li button { min-width: 0; padding: 6px 10px; border-color: var(--line); background: var(--surface); font-size: 12px; }
+li code { white-space: normal; overflow-wrap: anywhere; }
+.prompt-required { padding: 2px 6px; border-radius: 4px; background: var(--selected); color: var(--highlight); }
 pre { padding: 16px; max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--canvas); font: 12px / 1.8 var(--font-code); }
 @media (max-width: 768px) { ul { grid-template-columns: minmax(0, 1fr); } }
 </style>

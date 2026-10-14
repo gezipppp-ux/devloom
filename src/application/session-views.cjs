@@ -180,6 +180,26 @@ class SessionViews {
     };
   }
 
+  // Attention queries inspect live requests without connecting or resuming an Agent.
+  async pendingRequests() {
+    this.assertOpen();
+    const result = [];
+    for (const runtime of this.sessions.values()) {
+      if (!runtime.connected || runtime.deleting || !runtime.requests.size) continue;
+      if (await this.store.isArchived(runtime.key)) continue;
+      const state = await this.store.read(runtime.key);
+      const title = await this.store.readSessionTitle(runtime.key, state.workitem?.title || state.workitem?.name || runtime.key);
+      if (this.sessions.get(runtime.key) !== runtime || !runtime.connected || runtime.deleting) continue;
+      const requests = [...runtime.requests.values()].filter(request =>
+        (!request.turnId || request.turnId === runtime.turnId) &&
+        this.agent.capabilities?.[request.kind === "user-input" ? "userInput" : "approvals"] === true &&
+        ["approval", "user-input"].includes(request.kind),
+      ).map(request => ({ id: String(request.id), kind: request.kind, turnId: request.turnId || runtime.turnId || "" }));
+      if (requests.length) result.push({ key: runtime.key, title, updatedAt: runtime.lastActivity || state.updated_at, requests });
+    }
+    return result;
+  }
+
   async list({ archived = false } = {}) {
     const saved = new Map(
       (await Promise.all((await this.store.list()).flatMap(async ({ key, state }) => {

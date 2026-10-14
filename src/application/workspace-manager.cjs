@@ -224,6 +224,13 @@ class WorkspaceManager {
     return this.contexts.get(id);
   }
 
+  async pendingRequests(id, actor) {
+    await this.read(id, actor);
+    const requests = await this.contexts.get(id)?.sessions.pendingRequests?.() || [];
+    await this.read(id, actor);
+    return requests;
+  }
+
   async close() {
     this.closing = true;
     await Promise.all(

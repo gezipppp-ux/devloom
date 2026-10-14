@@ -60,3 +60,27 @@ test("PostgreSQL sessions share a persistent signing secret and reject expired s
   assert.equal(await promisify(second.get.bind(second))("expired"), null);
   assert.equal(await database.client.authSession.count(), 0);
 });
+
+test("promotion clears department and project grants, demotion removes automatic access", options, async t => {
+  const fixture = await postgresFixture(t);
+  await fixture.deploy();
+  const database = await fixture.open();
+  const accounts = new AccountStore(database);
+  const department = await database.client.department.create({ data: { name: "Members", permissions: ["project.view"] } });
+  const admin = await accounts.create({ username: "admin", displayName: "Admin", password_hash: "fixture", role: "admin", departmentId: department.id, canCreateProjects: true });
+  assert.equal(admin.departmentId, null);
+  assert.equal(admin.canCreateProjects, false);
+  const member = await accounts.create({ username: "member", displayName: "Member", password_hash: "fixture", role: "member", departmentId: department.id, canCreateProjects: true });
+  const project = await database.client.project.create({ data: { name: "Project", directoryName: "repo", directoryKey: "repo", remoteUrl: "https://git.example/repo.git", ownerUserId: admin.id } });
+  await database.client.projectMember.create({ data: { projectId: project.id, userId: member.id, permissions: ["project.view"] } });
+  const promoted = await accounts.update(member.id, { role: "admin" });
+  assert.equal(promoted.departmentId, null);
+  assert.equal(promoted.canCreateProjects, false);
+  const membership = await database.client.projectMember.findUnique({ where: { projectId_userId: { projectId: project.id, userId: member.id } } });
+  assert.deepEqual(membership.permissions, []);
+  const { projectContextPermissions, administratorPermissions } = require("../../src/domain/project-permissions.cjs");
+  assert.deepEqual(projectContextPermissions({ user: promoted, project, membership }), administratorPermissions);
+  const demoted = await accounts.update(member.id, { role: "member", departmentId: department.id });
+  assert.equal(demoted.departmentId, department.id);
+  assert.deepEqual(projectContextPermissions({ user: demoted, department, project, membership }), []);
+});

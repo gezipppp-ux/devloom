@@ -13,6 +13,7 @@ const props = defineProps({
   reasoningEffort: { type: String, default: "" },
   permissionMode: { type: String, default: "ask" },
   disabled: Boolean,
+  embedded: Boolean,
   workspaceId: { type: String, default: "" },
 });
 const emit = defineEmits([
@@ -39,7 +40,7 @@ function changeModel(settings) {
 </script>
 
 <template>
-  <FormSection :title="$t(&quot;执行偏好&quot;)" number="02">
+  <FormSection :title="$t(&quot;执行偏好&quot;)" :number="embedded ? '' : '02'" :class="{ 'agent-model-settings-embedded': embedded }">
     <template #action>
       <button
         class="text-button"
