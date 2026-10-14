@@ -41,7 +41,7 @@ function refresh() {
         :loading="loading"
         :disabled="disabled || loading || Boolean(error)"
         aria-required="true"
-        :placeholder="$t(&quot;搜索并选择远端分支&quot;)"
+        :placeholder="$t('搜索并选择远端分支')"
         :not-found-content="loading ? '正在读取远端分支…' : '没有匹配的远端分支。'"
         @change="value => emit('update:modelValue', value || '')"
       />

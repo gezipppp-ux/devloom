@@ -95,7 +95,7 @@ async function save() {
     </form>
     <div v-else class="session-title-display">
       <h1 class="session-heading">{{ title }}</h1>
-      <button ref="editButton" type="button" class="icon-button" :aria-label="$t(&quot;修改会话标题&quot;)" :title="$t(&quot;修改会话标题&quot;)" @click="start">
+      <button ref="editButton" type="button" class="icon-button" :aria-label="$t('修改会话标题')" :title="$t('修改会话标题')" @click="start">
         <EditOutlined aria-hidden="true" />
       </button>
     </div>

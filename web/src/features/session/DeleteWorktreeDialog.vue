@@ -105,7 +105,7 @@ defineExpose({ open });
     <dialog
       ref="dialog"
       class="workspace-dialog delete-worktree-dialog"
-      :aria-label="$t(&quot;删除 Worktree&quot;)"
+      :aria-label="$t('删除 Worktree')"
       @cancel.prevent="close"
     >
       <div class="workspace-dialog-heading">
@@ -113,7 +113,7 @@ defineExpose({ open });
         <button
           type="button"
           class="workspace-menu"
-          :aria-label="$t(&quot;关闭删除确认&quot;)"
+          :aria-label="$t('关闭删除确认')"
           :disabled="busy"
           @click="close"
         >
@@ -186,7 +186,7 @@ defineExpose({ open });
             id="delete-worktree-confirm"
             ref="confirmInput"
             v-model="confirmation"
-            :aria-label="$t(&quot;确认删除的本地分支&quot;)"
+            :aria-label="$t('确认删除的本地分支')"
             aria-describedby="delete-worktree-confirm-hint"
             :disabled="busy"
             :placeholder="snapshot.branch"

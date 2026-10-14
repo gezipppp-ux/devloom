@@ -84,7 +84,7 @@ function returnToIssue() {
       <div v-if="!standaloneDetail" class="project-tab-bar"><nav class="page-tabs project-navigation" :aria-label="$t('项目功能')"><button v-for="item in primaryTabs" :key="item.id" :class="{ active: currentTab === item.id }" :aria-current="currentTab === item.id ? 'page' : undefined" @click="emit('tab', item.id)">{{ $t(item.label) }}</button></nav><details v-if="secondaryTabs.length" class="project-more"><summary>{{ secondaryTabs.find(item => item.id === currentTab) ? $t(secondaryTabs.find(item => item.id === currentTab).label) : $t('协作入口') }}</summary><nav :aria-label="$t('项目协作')"><button v-for="item in secondaryTabs" :key="item.id" :aria-current="currentTab === item.id ? 'page' : undefined" @click="emit('tab', item.id); $event.target.closest('details').open = false">{{ $t(item.label) }}</button></nav></details></div>
       <p v-if="currentTab !== tab" class="warning" role="status">{{ $t("当前项目状态或你的分工未开放所选功能，可在下方查看当前权限。") }}</p>
       <template v-if="currentTab === 'overview'">
-        <section v-if="managementOnly && !archived" class="project-setup-callout" :aria-label="$t(&quot;完成项目配置&quot;)">
+        <section v-if="managementOnly && !archived" class="project-setup-callout" :aria-label="$t('完成项目配置')">
           <h2>{{ $t("下一步：分配项目工作") }}</h2><p>{{ $t("你是项目负责人，已具备配置和成员管理权限。请为自己及参与者选择工作内容，需求、资产和开发入口会按授权显示。") }}</p>
           <button class="primary" @click="emit('tab', 'members')">{{ $t("配置本人及成员分工") }}</button>
         </section>

@@ -138,7 +138,7 @@ function refresh() {
     </header>
     <FeedbackMessage :message="error" type="error" />
     <p v-if="loading" role="status">{{ $t("正在读取开发任务…") }}</p>
-    <nav v-if="!issueId" class="ui-segmented development-list-scopes" :aria-label="$t(&quot;开发任务范围&quot;)">
+    <nav v-if="!issueId" class="ui-segmented development-list-scopes" :aria-label="$t('开发任务范围')">
       <button
         :class="{ active: scope === 'mine' }"
         :aria-pressed="scope === 'mine'"

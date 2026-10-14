@@ -15,7 +15,15 @@ const saving = ref(false);
 const error = ref("");
 const saved = ref(false);
 const git = ref(null);
-const directoryPreview = computed(() => `${memberStorageRoot.value || (platform.value === "win32" ? "D:\\wt" : "/srv/wt")}/\n  projects/\n    <${translate("仓库目录名")}>/\n      members/\n        <${translate("登录用户名")}>/\n          repository-<${translate("准备修订号")}>/\n          worktree/<${translate("任务目录")}>/`);
+const directoryPreview = computed(() => {
+  const separator = platform.value === "win32" ? "\\" : "/";
+  const base = memberStorageRoot.value || (platform.value === "win32" ? "D:\\wt" : "/srv/wt");
+  const memberRoot = [base.replace(/[\\/]+$/, ""), "projects", translate("仓库目录名"), "members", translate("登录用户名")].join(separator);
+  return [
+    `${translate("成员项目仓库")}\n${memberRoot}${separator}${translate("repository-<准备修订号>")}`,
+    `${translate("任务 Worktree")}\n${memberRoot}${separator}worktree${separator}${translate("<任务目录>")}`,
+  ].join("\n\n");
+});
 let disposed = false;
 const dirty = computed(
   () =>
@@ -78,7 +86,7 @@ onUnmounted(() => {
         <input
           id="member-storage-root"
           v-model="memberStorageRoot"
-          :aria-label="$t(&quot;成员目录基础路径&quot;)"
+          :aria-label="$t('成员目录基础路径')"
           :placeholder="platform === 'win32' ? 'D:\\wt' : '/srv/wt'"
           :disabled="loading || saving || savedStorageRoot === null"
           required

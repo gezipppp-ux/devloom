@@ -3,7 +3,7 @@ import FormSection from "../../shared/components/FormSection.vue";
 defineProps({ state: { type: Object, required: true } });
 </script>
 <template>
-  <FormSection :title="$t(&quot;初始化结果&quot;)">
+  <FormSection :title="$t('初始化结果')">
     <dl class="setup-summary">
       <div><dt>{{ $t("管理员") }}</dt><dd>{{ state.administrator?.displayName || '—' }}<small>{{ state.administrator?.username }}</small></dd></div>
       <div><dt>{{ $t("运行环境") }}</dt><dd>{{ state.steps.environment ? $t("基础工具检测通过") : $t("未记录") }}<small v-if="state.steps.environment?.data?.deferCodexLogin">{{ $t("配置时选择稍后完成 Codex 登录；开发前请重新检测。") }}</small></dd></div>

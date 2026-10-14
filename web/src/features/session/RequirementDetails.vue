@@ -19,7 +19,7 @@ const capturedAt = computed(() => {
 </script>
 
 <template>
-  <section class="requirement-details" :aria-label="$t(&quot;完整需求资料&quot;)">
+  <section class="requirement-details" :aria-label="$t('完整需求资料')">
     <div class="requirement-heading">
       <h2>{{ requirement?.requirements?.length ? requirement.title : $t("需求正文") }}</h2>
       <a
@@ -50,7 +50,7 @@ const capturedAt = computed(() => {
     <section
       v-if="requirement?.supplementaryInstructions"
       class="requirement-supplement"
-      :aria-label="$t(&quot;补充说明与指导意见&quot;)"
+      :aria-label="$t('补充说明与指导意见')"
     >
       <h3>{{ $t("补充说明与指导意见") }}</h3>
       <pre>{{ requirement.supplementaryInstructions }}</pre>

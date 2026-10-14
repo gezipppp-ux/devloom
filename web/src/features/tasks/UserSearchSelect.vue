@@ -92,7 +92,7 @@ onUnmounted(() => {
       :loading="loading"
       :disabled="disabled || !workspace"
       :not-found-content="emptyText"
-      :placeholder="$t(&quot;输入姓名或拼音搜索&quot;)"
+      :placeholder="$t('输入姓名或拼音搜索')"
       style="width: 100%"
       @search="search"
       @change="(value) => emit('update:modelValue', value || '')"

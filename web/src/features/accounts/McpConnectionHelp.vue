@@ -12,10 +12,10 @@ const configuration = computed(() => {
 const verify = computed(() => 'curl --fail-with-body "' + props.origin + '/api/mcp/whoami" --header "Authorization: Bearer $WEB_CODING_TOKEN"');
 </script>
 <template>
-  <section class="mcp-card mcp-connection" :aria-label="$t(&quot;连接你的 Agent&quot;)">
+  <section class="mcp-card mcp-connection" :aria-label="$t('连接你的 Agent')">
     <header class="mcp-row mcp-between"><h3>{{ $t("连接你的 Agent") }}</h3><span class="field-hint">Streamable HTTP</span></header>
-    <div class="mcp-endpoint"><LinkOutlined aria-hidden="true" /><input :value="endpoint" :aria-label="$t(&quot;MCP 地址&quot;)" readonly /><button type="button" class="text-button" :aria-label="$t(&quot;复制 MCP 地址&quot;)" @click="$emit('copy', endpoint)"><CopyOutlined aria-hidden="true" /></button></div>
-    <div class="mcp-row mcp-between"><div class="mcp-segments" role="group" :aria-label="$t(&quot;客户端配置&quot;)"><button v-for="name in ['Codex', 'Claude Code', 'Pi']" :key="name" type="button" :aria-pressed="client === name" @click="client = name">{{ name }}</button></div><button type="button" class="text-button" :aria-label="$t(&quot;复制客户端配置&quot;)" @click="$emit('copy', configuration)"><CopyOutlined aria-hidden="true" /></button></div>
+    <div class="mcp-endpoint"><LinkOutlined aria-hidden="true" /><input :value="endpoint" :aria-label="$t('MCP 地址')" readonly /><button type="button" class="text-button" :aria-label="$t('复制 MCP 地址')" @click="$emit('copy', endpoint)"><CopyOutlined aria-hidden="true" /></button></div>
+    <div class="mcp-row mcp-between"><div class="mcp-segments" role="group" :aria-label="$t('客户端配置')"><button v-for="name in ['Codex', 'Claude Code', 'Pi']" :key="name" type="button" :aria-pressed="client === name" @click="client = name">{{ name }}</button></div><button type="button" class="text-button" :aria-label="$t('复制客户端配置')" @click="$emit('copy', configuration)"><CopyOutlined aria-hidden="true" /></button></div>
     <pre class="mcp-code"><code>{{ configuration }}</code></pre>
     <p v-if="client === 'Pi'" class="field-hint">{{ $t("在 Pi 使用的 MCP 扩展中配置以上连接参数；配置字段和环境变量写法以该扩展为准。") }}</p>
     <p v-else class="field-hint">{{ $t("放入客户端个人配置，并让客户端进程读取环境变量") }} <code>WEB_CODING_TOKEN</code>。</p>

@@ -29,9 +29,9 @@ const issueExample = JSON.stringify({ projectId: "<PROJECT_ID>", requestId: "<CR
 const uploadCommand = computed(() => language.value === "curl" ? shell.value : powershell.value);
 </script>
 <template>
-  <section class="mcp-upload-help" :aria-label="$t(&quot;HTTP 上传说明&quot;)">
+  <section class="mcp-upload-help" :aria-label="$t('HTTP 上传说明')">
     <div><h3>{{ $t("1. 使用 Token 上传图片") }}</h3><p class="field-hint">{{ $t("通过") }} <code>list_projects</code> {{ $t("获取项目 ID。HTTP POST 上传原始二进制，使用同一枚 Token，需开启“上传图片附件”。") }}</p></div>
-    <div class="mcp-row mcp-between"><div class="mcp-segments" role="group" :aria-label="$t(&quot;上传命令语言&quot;)"><button v-for="name in ['curl', 'PowerShell']" :key="name" type="button" :aria-pressed="language === name" @click="language = name">{{ name }}</button></div><button type="button" class="text-button" :aria-label="$t(&quot;复制上传示例&quot;)" @click="$emit('copy', uploadCommand)"><CopyOutlined aria-hidden="true" /></button></div>
+    <div class="mcp-row mcp-between"><div class="mcp-segments" role="group" :aria-label="$t('上传命令语言')"><button v-for="name in ['curl', 'PowerShell']" :key="name" type="button" :aria-pressed="language === name" @click="language = name">{{ name }}</button></div><button type="button" class="text-button" :aria-label="$t('复制上传示例')" @click="$emit('copy', uploadCommand)"><CopyOutlined aria-hidden="true" /></button></div>
     <pre class="mcp-code"><code>{{ uploadCommand }}</code></pre>
     <div><h3>{{ $t("2. 引用附件 ID，发布需求或 Bug") }}</h3><p class="field-hint">{{ $t("响应包含") }} <code>attachmentId</code> {{ $t("和") }} <code>markdown</code>{{ $t("。在正文引用图片，同时把 ID 放入") }} <code>attachmentIds</code>{{ $t("。调用") }} <code>create_issue</code> {{ $t("发布，或用") }} <code>update_issue</code> {{ $t("补充图片。") }}</p></div>
     <pre class="mcp-code"><code>![说明](attachment:&lt;ATTACHMENT_ID&gt;)</code></pre>

@@ -17,10 +17,10 @@ const mode = ref("");
 
 <template>
   <div class="session-lifecycle-controls">
-    <button type="button" :aria-label="$t(&quot;归档会话&quot;)" :title="$t(&quot;归档会话&quot;)" @click="mode = 'archive'">
+    <button type="button" :aria-label="$t('归档会话')" :title="$t('归档会话')" @click="mode = 'archive'">
       <InboxOutlined aria-hidden="true" /> {{ $t("归档") }}
     </button>
-    <button v-if="canDelete" type="button" class="danger-button" :aria-label="$t(&quot;永久删除会话&quot;)" :title="$t(&quot;永久删除会话&quot;)" @click="mode = 'delete'">
+    <button v-if="canDelete" type="button" class="danger-button" :aria-label="$t('永久删除会话')" :title="$t('永久删除会话')" @click="mode = 'delete'">
       <DeleteOutlined aria-hidden="true" /> {{ $t("删除") }}
     </button>
     <SessionLifecycleDialog v-if="mode" :mode="mode" :task-key="taskKey" :title="title" :worktree="worktree" :deletion="deletion" :active="active"

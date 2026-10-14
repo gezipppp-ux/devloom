@@ -57,11 +57,11 @@ watch(() => props.contextKey, () => { generation++; mode.value = "write"; select
 onBeforeUnmount(() => { generation++; });
 </script>
 <template>
-  <div class="markdown-editor" :class="{ 'is-disabled': disabled }" role="group" :aria-label="$t(&quot;{p0}编辑器&quot;, { p0: $t(label) })">
+  <div class="markdown-editor" :class="{ 'is-disabled': disabled }" role="group" :aria-label="$t('{p0}编辑器', { p0: $t(label) })">
     <label :for="mode === 'preview' ? undefined : id" @click="focusEditor">{{ $t(label) }}</label>
     <div class="markdown-editor-surface">
       <div class="markdown-editor-toolbar">
-        <div class="markdown-editor-modes" :aria-label="$t(&quot;{p0}编辑模式&quot;, { p0: $t(label) })">
+        <div class="markdown-editor-modes" :aria-label="$t('{p0}编辑模式', { p0: $t(label) })">
           <button v-for="[value, title] in modes" :key="value" type="button" :aria-pressed="mode === value" :disabled="busy" @click="mode = value">{{ $t(title) }}</button>
         </div>
         <button class="markdown-attach-button" type="button" :disabled="!canAttach" @click="picker.click()"><PaperClipOutlined aria-hidden="true" />{{ busy ? $t("读取附件中…") : $t(attachButtonLabel) }}</button>
@@ -79,7 +79,7 @@ onBeforeUnmount(() => { generation++; });
           <img v-if="item.previewUrl" class="markdown-attachment-thumbnail" :src="item.previewUrl" alt="" />
           <span v-else class="markdown-attachment-icon"><FileTextOutlined aria-hidden="true" /></span>
           <span class="markdown-attachment-info"><strong :title="item.name">{{ item.name }}</strong><small>{{ sizeLabel(item.size) }}</small></span>
-          <button class="markdown-remove-attachment" type="button" :disabled="disabled || busy" :aria-label="$t(&quot;移除附件 {p0}&quot;, { p0: item.name })" :title="$t(&quot;移除附件 {p0}&quot;, { p0: item.name })" @click="emit('remove', item.id)"><CloseOutlined aria-hidden="true" /></button>
+          <button class="markdown-remove-attachment" type="button" :disabled="disabled || busy" :aria-label="$t('移除附件 {p0}', { p0: item.name })" :title="$t('移除附件 {p0}', { p0: item.name })" @click="emit('remove', item.id)"><CloseOutlined aria-hidden="true" /></button>
         </li>
       </ul>
     </div>

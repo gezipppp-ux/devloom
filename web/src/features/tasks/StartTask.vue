@@ -162,12 +162,12 @@ async function start() {
       <p>{{ $t("描述目标与验收标准，为本次任务选择模型。") }}</p>
     </header>
     <a-form :model="form" :rules="rules" layout="vertical" @finish="start">
-      <FormSection :title="$t(&quot;需求信息&quot;)" number="01">
+      <FormSection :title="$t('需求信息')" number="01">
         <div class="form-columns">
-          <a-form-item :label="$t(&quot;需求渠道&quot;)" name="channel"
+          <a-form-item :label="$t('需求渠道')" name="channel"
             ><select
               v-model="form.channel"
-              :aria-label="$t(&quot;需求渠道&quot;)"
+              :aria-label="$t('需求渠道')"
               :disabled="busy || uploading"
             >
               <option
@@ -179,10 +179,10 @@ async function start() {
               </option>
             </select></a-form-item
           >
-          <a-form-item :label="$t(&quot;任务类型&quot;)">
+          <a-form-item :label="$t('任务类型')">
             <select
               v-model="form.taskType"
-              :aria-label="$t(&quot;任务类型&quot;)"
+              :aria-label="$t('任务类型')"
               :disabled="busy || uploading"
             >
               <option
@@ -210,13 +210,13 @@ async function start() {
         />
         <a-form-item
           v-if="!manualInput"
-          :label="selectedChannel?.scopeLabel || $t(&quot;项目 ID&quot;)"
+          :label="selectedChannel?.scopeLabel || $t('项目 ID')"
           name="workspace"
           ><input
             v-model="form.workspace"
             :readonly="selectedChannel?.scopeLocked"
             :disabled="busy || uploading"
-            :aria-label="selectedChannel?.scopeLabel || $t(&quot;项目 ID&quot;)"
+            :aria-label="selectedChannel?.scopeLabel || $t('项目 ID')"
             required
         /></a-form-item>
         <label v-if="selectedChannel?.capabilities.search" for="search"
@@ -226,7 +226,7 @@ async function start() {
           <input
             id="search"
             v-model="query"
-            :placeholder="$t(&quot;输入需求标题关键词&quot;)"
+            :placeholder="$t('输入需求标题关键词')"
             :disabled="starting || uploading"
             @keydown.enter.prevent="search"
           /><button
@@ -259,29 +259,29 @@ async function start() {
         <p v-else-if="searched" class="muted">
           {{ $t("当前待办视图没有匹配结果，也可直接填写需求 ID。") }}
         </p>
-        <a-form-item v-if="!manualInput" :label="$t(&quot;需求 ID&quot;)" name="id"
+        <a-form-item v-if="!manualInput" :label="$t('需求 ID')" name="id"
           ><input
             v-model="form.id"
-            :aria-label="$t(&quot;需求 ID&quot;)"
+            :aria-label="$t('需求 ID')"
             :disabled="busy || uploading"
             required
         /></a-form-item>
         <div v-if="needsAssignees" class="form-columns">
-          <a-form-item :label="$t(&quot;开发人员&quot;)" name="developer"
+          <a-form-item :label="$t('开发人员')" name="developer"
             ><UserSearchSelect
               v-model="form.developer"
               :channel="form.channel"
               :workspace="form.workspace"
               :disabled="busy || uploading"
-              :label="$t(&quot;开发人员&quot;)"
+              :label="$t('开发人员')"
           /></a-form-item>
-          <a-form-item :label="$t(&quot;测试人员&quot;)" name="tester"
+          <a-form-item :label="$t('测试人员')" name="tester"
             ><UserSearchSelect
               v-model="form.tester"
               :channel="form.channel"
               :workspace="form.workspace"
               :disabled="busy || uploading"
-              :label="$t(&quot;测试人员&quot;)"
+              :label="$t('测试人员')"
           /></a-form-item>
         </div>
       </FormSection>

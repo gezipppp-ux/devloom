@@ -230,7 +230,7 @@ async function submitConfirmation() {
 }
 </script>
 <template>
-  <article class="development-task-detail" :aria-label="$t(&quot;开发任务详情&quot;)">
+  <article class="development-task-detail" :aria-label="$t('开发任务详情')">
     <FeedbackMessage :message="error" type="error" /><FeedbackMessage
       :message="notice"
       type="success"
@@ -254,7 +254,7 @@ async function submitConfirmation() {
       <form
         v-if="editing && canEdit && !starting"
         class="development-panel project-form"
-        :aria-label="$t(&quot;编辑任务信息&quot;)"
+        :aria-label="$t('编辑任务信息')"
         @submit.prevent="saveInformation"
         @keydown.esc.prevent="!saving && closeEdit()"
       >
@@ -368,8 +368,8 @@ async function submitConfirmation() {
             <input
               ref="searchInput"
               v-model="query"
-              :aria-label="$t(&quot;搜索追加事项&quot;)"
-              :placeholder="$t(&quot;搜索待追加的事项&quot;)"
+              :aria-label="$t('搜索追加事项')"
+              :placeholder="$t('搜索待追加的事项')"
               :disabled="saving"
             /><button :disabled="busy || search.loading.value">
               {{ search.loading.value ? $t("正在搜索…") : $t("搜索事项") }}

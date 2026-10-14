@@ -22,7 +22,7 @@ async function save() {
 }
 </script>
 <template>
-  <FormSection class="account-profile-section" :title="$t(&quot;个人资料&quot;)">
+  <FormSection class="account-profile-section" :title="$t('个人资料')">
     <form class="project-form" @submit.prevent="save">
       <div class="profile-identity"><PersonAvatar :name="accountSession.user.displayName" /><div><strong>{{ accountSession.user.displayName }}</strong><p>{{ accountSession.user.username }} · {{ $t("登录账号") }}</p></div></div>
       <label>{{ $t("显示名称") }}<input v-model="displayName" required maxlength="80" :disabled="busy" /></label>

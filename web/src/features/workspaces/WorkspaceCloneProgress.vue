@@ -18,19 +18,19 @@ defineExpose({ open });
 </script>
 
 <template>
-  <button type="button" class="clone-progress-trigger" :aria-label="$t(&quot;克隆任务{p0}&quot;, { p0: clones.length ? `（${clones.length}）` : '' })" @click="open"><CloudDownloadOutlined aria-hidden="true" /><span>{{ $t("克隆任务") }}</span><small v-if="clones.length" class="clone-count" aria-hidden="true">{{ clones.length }}</small></button>
+  <button type="button" class="clone-progress-trigger" :aria-label="$t('克隆任务{p0}', { p0: clones.length ? `（${clones.length}）` : '' })" @click="open"><CloudDownloadOutlined aria-hidden="true" /><span>{{ $t("克隆任务") }}</span><small v-if="clones.length" class="clone-count" aria-hidden="true">{{ clones.length }}</small></button>
   <Teleport to="body">
-    <dialog ref="dialog" class="workspace-dialog clone-progress-dialog" :aria-label="$t(&quot;工作区克隆进度&quot;)" @cancel.prevent="close">
-      <div class="workspace-dialog-heading"><h2>{{ $t("工作区克隆进度") }}</h2><button type="button" :aria-label="$t(&quot;关闭克隆进度&quot;)" @click="close">×</button></div>
+    <dialog ref="dialog" class="workspace-dialog clone-progress-dialog" :aria-label="$t('工作区克隆进度')" @cancel.prevent="close">
+      <div class="workspace-dialog-heading"><h2>{{ $t("工作区克隆进度") }}</h2><button type="button" :aria-label="$t('关闭克隆进度')" @click="close">×</button></div>
       <p class="field-hint">{{ $t("任务受理后在服务器后台执行。关闭此窗口、刷新或关闭浏览器不会中止克隆；再次登录可从「克隆任务」查看进度。") }}</p>
       <p class="field-hint">{{ $t("大仓库可能需要较长时间，各阶段进度单独计算。服务停止或重启会中断克隆，不会自动重试。") }}</p>
       <FeedbackMessage :message="error || failure" type="error" />
       <p v-if="!clones.length" class="muted">{{ $t("暂无克隆任务。") }}</p>
-      <section v-for="clone in clones" :key="clone.id" class="clone-progress-item" :aria-label="$t(&quot;克隆任务：{p0}&quot;, { p0: clone.name })">
+      <section v-for="clone in clones" :key="clone.id" class="clone-progress-item" :aria-label="$t('克隆任务：{p0}', { p0: clone.name })">
         <h3>{{ clone.name }}</h3>
         <template v-if="clone.status === 'running'">
           <p role="status">{{ labels[clone.progress.stage] || $t("正在克隆") }}<span v-if="clone.progress.percent !== null"> · {{ clone.progress.percent }}%</span></p>
-          <progress :value="clone.progress.percent ?? undefined" max="100" :aria-label="$t(&quot;{p0} 当前阶段进度&quot;, { p0: clone.name })"></progress>
+          <progress :value="clone.progress.percent ?? undefined" max="100" :aria-label="$t('{p0} 当前阶段进度', { p0: clone.name })"></progress>
           <p class="field-hint">{{ $t("服务器正在处理，请耐心等待。长时间无进度不一定表示失败。") }}</p>
         </template>
         <template v-else>

@@ -130,9 +130,9 @@ onMounted(() => {
 <template>
   <nav
     :class="rail ? 'workspace-rail' : 'workspace-choices'"
-    :aria-label="$t(&quot;工作区&quot;)"
+    :aria-label="$t('工作区')"
   >
-    <div v-if="rail" class="rail-brand" :aria-label="$t(&quot;需求开发工作台&quot;)">t_</div>
+    <div v-if="rail" class="rail-brand" :aria-label="$t('需求开发工作台')">t_</div>
     <div v-if="workspaces.length" class="workspace-icons">
       <button
         v-for="(entry, index) in workspaces"
@@ -140,7 +140,7 @@ onMounted(() => {
         type="button"
         class="workspace-icon"
         :class="{ active: current?.id === entry.id }"
-        :aria-label="$t(&quot;切换工作区：{p0}{p1}&quot;, { p0: entry.name, p1: unreadWorkspaceIds.includes(entry.id) ? $t(&quot;，有未读 Codex 回复&quot;) : '' })"
+        :aria-label="$t('切换工作区：{p0}{p1}', { p0: entry.name, p1: unreadWorkspaceIds.includes(entry.id) ? $t('，有未读 Codex 回复') : '' })"
         :aria-current="current?.id === entry.id ? 'true' : undefined"
         :title="entry.name"
         @click="
@@ -169,8 +169,8 @@ onMounted(() => {
     <button
       type="button"
       class="workspace-add"
-      :aria-label="$t(&quot;＋ 新建工作区&quot;)"
-      :title="$t(&quot;新建工作区&quot;)"
+      :aria-label="$t('＋ 新建工作区')"
+      :title="$t('新建工作区')"
       @click="edit()"
     >
       <span aria-hidden="true">＋</span><span v-if="!rail">{{ $t("新建工作区") }}</span>
@@ -180,8 +180,8 @@ onMounted(() => {
       type="button"
       class="workspace-icon workspace-system-settings"
       :class="{ active: systemSettingsOpen }"
-      :aria-label="$t(&quot;系统设置&quot;)"
-      :title="$t(&quot;系统设置&quot;)"
+      :aria-label="$t('系统设置')"
+      :title="$t('系统设置')"
       @click="emit('system-settings')"
     >
       <SettingOutlined aria-hidden="true" />
@@ -202,7 +202,7 @@ onMounted(() => {
           <button
             type="button"
             class="workspace-menu"
-            :aria-label="$t(&quot;关闭&quot;)"
+            :aria-label="$t('关闭')"
             :disabled="busy"
             @click="close"
           >
@@ -216,19 +216,19 @@ onMounted(() => {
               : $t("选择 Git 账号并输入远程地址，提交后台克隆任务后创建工作区。")
           }}
         </p>
-        <a-form-item :label="$t(&quot;工作区名称&quot;)" html-for="workspace-name">
+        <a-form-item :label="$t('工作区名称')" html-for="workspace-name">
           <input
             id="workspace-name"
             ref="nameInput"
             v-model="name"
             maxlength="80"
             required
-            :placeholder="$t(&quot;例如：客户管理系统&quot;)"
+            :placeholder="$t('例如：客户管理系统')"
             :disabled="busy"
           />
         </a-form-item>
         <template v-if="!renaming">
-          <a-form-item :label="$t(&quot;Git 账号&quot;)" html-for="workspace-git-account">
+          <a-form-item :label="$t('Git 账号')" html-for="workspace-git-account">
             <select
               id="workspace-git-account"
               v-model="gitAccountId"
@@ -253,11 +253,11 @@ onMounted(() => {
               {{ $t("正在加载 Git 账号…") }}
             </p>
           </a-form-item>
-          <a-form-item :label="$t(&quot;Git 远程地址&quot;)" html-for="workspace-remote-url">
+          <a-form-item :label="$t('Git 远程地址')" html-for="workspace-remote-url">
             <input
               id="workspace-remote-url"
               v-model="remoteUrl"
-              :placeholder="$t(&quot;例如：http://git.example.com/team/project.git&quot;)"
+              :placeholder="$t('例如：http://git.example.com/team/project.git')"
               required
               :disabled="busy || loadingAccounts"
             />

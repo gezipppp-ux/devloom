@@ -35,7 +35,7 @@ const {
     <div
       v-else-if="accounts.length"
       class="account-list git-saved-accounts"
-      :aria-label="$t(&quot;已保存 Git 账号&quot;)"
+      :aria-label="$t('已保存 Git 账号')"
     >
       <div
         v-for="account in accounts"
@@ -52,14 +52,14 @@ const {
           <button
             type="button"
             :disabled="busy"
-            :aria-label="$t(&quot;编辑 Git 账号：{p0}&quot;, { p0: account.name })"
+            :aria-label="$t('编辑 Git 账号：{p0}', { p0: account.name })"
             @click="edit(account)"
           >
             {{ $t("编辑") }}</button
           ><button
             type="button"
             :disabled="busy"
-            :aria-label="$t(&quot;删除 Git 账号：{p0}&quot;, { p0: account.name })"
+            :aria-label="$t('删除 Git 账号：{p0}', { p0: account.name })"
             @click="deleteId = account.id"
           >
             {{ $t("删除") }}
@@ -72,7 +72,7 @@ const {
       v-if="deleteId"
       class="notice"
       role="group"
-      :aria-label="$t(&quot;确认删除 Git 账号&quot;)"
+      :aria-label="$t('确认删除 Git 账号')"
     >
       <p>
         {{ $t("确认删除「") }}{{
@@ -89,22 +89,22 @@ const {
     </div>
     <a-form class="git-settings-form" :model="form" layout="vertical" @finish="save">
       <section class="git-form-section">
-      <a-form-item :label="$t(&quot;账号名称&quot;)" html-for="git-account-name"
+      <a-form-item :label="$t('账号名称')" html-for="git-account-name"
         ><input
           id="git-account-name"
           v-model="form.name"
           maxlength="80"
           required
           :disabled="busy"
-          :placeholder="$t(&quot;例如：公司 Git&quot;)"
+          :placeholder="$t('例如：公司 Git')"
       /></a-form-item>
-      <a-form-item :label="$t(&quot;Git 主机&quot;)" html-for="git-account-host"
+      <a-form-item :label="$t('Git 主机')" html-for="git-account-host"
         ><input
           id="git-account-host"
           v-model="form.host"
           required
           :disabled="busy"
-          :placeholder="form.authType === 'ssh' ? $t(&quot;例如：gitee.com&quot;) : $t(&quot;例如：https://gitee.com&quot;)"
+          :placeholder="form.authType === 'ssh' ? $t('例如：gitee.com') : $t('例如：https://gitee.com')"
           aria-describedby="git-account-host-hint"
         />
         <p id="git-account-host-hint" class="field-hint">
@@ -114,7 +114,7 @@ const {
       >
       <a-form-item :label="$t('认证方式')" html-for="git-account-auth-type"><select id="git-account-auth-type" v-model="form.authType" :disabled="busy" @change="changeAuthType"><option value="http">{{ $t("HTTP/HTTPS · 账号密码或令牌") }}</option><option value="ssh">{{ $t("SSH · 系统生成密钥") }}</option></select></a-form-item>
       <div v-if="form.authType === 'http'" class="form-columns">
-        <a-form-item :label="$t(&quot;用户名&quot;)" html-for="git-account-user"
+        <a-form-item :label="$t('用户名')" html-for="git-account-user"
           ><input
             id="git-account-user"
             v-model="form.username"
@@ -122,7 +122,7 @@ const {
             :disabled="busy"
             autocomplete="off"
         /></a-form-item>
-        <a-form-item :label="$t(&quot;密码或访问令牌&quot;)" html-for="git-account-password"
+        <a-form-item :label="$t('密码或访问令牌')" html-for="git-account-password"
           ><input
             id="git-account-password"
             v-model="form.password"
@@ -140,14 +140,14 @@ const {
           </p></a-form-item
         >
       </div>
-      <a-form-item v-else :label="$t(&quot;SSH 公钥&quot;)" html-for="git-account-public-key">
+      <a-form-item v-else :label="$t('SSH 公钥')" html-for="git-account-public-key">
         <textarea
           v-if="form.publicKey"
           id="git-account-public-key"
           :value="form.publicKey"
           readonly
           rows="4"
-          :aria-label="$t(&quot;SSH 公钥&quot;)"
+          :aria-label="$t('SSH 公钥')"
           spellcheck="false"
           @focus="$event.target.select()"
         />
@@ -164,7 +164,7 @@ const {
           }}
         </button>
       </a-form-item>
-      <a-form-item v-if="form.authType === 'http'" :label="$t(&quot;登录验证服务&quot;)" html-for="git-login-provider">
+      <a-form-item v-if="form.authType === 'http'" :label="$t('登录验证服务')" html-for="git-login-provider">
         <select id="git-login-provider" v-model="provider" :disabled="busy" aria-describedby="git-login-hint">
           <option value="auto">{{ $t("自动识别 Gitee / GitHub / GitLab 官方主机") }}</option>
           <option value="gitee">Gitee</option>
@@ -177,7 +177,7 @@ const {
       <p v-else class="field-hint">{{ $t("验证登录会使用当前公钥连接 Git 主机的 git 用户。请先将公钥添加到 Git 服务；验证不会保存或替换账号密钥。") }}</p>
       </section>
       <section class="git-form-section git-author-section"><h3>{{ $t("提交作者") }}</h3>
-      <div class="form-columns"><a-form-item :label="$t(&quot;提交作者姓名&quot;)" html-for="git-author-name"><input id="git-author-name" v-model="form.authorName" :disabled="busy" /></a-form-item><a-form-item :label="$t(&quot;提交作者邮箱&quot;)" html-for="git-author-email"><input id="git-author-email" v-model="form.authorEmail" type="email" :disabled="busy" /></a-form-item></div>
+      <div class="form-columns"><a-form-item :label="$t('提交作者姓名')" html-for="git-author-name"><input id="git-author-name" v-model="form.authorName" :disabled="busy" /></a-form-item><a-form-item :label="$t('提交作者邮箱')" html-for="git-author-email"><input id="git-author-email" v-model="form.authorEmail" type="email" :disabled="busy" /></a-form-item></div>
       <p class="field-hint">{{ $t("提交作者身份与 Git 登录凭据独立；不填写时沿用服务端已配置的 Git 作者身份。") }}</p>
       </section>
       <footer class="git-form-footer">

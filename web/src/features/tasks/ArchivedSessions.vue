@@ -70,31 +70,31 @@ defineExpose({ open });
     <InboxOutlined aria-hidden="true" />{{ $t("已归档会话") }}
   </button>
   <Teleport to="body">
-    <dialog ref="dialog" class="workspace-dialog archived-sessions-dialog" :aria-label="$t(&quot;已归档会话&quot;)" @cancel.prevent="close">
+    <dialog ref="dialog" class="workspace-dialog archived-sessions-dialog" :aria-label="$t('已归档会话')" @cancel.prevent="close">
       <div class="workspace-dialog-heading">
         <h2>{{ $t("已归档会话") }}</h2>
-        <button type="button" class="workspace-menu" :aria-label="$t(&quot;关闭已归档会话&quot;)" :disabled="locked" @click="close">×</button>
+        <button type="button" class="workspace-menu" :aria-label="$t('关闭已归档会话')" :disabled="locked" @click="close">×</button>
       </div>
       <p class="muted">{{ $t("恢复后会话重新显示在需求列表中，保留原有历史和代码状态。") }}</p>
       <label for="archived-session-search">{{ $t("搜索会话名称") }}</label>
-      <input id="archived-session-search" ref="searchInput" v-model="query" type="search" :placeholder="$t(&quot;输入会话名称&quot;)" />
-      <FeedbackMessage :message="restoreError ? $t(&quot;恢复失败：{p0}&quot;, { p0: restoreError }) : ''" type="error" />
+      <input id="archived-session-search" ref="searchInput" v-model="query" type="search" :placeholder="$t('输入会话名称')" />
+      <FeedbackMessage :message="restoreError ? $t('恢复失败：{p0}', { p0: restoreError }) : ''" type="error" />
       <p v-if="loading" class="muted" role="status">{{ $t("正在加载已归档会话…") }}</p>
       <div v-else-if="error">
-        <FeedbackMessage :message="$t(&quot;加载失败：{p0}&quot;, { p0: error })" type="error" />
+        <FeedbackMessage :message="$t('加载失败：{p0}', { p0: error })" type="error" />
         <button type="button" @click="refresh"><ReloadOutlined aria-hidden="true" /> {{ $t("重试") }}</button>
       </div>
-      <ul v-else-if="filtered.length" class="archived-session-list" :aria-label="$t(&quot;已归档会话列表&quot;)">
+      <ul v-else-if="filtered.length" class="archived-session-list" :aria-label="$t('已归档会话列表')">
         <li v-for="run in filtered" :key="run.key">
           <div class="archived-session-info">
             <h3>{{ run.title }}</h3>
             <p class="field-hint">{{ $t("归档于") }} <time :datetime="run.archivedAt">{{ dateLabel(run.archivedAt) }}</time></p>
           </div>
           <div class="archived-session-actions">
-            <button type="button" :disabled="locked" :aria-label="$t(&quot;恢复会话：{p0}&quot;, { p0: run.title })" @click="recover(run)">
+            <button type="button" :disabled="locked" :aria-label="$t('恢复会话：{p0}', { p0: run.title })" @click="recover(run)">
               <UndoOutlined aria-hidden="true" />{{ restoring === run.key ? $t("恢复中…") : $t("恢复") }}
             </button>
-            <button type="button" class="danger-button" :disabled="locked" :aria-label="$t(&quot;永久删除会话：{p0}&quot;, { p0: run.title })" @click="requestDelete(run, $event)">
+            <button type="button" class="danger-button" :disabled="locked" :aria-label="$t('永久删除会话：{p0}', { p0: run.title })" @click="requestDelete(run, $event)">
               <DeleteOutlined aria-hidden="true" />{{ $t("删除") }}
             </button>
           </div>

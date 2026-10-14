@@ -63,14 +63,14 @@ const pretty = (value) =>
     <div v-else-if="item.text || !images.length" class="message-text">
       {{ item.text || "…" }}
     </div>
-    <div v-if="images.length" class="message-images" :aria-label="$t(&quot;消息图片&quot;)">
+    <div v-if="images.length" class="message-images" :aria-label="$t('消息图片')">
       <a
         v-for="(image, index) in images"
         :key="`${image.url}-${index}`"
         :href="image.url"
         target="_blank"
         rel="noopener noreferrer"
-        :aria-label="$t(&quot;查看消息图片 {p0}&quot;, { p0: index + 1 })"
+        :aria-label="$t('查看消息图片 {p0}', { p0: index + 1 })"
         ><img
           :src="image.url"
           :alt="image.name || `消息图片 ${index + 1}`"

@@ -22,9 +22,9 @@ async function save() {
 </script>
 <template>
   <a-form :model="form" layout="vertical" @finish="save">
-    <a-form-item :label="$t(&quot;当前密码&quot;)"><input v-model="form.currentPassword" type="password" autocomplete="current-password" :aria-label="$t(&quot;当前密码&quot;)" required :disabled="busy" /></a-form-item>
-    <a-form-item :label="$t(&quot;新密码&quot;)"><input v-model="form.password" type="password" autocomplete="new-password" :aria-label="$t(&quot;新密码&quot;)" required minlength="6" :disabled="busy" /><p class="field-hint">{{ $t("至少 6 个字符。") }}</p></a-form-item>
-    <a-form-item :label="$t(&quot;确认新密码&quot;)"><input v-model="form.confirmation" type="password" autocomplete="new-password" :aria-label="$t(&quot;确认新密码&quot;)" required minlength="6" :disabled="busy" /></a-form-item>
+    <a-form-item :label="$t('当前密码')"><input v-model="form.currentPassword" type="password" autocomplete="current-password" :aria-label="$t('当前密码')" required :disabled="busy" /></a-form-item>
+    <a-form-item :label="$t('新密码')"><input v-model="form.password" type="password" autocomplete="new-password" :aria-label="$t('新密码')" required minlength="6" :disabled="busy" /><p class="field-hint">{{ $t("至少 6 个字符。") }}</p></a-form-item>
+    <a-form-item :label="$t('确认新密码')"><input v-model="form.confirmation" type="password" autocomplete="new-password" :aria-label="$t('确认新密码')" required minlength="6" :disabled="busy" /></a-form-item>
     <FeedbackMessage :message="error" type="error" />
     <button class="primary" type="submit" :disabled="busy">{{ busy ? $t("正在保存…") : $t("修改密码") }}</button>
   </a-form>

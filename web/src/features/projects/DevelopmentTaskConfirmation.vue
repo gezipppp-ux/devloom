@@ -57,7 +57,7 @@ onUnmounted(() => {
   >
     <div class="workspace-dialog-heading">
       <h2 id="development-confirmation-title">{{ $t(copy.title) }}</h2>
-      <button :disabled="busy" :aria-label="$t(&quot;关闭确认&quot;)" @click="close">
+      <button :disabled="busy" :aria-label="$t('关闭确认')" @click="close">
         {{ $t("关闭") }}
       </button>
     </div>

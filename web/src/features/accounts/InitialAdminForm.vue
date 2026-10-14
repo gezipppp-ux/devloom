@@ -29,7 +29,7 @@ onUnmounted(() => { disposed = true; form.password = ""; form.confirm = ""; });
   <div>
     <p class="notice">{{ $t("创建管理员账号后自动登录，并继续完成团队配置。") }}</p>
     <form @submit.prevent="submit">
-      <FormSection :title="$t(&quot;管理员信息&quot;)">
+      <FormSection :title="$t('管理员信息')">
         <div class="admin-form-grid">
           <div><label for="setup-admin-username">{{ $t("登录名") }}</label><input id="setup-admin-username" v-model="form.username" autocomplete="username" required minlength="3" maxlength="64" pattern="[a-zA-Z0-9][a-zA-Z0-9_.\-]{2,63}" :disabled="busy" /><p class="field-hint">{{ $t("3–64 位字母、数字、点、短横线或下划线。") }}</p></div>
           <div><label for="setup-admin-name">{{ $t("显示名称") }}</label><input id="setup-admin-name" v-model="form.displayName" required maxlength="80" :disabled="busy" /></div>

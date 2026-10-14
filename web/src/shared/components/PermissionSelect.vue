@@ -142,7 +142,7 @@ onUnmounted(() => {
       ref="trigger"
       type="button"
       role="combobox"
-      :aria-label="$t(&quot;权限模式&quot;)"
+      :aria-label="$t('权限模式')"
       aria-haspopup="listbox"
       :aria-controls="menuId"
       :aria-expanded="expanded"
@@ -167,7 +167,7 @@ onUnmounted(() => {
       <div
         :id="menuId"
         role="listbox"
-        :aria-label="$t(&quot;执行权限选项&quot;)"
+        :aria-label="$t('执行权限选项')"
         @keydown="navigate"
       >
         <button

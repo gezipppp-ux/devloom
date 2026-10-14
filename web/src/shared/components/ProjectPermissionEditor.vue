@@ -96,7 +96,7 @@ function revert() {
       </label>
     </div>
     <details v-else class="permission-preset-tools" :open="!compact"><summary v-if="compact">{{ $t('权限组合与高级设置') }}</summary><div class="permission-preset">
-      <label>{{ $t("权限组合") }}<select v-model="preview" :disabled="disabled" :aria-label="$t(&quot;权限组合&quot;)"><option v-for="entry in presets" :key="entry.id" :value="entry.id">{{ $t(entry.label) }}</option></select></label>
+      <label>{{ $t("权限组合") }}<select v-model="preview" :disabled="disabled" :aria-label="$t('权限组合')"><option v-for="entry in presets" :key="entry.id" :value="entry.id">{{ $t(entry.label) }}</option></select></label>
       <p>{{ $t(preset.description) }}</p><p class="field-hint">{{ $t("将添加：") }}{{ labels(available) || $t("无可用权限") }}</p>
       <p v-if="blocked.length" class="field-hint">{{ $t("部门未开放：") }}{{ labels(blocked) }}</p>
       <p v-if="coreBlocked.length" class="field-hint">{{ $t("组合核心功能未开放：") }}{{ labels(coreBlocked) }}{{ $t("。请联系系统管理员调整部门可用功能后再添加此组合。") }}</p>
@@ -107,16 +107,16 @@ function revert() {
     <component :is="compact ? 'div' : 'details'" class="permission-details" :open="department"><summary v-if="!compact">{{ $t("高级权限细项（") }}{{ modelValue.length }} {{ $t("项已选）") }}</summary>
       <p v-if="!compact" class="field-hint">{{ $t("选中操作会补齐必要依赖；取消基础权限会同时取消相关操作。") }}</p>
       <details class="permission-filter-tools" :open="!compact" @toggle="toolsOpen = $event.target.open"><summary v-if="compact">{{ $t('筛选与批量操作') }}</summary><div class="permission-toolbar">
-        <label class="permission-search">{{ $t("搜索权限") }}<input v-model="search" type="search" :placeholder="$t(&quot;搜索功能或权限名称&quot;)" @keydown.enter.prevent /></label>
+        <label class="permission-search">{{ $t("搜索权限") }}<input v-model="search" type="search" :placeholder="$t('搜索功能或权限名称')" @keydown.enter.prevent /></label>
         <label class="permission-filter"><input v-model="onlySelected" type="checkbox" />{{ department ? $t("只看已开放") : $t("只看已选") }}</label>
       </div></details>
       <div class="permission-workbench">
-        <nav class="permission-categories" :aria-label="$t(&quot;权限分类&quot;)">
+        <nav class="permission-categories" :aria-label="$t('权限分类')">
           <button v-for="group in groups" :key="group.name" type="button" :aria-label="$t(group.name)" :aria-pressed="activeGroup?.name === group.name" :disabled="!group.matches.length" @click="selectedGroup = group.name">
             <span>{{ $t(group.name) }}</span><small>{{ group.selected }} / {{ group.permissions.length }}</small>
           </button>
         </nav>
-        <section class="permission-pane" :aria-label="activeGroup ? $t(&quot;{p0}权限&quot;, { p0: $t(activeGroup.name) }) : $t(&quot;权限搜索结果&quot;)">
+        <section class="permission-pane" :aria-label="activeGroup ? $t('{p0}权限', { p0: $t(activeGroup.name) }) : $t('权限搜索结果')">
           <template v-if="activeGroup">
             <header class="permission-pane-heading"><h3>{{ compact ? $t('{name}可用功能', { name: $t(activeGroup.name) }) : $t(activeGroup.name) }}</h3><span v-if="!compact">{{ activeGroup.selected }} / {{ activeGroup.permissions.length }} {{ $t("项") }}{{ department ? $t("已开放") : $t("已选") }}</span></header>
             <p v-if="compact" class="field-hint">{{ $t('项目授权不得超出所属部门的功能上限。') }}</p>

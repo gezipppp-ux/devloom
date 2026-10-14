@@ -66,10 +66,10 @@ onUnmounted(() => { revision++; });
 
 <template>
     <Teleport to="body">
-      <dialog ref="dialog" class="workspace-dialog session-delete-dialog" :aria-label="mode === 'archive' ? $t(&quot;归档会话&quot;) : $t(&quot;永久删除会话&quot;)" @cancel.prevent="close">
+      <dialog ref="dialog" class="workspace-dialog session-delete-dialog" :aria-label="mode === 'archive' ? $t('归档会话') : $t('永久删除会话')" @cancel.prevent="close">
         <div class="workspace-dialog-heading">
           <h2>{{ mode === "archive" ? $t("归档会话") : $t("永久删除会话") }}</h2>
-          <button type="button" class="workspace-menu" :aria-label="$t(&quot;关闭确认窗口&quot;)" :disabled="busy" @click="close">×</button>
+          <button type="button" class="workspace-menu" :aria-label="$t('关闭确认窗口')" :disabled="busy" @click="close">×</button>
         </div>
         <p v-if="title" class="session-lifecycle-title">{{ $t("会话：") }}<strong>{{ $t(title) }}</strong></p>
         <p v-if="mode === 'archive'" class="muted">{{ $t("归档后会话不再显示在左侧列表中，可从「已归档会话」恢复。历史、需求资料和 Worktree 保留。") }}</p>
@@ -92,7 +92,7 @@ onUnmounted(() => { revision++; });
               <p class="git-feedback warning">{{ $t("将放弃未提交、未跟踪和忽略的文件（包括依赖与构建产物），以及尚未推送的本地提交。会话资料一并永久删除，无法恢复。远程分支保留。") }}</p>
               <label :for="`force-delete-branch-${taskKey}`">{{ $t("输入完整本地分支名以确认强制删除") }}</label>
               <p class="field-hint">{{ $t("请准确输入：") }}<code>{{ worktree.branch }}</code></p>
-              <input :id="`force-delete-branch-${taskKey}`" v-model="confirmBranch" :aria-label="$t(&quot;确认强制删除的本地分支&quot;)" :disabled="busy || active" :placeholder="worktree.branch" autocomplete="off" spellcheck="false" />
+              <input :id="`force-delete-branch-${taskKey}`" v-model="confirmBranch" :aria-label="$t('确认强制删除的本地分支')" :disabled="busy || active" :placeholder="worktree.branch" autocomplete="off" spellcheck="false" />
             </template>
           </template>
           <label class="git-risk-confirm">

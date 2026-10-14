@@ -40,19 +40,19 @@ async function save() {
     <div v-show="currentTab === 'profile'" class="ui-profile-settings"><header class="ui-settings-heading"><h2>{{ $t('个人资料与偏好') }}</h2><p>{{ $t('这些设置只影响你的账号。') }}</p></header>
     <div class="profile-settings-panel">
     <AccountProfile />
-    <FormSection :title="$t(&quot;执行默认值&quot;)" :description="$t(&quot;创建任务时自动填入，单个任务仍可独立调整。已有会话保持原设置。&quot;)">
+    <FormSection :title="$t('执行默认值')" :description="$t('创建任务时自动填入，单个任务仍可独立调整。已有会话保持原设置。')">
       <template #action><button type="button" class="text-button" :disabled="models.loading.value" @click="models.refresh"><ReloadOutlined aria-hidden="true" />{{ $t("刷新模型列表") }}</button></template>
       <a-form id="personal-defaults-form" :model="form" layout="vertical" @finish="save">
         <AgentModelControls :agent-label="permissions.agent.value?.label || 'Agent'" :model="form.model" :reasoning-effort="form.reasoningEffort" :models="models.models.value" :loading="models.loading.value" :disabled="busy" @change="Object.assign(form, $event)" />
-        <FeedbackMessage :message="models.error.value ? $t(&quot;模型列表加载失败：{p0}。当前选择会保留。&quot;, { p0: models.error.value }) : ''" type="error" />
-        <a-form-item :label="$t(&quot;默认执行权限&quot;)"><PermissionSelect v-model="form.permissionMode" :options="permissions.permissionModes.value" :disabled="busy" refreshable :refreshing="permissions.loading.value" @refresh="permissions.refresh" /></a-form-item>
+        <FeedbackMessage :message="models.error.value ? $t('模型列表加载失败：{p0}。当前选择会保留。', { p0: models.error.value }) : ''" type="error" />
+        <a-form-item :label="$t('默认执行权限')"><PermissionSelect v-model="form.permissionMode" :options="permissions.permissionModes.value" :disabled="busy" refreshable :refreshing="permissions.loading.value" @refresh="permissions.refresh" /></a-form-item>
         <FeedbackMessage :message="permissions.error.value" type="error" />
         <p v-if="!permissions.loading.value && !permissions.error.value && !permissions.isAvailable(form.permissionMode)" class="error" role="alert">{{ $t("当前权限模式不可用，请选择可用的权限模式后保存。") }}</p>
-        <a-form-item :label="$t(&quot;默认任务分组&quot;)"><select v-model="form.grouping" :aria-label="$t(&quot;默认任务分组&quot;)" :disabled="busy"><option value="type">{{ $t("按类型") }}</option><option value="progress">{{ $t("按进度") }}</option><option value="none">{{ $t("不分组") }}</option></select></a-form-item>
+        <a-form-item :label="$t('默认任务分组')"><select v-model="form.grouping" :aria-label="$t('默认任务分组')" :disabled="busy"><option value="type">{{ $t("按类型") }}</option><option value="progress">{{ $t("按进度") }}</option><option value="none">{{ $t("不分组") }}</option></select></a-form-item>
         <FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="saved ? '个人设置已保存。' : ''" type="success" />
       </a-form>
     </FormSection>
-    <FormSection :title="$t(&quot;通知&quot;)">
+    <FormSection :title="$t('通知')">
       <div class="notification-setting-row"><div><strong>{{ $t("需要我处理时提醒") }}</strong><p>{{ $t("浏览器打开应用期间，提醒新的执行审批、提问、待验证交付和 Codex 未读结果。每台设备需单独允许通知。") }}</p></div>
       <button v-if="notifications.available.value" type="button" class="notification-switch" role="switch" :aria-label="$t('需要我处理时提醒')" :aria-checked="notifications.enabled.value && notifications.permission.value === 'granted'" :title="notifications.enabled.value && notifications.permission.value === 'granted' ? $t('关闭桌面通知') : $t('开启桌面通知')" :disabled="notifications.busy.value" @click="notifications.toggle"><span aria-hidden="true" /></button>
       </div>
@@ -65,7 +65,7 @@ async function save() {
     </div>
     <McpTokenSettings v-if="currentTab === 'mcp'" />
     <GitAccountSettings v-if="currentTab === 'git'" />
-    <FormSection v-if="currentTab === 'security'" :title="$t(&quot;账号安全&quot;)" :description="$t(&quot;修改登录密码。&quot;)"><PasswordForm /></FormSection>
+    <FormSection v-if="currentTab === 'security'" :title="$t('账号安全')" :description="$t('修改登录密码。')"><PasswordForm /></FormSection>
     </SettingsLayout>
   </section>
 </template>

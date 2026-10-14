@@ -241,8 +241,8 @@ async function refreshCurrentSession() {
           :class="{ active: settingsOpen }"
           :disabled="workspaceLoading"
           :aria-pressed="settingsOpen"
-          :aria-label="$t(&quot;工作区设置&quot;)"
-          :title="$t(&quot;工作区设置&quot;)"
+          :aria-label="$t('工作区设置')"
+          :title="$t('工作区设置')"
           @click="
             settingsOpen = true;
             repositoryOpen = false;
@@ -310,7 +310,7 @@ async function refreshCurrentSession() {
         </template>
       </ArchivedSessions>
       <div class="sidebar-footer">
-        <FeedbackMessage :message="preferenceError ? $t(&quot;未读状态同步失败：{p0}&quot;, { p0: preferenceError }) : ''" type="error" />
+        <FeedbackMessage :message="preferenceError ? $t('未读状态同步失败：{p0}', { p0: preferenceError }) : ''" type="error" />
         <span :class="['connection', { online }]"></span
         >{{ online ? $t("服务已连接") : $t("正在重连服务") }}
       </div>
@@ -341,9 +341,9 @@ async function refreshCurrentSession() {
       />
       <RepositoryGitPanel v-else-if="repositoryOpen" :can-operate="allowed('code.operate')" />
       <template v-else-if="session">
-        <header class="session-header" :aria-label="$t(&quot;会话工具栏&quot;)">
-          <div class="page-breadcrumb" :aria-label="$t(&quot;当前位置&quot;)">
-            <span :title="props.workspaceName || $t(&quot;开发工作台&quot;)">{{ props.workspaceName || $t("开发工作台") }}</span>
+        <header class="session-header" :aria-label="$t('会话工具栏')">
+          <div class="page-breadcrumb" :aria-label="$t('当前位置')">
+            <span :title="props.workspaceName || $t('开发工作台')">{{ props.workspaceName || $t("开发工作台") }}</span>
             <span aria-hidden="true">/</span>
             <strong>{{ $t("需求会话") }}</strong>
           </div>
@@ -385,7 +385,7 @@ async function refreshCurrentSession() {
             <div
               ref="timeline"
               class="timeline"
-              :aria-label="$t(&quot;会话记录&quot;)"
+              :aria-label="$t('会话记录')"
               :aria-busy="loading"
             >
               <button

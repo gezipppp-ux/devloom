@@ -33,7 +33,7 @@ const selected = computed(() =>
   <fieldset class="workspace-icon-editor" :disabled="disabled">
     <legend>{{ $t("工作区图标") }}</legend>
     <div class="icon-preview-row">
-      <div class="workspace-icon-preview" :aria-label="$t(&quot;图标预览&quot;)">
+      <div class="workspace-icon-preview" :aria-label="$t('图标预览')">
         <component
           :is="workspaceIcon(modelValue)"
           v-if="workspaceIcon(modelValue)"
@@ -56,25 +56,25 @@ const selected = computed(() =>
     </div>
   </fieldset>
   <Teleport to="body">
-    <dialog ref="dialog" class="workspace-dialog workspace-icon-dialog" :aria-label="$t(&quot;选择工作区图标&quot;)" @cancel.prevent="close">
+    <dialog ref="dialog" class="workspace-dialog workspace-icon-dialog" :aria-label="$t('选择工作区图标')" @cancel.prevent="close">
       <div class="workspace-dialog-heading">
         <h2>{{ $t("选择工作区图标") }}</h2>
-        <button type="button" :aria-label="$t(&quot;关闭图标选择&quot;)" @click="close">×</button>
+        <button type="button" :aria-label="$t('关闭图标选择')" @click="close">×</button>
       </div>
     <input
       ref="searchInput"
       v-model="query"
-      :aria-label="$t(&quot;搜索图标&quot;)"
-      :placeholder="$t(&quot;搜索图标，例如：代码、测试、rocket&quot;)"
+      :aria-label="$t('搜索图标')"
+      :placeholder="$t('搜索图标，例如：代码、测试、rocket')"
       type="search"
     />
-    <div class="icon-presets" :aria-label="$t(&quot;可选工作区图标&quot;)">
+    <div class="icon-presets" :aria-label="$t('可选工作区图标')">
       <button
         v-for="icon in filtered"
         :key="icon.id"
         type="button"
         :title="icon.label"
-        :aria-label="$t(&quot;图标：{p0}&quot;, { p0: icon.label })"
+        :aria-label="$t('图标：{p0}', { p0: icon.label })"
         :aria-pressed="modelValue === icon.id"
         @click="choose(icon.id)"
       >

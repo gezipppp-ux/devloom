@@ -69,7 +69,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="page-layout repository-git-panel" :aria-label="$t(&quot;代码仓库&quot;)">
+  <section class="page-layout repository-git-panel" :aria-label="$t('代码仓库')">
     <header class="page-heading">
       <div class="eyebrow">REPOSITORY</div>
       <h1>{{ $t("代码仓库") }}</h1>
@@ -79,8 +79,8 @@ onUnmounted(() => {
       </p>
     </header>
     <FormSection
-      :title="$t(&quot;仓库状态&quot;)"
-      :description="$t(&quot;显示服务器上的项目仓库与配置的开发分支。&quot;)"
+      :title="$t('仓库状态')"
+      :description="$t('显示服务器上的项目仓库与配置的开发分支。')"
     >
       <template #action>
         <button
@@ -114,8 +114,8 @@ onUnmounted(() => {
     </FormSection>
     <FormSection
       v-if="repository && canOperate"
-      :title="$t(&quot;获取最新代码&quot;)"
-      :description="$t(&quot;先获取远端分支信息，再按需更新本地基准分支。&quot;)"
+      :title="$t('获取最新代码')"
+      :description="$t('先获取远端分支信息，再按需更新本地基准分支。')"
     >
       <label class="git-field-label" for="repository-remote"
         >{{ $t("要获取更新的远端") }}</label
@@ -123,7 +123,7 @@ onUnmounted(() => {
       <select
         id="repository-remote"
         v-model="selectedRemote"
-        :aria-label="$t(&quot;远端仓库&quot;)"
+        :aria-label="$t('远端仓库')"
         :disabled="loading || Boolean(operation) || !repository.remotes?.length"
       >
         <option v-if="!repository.remotes?.length" value="">

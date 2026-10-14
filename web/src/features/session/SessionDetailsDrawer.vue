@@ -110,7 +110,7 @@ onUnmounted(() => {
 
 <template>
   <div ref="root" class="session-details" :class="{ 'context-inline': inline && panel }">
-    <nav class="session-details-nav" :aria-label="$t(&quot;会话资料&quot;)">
+    <nav class="session-details-nav" :aria-label="$t('会话资料')">
       <button
         v-for="entry in panels"
         :key="entry.key"
@@ -135,7 +135,7 @@ onUnmounted(() => {
         <button
           ref="closeButton"
           type="button"
-          :aria-label="$t(&quot;收起会话资料&quot;)"
+          :aria-label="$t('收起会话资料')"
           @click="close()"
         >
           <RightOutlined aria-hidden="true" /> {{ $t("收起") }}
@@ -146,7 +146,7 @@ onUnmounted(() => {
           v-show="panel === 'info'"
           :id="`${id}-info`"
           class="session-context"
-          :aria-label="$t(&quot;会话信息内容&quot;)"
+          :aria-label="$t('会话信息内容')"
         >
           <section class="session-info-section">
             <h3>{{ $t("执行上下文") }}</h3>
@@ -198,7 +198,7 @@ onUnmounted(() => {
         <section
           v-show="panel === 'git'"
           :id="`${id}-git`"
-          :aria-label="$t(&quot;Worktree Git 内容&quot;)"
+          :aria-label="$t('Worktree Git 内容')"
         >
           <SessionGitPanel
             v-if="panel === 'git' && session.worktree?.path"

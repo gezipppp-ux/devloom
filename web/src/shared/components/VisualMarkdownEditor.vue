@@ -292,7 +292,7 @@ defineExpose({ captureInsertion, insertMarkdown, focus, canInsert });
       <div
         class="visual-markdown-toolbar"
         role="toolbar"
-        :aria-label="$t(&quot;{p0}格式&quot;, { p0: label })"
+        :aria-label="$t('{p0}格式', { p0: label })"
       >
         <button
           v-for="control in controls"

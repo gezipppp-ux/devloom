@@ -14,7 +14,7 @@ watch(confirmation, async value => {
 const actionLabel = pending => pending.action === 'activate' ? '设为默认' : pending.action === 'delete' ? '删除供应商' : pending.row.enabled ? '停用供应商' : '启用供应商';
 </script>
 <template>
-  <section :aria-label="$t(&quot;Agent 供应商&quot;)">
+  <section :aria-label="$t('Agent 供应商')">
     <div class="supplier-toolbar supplier-page-heading"><div><h2><ApiOutlined aria-hidden="true" /> {{ $t("Agent 供应商") }}</h2><p class="muted">{{ $t("系统统一配置 · Codex") }}</p></div><div class="actions"><button :disabled="loading || busy" @click="load"><ReloadOutlined aria-hidden="true" /> {{ $t("刷新") }}</button><button class="primary" :disabled="busy" @click="edit()"><PlusOutlined aria-hidden="true" /> {{ $t("新增供应商") }}</button></div></div>
     <p class="supplier-banner">{{ $t("所有会话的新轮次使用系统默认供应商。切换后，正在执行的轮次和审批继续使用原配置。") }}</p>
     <p v-if="loading" role="status">{{ $t("正在加载供应商…") }}</p>

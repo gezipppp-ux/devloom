@@ -69,7 +69,7 @@ function person(id) { return data.value?.people?.find(p => p.id === id)?.display
       <button v-if="releases.error.value" :disabled="releases.loading.value" @click="releases.reload">{{ $t("重新读取版本") }}</button>
       <div class="issue-detail-grid" :class="{ 'issue-detail-editing': editing }">
         <div class="issue-detail-main">
-          <section v-if="editing" class="issue-panel issue-content" :aria-label="$t(&quot;编辑事项&quot;)">
+          <section v-if="editing" class="issue-panel issue-content" :aria-label="$t('编辑事项')">
             <h3 class="issue-panel-heading"><EditOutlined aria-hidden="true" />{{ $t("编辑事项") }}</h3>
             <EditConflict v-if="latest" :key="latest.revision" :base="baseline" :draft="form" :latest="latest" :people="data.people" @resolve="resolve" @discard="discardDraft" />
             <form class="project-form" @submit.prevent="submit">
@@ -77,7 +77,7 @@ function person(id) { return data.value?.people?.find(p => p.id === id)?.display
               <div class="actions"><button type="submit" class="primary" :disabled="saving || attachmentBusy || Boolean(latest)">{{ saving ? $t("正在保存…") : $t("保存事项") }}</button><button type="button" :disabled="saving" @click="cancelEdit">{{ $t("取消编辑") }}</button><button type="button" :disabled="loading || saving || attachmentBusy" @click="loadLatest">{{ $t("保留草稿，加载最新内容") }}</button></div>
             </form>
           </section>
-          <section v-else class="issue-panel issue-content issue-prose" :aria-label="data.type === 'bug' ? $t(&quot;Bug 信息&quot;) : $t(&quot;需求内容&quot;)">
+          <section v-else class="issue-panel issue-content issue-prose" :aria-label="data.type === 'bug' ? $t('Bug 信息') : $t('需求内容')">
             <h3 class="issue-panel-heading"><FileTextOutlined aria-hidden="true" />{{ data.type === 'bug' ? $t("Bug 信息") : $t("需求内容") }}</h3>
             <div class="issue-content-body">
               <section class="issue-content-block"><h4>{{ data.type === 'bug' ? $t('问题描述') : $t('目标与背景') }}</h4><MarkdownContent v-if="data.description" :content="data.description" :images="data.images || []" /><p v-else class="muted">{{ $t("暂无描述。") }}</p></section>
@@ -91,18 +91,18 @@ function person(id) { return data.value?.people?.find(p => p.id === id)?.display
           <ProjectFiles :key="filesVersion" class="issue-panel issue-files" :endpoint="endpoint" :can-edit="can('issue.edit') && !editing" :title="editing ? '附件' : '参考资料'" @uploaded="reload" />
           <IssueDiscussion prototype-layout class="issue-panel issue-discussion" :endpoint="endpoint" :status-names="Object.fromEntries((data.workflow?.definition.nodes || []).map(node => [node.id, node.name]))" :permissions="data.release?.status === 'archived' ? permissions.filter(p => p.endsWith('.view')) : permissions" />
         </div>
-        <aside class="issue-detail-sidebar" :aria-label="$t(&quot;事项操作与资料&quot;)">
-          <section v-if="!editing" class="issue-panel issue-status" :aria-label="$t(&quot;状态流转&quot;)">
+        <aside class="issue-detail-sidebar" :aria-label="$t('事项操作与资料')">
+          <section v-if="!editing" class="issue-panel issue-status" :aria-label="$t('状态流转')">
             <h3 class="issue-panel-heading"><SwapOutlined aria-hidden="true" />{{ $t("状态流转") }}</h3>
             <p class="issue-current-status"><span class="muted">{{ $t("当前状态") }}</span><span class="issue-status-badge">{{ data.statusName }}</span></p>
             <form v-if="transitions.length" class="project-form" @submit.prevent="transition">
-              <label>{{ $t("目标状态") }}<select v-model="nextStatus" :aria-label="$t(&quot;目标状态&quot;)" :disabled="saving" required><option value="" disabled>{{ $t("选择目标状态") }}</option><option v-for="t in transitions" :key="t.id" :value="t.id">{{ t.name }}</option></select></label>
+              <label>{{ $t("目标状态") }}<select v-model="nextStatus" :aria-label="$t('目标状态')" :disabled="saving" required><option value="" disabled>{{ $t("选择目标状态") }}</option><option v-for="t in transitions" :key="t.id" :value="t.id">{{ t.name }}</option></select></label>
               <label v-if="nextStatus">{{ $t("原因") }}<textarea v-model="reason" rows="2" :disabled="saving" :required="Boolean(transitions.find(t => t.id === nextStatus)?.requiresReason)" /></label>
               <button class="primary" type="submit" :disabled="saving || !nextStatus">{{ saving ? $t("正在更新…") : $t("更新状态") }}</button>
             </form>
             <p v-else class="muted">{{ $t("当前没有可用的状态操作。") }}</p>
           </section>
-          <section v-if="!editing" class="issue-panel issue-information" :aria-label="$t(&quot;事项信息&quot;)">
+          <section v-if="!editing" class="issue-panel issue-information" :aria-label="$t('事项信息')">
             <h3 class="issue-panel-heading">{{ $t("事项信息") }}</h3>
             <dl class="issue-facts"><template v-if="projectName"><dt>{{ $t('所属项目') }}</dt><dd>{{ projectName }}</dd></template><dt>{{ $t('目标版本') }}</dt><dd><RouterLink v-if="data.release" :to="{ path: `/projects/${projectId}`, query: { tab: 'releases' } }">{{ data.release.name }}</RouterLink><span v-else>{{ $t('未排期') }}</span></dd><dt>{{ $t('优先级') }}</dt><dd>{{ $t(priorityLabels[data.priority]) }}</dd><dt>{{ $t('负责人') }}</dt><dd class="ui-person"><PersonAvatar v-if="data.assigneeId" :name="person(data.assigneeId)" />{{ person(data.assigneeId) }}</dd><template v-if="data.createdById"><dt>{{ $t('创建者') }}</dt><dd class="ui-person"><PersonAvatar :name="person(data.createdById)" />{{ person(data.createdById) }}</dd></template><dt>{{ $t('参与人') }}</dt><dd class="issue-participants"><span v-for="id in data.participantIds" :key="id" class="ui-person"><PersonAvatar :name="person(id)" />{{ person(id) }}</span><span v-if="!data.participantIds.length">{{ $t('无') }}</span></dd><template v-if="data.type === 'bug'"><dt>{{ $t('严重程度') }}</dt><dd>{{ { minor: $t('轻微'), normal: $t('普通'), major: $t('严重'), critical: $t('致命') }[data.severity] }}</dd></template><template v-if="data.dueDate"><dt>{{ $t('截止日期') }}</dt><dd>{{ formatDate(data.dueDate) }}</dd></template></dl><div v-if="data.tags?.length" class="ui-tags"><span v-for="tag in data.tags" :key="tag">{{ tag }}</span></div>
           </section>

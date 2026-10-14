@@ -52,7 +52,7 @@ onUnmounted(() => { alive = false; observer?.disconnect(); clearMessages(); });
 </script>
 <template>
   <Teleport :to="target">
-    <div ref="host" popover="manual" class="operation-messages" role="region" :aria-label="$t(&quot;操作提示&quot;)"
+    <div ref="host" popover="manual" class="operation-messages" role="region" :aria-label="$t('操作提示')"
       :tabindex="messages.length > 1 ? 0 : -1" :data-expanded="expanded"
       @pointerenter="hovered = $event.pointerType !== 'touch'" @pointerleave="hovered = false" @pointerdown="touchStack"
       @focusin="focused = true" @focusout="focused = Boolean(host?.contains($event.relatedTarget))">
@@ -62,7 +62,7 @@ onUnmounted(() => { alive = false; observer?.disconnect(); clearMessages(); });
           :role="['error', 'warning'].includes(item.type) ? 'alert' : 'status'" aria-atomic="true">
           <span class="operation-message-icon" aria-hidden="true"><component :is="icons[item.type]" /></span>
           <span class="operation-message-text">{{ $t(item.message) }}</span>
-          <button type="button" class="operation-message-close" :aria-label="$t(&quot;关闭提示&quot;)" @click="dismiss(item.id)"><CloseOutlined aria-hidden="true" /></button>
+          <button type="button" class="operation-message-close" :aria-label="$t('关闭提示')" @click="dismiss(item.id)"><CloseOutlined aria-hidden="true" /></button>
         </div>
       </div>
     </div>

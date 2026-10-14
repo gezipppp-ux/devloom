@@ -73,7 +73,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="session-git" :aria-busy="loading" :aria-label="$t(&quot;Worktree Git 状态&quot;)">
+  <section class="session-git" :aria-busy="loading" :aria-label="$t('Worktree Git 状态')">
     <div class="session-git-summary">
       <span class="git-summary-title"
         ><BranchesOutlined aria-hidden="true" /> Worktree</span

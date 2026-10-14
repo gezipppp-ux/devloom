@@ -40,7 +40,7 @@ function changeModel(settings) {
 </script>
 
 <template>
-  <FormSection :title="$t(&quot;执行偏好&quot;)" :number="embedded ? '' : '02'" :class="{ 'agent-model-settings-embedded': embedded }">
+  <FormSection :title="$t('执行偏好')" :number="embedded ? '' : '02'" :class="{ 'agent-model-settings-embedded': embedded }">
     <template #action>
       <button
         class="text-button"
@@ -65,7 +65,7 @@ function changeModel(settings) {
     <p class="field-hint">
       {{ $t("选择具体模型后可设置其支持的思考强度。创建后仍可在会话输入区修改，从下一轮生效。") }}
     </p>
-    <a-form-item :label="$t(&quot;执行权限&quot;)" layout="vertical">
+    <a-form-item :label="$t('执行权限')" layout="vertical">
       <PermissionSelect
         refreshable
         :refreshing="permissions.loading.value"
@@ -76,7 +76,7 @@ function changeModel(settings) {
         @update:model-value="emit('update:permissionMode', $event)"
       />
     </a-form-item>
-    <FeedbackMessage :message="permissions.error.value ? $t(&quot;权限选项加载失败：{p0}。确认权限可用后才能创建任务。 {p1}&quot;, { p0: permissions.error.value, p1: permissions.errorHint.value }) : ''" type="error" />
+    <FeedbackMessage :message="permissions.error.value ? $t('权限选项加载失败：{p0}。确认权限可用后才能创建任务。 {p1}', { p0: permissions.error.value, p1: permissions.errorHint.value }) : ''" type="error" />
     <div v-if="permissions.error.value"><button
         type="button"
         class="text-button"
@@ -90,6 +90,6 @@ function changeModel(settings) {
     <p v-if="!loading && !error && !models.length" class="field-hint">
       {{ permissions.agent.value?.label || 'Agent' }} {{ $t("未返回可选模型，可使用默认配置或稍后刷新。") }}
     </p>
-    <FeedbackMessage :message="error ? $t(&quot;模型列表加载失败：{p0}。当前选择会保留。&quot;, { p0: error }) : ''" type="error" />
+    <FeedbackMessage :message="error ? $t('模型列表加载失败：{p0}。当前选择会保留。', { p0: error }) : ''" type="error" />
   </FormSection>
 </template>

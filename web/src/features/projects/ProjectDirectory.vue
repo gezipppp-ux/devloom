@@ -24,7 +24,7 @@ function create() { return save("/projects", { name: form.name, description: for
   <section class="page-layout project-page">
     <PageHeader :title="$t('项目')" :description="$t('将想法、协作与代码，放在同一个上下文里。')"><button v-if="data?.canCreateProjects" class="primary" :disabled="saving" @click="creating = true"><PlusOutlined aria-hidden="true" />{{ $t('新建项目') }}</button></PageHeader>
     <FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="notice" type="success" />
-    <FormSection v-if="data?.isAdmin && !projects.length" :title="$t(&quot;首次使用准备清单&quot;)">
+    <FormSection v-if="data?.isAdmin && !projects.length" :title="$t('首次使用准备清单')">
       <p class="field-hint">{{ $t("管理员可以直接创建和管理项目。为参与者配置部门和项目分工后，再按需准备开发环境。") }}</p>
       <ol class="project-setup-list">
         <li>{{ data.setup?.hasDepartments ? $t("已配置部门") : $t("待配置部门") }}：<RouterLink to="/departments">{{ $t("设置部门可用功能") }}</RouterLink>{{ $t("，为负责人开放查看、配置和成员管理。") }}</li>
@@ -34,7 +34,7 @@ function create() { return save("/projects", { name: form.name, description: for
     </FormSection>
     <ModalDialog :open="creating" :title="$t('创建项目')" @close="!saving && (creating = false)">
       <form class="project-form" @submit.prevent="create"><label>{{ $t("项目名称") }}<input v-model="form.name" :disabled="saving" required maxlength="80" /></label><label>{{ $t("项目说明") }}<textarea v-model="form.description" :disabled="saving" rows="3" maxlength="8000" /></label>
-        <label>{{ $t("Git 仓库地址") }}<input v-model="form.remoteUrl" :aria-label="$t(&quot;Git 仓库地址&quot;)" required :disabled="saving" placeholder="https://git.example.com/team/repository.git" aria-describedby="project-repository-hint" /><small id="project-repository-hint" class="field-hint">{{ $t("新建项目即引入一个 Git 仓库。支持 HTTP(S) 或 SSH 克隆地址，请勿填写密码或令牌；个人 Git 账号在开发空间中配置。") }}</small></label>
+        <label>{{ $t("Git 仓库地址") }}<input v-model="form.remoteUrl" :aria-label="$t('Git 仓库地址')" required :disabled="saving" placeholder="https://git.example.com/team/repository.git" aria-describedby="project-repository-hint" /><small id="project-repository-hint" class="field-hint">{{ $t("新建项目即引入一个 Git 仓库。支持 HTTP(S) 或 SSH 克隆地址，请勿填写密码或令牌；个人 Git 账号在开发空间中配置。") }}</small></label>
         <p class="field-hint">{{ administrator ? $t("管理员创建后拥有全部项目权限，可直接维护事项、资产并准备本人的开发空间。") : $t("创建者初始仅有查看项目、项目配置和成员管理权限。创建后请先到“成员”设置本人及参与者的工作内容组合，再维护事项或准备开发空间。") }}</p><div class="actions"><button type="submit" class="primary" :disabled="saving">{{ saving ? $t("正在创建…") : $t("保存项目") }}</button><button type="button" :disabled="saving" @click="creating = false">{{ $t("取消") }}</button></div>
       </form>
     </ModalDialog>

@@ -79,7 +79,7 @@ onUnmounted(() => {
     :not-found-content="
       loading ? '正在读取远端分支…' : '无匹配分支，可输入远端短分支名'
     "
-    :placeholder="$t(&quot;选择或输入远端短分支名&quot;)"
+    :placeholder="$t('选择或输入远端短分支名')"
     style="width: 100%"
     @search="(value) => (query = value)"
     @change="
@@ -92,7 +92,7 @@ onUnmounted(() => {
   <p v-if="!repository.trim()" :id="`${inputId}-hint`" class="base-branch-hint">
     {{ $t("项目仓库由创建工作区时的 Git 地址生成；加载后会显示已获取的 origin 分支。") }}
   </p>
-  <FeedbackMessage :message="error ? $t(&quot;分支加载失败：{p0}&quot;, { p0: error }) : ''" type="error" />
+  <FeedbackMessage :message="error ? $t('分支加载失败：{p0}', { p0: error }) : ''" type="error" />
 </template>
 
 <style scoped>

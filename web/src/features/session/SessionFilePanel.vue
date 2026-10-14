@@ -50,26 +50,26 @@ onMounted(() => { closeButton.value?.focus({ preventScroll: true }); document.ad
 onUnmounted(() => document.removeEventListener("keydown", escape));
 </script>
 <template>
-  <aside class="session-file-panel" :aria-label="$t(&quot;文件预览与对比&quot;)" :aria-busy="loading">
+  <aside class="session-file-panel" :aria-label="$t('文件预览与对比')" :aria-busy="loading">
     <header class="file-panel-heading">
       <FileTextOutlined aria-hidden="true" />
       <div><strong>{{ (file?.path || selected).split(/[\\/]/).at(-1) }}</strong><small>{{ file?.path || selected }}</small></div>
-      <button type="button" class="file-expand" :aria-label="wide ? $t(&quot;恢复代码面板宽度&quot;) : $t(&quot;加宽代码面板&quot;)" @click="emit('resize')"><CompressOutlined v-if="wide" /><ExpandOutlined v-else /></button>
-      <button ref="closeButton" type="button" :aria-label="$t(&quot;关闭文件预览&quot;)" @click="emit('close')"><CloseOutlined /></button>
+      <button type="button" class="file-expand" :aria-label="wide ? $t('恢复代码面板宽度') : $t('加宽代码面板')" @click="emit('resize')"><CompressOutlined v-if="wide" /><ExpandOutlined v-else /></button>
+      <button ref="closeButton" type="button" :aria-label="$t('关闭文件预览')" @click="emit('close')"><CloseOutlined /></button>
     </header>
     <div class="file-picker">
-      <select :aria-label="$t(&quot;预览文件&quot;)" :value="selected" @change="choose($event.target.value)"><option v-for="entry in choices" :key="entry.path" :value="entry.path">{{ entry.status }} {{ entry.path }}</option></select>
-      <button type="button" :disabled="loading || list.loading.value" :aria-label="$t(&quot;刷新文件与差异&quot;)" @click="reload"><ReloadOutlined /></button>
+      <select :aria-label="$t('预览文件')" :value="selected" @change="choose($event.target.value)"><option v-for="entry in choices" :key="entry.path" :value="entry.path">{{ entry.status }} {{ entry.path }}</option></select>
+      <button type="button" :disabled="loading || list.loading.value" :aria-label="$t('刷新文件与差异')" @click="reload"><ReloadOutlined /></button>
     </div>
-    <FeedbackMessage :message="list.error.value ? $t(&quot;变更列表：{p0}&quot;, { p0: list.error.value }) : ''" type="error" />
-    <nav class="file-mode-tabs" :aria-label="$t(&quot;文件查看方式&quot;)">
+    <FeedbackMessage :message="list.error.value ? $t('变更列表：{p0}', { p0: list.error.value }) : ''" type="error" />
+    <nav class="file-mode-tabs" :aria-label="$t('文件查看方式')">
       <button type="button" :aria-pressed="mode === 'source'" @click="mode = 'source'">{{ $t("源码") }}</button>
       <button type="button" :aria-pressed="mode === 'diff'" @click="mode = 'diff'">{{ $t("变更对比") }}</button>
       <span v-if="file?.path && !file.comparisonReason" class="file-delta"><span class="file-added">+{{ totals.added }}</span><span class="file-removed">−{{ totals.removed }}</span></span>
     </nav>
     <div class="file-controls">
-      <label>{{ $t("比较范围") }}<select v-model="scope" :aria-label="$t(&quot;文件比较范围&quot;)"><option value="task">{{ $t("任务累计变更") }}</option><option value="head">{{ $t("未提交变更") }}</option></select></label>
-      <label v-if="mode === 'diff'" class="file-layout-choice">{{ $t("显示方式") }}<select v-model="layout" :aria-label="$t(&quot;差异显示方式&quot;)"><option value="unified">{{ $t("统一差异") }}</option><option value="split">{{ $t("左右对照") }}</option></select></label>
+      <label>{{ $t("比较范围") }}<select v-model="scope" :aria-label="$t('文件比较范围')"><option value="task">{{ $t("任务累计变更") }}</option><option value="head">{{ $t("未提交变更") }}</option></select></label>
+      <label v-if="mode === 'diff'" class="file-layout-choice">{{ $t("显示方式") }}<select v-model="layout" :aria-label="$t('差异显示方式')"><option value="unified">{{ $t("统一差异") }}</option><option value="split">{{ $t("左右对照") }}</option></select></label>
       <button v-else type="button" :disabled="!file?.current?.exists || file?.current?.text == null" @click="copy"><CopyOutlined /> {{ $t("复制源码") }}</button>
     </div>
     <FeedbackMessage :message="copied" :type="copied === '已复制' ? 'success' : 'error'" />
@@ -82,13 +82,13 @@ onUnmounted(() => document.removeEventListener("keydown", escape));
           <p v-if="file.current.reason" class="file-feedback">{{ file.current.reason }}</p>
           <p v-else-if="!file.current.exists" class="file-feedback">{{ $t("当前文件已删除，可切换「变更对比」查看删除前内容。") }}</p>
           <p v-else-if="!lines.length" class="file-feedback">{{ $t("这是一个空文件。") }}</p>
-          <div v-else class="file-source" :aria-label="$t(&quot;当前文件源码&quot;)"><div v-for="(text, index) in lines" :key="index" class="file-source-line" :class="{ 'file-target-line': index + 1 === targetLine }" :data-line="index + 1"><span class="file-line-number">{{ index + 1 }}</span><CodeLine :text="text" :path="file.path" /></div></div>
+          <div v-else class="file-source" :aria-label="$t('当前文件源码')"><div v-for="(text, index) in lines" :key="index" class="file-source-line" :class="{ 'file-target-line': index + 1 === targetLine }" :data-line="index + 1"><span class="file-line-number">{{ index + 1 }}</span><CodeLine :text="text" :path="file.path" /></div></div>
         </template>
         <template v-else>
           <div class="file-compare-caption">{{ scope === 'task' ? $t("任务开始时") : $t("最新提交") }} · {{ file.base?.slice(0, 8) || $t("不可用") }} {{ $t("→ 当前文件") }}<span v-if="file.previousPath !== file.path">{{ $t("重命名自") }} {{ file.previousPath }}</span></div>
           <p v-if="file.comparisonReason" class="file-feedback">{{ file.comparisonReason }}</p>
           <p v-else-if="!changed" class="file-feedback">{{ file.status === 'R' ? $t("文件已重命名，内容没有变化。") : $t("此范围内没有内容差异。") }}</p>
-          <div v-else class="file-diff" :class="{ 'file-diff-split': layout === 'split' }" :aria-label="$t(&quot;文件差异&quot;)">
+          <div v-else class="file-diff" :class="{ 'file-diff-split': layout === 'split' }" :aria-label="$t('文件差异')">
             <div class="file-unified"><template v-for="row in rows" :key="row.key"><div v-if="row.type === 'hunk' || row.type === 'note'" class="file-hunk">{{ row.text }}</div><div v-else class="file-diff-line" :class="row.type"><span class="file-line-number">{{ row.old }}</span><span class="file-line-number">{{ row.next }}</span><span class="file-mark">{{ row.mark }}</span><CodeLine :text="row.text" :path="file.path" /></div></template></div>
             <div v-if="layout === 'split'" class="file-split"><div class="file-split-caption"><span>{{ $t("修改前") }}</span><span>{{ $t("当前文件") }}</span></div><template v-for="row in pairs" :key="row.key"><div v-if="row.type === 'hunk' || row.type === 'note'" class="file-hunk">{{ row.left.text }}</div><div v-else class="file-split-row"><div v-for="side in ['left', 'right']" :key="side" class="file-split-line" :class="row[side]?.type"><span class="file-line-number">{{ side === 'left' ? row.left?.old : row.right?.next }}</span><span class="file-mark">{{ row[side]?.mark }}</span><CodeLine :text="row[side]?.text || ''" :path="file.path" /></div></div></template></div>
           </div>

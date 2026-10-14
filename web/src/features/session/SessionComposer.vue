@@ -100,7 +100,7 @@ function send() {
 </script>
 
 <template>
-  <section class="composer-wrap session-composer" :aria-label="$t(&quot;会话输入区&quot;)">
+  <section class="composer-wrap session-composer" :aria-label="$t('会话输入区')">
     <p v-if="nextSupplier" class="execution-settings-hint" role="status">
       <span v-if="running && activeSupplier">{{ $t("本轮供应商：") }}{{ activeSupplier.name }} · </span>
       {{ running && supplierPending ? $t("下一轮供应商") : $t("系统供应商") }}：{{ nextSupplier.name }}
@@ -117,14 +117,14 @@ function send() {
       <a-form-item name="text">
         <textarea
           :value="modelValue"
-          :aria-label="$t(&quot;发送给 {p0} 的指令&quot;, { p0: agentLabel })"
+          :aria-label="$t('发送给 {p0} 的指令', { p0: agentLabel })"
           :disabled="!canSend"
           :placeholder="
             readOnlyReason
-              ? $t(&quot;此会话为只读&quot;)
+              ? $t('此会话为只读')
               : running
-                ? $t(&quot;补充指令，调整当前执行方向…&quot;)
-                : $t(&quot;输入指令，继续这个 session…&quot;)
+                ? $t('补充指令，调整当前执行方向…')
+                : $t('输入指令，继续这个 session…')
           "
           rows="2"
           maxlength="60000"
@@ -136,15 +136,15 @@ function send() {
       <ul
         v-if="images.length"
         class="composer-image-list"
-        :aria-label="$t(&quot;待发送图片&quot;)"
+        :aria-label="$t('待发送图片')"
       >
         <li v-for="image in images" :key="image.localId" class="composer-image">
           <img :src="image.preview" :alt="image.name" />
           <button
             type="button"
             class="composer-image-remove"
-            :aria-label="$t(&quot;移除图片 {p0}&quot;, { p0: image.name })"
-            :title="$t(&quot;移除图片 {p0}&quot;, { p0: image.name })"
+            :aria-label="$t('移除图片 {p0}', { p0: image.name })"
+            :title="$t('移除图片 {p0}', { p0: image.name })"
             :disabled="busy"
             @click="emit('images-remove', image.localId)"
           >
@@ -169,7 +169,7 @@ function send() {
             <button
               type="button"
               class="text-button composer-image-retry"
-              :aria-label="$t(&quot;重试上传 {p0}&quot;, { p0: image.name })"
+              :aria-label="$t('重试上传 {p0}', { p0: image.name })"
               :disabled="!canSend || !supportsImages"
               @click="emit('images-retry', image.localId)"
             >
@@ -194,15 +194,15 @@ function send() {
             type="file"
             accept="image/png,image/jpeg,image/webp"
             multiple
-            :aria-label="$t(&quot;选择会话图片&quot;)"
+            :aria-label="$t('选择会话图片')"
             :disabled="!canSend || !supportsImages"
             @change="chooseImages"
           />
           <button
             type="button"
             class="composer-add-images"
-            :aria-label="$t(&quot;添加图片&quot;)"
-            :title="$t(&quot;添加图片（PNG / JPEG / WebP，最多 20 张，每张 10 MiB）&quot;)"
+            :aria-label="$t('添加图片')"
+            :title="$t('添加图片（PNG / JPEG / WebP，最多 20 张，每张 10 MiB）')"
             :disabled="!canSend || !supportsImages || images.length >= 20"
             @click="imageInput?.click()"
           >
@@ -238,8 +238,8 @@ function send() {
               type="button"
               class="stop composer-stop"
               :disabled="busy || !online"
-              :aria-label="$t(&quot;■ 停止&quot;)"
-              :title="$t(&quot;停止当前一轮&quot;)"
+              :aria-label="$t('■ 停止')"
+              :title="$t('停止当前一轮')"
               @click="emit('stop')"
             >
               <StopOutlined aria-hidden="true" />
@@ -257,8 +257,8 @@ function send() {
         </div>
       </div>
     </a-form>
-    <FeedbackMessage :message="settingsError ? $t(&quot;执行偏好保存失败：{p0}&quot;, { p0: settingsError }) : ''" type="error" />
-    <FeedbackMessage :message="catalog.error.value ? $t(&quot;模型列表加载失败：{p0}。当前选择会保留。&quot;, { p0: catalog.error.value }) : ''" type="error" />
+    <FeedbackMessage :message="settingsError ? $t('执行偏好保存失败：{p0}', { p0: settingsError }) : ''" type="error" />
+    <FeedbackMessage :message="catalog.error.value ? $t('模型列表加载失败：{p0}。当前选择会保留。', { p0: catalog.error.value }) : ''" type="error" />
     <div v-if="catalog.error.value"><button
         type="button"
         class="text-button"
@@ -267,7 +267,7 @@ function send() {
       >
         {{ $t("刷新模型列表") }}
       </button></div>
-    <FeedbackMessage :message="permissions.error.value ? $t(&quot;权限选项加载失败：{p0}。{p1} {p2}&quot;, { p0: permissions.error.value, p1: running ? '当前轮仍可补充指令，启动下一轮前需要确认权限。' : '确认权限可用后才能发送。', p2: permissions.errorHint.value }) : ''" type="error" />
+    <FeedbackMessage :message="permissions.error.value ? $t('权限选项加载失败：{p0}。{p1} {p2}', { p0: permissions.error.value, p1: running ? '当前轮仍可补充指令，启动下一轮前需要确认权限。' : '确认权限可用后才能发送。', p2: permissions.errorHint.value }) : ''" type="error" />
     <div v-if="permissions.error.value"><button
         type="button"
         class="text-button"

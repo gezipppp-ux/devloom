@@ -59,10 +59,10 @@ function remove(id) {
 }
 </script>
 <template>
-  <MarkdownEditor :model-value="modelValue" :label="$t(&quot;开发目标与验收条件&quot;)" :rows="6" :disabled="disabled"
+  <MarkdownEditor :model-value="modelValue" :label="$t('开发目标与验收条件')" :rows="6" :disabled="disabled"
     :busy="busy" :images="images" :attachments="attachments" :error="error"
-    accept="image/png,image/jpeg,image/webp" attach-button-label="添加图片" :attachment-label="$t(&quot;参考图片&quot;)"
-    :attachment-hint="$t(&quot;随启动一起发送&quot;)" :upload-hint="$t(&quot;PNG、JPEG、WebP，每张最多 10 MiB，最多 20 张。&quot;)"
+    accept="image/png,image/jpeg,image/webp" attach-button-label="添加图片" :attachment-label="$t('参考图片')"
+    :attachment-hint="$t('随启动一起发送')" :upload-hint="$t('PNG、JPEG、WebP，每张最多 10 MiB，最多 20 张。')"
     @update:model-value="emit('update:modelValue', $event)" @files="add" @remove="remove" />
   <p v-if="error" class="field-hint">{{ $t("图片未全部上传，请重试添加失败图片，或明确忽略后启动。") }}</p>
   <button v-if="error" type="button" :disabled="disabled || busy" @click="error = ''; emit('validity-change', true)">{{ $t("忽略未上传的图片") }}</button>

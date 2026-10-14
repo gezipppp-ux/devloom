@@ -97,7 +97,7 @@ async function save() {
         }}{{ $t("。保存后用于新建任务，已有 session 继续使用原来的 worktree。") }}
       </p>
     </header>
-    <nav v-if="props.workspaceName" class="page-tabs" :aria-label="$t(&quot;设置分区&quot;)">
+    <nav v-if="props.workspaceName" class="page-tabs" :aria-label="$t('设置分区')">
       <a href="#workspace-settings">{{ $t("基本信息") }}</a>
       <a href="#project-settings">{{ $t("项目环境") }}</a>
       <a href="#prompt-settings">{{ $t("提示词模板") }}</a>
@@ -105,8 +105,8 @@ async function save() {
     <FormSection
       v-if="props.workspaceName"
       id="workspace-settings"
-      :title="$t(&quot;基本信息&quot;)"
-      :description="$t(&quot;修改工作区名称和图标。&quot;)"
+      :title="$t('基本信息')"
+      :description="$t('修改工作区名称和图标。')"
     >
       <template #action>
         <button type="button" @click="emit('rename-workspace')">{{ $t("重命名") }}</button>
@@ -118,20 +118,20 @@ async function save() {
     </FormSection>
     <FormSection
       id="project-settings"
-      :title="$t(&quot;项目环境&quot;)"
-      :description="$t(&quot;项目仓库和任务目录由创建工作区时的 Git 地址自动生成，不能在这里修改。&quot;)"
+      :title="$t('项目环境')"
+      :description="$t('项目仓库和任务目录由创建工作区时的 Git 地址自动生成，不能在这里修改。')"
     >
       <a-form :model="form"  layout="vertical" @finish="save">
         <dl class="workspace-profile">
           <dt>{{ $t("项目代码仓库") }}</dt>
           <dd>
-            <code :aria-label="$t(&quot;项目代码仓库路径&quot;)">{{
+            <code :aria-label="$t('项目代码仓库路径')">{{
               form.repository || (busy ? $t("正在加载…") : $t("未加载"))
             }}</code>
           </dd>
           <dt>{{ $t("工作区 Worktree 目录") }}</dt>
           <dd>
-            <code :aria-label="$t(&quot;工作区 Worktree 完整路径&quot;)">{{
+            <code :aria-label="$t('工作区 Worktree 完整路径')">{{
               form.worktreeRoot || $t("未加载")
             }}</code>
           </dd>
@@ -140,7 +140,7 @@ async function save() {
           新任务会在上方 Worktree 目录下创建一层任务目录；路径由 Git
           项目自动确定。
         </p>
-        <a-form-item :label="$t(&quot;新任务开发分支&quot;)" name="baseBranch">
+        <a-form-item :label="$t('新任务开发分支')" name="baseBranch">
           <BaseBranchSelect
             v-model="form.baseBranch"
             :repository="form.repository"
@@ -151,10 +151,10 @@ async function save() {
           可搜索已获取的 origin 分支，也可输入尚未获取的远端短分支名。
           留空表示尚未配置；新建工作树前会获取并验证所选分支的最新代码。
         </p>
-        <a-form-item :label="$t(&quot;Worktree 初始化命令（可选）&quot;)">
+        <a-form-item :label="$t('Worktree 初始化命令（可选）')">
           <textarea
             v-model="initCommandsText"
-            :aria-label="$t(&quot;Worktree 初始化命令&quot;)"
+            :aria-label="$t('Worktree 初始化命令')"
             rows="5"
             :disabled="busy"
             placeholder="pnpm install&#10;pnpm build"

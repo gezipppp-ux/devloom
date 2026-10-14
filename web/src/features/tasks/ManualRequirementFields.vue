@@ -62,32 +62,32 @@ function remove(index) {
 
 <template>
   <div class="manual-fields">
-    <a-form-item :label="independent ? $t(&quot;任务标题&quot;) : $t(&quot;需求标题&quot;)" name="title">
+    <a-form-item :label="independent ? $t('任务标题') : $t('需求标题')" name="title">
       <input
         :value="form.title"
         @input="emit('change', { title: $event.target.value })"
-        :aria-label="independent ? $t(&quot;任务标题&quot;) : $t(&quot;需求标题&quot;)"
+        :aria-label="independent ? $t('任务标题') : $t('需求标题')"
         maxlength="200"
         :disabled="disabled"
         required
-        :placeholder="$t(&quot;例如：新增登录入口&quot;)"
+        :placeholder="$t('例如：新增登录入口')"
       />
     </a-form-item>
-    <a-form-item :label="independent ? $t(&quot;开发目标与验收条件&quot;) : $t(&quot;需求内容&quot;)" name="content">
+    <a-form-item :label="independent ? $t('开发目标与验收条件') : $t('需求内容')" name="content">
       <textarea
         :value="form.content"
         @input="emit('change', { content: $event.target.value })"
-        :aria-label="independent ? $t(&quot;开发目标与验收条件&quot;) : $t(&quot;需求内容&quot;)"
+        :aria-label="independent ? $t('开发目标与验收条件') : $t('需求内容')"
         rows="5"
         maxlength="60000"
         :disabled="disabled"
-        :placeholder="$t(&quot;描述目标、交互和验收标准，支持 Markdown；也可仅上传图片。&quot;)"
+        :placeholder="$t('描述目标、交互和验收标准，支持 Markdown；也可仅上传图片。')"
       />
     </a-form-item>
-    <a-form-item :label="independent ? $t(&quot;参考图片&quot;) : $t(&quot;需求图片&quot;)" name="images">
+    <a-form-item :label="independent ? $t('参考图片') : $t('需求图片')" name="images">
       <input
         type="file"
-        :aria-label="independent ? $t(&quot;参考图片&quot;) : $t(&quot;需求图片&quot;)"
+        :aria-label="independent ? $t('参考图片') : $t('需求图片')"
         accept="image/png,image/jpeg,image/webp"
         multiple
         :disabled="disabled || uploading"
@@ -103,7 +103,7 @@ function remove(index) {
           <button
             type="button"
             :disabled="disabled || uploading"
-            :aria-label="$t(&quot;移除图片 {p0}&quot;, { p0: index + 1 })"
+            :aria-label="$t('移除图片 {p0}', { p0: index + 1 })"
             @click="remove(index)"
           >
             {{ $t("移除") }}
@@ -111,16 +111,16 @@ function remove(index) {
         </figure>
       </div>
     </a-form-item>
-    <a-form-item v-if="showWorktreeName" :label="$t(&quot;Worktree 目录前缀（可选）&quot;)" name="worktreeName">
+    <a-form-item v-if="showWorktreeName" :label="$t('Worktree 目录前缀（可选）')" name="worktreeName">
       <input
         :value="form.worktreeName"
         @input="emit('change', { worktreeName: $event.target.value })"
-        :aria-label="$t(&quot;Worktree 目录前缀（可选）&quot;)"
+        :aria-label="$t('Worktree 目录前缀（可选）')"
         aria-describedby="worktree-prefix-hint"
         maxlength="16"
         pattern="[a-zA-Z0-9][a-zA-Z0-9_\-]{0,15}"
         :disabled="disabled"
-        :placeholder="$t(&quot;例如 login-entry；留空按标题自动生成&quot;)"
+        :placeholder="$t('例如 login-entry；留空按标题自动生成')"
       />
       <p id="worktree-prefix-hint" class="field-hint">
         {{ $t("最多 16 位英文字母、数字、短横线或下划线，以字母或数字开头。留空时按标题生成短前缀，中文转拼音；系统自动追加 12 位短标识，例如 login-entry-a1b2c3d4e5f6。") }}

@@ -128,8 +128,8 @@ async function save() {
   <FormSection
     id="prompt-settings"
     class="prompt-settings"
-    :title="$t(&quot;提示词模板&quot;)"
-    :description="$t(&quot;维护发送给 Codex 的提示词，创建任务或追加需求时自动填充占位符。&quot;)"
+    :title="$t('提示词模板')"
+    :description="$t('维护发送给 Codex 的提示词，创建任务或追加需求时自动填充占位符。')"
     :aria-busy="busy"
   >
     <p class="prompt-scope">
@@ -141,7 +141,7 @@ async function save() {
       {{ $t("重新加载提示词模板") }}
     </button>
     <form v-if="loaded" @submit.prevent="save">
-      <div class="prompt-types" role="group" :aria-label="$t(&quot;提示词类型&quot;)">
+      <div class="prompt-types" role="group" :aria-label="$t('提示词类型')">
         <button
           v-for="(_, name) in catalog"
           :key="name"
@@ -164,7 +164,7 @@ async function save() {
         id="prompt-template-editor"
         ref="editor"
         v-model="drafts[type]"
-        :aria-label="$t(&quot;提示词模板内容&quot;)"
+        :aria-label="$t('提示词模板内容')"
         aria-describedby="prompt-template-hint prompt-template-count"
         rows="13"
         :maxlength="maxLength"
@@ -187,7 +187,7 @@ async function save() {
             <button
               type="button"
               :disabled="busy"
-              :aria-label="$t(&quot;插入占位符 {p0}&quot;, { p0: placeholder.name })"
+              :aria-label="$t('插入占位符 {p0}', { p0: placeholder.name })"
               @mousedown.prevent
               @click="insertPlaceholder(placeholder.name)"
             >
@@ -201,7 +201,7 @@ async function save() {
       <details class="prompt-preview">
         <summary>{{ $t("示例预览") }}</summary>
         <p class="field-hint">{{ $t("使用示例资料预览填充结果，实际任务会使用自己的需求资料。") }}</p>
-        <pre :aria-label="$t(&quot;提示词示例预览&quot;)">{{ preview }}</pre>
+        <pre :aria-label="$t('提示词示例预览')">{{ preview }}</pre>
       </details>
       <FeedbackMessage :message="message" type="success" />
       <div class="actions">

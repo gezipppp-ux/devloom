@@ -15,14 +15,14 @@ async function insert(name) {
 <template>
   <div class="prompt-template-editor">
     <label>{{ $t(definition.label) }}{{ $t("提示词") }}
-      <textarea ref="editor" :value="modelValue" :aria-label="$t(&quot;{p0}提示词&quot;, { p0: definition.label })" :disabled="disabled" :maxlength="maxLength" rows="15" spellcheck="false" @input="emit('update:modelValue', $event.target.value)" />
+      <textarea ref="editor" :value="modelValue" :aria-label="$t('{p0}提示词', { p0: definition.label })" :disabled="disabled" :maxlength="maxLength" rows="15" spellcheck="false" @input="emit('update:modelValue', $event.target.value)" />
     </label>
     <div class="prompt-editor-hints"><p class="field-hint">{{ $t("保留必填占位符，运行时会填入对应的事项资料或任务补充要求。") }}</p><span>{{ modelValue.length }} / {{ maxLength }}</span></div>
     <details class="prompt-placeholders" open>
       <summary>{{ $t("可用占位符 · 点击插入") }}</summary>
-      <ul><li v-for="item in definition.placeholders" :key="item.name"><button type="button" :disabled="disabled" :aria-label="$t(&quot;插入占位符 {p0}&quot;, { p0: item.name })" @mousedown.prevent @click="insert(item.name)"><code>{{ token(item.name) }}</code></button><span>{{ $t(item.label) }}</span><span v-if="item.required" class="prompt-required">{{ $t("必填") }}</span></li></ul>
+      <ul><li v-for="item in definition.placeholders" :key="item.name"><button type="button" :disabled="disabled" :aria-label="$t('插入占位符 {p0}', { p0: item.name })" @mousedown.prevent @click="insert(item.name)"><code>{{ token(item.name) }}</code></button><span>{{ $t(item.label) }}</span><span v-if="item.required" class="prompt-required">{{ $t("必填") }}</span></li></ul>
     </details>
-    <details class="prompt-preview"><summary>{{ $t("示例预览") }}</summary><p class="field-hint">{{ $t("以下使用示例资料；实际执行时填入对应事项或任务的内容。") }}</p><pre :aria-label="$t(&quot;提示词示例预览&quot;)">{{ preview }}</pre></details>
+    <details class="prompt-preview"><summary>{{ $t("示例预览") }}</summary><p class="field-hint">{{ $t("以下使用示例资料；实际执行时填入对应事项或任务的内容。") }}</p><pre :aria-label="$t('提示词示例预览')">{{ preview }}</pre></details>
   </div>
 </template>
 <style scoped>

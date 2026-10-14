@@ -50,14 +50,14 @@ const groups = computed(() => {
     <span
       >{{ $t("需求列表") }} <small>{{ runs.length }}</small></span
     >
-    <select :value="grouping" :aria-label="$t(&quot;任务分组方式&quot;)" @change="changeGrouping">
+    <select :value="grouping" :aria-label="$t('任务分组方式')" @change="changeGrouping">
       <option value="type">{{ $t("按类型") }}</option>
       <option value="progress">{{ $t("按进度") }}</option>
       <option value="none">{{ $t("不分组") }}</option>
     </select>
   </div>
-  <FeedbackMessage :message="preferenceError ? $t(&quot;分组保存失败：{p0}&quot;, { p0: preferenceError }) : ''" type="error" />
-  <nav class="task-list" :aria-label="$t(&quot;会话列表&quot;)">
+  <FeedbackMessage :message="preferenceError ? $t('分组保存失败：{p0}', { p0: preferenceError }) : ''" type="error" />
+  <nav class="task-list" :aria-label="$t('会话列表')">
     <details
       v-for="group in groups"
       :key="`${grouping}:${group.value}`"
@@ -65,7 +65,7 @@ const groups = computed(() => {
       :class="{ ungrouped: grouping === 'none' }"
       open
     >
-      <summary :aria-label="$t(&quot;{p0}分组，{p1}个任务&quot;, { p0: group.label, p1: group.runs.length })">
+      <summary :aria-label="$t('{p0}分组，{p1}个任务', { p0: group.label, p1: group.runs.length })">
         <span>{{ $t(group.label) }}</span
         ><small>{{ group.runs.length }}</small>
       </summary>
@@ -91,7 +91,7 @@ const groups = computed(() => {
             v-if="props.unreadResultKeys.includes(run.key)"
             class="unread-result"
             role="img"
-            :aria-label="$t(&quot;有未读 {p0} 回复&quot;, { p0: run.agent?.label || 'Agent' })"
+            :aria-label="$t('有未读 {p0} 回复', { p0: run.agent?.label || 'Agent' })"
           ></span></span
         >
         <span class="task-tags"

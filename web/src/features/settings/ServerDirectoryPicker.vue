@@ -72,7 +72,7 @@ defineExpose({ open });
     <dialog
       ref="dialog"
       class="workspace-dialog directory-picker"
-      :aria-label="$t(&quot;选择服务器目录&quot;)"
+      :aria-label="$t('选择服务器目录')"
       @cancel.prevent="close"
     >
       <div class="workspace-dialog-heading">
@@ -80,7 +80,7 @@ defineExpose({ open });
         <button
           type="button"
           class="workspace-menu"
-          :aria-label="$t(&quot;关闭目录选择&quot;)"
+          :aria-label="$t('关闭目录选择')"
           @click="close"
         >
           ×
@@ -96,13 +96,13 @@ defineExpose({ open });
             id="directory-browse-path"
             ref="pathInput"
             v-model="draftPath"
-            :aria-label="$t(&quot;浏览目录路径&quot;)"
-            :placeholder="$t(&quot;输入服务器绝对路径&quot;)"
+            :aria-label="$t('浏览目录路径')"
+            :placeholder="$t('输入服务器绝对路径')"
           />
           <button type="submit" :disabled="loading">{{ $t("打开目录") }}</button>
         </div>
       </form>
-      <nav class="directory-roots" :aria-label="$t(&quot;服务器根目录&quot;)">
+      <nav class="directory-roots" :aria-label="$t('服务器根目录')">
         <button type="button" :disabled="loading" @click="browse()">
           {{ $t("默认目录") }}
         </button>
@@ -128,11 +128,11 @@ defineExpose({ open });
       </div>
       <p v-if="loading" class="muted" role="status">{{ $t("正在读取目录…") }}</p>
       <FeedbackMessage :message="error" type="error" />
-      <ul v-if="listing" class="directory-list" :aria-label="$t(&quot;子目录&quot;)">
+      <ul v-if="listing" class="directory-list" :aria-label="$t('子目录')">
         <li v-for="entry in listing.directories" :key="entry.path">
           <button
             type="button"
-            :aria-label="$t(&quot;打开目录：{p0}&quot;, { p0: entry.name })"
+            :aria-label="$t('打开目录：{p0}', { p0: entry.name })"
             :disabled="loading"
             @click="browse(entry.path)"
           >

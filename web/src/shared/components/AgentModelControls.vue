@@ -193,7 +193,7 @@ onUnmounted(() => {
         ref="modelTrigger"
         type="button"
         role="combobox"
-        :aria-label="$t(&quot;{p0} 模型&quot;, { p0: agentLabel })"
+        :aria-label="$t('{p0} 模型', { p0: agentLabel })"
         aria-haspopup="listbox"
         :aria-controls="menuId"
         :aria-expanded="expanded && menuMode === 'models'"
@@ -210,13 +210,13 @@ onUnmounted(() => {
         ref="effortTrigger"
         type="button"
         role="combobox"
-        :aria-label="$t(&quot;思考强度&quot;)"
+        :aria-label="$t('思考强度')"
         aria-haspopup="listbox"
         :aria-controls="menuId"
         :aria-expanded="expanded && menuMode === 'efforts'"
         :data-effort="reasoningEffort"
         :disabled="disabled || loading || !selected || !efforts.length"
-        :title="reasoningEffort ? label(reasoningEffort) : $t(&quot;使用默认思考强度&quot;)"
+        :title="reasoningEffort ? label(reasoningEffort) : $t('使用默认思考强度')"
         class="model-compact-trigger model-compact-effort"
         @click="expanded && menuMode === 'efforts' ? close() : open('efforts')"
         @keydown.down.prevent="open('efforts')"
@@ -234,7 +234,7 @@ onUnmounted(() => {
     >
       <template v-if="menuMode === 'models'">
         <p class="model-menu-title">{{ $t("选择模型") }}</p>
-        <div :id="menuId" role="listbox" :aria-label="$t(&quot;{p0} 模型选项&quot;, { p0: agentLabel })" @keydown="navigate">
+        <div :id="menuId" role="listbox" :aria-label="$t('{p0} 模型选项', { p0: agentLabel })" @keydown="navigate">
           <button
             type="button"
             role="option"
@@ -280,14 +280,14 @@ onUnmounted(() => {
           <button
             type="button"
             class="model-menu-reset"
-            :aria-label="$t(&quot;使用默认思考强度&quot;)"
-            :title="$t(&quot;使用默认思考强度&quot;)"
+            :aria-label="$t('使用默认思考强度')"
+            :title="$t('使用默认思考强度')"
             @click="chooseEffort('')"
           >
             <ReloadOutlined aria-hidden="true" />
           </button>
         </div>
-        <div :id="menuId" role="listbox" :aria-label="$t(&quot;思考强度选项&quot;)" @keydown="navigate">
+        <div :id="menuId" role="listbox" :aria-label="$t('思考强度选项')" @keydown="navigate">
           <button
             v-for="effort in efforts"
             :key="effort"
@@ -306,9 +306,9 @@ onUnmounted(() => {
     </div>
   </div>
   <div v-else class="model-controls form-columns">
-    <a-form-item :label="$t(&quot;{p0} 模型（可选）&quot;, { p0: agentLabel })" class="model-control" layout="vertical">
+    <a-form-item :label="$t('{p0} 模型（可选）', { p0: agentLabel })" class="model-control" layout="vertical">
       <select
-        :aria-label="$t(&quot;{p0} 模型&quot;, { p0: agentLabel })"
+        :aria-label="$t('{p0} 模型', { p0: agentLabel })"
         :value="model"
         :disabled="disabled || loading"
         @change="changeModel"
@@ -322,9 +322,9 @@ onUnmounted(() => {
         </option>
       </select>
     </a-form-item>
-    <a-form-item :label="$t(&quot;思考强度（可选）&quot;)" class="effort-control" layout="vertical">
+    <a-form-item :label="$t('思考强度（可选）')" class="effort-control" layout="vertical">
       <select
-        :aria-label="$t(&quot;思考强度&quot;)"
+        :aria-label="$t('思考强度')"
         :value="reasoningEffort"
         :disabled="disabled || loading || !selected"
         @change="changeEffort"

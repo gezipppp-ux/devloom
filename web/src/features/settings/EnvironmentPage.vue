@@ -33,7 +33,7 @@ async function confirm() {
 </script>
 
 <template>
-  <section class="environment-panel" :aria-label="$t(&quot;环境检测&quot;)">
+  <section class="environment-panel" :aria-label="$t('环境检测')">
     <header class="ui-settings-heading"><h2>{{ $t("环境检测") }}</h2></header>
     <p class="muted">{{ $t("检查运行服务的服务器环境，自动安装缺失工具并管理更新。支持 Windows 和 Linux，安装方式以服务端可用的包管理器为准。") }}</p>
     <div class="actions environment-actions">
@@ -45,7 +45,7 @@ async function confirm() {
     <p v-if="loading && !report" class="muted" role="status">{{ $t("正在检测工具版本、登录状态与目录权限…") }}</p>
     <FeedbackMessage :message="jobMessage" :type="jobMessageType" />
     <template v-if="report">
-      <FormSection :title="$t(&quot;环境概况&quot;)" :description="report.ready ? $t(&quot;基础环境检测通过&quot;) : $t(&quot;部分检测项需要处理或进一步确认&quot;)">
+      <FormSection :title="$t('环境概况')" :description="report.ready ? $t('基础环境检测通过') : $t('部分检测项需要处理或进一步确认')">
         <ul class="environment-checks">
           <li v-for="check in report.checks" :key="check.name"><div><strong>{{ check.name }}</strong><p class="field-hint">{{ check.detail }}</p></div><span class="environment-status" :class="check.status">{{ $t(labels[check.status]) }}</span></li>
         </ul>
@@ -74,7 +74,7 @@ async function confirm() {
     <Teleport to="body">
       <dialog ref="dialog" class="workspace-dialog environment-dialog" aria-labelledby="environment-update-title" @cancel.prevent="close">
         <template v-if="selected">
-          <div class="workspace-dialog-heading"><h2 id="environment-update-title">{{ selected.missing ? $t("自动安装") : $t("更新") }} {{ selected.name }}</h2><button :aria-label="$t(&quot;关闭安装窗口&quot;)" @click="close">×</button></div>
+          <div class="workspace-dialog-heading"><h2 id="environment-update-title">{{ selected.missing ? $t("自动安装") : $t("更新") }} {{ selected.name }}</h2><button :aria-label="$t('关闭安装窗口')" @click="close">×</button></div>
           <template v-if="selected.updateAvailable || selected.installAvailable">
             <p v-if="selected.missing">{{ $t("将在服务器安装") }} {{ selected.name }} {{ selected.installVersion }}{{ selected.installSource ? '（' + selected.installSource + '）' : '' }}。{{ selected.updateDescription }}</p>
             <p v-else>{{ $t("从") }} {{ selected.version }} {{ $t("更新到") }} {{ selected.latest }}。{{ selected.updateDescription }}</p>
