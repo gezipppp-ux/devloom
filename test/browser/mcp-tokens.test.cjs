@@ -23,6 +23,7 @@ async function verifyMcpTokens(page, output) {
     tokens.push(token, { ...token, id: "fixture-second", name: "开发电脑 · Claude Code" }, { ...token, id: "fixture-third", name: "临时调试设备与自动化访问凭证的长名称展示", status: "expired" });
     return route.fulfill({ status: 201, json: { token, secret } });
   });
+  await page.getByRole("navigation", { name: "个人设置", exact: true }).getByRole("button", { name: "MCP 接入", exact: true }).click();
   await page.getByRole("button", { name: "管理 MCP Token", exact: true }).click();
   const section = page.locator(".mcp-settings");
   const access = page.locator(".mcp-access");

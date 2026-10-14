@@ -3,10 +3,10 @@ import { createApp, h } from "vue";
 import { ConfigProvider, Form, FormItem } from "antdv-next";
 import enUS from "antdv-next/locale/en_US";
 import zhCN from "antdv-next/locale/zh_CN";
+import "./shared/styles/style.css";
 import App from "./app/App.vue";
 import { router } from "./app/router.js";
 import { i18n, setLocale } from "./shared/i18n/index.js";
-import "./shared/styles/style.css";
 
 const tokens = getComputedStyle(document.documentElement);
 setLocale(i18n.global.locale.value);

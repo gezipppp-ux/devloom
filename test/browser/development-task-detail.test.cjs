@@ -77,7 +77,7 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
       await page.waitForFunction(() => document.documentElement.scrollWidth <= window.innerWidth, null, { timeout: 5000 });
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${name}: overflow at ${width}`);
       const nav = page.getByRole("navigation", { name: "项目功能" });
-      assert.equal(await nav.locator('[aria-current="page"]').textContent(), "开发任务");
+      assert.equal(await page.locator(".project-more summary").textContent(), "开发任务");
       assert.ok(await nav.getByRole("button").evaluateAll(buttons => buttons.every(button => button.getBoundingClientRect().width >= 44)), "navigation targets stay readable");
       const dialog = page.getByRole("dialog");
       if (await dialog.count()) {

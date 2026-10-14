@@ -4,7 +4,8 @@ import { useRoute, useRouter } from "vue-router";
 import { appApi } from "../../shared/api/api.js";
 import { useResource } from "../../shared/api/use-resource.js";
 import PageHeader from "../../shared/components/PageHeader.vue";
-import FilterBar from "../../shared/components/FilterBar.vue";
+import { PlusOutlined, SearchOutlined, FilterOutlined } from "@antdv-next/icons";
+import WorkItemTable from "./WorkItemTable.vue";
 import EmptyState from "../../shared/components/EmptyState.vue";
 import PagePagination from "../../shared/components/PagePagination.vue";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
@@ -15,11 +16,12 @@ import { workLocation } from "./work-navigation.js";
 const props = defineProps({ kind: { type: String, required: true }, projectId: { type: String, default: "" }, canPublish: Boolean });
 const emit = defineEmits(["create"]);
 const route = useRoute(), router = useRouter();
+const filtersOpen = ref(false);
 const query = ref(String(route.query.q || ""));
 const publishing = ref(route.query.publish === "1");
 const scope = ref(String(route.query.scope || "all")), type = ref(String(route.query.type || "")), status = ref(String(route.query.status || ""));
 const offset = computed(() => Math.max(0, Number.parseInt(route.query.offset, 10) || 0));
-const headings = { issues: ["事项", "把想法写清楚，让协作有据可循。"], tasks: ["开发", "整理范围，准备环境，专注下一次推进。"], deliveries: ["交付", "每一份成果，都有清晰的验证与反馈。"] };
+const headings = { issues: ["事项", "从清晰的表达开始，一起把问题推进到完成。"], tasks: ["开发", "整理范围，准备环境，然后专注执行。"], deliveries: ["交付", "把完成的工作，变成可验证的结果。"] };
 const { data, loading, error, reload } = useResource(() => {
   const params = new URLSearchParams({ query: String(route.query.q || ""), scope: String(route.query.scope || "all"), type: String(route.query.type || ""), status: String(route.query.status || ""), offset: String(offset.value), ...(props.projectId ? { projectId: props.projectId } : {}) });
   return appApi(`/workbench/${props.kind}?${params}`);
@@ -27,4 +29,27 @@ const { data, loading, error, reload } = useResource(() => {
 watch(() => route.fullPath, () => { query.value = String(route.query.q || ""); scope.value = String(route.query.scope || "all"); type.value = String(route.query.type || ""); status.value = String(route.query.status || ""); void reload(); });
 function search() { void router.push({ query: { ...route.query, q: query.value || undefined, scope: scope.value, type: type.value || undefined, status: status.value || undefined, offset: undefined } }); }
 </script>
-<template><section class="page-layout work-queue"><PublishDelivery v-if="publishing && canPublish && projectId" :project-id="projectId" @close="publishing = false" @published="delivery => { publishing = false; router.push({ name: 'deliveries', query: { projectId, delivery: delivery.id } }); }" /><DeliveryDetail v-if="kind === 'deliveries' && route.query.delivery && projectId" :key="String(route.query.delivery)" :project-id="projectId" :delivery-id="String(route.query.delivery)" @back="router.push({ query: { ...route.query, delivery: undefined } })" /><template v-else><PageHeader :title="$t(headings[kind][0])" :description="$t(headings[kind][1])"><button v-if="kind === 'issues'" class="primary" @click="emit('create')">{{ $t("＋ 新建事项") }}</button><button v-else-if="kind === 'deliveries' && canPublish" class="primary" @click="publishing = true">{{ $t('发布交付') }}</button><button v-else-if="kind === 'tasks'" @click="emit('create', 'development')">{{ $t("准备开发环境") }}</button></PageHeader><FilterBar v-model="query" :busy="loading" :placeholder="kind === 'issues' ? $t(&quot;搜索事项标题、描述或标签&quot;) : $t(&quot;搜索标题或交付内容&quot;)" @search="search"><select v-if="kind !== 'tasks'" v-model="scope" :aria-label="$t(&quot;工作范围&quot;)" @change="search"><option value="all">{{ $t("全部") }}</option><option value="mine">{{ $t("与我有关") }}</option></select><select v-if="kind === 'issues'" v-model="type" :aria-label="$t(&quot;事项类型&quot;)" @change="search"><option value="">{{ $t("全部类型") }}</option><option value="requirement">{{ $t("需求") }}</option><option value="bug">{{ $t("缺陷") }}</option></select><select v-if="kind === 'deliveries'" v-model="status" :aria-label="$t(&quot;验收状态&quot;)" @change="search"><option value="">{{ $t("全部状态") }}</option><option value="pending">{{ $t("待验证") }}</option><option value="accepted">{{ $t("已通过") }}</option><option value="returned">{{ $t("已退回") }}</option></select></FilterBar><FeedbackMessage :message="error" type="error" /><button v-if="error" @click="reload">{{ $t("重试") }}</button><p v-if="loading" role="status">{{ $t("正在加载…") }}</p><WorkItemList v-if="data?.items.length" :items="data.items" :people="data.people" :kind="kind" @open="item => router.push(workLocation(kind, item))" /><EmptyState v-else-if="data && !loading" :title="$t(&quot;暂无符合条件的内容&quot;)" :description="$t(&quot;试试调整筛选，或从项目中开始新的工作。&quot;)" /><PagePagination :offset="offset" :total="data?.total" :next-offset="data?.nextOffset" :disabled="loading" @change="value => router.push({ query: { ...route.query, offset: value || undefined } })" /></template></section></template>
+<template>
+  <section class="page-layout work-queue">
+    <PublishDelivery v-if="publishing && canPublish && projectId" :project-id="projectId" @close="publishing = false" @published="delivery => { publishing = false; router.push({ name: 'deliveries', query: { projectId, delivery: delivery.id } }); }" />
+    <DeliveryDetail v-if="kind === 'deliveries' && route.query.delivery && projectId" :key="String(route.query.delivery)" :project-id="projectId" :delivery-id="String(route.query.delivery)" @back="router.push({ query: { ...route.query, delivery: undefined } })" />
+    <template v-else>
+      <PageHeader :title="$t(headings[kind][0])" :description="$t(headings[kind][1])">
+        <button v-if="kind === 'issues'" class="primary" @click="emit('create')"><PlusOutlined aria-hidden="true" />{{ $t('新建事项') }}</button>
+        <button v-else-if="kind === 'deliveries' && canPublish" class="primary" @click="publishing = true"><PlusOutlined aria-hidden="true" />{{ $t('发布交付') }}</button>
+        <button v-else-if="kind === 'tasks'" class="primary" @click="emit('create', 'development')"><PlusOutlined aria-hidden="true" />{{ $t('准备开发环境') }}</button>
+      </PageHeader>
+      <form class="ui-list-toolbar" role="search" @submit.prevent="search">
+        <div v-if="kind === 'issues'" class="ui-segmented" :aria-label="$t('事项类型')"><button v-for="option in [['', '全部'], ['requirement', '需求'], ['bug', '缺陷']]" :key="option[0]" type="button" :aria-pressed="type === option[0]" @click="type = option[0]; search()">{{ $t(option[1]) }}</button></div>
+        <div v-else-if="kind === 'deliveries'" class="ui-segmented" :aria-label="$t('验收状态')"><button v-for="option in [['', '全部'], ['pending', '待验证'], ['accepted', '已通过'], ['returned', '已退回']]" :key="option[0]" type="button" :aria-pressed="status === option[0]" @click="status = option[0]; search()">{{ $t(option[1]) }}</button></div>
+        <div v-else class="ui-segmented"><button type="button" aria-pressed="true">{{ $t('我的任务') }}</button><RouterLink v-if="projectId" :to="{ name: 'project', params: { projectId }, query: { tab: 'tasks', taskScope: 'all' } }">{{ $t('项目全部任务') }}</RouterLink></div>
+        <span class="ui-toolbar-spacer" /><label class="ui-compact-search"><button type="submit" :disabled="loading" :aria-label="$t('搜索')"><SearchOutlined aria-hidden="true" /></button><input v-model="query" type="search" :aria-label="$t('搜索')" :placeholder="$t(kind === 'issues' ? '搜索事项' : kind === 'tasks' ? '搜索开发任务' : '搜索交付')" @change="search" /></label><button type="button" :aria-expanded="filtersOpen" :class="{ active: filtersOpen }" @click="filtersOpen = !filtersOpen"><FilterOutlined aria-hidden="true" />{{ $t('筛选') }}</button>
+      </form>
+      <div v-if="filtersOpen" class="ui-filter-panel"><label v-if="kind !== 'tasks'">{{ $t('工作范围') }}<select v-model="scope" :aria-label="$t('工作范围')" @change="search"><option value="all">{{ $t('全部') }}</option><option value="mine">{{ $t('与我有关') }}</option></select></label><label v-if="kind === 'tasks'">{{ $t('任务状态') }}<select v-model="status" :aria-label="$t('任务状态')" @change="search"><option value="">{{ $t('全部状态') }}</option><option value="planned">{{ $t('待开发') }}</option><option value="started">{{ $t('已启动') }}</option><option value="unknown">{{ $t('执行结果待确认') }}</option><option value="merged">{{ $t('已合并') }}</option><option value="completed">{{ $t('已完成') }}</option><option value="cancelled">{{ $t('已取消') }}</option></select></label><p class="field-hint">{{ $t(kind === 'tasks' ? '仅显示你有权访问的本人开发任务。' : '筛选仅应用于当前可访问的项目。') }}</p></div>
+      <FeedbackMessage :message="error" type="error" /><button v-if="error" @click="reload">{{ $t('重试') }}</button><p v-if="loading" role="status">{{ $t('正在加载…') }}</p>
+      <template v-if="data?.items.length"><WorkItemList v-if="kind === 'deliveries'" :items="data.items" :people="data.people" :kind="kind" @open="item => router.push(workLocation(kind, item))" /><WorkItemTable v-else :items="data.items" :people="data.people" :kind="kind" @open="item => router.push(workLocation(kind, item))" /></template>
+      <EmptyState v-else-if="data && !loading" :title="$t('暂无符合条件的内容')" :description="$t('试试调整筛选，或从项目中开始新的工作。')" />
+      <PagePagination :offset="offset" :total="data?.total" :next-offset="data?.nextOffset" :disabled="loading" @change="value => router.push({ query: { ...route.query, offset: value || undefined } })" />
+    </template>
+  </section>
+</template>

@@ -4,6 +4,7 @@ import { enDetails } from "./en-details.js";
 import { enDynamic } from "./en-dynamic.js";
 import { enParameters } from "./en-parameters.js";
 import { enFeedback } from "./en-feedback.js";
+import { enWorkbench } from "./en-workbench.js";
 export const en = {
   "{priority}优先级": "{priority} priority",
 "格式为 v主版本.次版本 或 v主版本.次版本.修订版本，例如 v0.1、v1.0、v0.5.9。数字不带多余前导零。": "Use vMAJOR.MINOR or vMAJOR.MINOR.PATCH, for example v0.1, v1.0 or v0.5.9. Do not add leading zeros.",
@@ -16,6 +17,7 @@ export const en = {
   ...enDynamic,
   ...enParameters,
   ...enFeedback,
+  ...enWorkbench,
   "共 {count} 项": "Items: {count}",
   "关联 {count} 条事项": "{count} linked issues",
   "选择事项 {number}": "Select issue {number}",

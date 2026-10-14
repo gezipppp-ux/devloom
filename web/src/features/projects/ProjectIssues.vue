@@ -32,6 +32,7 @@ const { data: members, loading: membersLoading, error: membersError, reload: rel
 const activeMembers = computed(() => (members.value?.members || []).filter(m => m.status === "active" && m.userStatus === "active"));
 watch(creating, value => { if (value && can("issue.assign")) void reloadMembers(); }, { immediate: true });
 watch(() => route.fullPath, () => { startingIssues.value = []; });
+watch(() => route.query.create, value => { if (value === "1") creating.value = true; });
 watch(selected, value => { if (value && creating.value) cancelCreate(); });
 const releases = useResource(() => appApi(`/projects/${props.projectId}/releases?includeArchived=true`));
 const workflow = useResource(() => appApi(`/projects/${props.projectId}/issue-workflows/${props.type}`));
@@ -41,10 +42,10 @@ async function search(nextOffset = 0) {
   await router.push({ query: { ...route.query, q: query.value || undefined, status: status.value || undefined, offset: nextOffset || undefined, selection: undefined, releaseId: releaseId.value || undefined, includeArchived: includeArchived.value ? "true" : undefined } });
   void reload();
 }
-function openIssue(id) { void router.push({ query: { ...route.query, issue: id || undefined, task: undefined } }); }
+function openIssue(id) { void router.push({ query: { ...route.query, issue: id || undefined, task: undefined, create: undefined } }); }
 async function attach({ files, insert }) { const markdown = await add(files); if (markdown) insert(markdown); }
 function removeFile(id) { removeAttachmentLinks(form, `/api/projects/${props.projectId}/files/${id}`); remove(id); }
-function cancelCreate() { creating.value = false; draftVersion.value++; creationRequest.value = createRequestId(); Object.assign(form, emptyIssue()); reset(); }
+function cancelCreate() { if (route.query.create) void router.replace({ query: { ...route.query, create: undefined } }); creating.value = false; draftVersion.value++; creationRequest.value = createRequestId(); Object.assign(form, emptyIssue()); reset(); }
 function toggleCreate() { if (creating.value) cancelCreate(); else creating.value = true; }
 function create() {
   if (attachmentBusy.value || saving.value) return;

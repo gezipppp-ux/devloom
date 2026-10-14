@@ -23,7 +23,8 @@ async function verifySystemSettings(browser, { origin, output, errors, directory
   const openSystem = async () => {
     const menu = page.getByRole("button", { name: "打开导航", exact: true });
     if (await menu.isVisible()) await menu.click();
-    await page.getByRole("button", { name: "系统设置", exact: true }).click();
+    await page.getByRole("button", { name: "管理中心", exact: true }).click();
+    await page.getByRole("navigation", { name: "管理中心", exact: true }).getByRole("button", { name: "目录设置", exact: true }).click();
     await baseField.waitFor();
   };
   const openWorkspace = async () => {

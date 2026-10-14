@@ -146,8 +146,9 @@ async function main() {
       await page.screenshot({ path: path.join(output, `personal-${width}.png`), fullPage: true });
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.getByRole("button", { name: "账号管理", exact: true }).click();
+    await page.getByRole("button", { name: "管理中心", exact: true }).click();
     await page.getByRole("heading", { name: "账号管理", exact: true }).waitFor();
+    await page.getByRole("button", { name: "新建账号", exact: true }).click();
     await page.getByLabel("新账号", { exact: true }).fill("created-user");
     await page.getByLabel("显示名称", { exact: true }).fill("新建成员");
     await page.getByLabel("所属部门", { exact: true }).selectOption(departments[0].id);
@@ -160,6 +161,7 @@ async function main() {
     await page.getByRole("button", { name: "创建账号", exact: true }).click();
     await page.getByText("账号已创建，首次登录需要修改密码。", { exact: true }).waitFor();
     assert.equal(writesTo("/api/admin/accounts").at(-1).body.password, "new123");
+    await page.locator(".account-list-row").filter({ hasText: "created-user" }).locator("summary").click();
     await page.getByRole("button", { name: "created-user：重置密码" }).click();
     const resetPassword = page.getByLabel("created-user 的新临时密码", { exact: true });
     await resetPassword.fill("short");
@@ -170,6 +172,7 @@ async function main() {
     await page.getByRole("button", { name: "确认重置密码", exact: true }).click();
     await page.getByRole("button", { name: "确认重置密码", exact: true }).waitFor({ state: "hidden" });
     assert.equal(writesTo("/api/admin/accounts/created").at(-1).body.password, "rst123");
+    await page.locator(".account-list-row").filter({ hasText: "created-user" }).locator("summary").click();
     await page.getByRole("button", { name: "created-user：编辑显示名称" }).click();
     await page.getByLabel("created-user 的显示名称", { exact: true }).fill("更新后的成员");
     await page.getByRole("button", { name: "保存显示名称", exact: true }).click();
@@ -177,6 +180,7 @@ async function main() {
     assert.equal(users.find(entry => entry.id === "created").displayName, "更新后的成员");
     assert.equal(users.find(entry => entry.id === "created").username, "created-user");
     const accountHeading = page.getByRole("heading", { name: "账号管理", exact: true });
+    await page.locator(".account-list-row").filter({ hasText: "created-user" }).locator("summary").click();
     await page.getByRole("button", { name: "created-user：停用账号" }).scrollIntoViewIfNeeded();
     const beforeFeedback = await accountHeading.boundingBox();
     await page.route("**/api/admin/accounts/created", route => route.fulfill({ status: 409, json: { error: "该账号仍为项目负责人，请先指定接任人。" } }), { times: 1 });
@@ -250,7 +254,7 @@ async function main() {
     await heldDetail();
     await page.waitForFunction(() => window.accountResponseMarkers.includes("late"));
     assert.equal(await page.getByText("不应展示的旧账号响应", { exact: true }).count(), 0);
-    assert.equal(await page.getByRole("button", { name: "系统设置", exact: true }).count(), 0);
+    assert.equal(await page.getByRole("button", { name: "管理中心", exact: true }).count(), 0);
     assert.equal(await page.getByRole("button", { name: "环境检测", exact: true }).count(), 0);
     assert.equal(await page.getByRole("button", { name: "流程编排", exact: true }).count(), 0);
     assert.equal(await page.getByRole("button", { name: "账号管理", exact: true }).count(), 0);

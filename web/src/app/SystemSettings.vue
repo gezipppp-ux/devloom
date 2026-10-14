@@ -1,37 +1,28 @@
 <script setup>
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { SettingOutlined } from "@antdv-next/icons";
+import { TeamOutlined, ApartmentOutlined, BranchesOutlined, ApiOutlined, DesktopOutlined, FolderOutlined, HistoryOutlined } from "@antdv-next/icons";
+import SettingsLayout from "../shared/components/SettingsLayout.vue";
+import AccountManagement from "../features/accounts/AccountManagement.vue";
+import DepartmentAdministration from "../features/projects/DepartmentAdministration.vue";
 import MemberStorageSettings from "../features/settings/MemberStorageSettings.vue";
 import SystemWorkflows from "../features/settings/SystemWorkflows.vue";
 import EnvironmentPage from "../features/settings/EnvironmentPage.vue";
 import AgentSuppliers from "../features/settings/AgentSuppliers.vue";
 import SetupRecord from "../features/setup/SetupRecord.vue";
-
-const route = useRoute();
-const router = useRouter();
-const currentTab = computed(() => ["environment", "workflows", "agent-suppliers", "initialization"].includes(route.query.tab) ? route.query.tab : "storage");
-function select(tab) {
-  const query = { ...route.query };
-  if (tab !== "storage") query.tab = tab;
-  else delete query.tab;
-  void router.push({ name: "system", query, hash: route.hash });
-}
+const route = useRoute(), router = useRouter();
+const items = [{ id: 'accounts', label: '账号管理', icon: TeamOutlined }, { id: 'departments', label: '部门可用功能', icon: ApartmentOutlined }, { id: 'workflows', label: '流程编排', icon: BranchesOutlined }, { id: 'agent-suppliers', label: 'Agent 供应商', icon: ApiOutlined }, { id: 'environment', label: '环境检测', icon: DesktopOutlined }, { id: 'storage', label: '目录设置', icon: FolderOutlined }, { id: 'initialization', label: '初始化记录', icon: HistoryOutlined }];
+const currentTab = computed(() => ['accounts', 'departments'].includes(route.name) ? route.name : items.some(item => item.id === route.query.tab) ? route.query.tab : 'storage');
+function select(tab) { void router.push({ name: ['accounts', 'departments'].includes(tab) ? tab : 'system', query: ['accounts', 'departments', 'storage'].includes(tab) ? {} : { tab } }); }
 </script>
 <template>
-  <section class="system-settings-panel">
-    <header class="page-heading"><div class="eyebrow">SYSTEM</div><h1><SettingOutlined aria-hidden="true" /> {{ $t("系统设置") }}</h1><p>{{ $t("管理 Agent 供应商、服务器目录、运行环境与系统事项流程。") }}</p></header>
-    <nav class="page-tabs" :aria-label="$t(&quot;系统设置分类&quot;)">
-      <button :aria-pressed="currentTab === 'agent-suppliers'" :class="{ active: currentTab === 'agent-suppliers' }" @click="select('agent-suppliers')">{{ $t("Agent 供应商") }}</button>
-      <button :aria-pressed="currentTab === 'storage'" :class="{ active: currentTab === 'storage' }" @click="select('storage')">{{ $t("目录设置") }}</button>
-      <button :aria-pressed="currentTab === 'environment'" :class="{ active: currentTab === 'environment' }" @click="select('environment')">{{ $t("环境检测") }}</button>
-      <button :aria-pressed="currentTab === 'workflows'" :class="{ active: currentTab === 'workflows' }" @click="select('workflows')">{{ $t("流程编排") }}</button>
-      <button :aria-pressed="currentTab === 'initialization'" :class="{ active: currentTab === 'initialization' }" @click="select('initialization')">{{ $t("初始化记录") }}</button>
-    </nav>
-    <AgentSuppliers v-if="currentTab === 'agent-suppliers'" />
+  <SettingsLayout :title="$t('管理中心')" :description="$t('组织、流程与运行平台，集中维护。')" :label="$t('组织与平台')" :items="items" :active="currentTab" @select="select">
+    <AccountManagement v-if="currentTab === 'accounts'" embedded />
+    <DepartmentAdministration v-else-if="currentTab === 'departments'" embedded />
+    <AgentSuppliers v-else-if="currentTab === 'agent-suppliers'" />
     <EnvironmentPage v-else-if="currentTab === 'environment'" />
     <SystemWorkflows v-else-if="currentTab === 'workflows'" />
     <SetupRecord v-else-if="currentTab === 'initialization'" @continue="router.push({ name: 'setup' })" />
     <MemberStorageSettings v-else />
-  </section>
+  </SettingsLayout>
 </template>

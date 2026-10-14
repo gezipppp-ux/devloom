@@ -51,6 +51,7 @@ async function verifyProjectPermissions({ page, projects, accounts, admin, proje
   await page.setViewportSize({ width: 1440, height: 1000 });
 }
 async function verifyDepartmentCapabilities({ page, output }) {
+  await page.getByRole("button", { name: "新建部门", exact: true }).click();
   await page.getByRole("heading", { name: "部门可用功能", exact: true }).waitFor();
   assert.equal(await page.getByLabel("权限组合", { exact: true }).count(), 0, "department configuration is a capability ceiling, not project work assignments");
   const cards = page.locator(".permission-capabilities");
@@ -73,13 +74,13 @@ async function verifyDepartmentCapabilities({ page, output }) {
   assert.equal(await editor.locator(".permission-detail-row").count(), 1);
   await editor.getByRole("checkbox", { name: "全选筛选结果", exact: true }).check();
   await editor.getByText("待保存：新增 5 项 · 取消 0 项", { exact: true }).waitFor();
-  assert.match(await editor.getByRole("status").textContent(), /自动补齐：.*查看项目/);
+  assert.match(await editor.getByRole("status").textContent(), /自动补齐[:：]\s*.*查看项目/);
   await search.fill("");
   await categories.getByRole("button", { name: "Agent", exact: true }).click();
   assert.equal(await editor.getByRole("checkbox", { name: "继续对话", exact: true }).isChecked(), false, "filtered bulk selection leaves hidden permissions unchanged");
   await categories.getByRole("button", { name: "代码", exact: true }).click();
   await editor.getByRole("checkbox", { name: "执行仓库操作", exact: true }).uncheck();
-  assert.match(await editor.getByRole("status").textContent(), /联动关闭：认领并启动开发任务/);
+  assert.match(await editor.getByRole("status").textContent(), /联动关闭[:：]\s*认领并启动开发任务/);
   await categories.getByRole("button", { name: "Agent", exact: true }).click();
   assert.equal(await editor.getByRole("checkbox", { name: "认领并启动开发任务", exact: true }).isChecked(), false);
   await revert.click();

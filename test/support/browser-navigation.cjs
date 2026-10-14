@@ -12,4 +12,13 @@ async function navigateWorkspace(page, workspace) {
     window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
   }, workspace.id);
 }
-module.exports = { navigateWorkspace };
+async function openProjectTab(page, name) {
+  await page.locator(".project-tab-bar").waitFor();
+  const label = name === "资产" ? "资料" : name;
+  const primary = page.getByRole("navigation", { name: "项目功能", exact: true }).getByRole("button", { name: label, exact: true });
+  if (await primary.count()) return primary.click();
+  const more = page.locator(".project-more");
+  if (await more.getAttribute("open") === null) await more.locator("summary").click();
+  return more.getByRole("button", { name: label, exact: true }).click();
+}
+module.exports = { navigateWorkspace, openProjectTab };

@@ -16,11 +16,12 @@ class ProjectStore {
   }
   async user(id) { return this.database.client.user.findUnique({ where: { id }, include: { department: true } }); }
   async departments() { return this.database.client.department.findMany({ orderBy: { name: "asc" } }); }
-  async project(id) { return this.database.client.project.findUnique({ where: { id }, include: { _count: { select: { spaces: true } } } }); }
+  summaryInclude() { return { _count: { select: { spaces: true, issues: true, members: { where: { status: "active", user: { status: "active" } } } } }, owner: { select: { id: true, displayName: true } }, members: { where: { status: "active", user: { status: "active" } }, take: 3, orderBy: { createdAt: "asc" }, select: { user: { select: { id: true, displayName: true } } } } }; }
+  async project(id, { summary = false } = {}) { return this.database.client.project.findUnique({ where: { id }, include: summary ? this.summaryInclude() : { _count: { select: { spaces: true } } } }); }
   async membership(projectId, userId) { return this.database.client.projectMember.findUnique({ where: { projectId_userId: { projectId, userId } } }); }
   async members(projectId) { return this.database.client.projectMember.findMany({ where: { projectId }, include: { user: { include: { department: true } } }, orderBy: { createdAt: "asc" } }); }
   async users() { return this.database.client.user.findMany({ where: { status: "active" }, include: { department: true }, orderBy: { username: "asc" } }); }
-  async projects(userId, { includeAll = false } = {}) { return this.database.client.project.findMany({ where: includeAll ? {} : { members: { some: { userId, status: "active" } } }, include: { _count: { select: { spaces: true } } }, orderBy: { updatedAt: "desc" } }); }
+  async projects(userId, { includeAll = false } = {}) { return this.database.client.project.findMany({ where: includeAll ? {} : { members: { some: { userId, status: "active" } } }, include: this.summaryInclude(), orderBy: { updatedAt: "desc" } }); }
   async saveCatalog(model, value, id) {
     const { revision, ...data } = value;
     try {

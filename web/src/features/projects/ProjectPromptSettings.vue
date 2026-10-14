@@ -46,7 +46,7 @@ function resolve(merged) {
 }
 </script>
 <template>
-  <FormSection :title="$t(&quot;提示词模板&quot;)" :description="$t(&quot;Bug 和需求按事项类型生成开发指令；任务补充提示词使用补充模板。已保存的执行快照不受后续修改影响。&quot;)">
+  <FormSection class="project-prompt-settings" :title="$t(&quot;提示词模板&quot;)" :description="$t(&quot;Bug 和需求按事项类型生成开发指令；任务补充提示词使用补充模板。已保存的执行快照不受后续修改影响。&quot;)">
     <FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="notice" type="success" />
     <p v-if="loading" role="status">{{ $t("正在加载提示词模板…") }}</p>
     <button v-if="!data && !loading" @click="reload">{{ $t("重新加载提示词模板") }}</button>
@@ -66,6 +66,11 @@ function resolve(merged) {
   </FormSection>
 </template>
 <style scoped>
+.project-prompt-settings { max-width: 1160px; }
+.project-prompt-settings > .page-tabs { margin-bottom: 12px; }
+.project-prompt-settings > .field-hint { max-width: 800px; margin-bottom: 24px; line-height: 1.8; }
+.project-form { gap: 16px; }
+.prompt-actions { padding-top: 20px; margin-top: 4px; border-top: 1px solid var(--line); }
 .project-form .prompt-override { display: flex; flex-direction: row; align-items: center; gap: 8px; }
 .prompt-override input { width: auto; }
 .prompt-actions { flex-wrap: wrap; }

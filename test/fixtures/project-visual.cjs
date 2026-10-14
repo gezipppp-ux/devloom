@@ -7,6 +7,7 @@ function projectVisual(workspaceId) {
   const project = { id: '00000000-0000-4000-8000-000000000001', name: '客户管理系统', description: '统一管理客户搜索、业务交付和测试环境资料，让产品与研发在同一个项目中协作。', remoteUrl: 'https://git.example.test/team/customer.git', repositoryEditable: false, status: 'active', ownerUserId: 'visual-admin', revision: 1, settings: { initCommands: ['npm ci', 'npm run build'], prompts: {} } };
   const members = ['演示管理员', '张明', '李欣'].map((displayName, i) => ({ userId: i ? `member-${i}` : 'visual-admin', username: i ? `member-${i}` : 'visual-admin', displayName, departmentName: department.name, status: 'active', userStatus: 'active', permissions, departmentPermissions: permissions, grantablePermissions: permissions, administratorAccess: !i, effectivePermissions: permissions, revision: 1 }));
   const people = members.map(m => ({ id: m.userId, username: m.username, displayName: m.displayName }));
+  Object.assign(project, { memberCount: members.length, memberPreview: people, owner: people[0], issueCount: 3, createdAt: '2026-10-08T08:00:00Z', updatedAt: '2026-10-14T08:00:00Z' });
   const release = { id: 'release-1', name: 'v0.2', description: '优化客户搜索与筛选体验。\n补充空结果提示，完善移动端交互与验收流程。', revision: 1, status: 'active', createdAt: '2026-10-08T08:00:00Z', updatedAt: '2026-10-12T08:00:00Z' };
   const releases = [release, { ...release, id: 'release-2', name: 'v0.1', description: '项目首个迭代版本。', updatedAt: '2026-10-08T08:00:00Z' }, { ...release, id: 'release-archived', name: 'v0.0.9', status: 'archived', description: '早期验证版本，保留历史记录。' }];
   const issues = [
@@ -21,6 +22,12 @@ function projectVisual(workspaceId) {
   const task = { id: 'search-task', revision: 1, releaseId: release.id, release, executorId: 'visual-admin', executor: { id: 'visual-admin', displayName: '演示管理员' }, issueIds: ['search'], canStart: false, canEdit: false, canComplete: true, canCancel: true, baseBranch: 'main', baseCommit: '1234567890abcdef1234567890abcdef12345678', fetchedAt: '2026-10-12T08:00:00Z', title: '客户搜索与空结果提示', status: 'started', canOpenSession: true, workspaceId, runKey: '1-1', execution: { status: 'completed', sessionId: 'fixture-session' }, issues: [issues[0]], additions: [{ requestId: 'append-fixture', status: 'ready', issues: [issues[2]] }] };
   function response(url) {
     const endpoint = url.pathname;
+    if (endpoint.startsWith('/api/workbench/')) {
+      const kind = endpoint.split('/').at(-1);
+      const items = kind === 'issues' ? issues : kind === 'tasks' ? [task] : [{ id: 'delivery-1', title: '客户搜索体验交付', status: 'pending', authorId: 'member-1' }];
+      return { items: items.map(item => ({ ...item, projectId: project.id, projectName: project.name, releaseName: release.name, createdAt: '2026-10-14T08:00:00Z' })), people, total: items.length, nextOffset: null };
+    }
+    if (endpoint === '/api/admin/accounts') return { users: members.map(member => ({ id: member.userId, username: member.username, displayName: member.displayName, role: member.administratorAccess ? 'admin' : 'member', status: 'active', departmentId: department.id })) };
     if (endpoint.endsWith('/prompts')) return { projectTemplates: getPromptTemplates(), overrides: {}, templates: getPromptTemplates(), projectRevision: 1, personalRevision: 1, canConfigure: true, canPersonalize: true, catalog: promptTemplateCatalog, maxLength: MAX_PROMPT_TEMPLATE_LENGTH };
     if (endpoint === '/api/projects') return { projects: [{ ...project, permissions }, { ...project, permissions, id: 'operations', name: '运营后台', description: '运营指标、客户跟进与业务配置。' }], canCreateProjects: true };
     if (endpoint === '/api/admin/departments') return { departments: [department] };

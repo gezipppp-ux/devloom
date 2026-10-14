@@ -8,6 +8,12 @@
 
 跨项目的工作台、搜索与事项／本人开发／交付队列由 `features/projects/` 组合，复用 `WorkItemList`；`PageHeader`、`FilterBar`、`EmptyState`、`PagePagination`、`StatusBadge`、`ModalDialog` 为共享呈现组件。分页、权限及提交由所属业务组件和 API 负责。项目内需求／Bug 分类保留完整批量分配和版本筛选，主「事项」提供统一跨项目查询。
 
+原型对齐后的项目目录使用 `ProjectCard`，项目概览由 `ProjectDashboard` 组合真实事项／交付计数、当前版本和项目资料；请求失败显示错误与重试，不把未知计数显示为零。`WorkItemTable` 复用事项和开发队列的桌面表格／移动条目；`WorkItemList` 复用工作台、交付和搜索结果。项目详情的主导航为概览、版本、资料、成员、设置、提示词，其余协作入口在展开菜单中保留原深链。
+
+`SettingsLayout` 复用个人设置与管理中心的分类导航；`app/SystemSettings.vue` 组合账号、部门、流程、供应商、环境、目录及初始化记录，原 `/accounts`、`/departments`、`/system?tab=` 地址继续生效。个人设置按资料与偏好、Git、MCP、账号安全组织；切换分类保留资料与默认值草稿，离开敏感凭据页面清理组件内明文。新建账号／项目使用共享模态框，账号列表的管理菜单保留原有操作。
+
+页面布局在 `shared/styles/workbench-pages.css` 中对齐 B 原型，基础 `style.css` 先于应用样式加载。表单在大屏限制行宽，窄屏列表和设置分类重排；移动导航保留完整可访问名称。项目提示词继续复用原 `PromptTemplateEditor` 的编辑样式、光标位置插入占位符与示例预览，只调整外围间距和窄屏操作排列。
+
 会话文件查看归 `features/session/`：`file-reference.js` 解析本地链接，`SessionItem` 发出文件请求，app 仅协调侧栏开关；`use-session-files.js` 拥有文件/列表请求与代际隔离，`SessionFilePanel`、`SessionChangedFiles` 呈现预览和 Git 列表，`code-content.js` 处理高亮与差异行。高亮库仅在打开文件侧栏时加载。文件内容始终由后端按会话的 Worktree 校验，前端不拼接服务器磁盘路径。
 
 | 目录 | 职责 |

@@ -1,0 +1,439 @@
+{
+  "model": "gpt-image-2.5-sunburst",
+  "design": "B 方案 · 中性平台",
+  "noPersonaModes": true,
+  "groups": [
+    {
+      "id": "01",
+      "name": "工作入口与项目",
+      "subtitle": "统一入口 · 按工作对象组织，不按岗位区分",
+      "board": "01-overview.png",
+      "pages": [
+        {
+          "number": 1,
+          "id": "home",
+          "title": "统一工作台",
+          "size": "1536x1024",
+          "file": "pages/01-home.png"
+        },
+        {
+          "number": 2,
+          "id": "projects",
+          "title": "项目目录",
+          "size": "1536x1024",
+          "file": "pages/01-projects.png"
+        },
+        {
+          "number": 3,
+          "id": "project-overview",
+          "title": "项目协作概览",
+          "size": "1536x1024",
+          "file": "pages/01-project-overview.png"
+        },
+        {
+          "number": 4,
+          "id": "project-config",
+          "title": "创建与配置项目",
+          "size": "1536x1024",
+          "file": "pages/01-project-config.png"
+        }
+      ]
+    },
+    {
+      "id": "02",
+      "name": "事项表达与协作",
+      "subtitle": "提出需求或缺陷 · 补充标准 · 沟通与追溯",
+      "board": "02-overview.png",
+      "pages": [
+        {
+          "number": 1,
+          "id": "issues",
+          "title": "统一事项列表",
+          "size": "1536x1024",
+          "file": "pages/02-issues.png"
+        },
+        {
+          "number": 2,
+          "id": "requirement-editor",
+          "title": "编写需求",
+          "size": "1536x1024",
+          "file": "pages/02-requirement-editor.png"
+        },
+        {
+          "number": 3,
+          "id": "bug-editor",
+          "title": "提交缺陷",
+          "size": "1536x1024",
+          "file": "pages/02-bug-editor.png"
+        },
+        {
+          "number": 4,
+          "id": "issue-detail",
+          "title": "事项详情与讨论",
+          "size": "1536x1024",
+          "file": "pages/02-issue-detail.png"
+        }
+      ]
+    },
+    {
+      "id": "03",
+      "name": "版本规划与分派",
+      "subtitle": "组织范围 · 明确负责人 · 跟进待验证事项",
+      "board": "03-overview.png",
+      "pages": [
+        {
+          "number": 1,
+          "id": "releases",
+          "title": "版本目录与详情",
+          "size": "1536x1024",
+          "file": "pages/03-releases.png"
+        },
+        {
+          "number": 2,
+          "id": "release-scope",
+          "title": "版本范围规划",
+          "size": "1536x1024",
+          "file": "pages/03-release-scope.png"
+        },
+        {
+          "number": 3,
+          "id": "assignment",
+          "title": "认领与指派",
+          "size": "1536x1024",
+          "file": "pages/03-assignment.png"
+        },
+        {
+          "number": 4,
+          "id": "acceptance-queue",
+          "title": "待验证与交付总览",
+          "size": "1536x1024",
+          "file": "pages/03-acceptance-queue.png"
+        }
+      ]
+    },
+    {
+      "id": "04",
+      "name": "开发任务与准备",
+      "subtitle": "整理任务范围 · 准备个人环境 · 明确开始执行",
+      "board": "04-overview.png",
+      "pages": [
+        {
+          "number": 1,
+          "id": "development-tasks",
+          "title": "开发任务列表",
+          "size": "1536x1024",
+          "file": "pages/04-development-tasks.png"
+        },
+        {
+          "number": 2,
+          "id": "task-detail",
+          "title": "任务范围与合并",
+          "size": "1536x1024",
+          "file": "pages/04-task-detail.png"
+        },
+        {
+          "number": 3,
+          "id": "environment-prepare",
+          "title": "准备个人开发环境",
+          "size": "1536x1024",
+          "file": "pages/04-environment-prepare.png"
+        },
+        {
+          "number": 4,
+          "id": "start-wizard",
+          "title": "分支与执行确认",
+          "size": "1536x1024",
+          "file": "pages/04-start-wizard.png"
+        }
+      ]
+    },
+    {
+      "id": "05",
+      "name": "AI 会话与代码",
+      "subtitle": "独立开发、对话、审批和文件检查共用一套工作台",
+      "board": "05-overview.png",
+      "pages": [
+        {
+          "number": 1,
+          "id": "manual-start",
+          "title": "独立开发入口",
+          "size": "1536x1024",
+          "file": "pages/05-manual-start.png"
+        },
+        {
+          "number": 2,
+          "id": "session",
+          "title": "专注开发会话",
+          "size": "1536x1024",
+          "file": "pages/05-session.png"
+        },
+        {
+          "number": 3,
+          "id": "approval-question",
+          "title": "执行审批与澄清",
+          "size": "1536x1024",
+          "file": "pages/05-approval-question.png"
+        },
+        {
+          "number": 4,
+          "id": "code-inspector",
+          "title": "文件变更与 Git",
+          "size": "1536x1024",
+          "file": "pages/05-code-inspector.png"
+        }
+      ]
+    },
+    {
+      "id": "06",
+      "name": "交付、验证与历史",
+      "subtitle": "公开交付与私有会话分开 · 业务判断保持明确",
+      "board": "06-overview.png",
+      "pages": [
+        {
+          "number": 1,
+          "id": "publish-delivery",
+          "title": "整理并发布交付",
+          "size": "1536x1024",
+          "file": "pages/06-publish-delivery.png"
+        },
+        {
+          "number": 2,
+          "id": "verify-detail",
+          "title": "验收与退回",
+          "size": "1536x1024",
+          "file": "pages/06-verify-detail.png"
+        },
+        {
+          "number": 3,
+          "id": "session-archive",
+          "title": "归档会话与历史",
+          "size": "1536x1024",
+          "file": "pages/06-session-archive.png"
+        },
+        {
+          "number": 4,
+          "id": "lifecycle-confirm",
+          "title": "取消、删除与清理确认",
+          "size": "1536x1024",
+          "file": "pages/06-lifecycle-confirm.png"
+        }
+      ]
+    },
+    {
+      "id": "07",
+      "name": "项目资料与配置",
+      "subtitle": "资料、敏感信息与项目分工按权限管理",
+      "board": "07-overview.png",
+      "pages": [
+        {
+          "number": 1,
+          "id": "assets",
+          "title": "项目资料库",
+          "size": "1536x1024",
+          "file": "pages/07-assets.png"
+        },
+        {
+          "number": 2,
+          "id": "asset-detail",
+          "title": "资料详情与安全字段",
+          "size": "1536x1024",
+          "file": "pages/07-asset-detail.png"
+        },
+        {
+          "number": 3,
+          "id": "members",
+          "title": "项目成员与分工",
+          "size": "1536x1024",
+          "file": "pages/07-members.png"
+        },
+        {
+          "number": 4,
+          "id": "prompts",
+          "title": "项目与个人提示词",
+          "size": "1536x1024",
+          "file": "pages/07-prompts.png"
+        }
+      ]
+    },
+    {
+      "id": "08",
+      "name": "个人设置与接入",
+      "subtitle": "个人偏好、Git 与 MCP 接入独立于项目配置",
+      "board": "08-overview.png",
+      "pages": [
+        {
+          "number": 1,
+          "id": "personal",
+          "title": "个人资料与偏好",
+          "size": "1536x1024",
+          "file": "pages/08-personal.png"
+        },
+        {
+          "number": 2,
+          "id": "git-accounts",
+          "title": "个人 Git 账号",
+          "size": "1536x1024",
+          "file": "pages/08-git-accounts.png"
+        },
+        {
+          "number": 3,
+          "id": "mcp-tokens",
+          "title": "MCP Token 与范围",
+          "size": "1536x1024",
+          "file": "pages/08-mcp-tokens.png"
+        },
+        {
+          "number": 4,
+          "id": "mcp-guide",
+          "title": "连接配置与图片上传",
+          "size": "1536x1024",
+          "file": "pages/08-mcp-guide.png"
+        }
+      ]
+    },
+    {
+      "id": "09",
+      "name": "组织与平台管理",
+      "subtitle": "保留系统管理权限，不引入产品／研发岗位角色",
+      "board": "09-overview.png",
+      "pages": [
+        {
+          "number": 1,
+          "id": "accounts",
+          "title": "账号管理",
+          "size": "1536x1024",
+          "file": "pages/09-accounts.png"
+        },
+        {
+          "number": 2,
+          "id": "departments",
+          "title": "部门功能上限",
+          "size": "1536x1024",
+          "file": "pages/09-departments.png"
+        },
+        {
+          "number": 3,
+          "id": "workflow",
+          "title": "全局事项流程",
+          "size": "1536x1024",
+          "file": "pages/09-workflow.png"
+        },
+        {
+          "number": 4,
+          "id": "suppliers",
+          "title": "Agent 供应商",
+          "size": "1536x1024",
+          "file": "pages/09-suppliers.png"
+        }
+      ]
+    },
+    {
+      "id": "10",
+      "name": "运行平台与系统配置",
+      "subtitle": "连接、环境、存储与初始化记录分别维护",
+      "board": "10-overview.png",
+      "pages": [
+        {
+          "number": 1,
+          "id": "supplier-editor",
+          "title": "供应商连接编辑",
+          "size": "1536x1024",
+          "file": "pages/10-supplier-editor.png"
+        },
+        {
+          "number": 2,
+          "id": "environment",
+          "title": "运行环境检测",
+          "size": "1536x1024",
+          "file": "pages/10-environment.png"
+        },
+        {
+          "number": 3,
+          "id": "storage",
+          "title": "成员目录设置",
+          "size": "1536x1024",
+          "file": "pages/10-storage.png"
+        },
+        {
+          "number": 4,
+          "id": "initialization-record",
+          "title": "初始化记录",
+          "size": "1536x1024",
+          "file": "pages/10-initialization-record.png"
+        }
+      ]
+    },
+    {
+      "id": "11",
+      "name": "账号与首次使用",
+      "subtitle": "登录、改密、初始化与确认形成独立引导",
+      "board": "11-overview.png",
+      "pages": [
+        {
+          "number": 1,
+          "id": "login",
+          "title": "登录",
+          "size": "1536x1024",
+          "file": "pages/11-login.png"
+        },
+        {
+          "number": 2,
+          "id": "password",
+          "title": "首次修改密码",
+          "size": "1536x1024",
+          "file": "pages/11-password.png"
+        },
+        {
+          "number": 3,
+          "id": "setup-wizard",
+          "title": "首次初始化向导",
+          "size": "1536x1024",
+          "file": "pages/11-setup-wizard.png"
+        },
+        {
+          "number": 4,
+          "id": "setup-summary",
+          "title": "初始化确认与就绪",
+          "size": "1536x1024",
+          "file": "pages/11-setup-summary.png"
+        }
+      ]
+    },
+    {
+      "id": "12",
+      "name": "冲突、异常与移动端",
+      "subtitle": "保留草稿与上下文，窄屏仍可完成完整操作",
+      "board": "12-overview.png",
+      "pages": [
+        {
+          "number": 1,
+          "id": "edit-conflict",
+          "title": "编辑冲突处理",
+          "size": "1536x1024",
+          "file": "pages/12-edit-conflict.png"
+        },
+        {
+          "number": 2,
+          "id": "uncertain-operation",
+          "title": "异常与结果待确认",
+          "size": "1536x1024",
+          "file": "pages/12-uncertain-operation.png"
+        },
+        {
+          "number": 3,
+          "id": "mobile-home",
+          "title": "移动端统一工作台",
+          "size": "1024x1536",
+          "file": "pages/12-mobile-home.png"
+        },
+        {
+          "number": 4,
+          "id": "mobile-issue",
+          "title": "移动端事项与验收",
+          "size": "1024x1536",
+          "file": "pages/12-mobile-issue.png"
+        }
+      ]
+    }
+  ]
+}

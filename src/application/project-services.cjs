@@ -79,8 +79,11 @@ class ProjectServices {
     return { projects, setup, canCreateProjects, creationReadiness: projectCreationReadiness(user, user.department), isAdmin: user.role === "admin" };
   }
   async read(id, actor) {
+    await this.authorize(id, actor, "project.view");
+    // Keep summary counts outside authorization used by write transactions.
+    const summary = await this.store.project(id, { summary: true });
     const { project, membership, permissions, department, user } = await this.authorize(id, actor, "project.view");
-    return { permissionContext: { administratorAccess: user.role === "admin", departmentName: department?.name || "", ceiling: department?.permissions || [], grants: membership?.permissions || [] }, project: presentProject(project, permissions), membership: presentMember(membership && { ...membership, user }), permissions, space: presentSpace(await this.store.space(id, actor.id)) };
+    return { permissionContext: { administratorAccess: user.role === "admin", departmentName: department?.name || "", ceiling: department?.permissions || [], grants: membership?.permissions || [] }, project: presentProject({ ...summary, ...project, _count: summary?._count }, permissions), membership: presentMember(membership && { ...membership, user }), permissions, space: presentSpace(await this.store.space(id, actor.id)) };
   }
   settings(input = {}, previous = {}) {
     const value = { initCommands: input.initCommands ?? previous.initCommands ?? [], prompts: getPromptTemplates({ prompt_templates: previous.prompts || {} }) };

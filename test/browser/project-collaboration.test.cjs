@@ -1,3 +1,4 @@
+const { openProjectTab } = require("../support/browser-navigation.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -72,11 +73,11 @@ async function main() {
       await page.getByRole("button", { name: "登录", exact: true }).click();
       await page.getByRole("heading", { name: "工作台", exact: true }).waitFor();
       await page.getByRole("navigation", { name: "主导航", exact: true }).getByRole("button", { name: "项目", exact: true }).click();
-      await page.getByRole("heading", { name: username === "admin" ? "全部项目" : "我的项目", exact: true }).waitFor();
-      await page.getByRole("button", { name: /项目协作回归/ }).click();
+      await page.getByRole("heading", { name: "项目", exact: true }).waitFor();
+      await page.getByRole("button", { name: "项目协作回归", exact: true }).click();
       await page.getByRole("heading", { name: "项目协作回归", exact: true }).waitFor();
     }
-    const tab = name => page.getByRole("navigation", { name: "项目功能" }).getByRole("button", { name, exact: true }).click();
+    const tab = name => openProjectTab(page, name);
     await login("product");
     await tab("提示词");
     const memberBugPrompt = page.getByRole("textbox", { name: "Bug提示词", exact: true });
@@ -91,8 +92,8 @@ async function main() {
     assert.equal((await memberPromptSaved).status(), 200, "personal templates do not require project configuration or a development space");
     assert.deepEqual((await projects.promptSettings(project.id, admin)).overrides, {});
     await tab("概览");
-    assert.equal(await page.getByLabel("账号导航").getByRole("button", { name: "系统设置", exact: true }).count(), 0, "ordinary members have no system workflow management entry");
-    assert.equal(await page.getByRole("navigation", { name: "项目功能" }).getByRole("button", { name: "流程", exact: true }).count(), 0);
+    assert.equal(await page.getByLabel("账号导航").getByRole("button", { name: "管理中心", exact: true }).count(), 0, "ordinary members have no system workflow management entry");
+    assert.equal(await page.locator(".project-tab-bar").getByRole("button", { name: "流程", exact: true }).count(), 0);
     assert.equal((await page.request.get(`${origin}/api/system/workflows/requirement`)).status(), 403);
     assert.equal((await page.request.get(`${origin}/api/projects/${project.id}/workflows/requirement`)).status(), 404, "project workflow configuration API is removed");
     const published = await (await page.request.get(`${origin}/api/projects/${project.id}/issue-workflows/requirement`)).json();
@@ -247,7 +248,7 @@ async function main() {
     await verifyProjectReleases({ page, origin, projectId: project.id, output });
     await verifyAdministratorProjectAccess({ page, origin, projects, accounts, admin, department, remoteUrl: remote.remoteUrl, output });
     await page.getByRole("navigation", { name: "主导航", exact: true }).getByRole("button", { name: "项目", exact: true }).click();
-    await page.getByRole("button", { name: "创建项目", exact: true }).click();
+    await page.getByRole("button", { name: "新建项目", exact: true }).click();
     assert.equal(await page.getByLabel("归属部门", { exact: true }).count(), 0);
     await page.getByLabel("项目名称", { exact: true }).fill("直接引入的新项目");
     await page.getByRole("textbox", { name: "Git 仓库地址", exact: true }).fill("https://git.example.test/team/new.git");
@@ -406,7 +407,8 @@ async function main() {
     await page.getByRole("button", { name: "发送资料并继续 Codex", exact: true }).click();
     await page.getByText("追加资料已发送。", { exact: true }).waitFor();
     assert.equal(clients.flatMap(client => client.calls).filter(call => call.method === "turn/start").length, 2);
-    await page.getByRole("button", { name: "部门可用功能", exact: true }).click();
+    await page.getByRole("button", { name: "管理中心", exact: true }).click();
+    await page.getByRole("navigation", { name: "管理中心", exact: true }).getByRole("button", { name: "部门可用功能", exact: true }).click();
     await page.getByRole("heading", { name: "部门可用功能", exact: true }).waitFor();
     await verifyDepartmentCapabilities({ page, output });
     await page.getByRole("button", { name: "编辑研发与产品", exact: true }).click();
@@ -428,7 +430,8 @@ async function main() {
     await page.getByRole("button", { name: "确认认领", exact: true }).waitFor();
     await page.getByRole("button", { name: "确认认领", exact: true }).click();
     await started;
-    await page.getByRole("navigation", { name: "项目功能" }).getByRole("button", { name: new URL(sourceIssueUrl).searchParams.get("tab") === "bugs" ? "Bug" : "需求", exact: true }).evaluate(button => button.click());
+    // Simulate history navigation during the held request; the native dialog intentionally blocks pointer input.
+    await page.locator(".project-more").getByRole("button", { name: new URL(sourceIssueUrl).searchParams.get("tab") === "bugs" ? "Bug" : "需求", exact: true, includeHidden: true }).evaluate(button => button.click());
     await page.getByRole("dialog", { name: "认领" }).waitFor({ state: "detached" });
     const listAfterStart = page.url();
     const lateResponse = page.waitForResponse(response => response.url() === tasksUrl && response.request().method() === "POST");
@@ -441,7 +444,7 @@ async function main() {
     await page.getByLabel("账号", { exact: true }).waitFor();
     const codeRequestStart = requests.length;
     await login("codeonly");
-    assert.equal(await page.getByRole("navigation", { name: "项目功能" }).getByRole("button", { name: "需求", exact: true }).count(), 0);
+    assert.equal(await page.locator(".project-tab-bar").getByRole("button", { name: "需求", exact: true }).count(), 0);
     await tab("代码与环境");
     await page.getByRole("combobox", { name: /^个人 Git 账号/ }).selectOption(codeGit.id);
     await page.getByRole("button", { name: "验证访问并准备空间", exact: true }).click();

@@ -1,7 +1,7 @@
 <script setup>
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
-import { reactive, ref } from "vue";
-import { UserOutlined, BellOutlined, ReloadOutlined } from "@antdv-next/icons";
+import { computed, reactive, ref } from "vue";
+import { UserOutlined, BellOutlined, ReloadOutlined, BranchesOutlined, ApiOutlined, LockOutlined } from "@antdv-next/icons";
 import { accountSession, saveAccountSettings } from "../../shared/api/account-session.js";
 import { appApi } from "../../shared/api/api.js";
 import { useModelCatalog } from "../../shared/api/use-model-catalog.js";
@@ -13,6 +13,12 @@ import AccountProfile from "./AccountProfile.vue";
 import PasswordForm from "./PasswordForm.vue";
 import GitAccountSettings from "./GitAccountSettings.vue";
 import McpTokenSettings from "./McpTokenSettings.vue";
+import { useRoute, useRouter } from "vue-router";
+import SettingsLayout from "../../shared/components/SettingsLayout.vue";
+const route = useRoute(), router = useRouter();
+const items = [{ id: "profile", label: "资料与偏好", icon: UserOutlined }, { id: "git", label: "Git 账号", icon: BranchesOutlined }, { id: "mcp", label: "MCP 接入", icon: ApiOutlined }, { id: "security", label: "账号安全", icon: LockOutlined }];
+const currentTab = computed(() => items.some(item => item.id === route.query.tab) ? route.query.tab : "profile");
+function select(tab) { void router.push({ query: { ...route.query, tab: tab === "profile" ? undefined : tab } }); }
 defineProps({ notifications: { type: Object, required: true } });
 const form = reactive({ model: accountSession.settings.model || "", reasoningEffort: accountSession.settings.reasoningEffort || "", permissionMode: accountSession.settings.permissionMode || "ask", grouping: accountSession.settings.grouping || "type" });
 const models = useModelCatalog((url) => appApi(`/account${url}`));
@@ -30,7 +36,8 @@ async function save() {
 </script>
 <template>
   <section class="system-settings-panel">
-    <header class="page-heading"><div class="eyebrow">PERSONAL</div><h1><UserOutlined aria-hidden="true" /> {{ $t("个人设置") }}</h1><p>{{ $t("设置你的执行默认值与提醒偏好，在不同设备登录后保持一致。") }}</p></header>
+    <SettingsLayout :title="$t('个人设置')" :description="$t('管理你的偏好与连接，让工作更顺手。')" :label="$t('我的账号')" :items="items" :active="currentTab" @select="select">
+    <div v-show="currentTab === 'profile'" class="ui-profile-settings"><header class="ui-settings-heading"><h2>{{ $t('个人资料与偏好') }}</h2><p>{{ $t('这些设置只影响你的账号。') }}</p></header>
     <AccountProfile />
     <FormSection :title="$t(&quot;新任务默认值&quot;)" :description="$t(&quot;创建任务时自动填入，单个任务仍可独立调整。已有会话保持原设置。&quot;)">
       <template #action><button type="button" class="text-button" :disabled="models.loading.value" @click="models.refresh"><ReloadOutlined aria-hidden="true" />{{ $t("刷新模型列表") }}</button></template>
@@ -51,8 +58,10 @@ async function save() {
       <p v-if="notifications.permission.value === 'denied'" class="field-hint">{{ $t("浏览器已拦截通知，请在网站权限中允许后重试。") }}</p>
       <FeedbackMessage :message="notifications.error.value" type="error" />
     </FormSection>
-    <McpTokenSettings />
-    <GitAccountSettings />
-    <FormSection :title="$t(&quot;账号安全&quot;)" :description="$t(&quot;修改登录密码。&quot;)"><PasswordForm /></FormSection>
+    </div>
+    <McpTokenSettings v-if="currentTab === 'mcp'" />
+    <GitAccountSettings v-if="currentTab === 'git'" />
+    <FormSection v-if="currentTab === 'security'" :title="$t(&quot;账号安全&quot;)" :description="$t(&quot;修改登录密码。&quot;)"><PasswordForm /></FormSection>
+    </SettingsLayout>
   </section>
 </template>

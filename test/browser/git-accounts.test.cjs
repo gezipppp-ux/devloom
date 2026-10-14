@@ -24,6 +24,7 @@ async function verifyGitAccounts(page, output) {
     if (index >= 0) accounts[index] = account; else accounts.push(account);
     return send({ account });
   });
+  await page.getByRole("navigation", { name: "个人设置", exact: true }).getByRole("button", { name: "Git 账号", exact: true }).click();
   const section = page.locator(".git-account-settings");
   const save = section.getByRole("button", { name: "保存 Git 账号", exact: true });
   const verify = section.getByRole("button", { name: "验证登录", exact: true });
@@ -129,12 +130,13 @@ async function verifyGitAccounts(page, output) {
   await verify.click();
   await pending;
   await page.getByRole("navigation", { name: "主导航", exact: true }).getByRole("button", { name: "项目", exact: true }).click();
-  await page.getByRole("heading", { name: "全部项目", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "项目", exact: true }).waitFor();
   const completed = page.waitForResponse(response => response.url().endsWith("/verify"));
   gate();
   await completed;
   assert.equal(await page.locator('.operation-message[data-type="success"]').filter({ hasText: "Git 主机登录验证成功" }).count(), 0, "late verification must not notify after leaving personal settings");
   await page.getByRole("button", { name: "个人设置", exact: true }).click();
+  await page.getByRole("navigation", { name: "个人设置", exact: true }).getByRole("button", { name: "Git 账号", exact: true }).click();
   await section.getByRole("button", { name: "编辑 Git 账号：开发 SSH Git", exact: true }).waitFor();
   process.stdout.write("Git account browser passed: host login, unsaved HTTP/SSH credentials, verification failures, revisions, explicit authors, generated public keys, confirmation and responsive forms.\n");
 }

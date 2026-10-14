@@ -40,8 +40,8 @@ async function verifyEnvironment(page, output) {
     return route.fulfill({ json: report() });
   });
   assert.equal(await page.getByRole("navigation", { name: "账号导航" }).getByRole("button", { name: "环境检测", exact: true }).count(), 0);
-  await page.getByRole("button", { name: "系统设置", exact: true }).click();
-  await page.getByRole("navigation", { name: "系统设置分类" }).getByRole("button", { name: "环境检测", exact: true }).click();
+  await page.getByRole("button", { name: "管理中心", exact: true }).click();
+  await page.getByRole("navigation", { name: "管理中心", exact: true }).getByRole("button", { name: "环境检测", exact: true }).click();
   await page.getByRole("alert").filter({ hasText: "模拟环境检测失败" }).waitFor();
   fail = false;
   await page.getByRole("button", { name: "重新检测", exact: true }).click();

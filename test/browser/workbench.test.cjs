@@ -24,6 +24,9 @@ async function verifyWorkbench(browser) {
       const send = (json,status=200)=>route.fulfill({status,json});
       if (endpoint === '/api/auth/session') return send({ user: {id:'visual-admin',username:'preview',displayName:'演示成员',role:'admin',status:'active',mustChangePassword:false}, token:'fixture', settings:{} });
       if (endpoint === '/api/bootstrap') return send({token:'fixture',workspaces:[]});
+      if (endpoint === '/api/account/models') return send({ models: [] });
+      if (endpoint === '/api/account/execution-options') return send({ permissionModes: require('../../shared/agent-permissions.json').map(mode => ({ ...mode, available: true })), agent: { label: 'Codex' } });
+      if (endpoint === '/api/account/preferences') return send({ preferences: { unreadRunKeys: [] } });
       if (endpoint.startsWith('/api/workbench/')) {
         const kind=endpoint.split('/').at(-1);
         const row={ ...issue, projectId, projectName:project.name, releaseName:'v0.2', ...(kind==='tasks'?{id:'task-1',title:'搜索开发任务',status:'planned'}:kind==='deliveries'?{...delivery}:{} ) };
@@ -51,13 +54,31 @@ async function verifyWorkbench(browser) {
     await page.locator('.ui-work-row').first().waitFor();
     for(const locale of ['zh-CN','en']) {
       await page.locator('.ui-locale').selectOption(locale);
-      for(const [width,height] of [[2560,1440],[1920,1080],[1440,900],[1280,720],[768,1024],[390,844],[320,740]]) {
-        await page.setViewportSize({width,height});
-        assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),`${locale} workbench overflow at ${width}`);
-        await page.screenshot({path:path.join(output,`home-${locale}-${width}.png`),fullPage:true});
+      for(const [name, location, ready] of [
+        ['home', '/', '.ui-work-row'], ['projects', '/projects', '.project-card'],
+        ['overview', `/projects/${projectId}`, '.project-overview-grid'],
+        ['issues', '/issues', '.ui-data-table'], ['development', '/development', '.ui-data-table'],
+        ['deliveries', '/deliveries', '.ui-work-row'], ['personal', '/personal', '.ui-profile-settings form'],
+        ['administration', '/accounts', '.account-list-row'],
+        ['prompts', `/projects/${projectId}?tab=prompts`, '.prompt-placeholders'],
+      ]) {
+        await page.goto(origin + location);
+        await page.locator(ready).first().waitFor();
+        for(const [width,height] of [[2560,1440],[1920,1080],[1440,900],[1280,720],[768,1024],[390,844],[320,740]]) {
+          await page.setViewportSize({width,height});
+          assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),`${locale} ${name} overflow at ${width}`);
+          await page.screenshot({path:path.join(output,`${name}-${locale}-${width}.png`),fullPage:true});
+        }
       }
     }
     await page.setViewportSize({width:1920,height:1080});
+    await page.goto(origin + '/development');
+    await page.getByRole('button', { name: 'Filters', exact: true }).click();
+    await page.getByLabel('Task status', { exact: true }).selectOption('started');
+    await page.waitForURL('**status=started**');
+    await page.locator('.ui-data-table').waitFor();
+    assert.ok(requests.some(request => request.endpoint === '/api/workbench/tasks' && new URLSearchParams(request.search).get('status') === 'started'));
+    await page.goto(origin);
     await page.getByRole('button',{name:'Search everything',exact:true}).click();
     await page.getByRole('dialog').getByRole('searchbox').fill('搜索');
     await page.getByRole('dialog').getByRole('button',{name:'Search',exact:true}).click();
@@ -101,7 +122,7 @@ async function verifyWorkbench(browser) {
     assert.equal(await page.getByLabel('Review notes',{exact:true}).inputValue(),'','access recovery cannot resurrect a revoked draft');
     assert.equal(await page.getByRole('checkbox').nth(0).isChecked(),false);
     assert.deepEqual(errors,[]);
-    console.log('Workbench browser checks passed: bilingual responsive home, search, paged issue selection, explicit sharing and complete acceptance checks.');
+    console.log('Workbench browser checks passed: nine bilingual surfaces at seven viewports, task filtering, search, paged issue selection, explicit sharing and complete acceptance checks.');
   } finally {await context.close();}
 }
 module.exports={verifyWorkbench};

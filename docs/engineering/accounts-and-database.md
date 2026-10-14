@@ -160,6 +160,8 @@ Vue 页面路径 `/login`、`/password`、`/personal`、`/system`、`/accounts`�
 
 ## 验证
 
+项目目录及详情的公开摘要包含负责人 ID／显示名称、活跃成员人数和最多三人的姓名预览；成员参与和账号均须为 active 才计入。事项总数只向具有 `issue.view` 的账号返回，提示词和凭据不进入摘要。摘要统计由存储层的读取查询提供，写事务的通用项目授权保持轻量，不读取事项计数；项目详情读取后复核访问权限再呈现。
+
 Jenkinsfile 运行 eslint、Node 测试、`npm run build` 和浏览器脚本。数据库测试使用独立 PostgreSQL 的随机 schema，执行测试使用假 Codex 和临时 Git。覆盖成员越权、登录撤销、SSE/图片隔离、完整执行、离线历史、图片缓存重建、迁移版本校验、事务回滚及连接失败，以及开发种子隔离。
 
 执行配置与任务记录采用 [Agent 契约](./agents.md) 的新格式，不提供旧 `codex` 字段回退。Git 账号引用查询使用 `execution.gitAccountId`，会话固定使用记录中的 `agent.provider`。

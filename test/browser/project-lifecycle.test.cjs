@@ -1,9 +1,10 @@
+const { openProjectTab } = require("../support/browser-navigation.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
 const path = require("node:path");
 
 async function verifyProjectLifecycle({ page, origin, project, database, output, projects, admin }) {
-  const tab = name => page.getByRole("navigation", { name: "项目功能" }).getByRole("button", { name, exact: true }).click();
+  const tab = name => openProjectTab(page, name);
   const releaseName = page.getByRole("navigation", { name: "版本列表" }).getByRole("button", { name: /v0.2/ });
   async function archiveVersion() {
     await releaseName.click();
@@ -23,8 +24,8 @@ async function verifyProjectLifecycle({ page, origin, project, database, output,
   await page.getByRole("button", { name: "恢复版本", exact: true }).click();
   await page.getByRole("button", { name: "编辑版本", exact: true }).waitFor();
   assert.equal(await page.getByRole("navigation", { name: "项目功能" }).getByRole("button", { name: "流程", exact: true }).count(), 0);
-  await page.getByLabel("账号导航").getByRole("button", { name: "系统设置", exact: true }).click();
-  await page.getByRole("navigation", { name: "系统设置分类" }).getByRole("button", { name: "流程编排", exact: true }).click();
+  await page.getByLabel("账号导航").getByRole("button", { name: "管理中心", exact: true }).click();
+  await page.getByRole("navigation", { name: "管理中心", exact: true }).getByRole("button", { name: "流程编排", exact: true }).click();
   await page.getByRole("button", { name: "规划中", exact: true }).click();
   const oldIssue = await database.client.projectIssue.findFirst({ where: { projectId: project.id, type: "requirement" } });
   await page.getByLabel("状态名称", { exact: true }).fill("需求规划");
@@ -55,6 +56,7 @@ async function verifyProjectLifecycle({ page, origin, project, database, output,
   assert.notEqual(first.workflowVersionId, oldIssue.workflowVersionId, "new issues use the newly published system workflow");
   const other = (await projects.create(admin, { name: "复用系统流程的另一项目", remoteUrl: project.remoteUrl })).project;
   await page.goto(`${origin}/projects/${other.id}?tab=issues`);
+  await page.getByRole("heading", { name: other.name, exact: true }).waitFor();
   await page.getByLabel("事项状态", { exact: true }).getByRole("option", { name: "需求规划", exact: true }).waitFor({ state: "attached" });
   await page.getByRole("button", { name: "新建需求", exact: true }).click();
   await page.getByLabel("标题", { exact: true }).fill("跨项目系统流程事项");

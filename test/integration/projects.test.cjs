@@ -132,6 +132,23 @@ test("department ceilings and memberships gate operations while administrators c
   await f.projects.authorize(f.project.id, another, "project.view");
 });
 
+test("project summaries expose public active participants and respect issue visibility", async t => {
+  const f = await fixture(t);
+  await f.projects.saveMember(f.project.id, f.admin, { userId: f.member.id, permissions: ["project.view"] });
+  await f.projects.saveMember(f.project.id, f.admin, { userId: f.analyst.id, permissions: productTemplate });
+  for (const project of [(await f.projects.read(f.project.id, f.member)).project, (await f.projects.list(f.member)).projects[0]]) {
+    assert.equal(project.memberCount, 3);
+    assert.equal(project.issueCount, undefined, "a project-only viewer cannot learn issue counts");
+    assert.deepEqual(Object.keys(project.owner).sort(), ["displayName", "id"]);
+    assert.ok(project.memberPreview.every(member => Object.keys(member).sort().join() === "displayName,id"));
+  }
+  assert.equal((await f.projects.read(f.project.id, f.admin)).project.issueCount, 0);
+  await f.projects.saveMember(f.project.id, f.admin, { revision: 1, permissions: productTemplate, status: "disabled" }, f.analyst.id);
+  const summary = (await f.projects.read(f.project.id, f.member)).project;
+  assert.equal(summary.memberCount, 2);
+  assert.equal(summary.memberPreview.some(person => person.id === f.analyst.id), false);
+});
+
 test("revisions, owner succession and archive protect identities and retained spaces", async t => {
   const f = await fixture(t);
   await f.projects.saveMember(f.project.id, f.admin, { userId: f.member.id, permissions: grants });

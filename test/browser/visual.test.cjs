@@ -1,3 +1,4 @@
+const { openProjectTab } = require("../support/browser-navigation.cjs");
 /* global document, window */
 // Visual fixtures only: intercepted APIs cannot run real tasks.
 const assert = require("node:assert/strict");
@@ -427,7 +428,8 @@ async function main() {
     }
     async function captureSystemSettings(suffix) {
       if (page.viewportSize().width < 768) await page.getByRole("button", { name: "打开导航", exact: true }).click();
-      await page.getByRole("button", { name: "系统设置", exact: true }).click();
+      await page.getByRole("button", { name: "管理中心", exact: true }).click();
+      await page.getByRole("navigation", { name: "管理中心", exact: true }).getByRole("button", { name: "目录设置", exact: true }).click();
       await page.getByRole("textbox", { name: "成员目录基础路径", exact: true }).waitFor();
       await capture("03-system-settings-" + suffix);
       await page.getByRole("button", { name: "浏览服务器目录", exact: true }).click();
@@ -508,16 +510,16 @@ async function main() {
         await page.setViewportSize({ width, height: 1000 });
         await page.goto(origin + '/projects');
         await page.locator('.project-card').first().waitFor();
-        const directoryHeading = await page.locator('.page-heading').boundingBox();
+        const directoryHeading = await page.locator('.ui-page-header').boundingBox();
         await capture('10-project-directory-' + width);
-        await page.getByRole('button', { name: '创建项目', exact: true }).click();
+        await page.getByRole('button', { name: '新建项目', exact: true }).click();
         await page.getByLabel('项目名称', { exact: true }).fill('客户体验提升计划');
         await capture('10-project-create-' + width);
         await page.goto(origin + '/projects/00000000-0000-4000-8000-000000000001');
-        await page.getByRole('heading', { name: '项目概览', exact: true }).waitFor();
+        await page.getByRole('heading', { name: '项目概况', exact: true }).waitFor();
         await capture('11-project-overview-' + width);
-        const tabs = page.getByRole('navigation', { name: '项目功能' });
-        await tabs.getByRole('button', { name: '需求', exact: true }).click();
+        const tab = name => openProjectTab(page, name);
+        await tab('需求');
         await page.getByRole('button', { name: /#1 优化客户搜索体验/ }).waitFor();
         await capture('12-project-issues-' + width);
         await page.getByRole('button', { name: '新建需求', exact: true }).click();
@@ -530,23 +532,23 @@ async function main() {
         await capture('12-project-issue-detail-' + width);
         await page.getByRole('button', { name: '编辑事项', exact: true }).click();
         await capture('12-project-issue-edit-' + width);
-        await tabs.getByRole('button', { name: 'Bug', exact: true }).click();
+        await tab('Bug');
         await page.getByRole('button', { name: /#2 修复导出结果/ }).click();
         await page.getByRole('heading', { name: '复现步骤', exact: true }).waitFor();
         await checkIssueCards(width);
         await capture('13-project-bug-' + width);
-        await tabs.getByRole('button', { name: '资产', exact: true }).click();
+        await tab('资产');
         await page.getByRole('button', { name: /测试环境演示账号/ }).click();
         await page.getByRole('button', { name: '显示敏感值', exact: true }).waitFor();
         await capture('14-project-asset-masked-' + width);
         await page.getByRole('button', { name: '编辑资产', exact: true }).click();
         await page.locator('input[type="password"]').waitFor();
         await capture('14-project-asset-edit-' + width);
-        await tabs.getByRole('button', { name: '开发任务', exact: true }).click();
+        await tab('开发任务');
         await page.getByRole('button', { name: /客户搜索与空结果提示/ }).click();
         await page.getByRole('button', { name: '发送资料并继续 Codex', exact: true }).waitFor();
         await capture('15-project-development-' + width);
-        await tabs.getByRole('button', { name: '版本', exact: true }).click();
+        await tab('版本');
         await page.getByRole('heading', { name: '发布版本', exact: true }).waitFor();
         await page.getByRole('heading', { name: 'v0.2', exact: true }).waitFor();
         await capture('15-project-releases-' + width);
@@ -573,22 +575,24 @@ async function main() {
         await page.getByRole('group', { name: '事项流程图', exact: true }).waitFor();
         await capture('15-system-workflows-' + width);
         await page.goto(origin + '/projects/00000000-0000-4000-8000-000000000001');
-        await tabs.getByRole('button', { name: '成员', exact: true }).click();
+        await tab('成员');
         await page.getByRole('button', { name: '调整张明（member-1）权限', exact: true }).click();
         await capture('16-project-members-' + width);
-        await tabs.getByRole('button', { name: '设置', exact: true }).click();
+        await tab('设置');
         await page.getByRole('button', { name: '保存项目设置', exact: true }).waitFor();
         await capture('17-project-settings-' + width);
-        await tabs.getByRole('button', { name: '提示词', exact: true }).click();
+        await tab('提示词');
         await page.getByRole('textbox', { name: 'Bug提示词', exact: true }).waitFor();
         await capture('17-project-prompts-personal-' + width);
         await page.getByRole('group', { name: '提示词作用域' }).getByRole('button', { name: '项目默认', exact: true }).click();
         await page.getByRole('group', { name: '提示词类型' }).getByRole('button', { name: '需求提示词', exact: true }).click();
         await capture('17-project-prompts-default-' + width);
         if (width < 768) await page.getByRole('button', { name: '打开导航', exact: true }).click();
-        await page.getByRole('navigation', { name: width < 768 ? '移动主导航' : '账号导航', exact: true }).getByRole('button', { name: '部门可用功能', exact: true }).click();
+        await page.getByRole('navigation', { name: width < 768 ? '移动主导航' : '账号导航', exact: true }).getByRole('button', { name: '管理中心', exact: true }).click();
+        await page.getByRole('navigation', { name: '管理中心', exact: true }).getByRole('button', { name: '部门可用功能', exact: true }).click();
+        await page.getByRole('button', { name: '新建部门', exact: true }).click();
         await page.getByLabel('部门名称', { exact: true }).waitFor();
-        const departmentHeading = await page.locator('.page-heading').boundingBox();
+        const departmentHeading = await page.locator('.ui-page-header').boundingBox();
         assert.ok(Math.abs(directoryHeading.x - departmentHeading.x) < 1 &&
           Math.abs(directoryHeading.width - departmentHeading.width) < 1,
         `project directory and scrollable department page keep the same horizontal edges at ${width}px`);

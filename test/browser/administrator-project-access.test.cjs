@@ -1,10 +1,11 @@
+const { openProjectTab } = require("../support/browser-navigation.cjs");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 
 async function verifyAdministratorProjectAccess({ page, origin, projects, accounts, admin, department, remoteUrl, output }) {
   const owner = await accounts.create({ username: "independent-owner", displayName: "独立项目负责人", password: "fixture-password", departmentId: department.id, canCreateProjects: true }, admin);
   const project = (await projects.create(owner, { name: "管理员未加入的项目", remoteUrl })).project;
-  const tab = name => page.getByRole("navigation", { name: "项目功能" }).getByRole("button", { name, exact: true }).click();
+  const tab = name => openProjectTab(page, name);
   const save = async (name, endpoint) => {
     const pending = page.waitForResponse(response => response.url() === `${origin}/api/projects/${project.id}${endpoint}` && response.request().method() === "POST");
     await page.getByRole("button", { name, exact: true }).click();
@@ -13,12 +14,12 @@ async function verifyAdministratorProjectAccess({ page, origin, projects, accoun
     return response.json();
   };
   await page.getByRole("navigation", { name: "主导航", exact: true }).getByRole("button", { name: "项目", exact: true }).click();
-  await page.getByRole("heading", { name: "全部项目", exact: true }).waitFor();
-  await page.getByRole("button", { name: /管理员未加入的项目/ }).click();
+  await page.getByRole("heading", { name: "项目", exact: true }).waitFor();
+  await page.getByRole("button", { name: "管理员未加入的项目", exact: true }).click();
   await page.getByRole("heading", { name: project.name, exact: true }).waitFor();
   assert.equal((await projects.read(project.id, admin)).membership, null);
   for (const name of ["代码与环境"])
-    assert.equal(await page.getByRole("navigation", { name: "项目功能" }).getByRole("button", { name, exact: true }).count(), 0);
+    assert.equal(await page.locator(".project-tab-bar").getByRole("button", { name, exact: true }).count(), 0);
   await tab("设置");
   await page.getByLabel("说明", { exact: true }).fill("管理员跨项目维护配置");
   await save("保存项目设置", "");

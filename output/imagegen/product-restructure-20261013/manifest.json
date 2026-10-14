@@ -1,0 +1,93 @@
+{
+  "model": "gpt-image-2.5-sunburst",
+  "generatedPageSize": [
+    1536,
+    1024
+  ],
+  "schemes": [
+    {
+      "id": "a",
+      "name": "项目工作台",
+      "subtitle": "从项目进入，把事项、开发与交付串起来",
+      "board": "a-overview.png",
+      "pages": [
+        {
+          "number": 1,
+          "title": "项目首页",
+          "file": "pages/a-01-projects.png"
+        },
+        {
+          "number": 2,
+          "title": "统一事项",
+          "file": "pages/a-02-issues.png"
+        },
+        {
+          "number": 3,
+          "title": "开发与准备",
+          "file": "pages/a-03-development.png"
+        },
+        {
+          "number": 4,
+          "title": "专注 AI 工作台",
+          "file": "pages/a-04-session.png"
+        }
+      ]
+    },
+    {
+      "id": "b",
+      "name": "我的工作台",
+      "subtitle": "以个人待办为入口，让下一步更清楚",
+      "board": "b-overview.png",
+      "pages": [
+        {
+          "number": 1,
+          "title": "我的工作",
+          "file": "pages/b-01-my-work.png"
+        },
+        {
+          "number": 2,
+          "title": "事项详情与认领",
+          "file": "pages/b-02-issue-detail.png"
+        },
+        {
+          "number": 3,
+          "title": "连续启动向导",
+          "file": "pages/b-03-start.png"
+        },
+        {
+          "number": 4,
+          "title": "开发与交付预览",
+          "file": "pages/b-04-session.png"
+        }
+      ]
+    },
+    {
+      "id": "c",
+      "name": "版本交付空间",
+      "subtitle": "围绕版本组织范围、执行与验收",
+      "board": "c-overview.png",
+      "pages": [
+        {
+          "number": 1,
+          "title": "项目与版本",
+          "file": "pages/c-01-projects.png"
+        },
+        {
+          "number": 2,
+          "title": "版本范围规划",
+          "file": "pages/c-02-scope.png"
+        },
+        {
+          "number": 3,
+          "title": "版本关联开发",
+          "file": "pages/c-03-session.png"
+        },
+        {
+          "number": 4,
+          "title": "验收与归档",
+          "file": "pages/c-04-acceptance.png"
+        }
+      ]
+    }
+  ]
+}
