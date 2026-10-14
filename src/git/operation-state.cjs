@@ -1,6 +1,19 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { git } = require("./command.cjs");
+const { samePath } = require("../shared/paths.cjs");
+
+function sameWorktreePath(left, right) {
+  if (samePath(left, right)) return true;
+  try {
+    // Git reports physical paths (e.g. /private/var on macOS), while saved
+    // sessions can retain an OS alias. Resolve only for comparison.
+    return samePath(fs.realpathSync.native(left), fs.realpathSync.native(right));
+  } catch {
+    // Missing/prunable registrations must not mask another valid worktree.
+    return false;
+  }
+}
 
 function operationReason(repository) {
   const directory = git(repository, [
@@ -30,4 +43,4 @@ function registeredWorktrees(repository) {
     });
 }
 
-module.exports = { operationReason, registeredWorktrees };
+module.exports = { operationReason, registeredWorktrees, sameWorktreePath };

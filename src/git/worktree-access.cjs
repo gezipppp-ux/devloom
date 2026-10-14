@@ -1,7 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { git: gitCommand } = require("./command.cjs");
-const { registeredWorktrees } = require("./operation-state.cjs");
+const { registeredWorktrees, sameWorktreePath } = require("./operation-state.cjs");
 const { repositoryCommonDirectory } = require("./repository.cjs");
 const { samePath } = require("../shared/paths.cjs");
 
@@ -12,7 +12,7 @@ function worktreeReason(state) {
     const git = (cwd, args) =>
       gitCommand(cwd, args, { timeout: 10000 });
     const match = registeredWorktrees(tree.repository)
-      .find((entry) => entry.path && samePath(entry.path, tree.path));
+      .find((entry) => entry.path && sameWorktreePath(entry.path, tree.path));
     if (!match || !fs.existsSync(path.join(tree.path, ".git")))
       return "工作区已移除，此任务仅供查看";
     const expectedCommon = repositoryCommonDirectory(tree.repository);

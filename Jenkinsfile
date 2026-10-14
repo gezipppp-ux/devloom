@@ -15,7 +15,7 @@ pipeline {
         axes {
           axis {
             name 'PLATFORM'
-            values 'linux', 'windows'
+            values 'linux', 'windows', 'macos-arm64', 'macos-x64'
           }
         }
         agent { label "web-coding-${PLATFORM}" }
@@ -35,6 +35,15 @@ pipeline {
               dir("verification/${PLATFORM}") {
                 script {
                   if (isUnix()) {
+                    sh '''
+                      node -e '
+                        const target = process.env.PLATFORM;
+                        if (target.startsWith("macos-") &&
+                            (process.platform !== "darwin" || process.arch !== target.slice(6))) {
+                          throw new Error("macOS CI Node architecture mismatch: " + process.platform + "/" + process.arch);
+                        }
+                      '
+                    '''
                     sh 'node --version'
                     sh 'git --version'
                     sh 'npm ci'

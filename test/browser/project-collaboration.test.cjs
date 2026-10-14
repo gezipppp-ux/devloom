@@ -201,6 +201,7 @@ async function main() {
       await page.getByRole("button", { name: title, exact: true }).click();
       assert.equal(page.url(), issueUrl, "browser Back returns to the list and opening restores the issue");
       await page.getByRole("button", { name: "编辑事项", exact: true }).click();
+      await visual(page);
       assert.equal(await editor(page).getByRole("button", { name: "撤销", exact: true }).isDisabled(), true, "opening saved content establishes the history baseline");
       await setMarkdown(page, type === "需求" ? "验收标准" : "复现步骤", "可重复验证的标准");
       await visual(page); await editor(page).locator('img[alt="pasted-proof.png"]').waitFor(); await captureEditor(page, output, `edit-${type === "Bug" ? "bug" : "requirement"}`);

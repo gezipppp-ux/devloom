@@ -45,7 +45,7 @@ Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install
 
 ## Verification
 
-Windows / Linux / macOS 环境和 Jenkins 节点配置见 [platform-verification.md](./platform-verification.md)；macOS 未接入 CI 矩阵，只作本机验证。
+Windows / Linux / macOS 环境和 Jenkins 节点配置见 [platform-verification.md](./platform-verification.md)；CI 矩阵包含 macOS arm64 与 x64，实际覆盖取决于对应节点是否接入并执行；模拟架构参数不能替代实机结果。
 
 Run the direct eslint and Node test commands from Jenkinsfile. Tests use Node's test runner, a fixture Codex process, isolated PostgreSQL and temporary real Git worktrees. Cover removed routes, manual tasks, image validation, failed startup, duplicate suppression and historical identity preservation. Never execute a real requirement for validation.
 

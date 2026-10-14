@@ -15,7 +15,7 @@ const editorFormId = useId();
 const props = defineProps({ projectId: { type: String, required: true }, canManage: Boolean, headerAction: Boolean });
 const endpoint = `/projects/${props.projectId}/members`;
 const { data, loading, saving, error, notice, reload, save } = useResource(() => appApi(endpoint));
-const selected = ref(null), form = reactive({ userId: "", permissions: [], status: "active" }), editorOpen = ref(false);
+const selected = ref(null), form = reactive({ userId: "", permissions: [], status: "active" }), editorOpen = ref(false), editorTrigger = ref(null);
 const candidate = computed(() => data.value?.candidates?.find(user => user.id === form.userId));
 const administratorAccess = computed(() => Boolean(selected.value?.administratorAccess ?? candidate.value?.administratorAccess));
 const ceiling = computed(() => selected.value?.grantablePermissions || candidate.value?.grantablePermissions || []);
@@ -31,8 +31,8 @@ function authorization(member) {
   return result.join('、') || translate('暂无有效授权');
 }
 function chooseUser() { form.permissions = !administratorAccess.value && ceiling.value.includes("project.view") ? ["project.view"] : []; }
-function restore(row) { edit(row); form.status = "active"; if (!administratorAccess.value && ceiling.value.includes("project.view") && !form.permissions.includes("project.view")) form.permissions.push("project.view"); }
-function edit(row) { if (!props.canManage || saving.value) return; editorOpen.value = true; selected.value = row; Object.assign(form, { userId: row?.userId || "", permissions: [...(row?.permissions || [])], status: row?.status || "active" }); }
+function restore(row, event) { edit(row, event); form.status = "active"; if (!administratorAccess.value && ceiling.value.includes("project.view") && !form.permissions.includes("project.view")) form.permissions.push("project.view"); }
+function edit(row, event) { if (!props.canManage || saving.value) return; editorTrigger.value = event?.currentTarget || null; editorOpen.value = true; selected.value = row; Object.assign(form, { userId: row?.userId || "", permissions: [...(row?.permissions || [])], status: row?.status || "active" }); }
 function submit() {
   const value = { permissions: form.permissions, status: form.status };
   if (selected.value) value.revision = selected.value.revision; else value.userId = form.userId;
@@ -41,11 +41,11 @@ function submit() {
 function closeEditor() { if (saving.value) return; editorOpen.value = false; selected.value = null; }
 watch(() => props.canManage, allowed => { if (!allowed) { editorOpen.value = false; selected.value = null; } });
 const creationDisabled = computed(() => loading.value || saving.value || editorOpen.value);
-defineExpose({ create: () => edit(null), creationDisabled });
+defineExpose({ create: event => edit(null, event), creationDisabled });
 </script>
 <template>
   <section class="project-members" :aria-label="$t('项目成员')">
-    <header v-if="!headerAction" class="project-heading"><div><h2 id="project-members-title">{{ $t('项目成员') }}</h2><p class="field-hint">{{ $t('围绕工作授权，让每位参与者都能顺畅协作。') }}</p></div><button v-if="canManage && !headerAction" class="primary" :disabled="creationDisabled" @click="edit(null)"><PlusOutlined aria-hidden="true" />{{ $t('添加成员') }}</button></header>
+    <header v-if="!headerAction" class="project-heading"><div><h2 id="project-members-title">{{ $t('项目成员') }}</h2><p class="field-hint">{{ $t('围绕工作授权，让每位参与者都能顺畅协作。') }}</p></div><button v-if="canManage && !headerAction" class="primary" :disabled="creationDisabled" @click="edit(null, $event)"><PlusOutlined aria-hidden="true" />{{ $t('添加成员') }}</button></header>
     <FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="notice" type="success" /><p v-if="loading" role="status">{{ $t('正在读取成员…') }}</p>
     <div v-if="data?.members.length" class="ui-table-wrap"><table class="ui-data-table ui-members-table">
       <thead><tr><th class="ui-table-title-column">{{ $t('参与者') }}</th><th>{{ $t('部门') }}</th><th>{{ $t('当前授权') }}</th><th><span class="sr-only">{{ $t('操作') }}</span></th></tr></thead>
@@ -53,12 +53,12 @@ defineExpose({ create: () => edit(null), creationDisabled });
         <td class="ui-table-title"><div class="ui-member-person"><PersonAvatar :name="member.displayName" /><div><strong>{{ member.displayName }}</strong><p>{{ member.username }}<span v-if="member.status !== 'active'" class="ui-member-status"> · {{ $t('已移除') }}</span></p></div></div></td>
         <td :data-label="$t('部门')">{{ member.administratorAccess ? $t('无需部门') : member.departmentName || $t('未分配部门') }}</td>
         <td :data-label="$t('当前授权')"><span class="ui-member-authorization" :title="permissionCatalog.filter(item => member.effectivePermissions.includes(item.id)).map(item => $t(item.label)).join('、')">{{ authorization(member) }}</span></td>
-        <td class="ui-table-action"><button v-if="canManage" :disabled="saving" :aria-label="member.status === 'active' ? $t('调整{p0}（{p1}）权限', { p0: member.displayName, p1: member.username }) : $t('恢复{p0}（{p1}）成员', { p0: member.displayName, p1: member.username })" @click="member.status === 'active' ? edit(member) : restore(member)">{{ member.status === 'active' ? $t('调整授权') : $t('恢复成员') }}</button></td>
+        <td class="ui-table-action"><button v-if="canManage" :disabled="saving" :aria-label="member.status === 'active' ? $t('调整{p0}（{p1}）权限', { p0: member.displayName, p1: member.username }) : $t('恢复{p0}（{p1}）成员', { p0: member.displayName, p1: member.username })" @click="member.status === 'active' ? edit(member, $event) : restore(member, $event)">{{ member.status === 'active' ? $t('调整授权') : $t('恢复成员') }}</button></td>
       </tr></tbody>
     </table></div>
     <p v-else-if="data && !loading" class="project-empty">{{ $t('暂无成员') }}</p>
     <button v-if="error && !data && !loading" @click="reload">{{ $t('重新加载') }}</button>
-    <ModalDialog class="project-member-dialog" :open="editorOpen && canManage"  @close="closeEditor" :title="selected ? (selected.status === 'disabled' ? $t('恢复成员') : $t('调整 {name} 的授权', { name: selected.displayName })) : $t('添加成员')">
+    <ModalDialog class="project-member-dialog" :open="editorOpen && canManage" :return-focus="editorTrigger" @close="closeEditor" :title="selected ? (selected.status === 'disabled' ? $t('恢复成员') : $t('调整 {name} 的授权', { name: selected.displayName })) : $t('添加成员')">
       <FeedbackMessage :message="error" type="error" />
       <form :id="editorFormId" class="project-form" @submit.prevent="submit">
         <p v-if="!form.userId" class="field-hint">{{ $t('普通成员的权限由部门上限与项目授权共同决定。管理员自动拥有全部权限，无需分配。') }}</p>

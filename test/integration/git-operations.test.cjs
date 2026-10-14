@@ -6,6 +6,7 @@ const { execFileSync } = require("node:child_process");
 const { temporary } = require("../support/helpers.cjs");
 const { readRepositoryStatus, fetchRepository, updateBaseBranch } = require("../../src/git/repository-operations.cjs");
 const { readTaskGit, deleteTaskWorktree } = require("../../src/git/task-operations.cjs");
+const { worktreeReason } = require("../../src/git/worktree-access.cjs");
 
 function command(directory, ...args) {
   return execFileSync("git", ["-C", directory, ...args], {
@@ -46,6 +47,23 @@ function fixture(t, remote = true, options = {}) {
 function confirmation(state, snapshot = readTaskGit(state)) {
   return { expectedHead: snapshot.head, statusToken: snapshot.statusToken, confirmBranch: snapshot.branch, discardChanges: true };
 }
+
+test("recorded worktree paths through directory aliases retain their Git identity and original spelling", async (t) => {
+  const { directory, repository, state } = fixture(t, false);
+  const alias = path.join(directory, "parent alias");
+  fs.symlinkSync(directory, alias, process.platform === "win32" ? "junction" : "dir");
+  const recorded = { worktree: { ...state.worktree, path: path.join(alias, "task tree") } };
+  const original = structuredClone(recorded);
+  assert.equal(worktreeReason(recorded), null);
+  const snapshot = readTaskGit(recorded);
+  assert.equal(snapshot.path, recorded.worktree.path);
+  assert.equal(snapshot.canDelete, true, snapshot.deleteReason);
+  assert.deepEqual(recorded, original, "path matching must not rewrite a saved session");
+  await deleteTaskWorktree(recorded, confirmation(recorded, snapshot));
+  assert.equal(fs.existsSync(state.worktree.path), false);
+  assert.equal(fs.existsSync(path.join(repository, "file.txt")), true);
+  assert.ok(worktreeReason(recorded), "a deleted alias target must remain read-only");
+});
 
 test("fetch refreshes local refs and ff-only update changes only the current clean base branch", async (t) => {
   const { directory, repository, state } = fixture(t);

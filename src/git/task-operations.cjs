@@ -4,7 +4,7 @@ const { createHash } = require("node:crypto");
 const { git, gitAsync } = require("./command.cjs");
 const { repositoryGit, repositoryCommonDirectory } = require("./repository.cjs");
 const { absolutePath, samePath } = require("../shared/paths.cjs");
-const { operationReason, registeredWorktrees } = require("./operation-state.cjs");
+const { operationReason, registeredWorktrees, sameWorktreePath } = require("./operation-state.cjs");
 
 function taskIdentity(state) {
   const tree = state.worktree;
@@ -19,7 +19,7 @@ function taskIdentity(state) {
 
 function inspectWorktree(state) {
   const tree = taskIdentity(state);
-  const entry = registeredWorktrees(tree.repository).find((candidate) => samePath(candidate.path, tree.path));
+  const entry = registeredWorktrees(tree.repository).find((candidate) => sameWorktreePath(candidate.path, tree.path));
   if (!entry || entry.prunable)
     throw new Error("原 Worktree 已移除或不再属于原仓库。");
   if (fs.lstatSync(tree.path).isSymbolicLink() || !fs.lstatSync(path.join(tree.path, ".git")).isFile())

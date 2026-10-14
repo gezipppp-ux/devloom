@@ -3,11 +3,14 @@ const os = require('node:os');
 const path = require('node:path');
 
 function temporary(t) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tapd-test-'));
+  // macOS exposes /var through /private/var. Git and child cwd report the
+  // physical path, so ordinary fixtures should use that same spelling.
+  const root = fs.realpathSync.native(os.tmpdir());
+  const directory = fs.mkdtempSync(path.join(root, 'tapd-test-'));
   t.after(() => {
     const resolved = path.resolve(directory);
     if (
-      path.dirname(resolved) !== path.resolve(os.tmpdir()) ||
+      path.dirname(resolved) !== root ||
       !path.basename(resolved).startsWith('tapd-test-')
     )
       throw new Error('Unexpected test cleanup path.');

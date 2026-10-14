@@ -153,7 +153,7 @@ async function verifyAgentSuppliers(page, output) {
   assert.equal(await dialog.getByLabel("支持的思考强度", { exact: true }).inputValue(), "high");
   assert.equal(await selectValue(dialog.getByLabel("默认思考强度", { exact: true })), "high");
   const effortInput = dialog.getByLabel("支持的思考强度", { exact: true });
-  await effortInput.press("End");
+  await effortInput.press(process.platform === "darwin" ? "Meta+ArrowRight" : "End");
   await effortInput.pressSequentially(", ");
   assert.equal(await effortInput.inputValue(), "high, ", "typing preserves separators until the next effort is entered");
   await effortInput.pressSequentially("medium");

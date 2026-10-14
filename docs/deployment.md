@@ -51,7 +51,26 @@ npm run db:deploy
 
 ## macOS
 
-macOS（Intel 或 Apple Silicon）的安装、构建和启动命令与 Linux 相同；macOS 未接入 Jenkins 矩阵，本机结果不能替代双平台 CI 结论。除通用要求外注意：
+macOS 支持 Apple Silicon（arm64）和 Intel（x64），安装、构建和启动使用同一份源码与锁文件。Jenkins 已配置两个独立架构的验证入口，需分别配置对应节点；只有实际执行的结果才算验证通过。
+
+| 机器 | 原生 Node.js 架构（`node -p process.arch`） | Homebrew 默认目录 |
+| --- | --- | --- |
+| Apple Silicon | `arm64` | `/opt/homebrew` |
+| Intel | `x64` | `/usr/local` |
+
+在服务账号下安装 Homebrew 后，可按以下方式准备 Node.js 22 LTS 与 Git；`brew --prefix` 同时适用于两种架构：
+
+```sh
+brew install node@22 git
+export PATH="$(brew --prefix node@22)/bin:$(brew --prefix)/bin:$PATH"
+node -p 'process.platform + "/" + process.arch + " " + process.version'
+git --version
+npm install --global @openai/codex
+```
+
+Apple Silicon 建议使用原生 arm64 终端、Node.js 和 Homebrew；Rosetta 下的 x64 Node 会按 Intel 环境运行并选择 x64 npm 原生依赖。切换 Node.js 架构或主版本后，在应用目录重新执行 `npm ci` 和 `npm run build`，不要在两种架构间复制 `node_modules`、`generated` 或浏览器缓存。锁文件包含两种 macOS 架构的 Vite/Rolldown 原生依赖，安装时保留 npm optional dependencies。
+
+PostgreSQL 17 可使用本机服务或 Docker Desktop。仓库 Compose 的 `postgres:17` 镜像支持 amd64/arm64，按宿主机选择，不要强制指定 `linux/amd64`。使用 Docker 时：
 
 ```sh
 export POSTGRES_PASSWORD='替换为独立随机密码'
@@ -61,13 +80,66 @@ docker compose exec postgres createdb -U web_coding test_web_coding
 export TEST_DATABASE_URL='postgresql://web_coding:替换为URL编码密码@127.0.0.1:5432/test_web_coding'
 ```
 
-- 使用满足要求的 Node.js LTS（22.13+）。切换 Node.js 主版本后删除 `node_modules` 重新 `npm ci`，不要复用另一版本的依赖目录。
-- Codex CLI 用 `npm i -g @openai/codex` 或 Homebrew 安装，并在服务账号下完成 `codex login`。自动查找已覆盖 Intel Mac 的 `/usr/local/bin`；Apple Silicon 的 `/opt/homebrew/bin` 不在回退列表内，需让它在服务账号 `PATH` 中可见，或设置 `CODEX_BIN`。
-- 初始化向导的「环境检测」在 macOS 不提供安装／更新按钮，缺失工具需自行安装后重新检测；Codex 登录可在向导中选择稍后完成。
+- 使用满足要求的 Node.js LTS（22.13+），并执行通用安装步骤中的 `npm ci`、`npm run build`、`npm run db:deploy` 和 `npm start`。
+- Codex CLI 也可用 Homebrew 安装。使用服务器现有认证时在服务账号下完成 `codex login`；系统 API Key 供应商遵循 [Agent 供应商](engineering/agent-suppliers.md)。自动查找保留显式配置与服务 PATH 的优先级；arm64 进程额外搜索 `/opt/homebrew/bin`，Intel/Rosetta 使用 `/usr/local/bin`。自定义安装可设置 `CODEX_BIN`。
+- npm 在 PATH 中缺失时会检查当前 Node 所在目录及其 `lib/node_modules/npm`，支持 Homebrew 与 nvm 的标准布局；npm 脚本通过当前 Node 执行。
+- 环境检测支持确认归属的 npm 全局 Codex 安装／更新及 npm 更新；Homebrew 管理的 Codex、Git 与 Node.js 使用原安装工具维护，页面不会用 npm 覆盖 Homebrew 二进制，也不会自动提权。Codex 登录可在向导中选择稍后完成。
 - 数据目录与成员目录不要放在桌面、文稿、下载或 iCloud 同步目录：终端或 launchd 启动的服务进程会触发 macOS 隐私授权，云同步还会干扰 `node_modules`、`.git` 和 worktree。
-- 常驻服务可用 launchd，但需显式提供绝对路径的 `PATH`、`CODEX_BIN` 和 `RUNNER_DATA_DIR`，不会读取交互式 shell 的 nvm 或 Homebrew 初始化。
+- 常驻服务可用下方的 launchd 配置，需显式提供 `PATH` 与固定的 `RUNNER_DATA_DIR`；launchd 不会读取交互式 shell 的 nvm 或 Homebrew 初始化。Git、初始化命令和目标项目工具都依赖服务 PATH。
 - macOS 默认 APFS 大小写不敏感，而路径身份比较只在 Windows 下忽略大小写；同一数据根、仓库或 worktree 只按一种写法配置。
 - 若拉取镜像时报 `error getting credentials`（Docker Desktop 的 `credsStore` 凭据助手异常，公共镜像并不需要凭据），可让本次命令使用不含该字段的配置目录：`DOCKER_CONFIG=/path/to/config docker compose up -d postgres`，其中 `config/config.json` 只保留 `{"auths":{}}`、`{"currentContext":"desktop-linux"}`，并把 `~/.docker/cli-plugins` 链接到该目录的 `cli-plugins`；也可以直接重启 Docker Desktop 修复凭据助手。
+
+### macOS 登录后常驻服务
+
+以下 LaunchAgent 示例在服务账号登录后运行，退出登录会停止。将 `runner`、安装位置和 Node 路径替换为实际值；Intel 将 `/opt/homebrew` 换为 `/usr/local`，nvm 则使用当前版本的绝对路径。先在安装目录 `.env` 中配置 `DATABASE_URL` 与固定的绝对 `RUNNER_DATA_DIR`，完成构建和迁移。`.env` 只允许服务账号读取，不提交到仓库。
+
+先创建目录，再将配置保存为 `~/Library/LaunchAgents/com.web-coding.plist`：
+
+```sh
+mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs/web-coding"
+```
+
+plist 不会展开 `~`、`$HOME` 或 shell 命令：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.web-coding</string>
+  <key>WorkingDirectory</key><string>/Users/runner/apps/web-coding</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/opt/node@22/bin/node</string>
+    <string>--env-file=/Users/runner/apps/web-coding/.env</string>
+    <string>/Users/runner/apps/web-coding/src/cli/web.cjs</string>
+    <string>--host</string><string>127.0.0.1</string>
+    <string>--port</string><string>4317</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>ExitTimeOut</key><integer>120</integer>
+  <key>StandardOutPath</key><string>/Users/runner/Library/Logs/web-coding/stdout.log</string>
+  <key>StandardErrorPath</key><string>/Users/runner/Library/Logs/web-coding/stderr.log</string>
+</dict>
+</plist>
+```
+
+在服务账号的终端执行：
+
+```sh
+plutil -lint "$HOME/Library/LaunchAgents/com.web-coding.plist"
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.web-coding.plist"
+# 停止服务；更新或修改 plist 后先停止，再重新 bootstrap
+launchctl bootout "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.web-coding.plist"
+```
+
+修改运行环境前等待任务空闲。安装目录可以调整，数据库、数据根、业务仓库与已有 worktree 路径保持原位。
 
 ## 持久化与配置
 
@@ -99,9 +171,9 @@ Web 与 CLI 自动定位 Codex 的顺序：
 1. `agent.options.command`，其次环境变量 `CODEX_BIN`。显式配置不可用时直接提示修正，不回退到其他程序。
 2. 服务进程的 `PATH`。
 3. 当前 Node 所在目录、`~/.local/bin`、`~/.npm-global/bin`。
-4. Linux/macOS 的 `/usr/local/bin`、`/usr/bin`、`/bin`；Windows 的 `%APPDATA%/npm` 和 `%LOCALAPPDATA%/OpenAI/Codex/bin`（包含按修改时间从新到旧检查的版本子目录）。
+4. macOS arm64 先检查 `/opt/homebrew/bin`；随后 Linux/macOS 检查 `/usr/local/bin`、`/usr/bin`、`/bin`。macOS x64 不自动搜索 arm64 Homebrew 目录。Windows 检查 `%APPDATA%/npm` 和 `%LOCALAPPDATA%/OpenAI/Codex/bin`（包含按修改时间从新到旧检查的版本子目录）。
 
-Linux 候选必须具有执行权限；npm 的 `codex.js` 入口通过当前 Node 启动，避免依赖 shell 初始化。Windows 标准 npm `codex.cmd` 也使用相邻 `node_modules/@openai/codex/bin/codex.js`，不会执行任意 `.cmd`、`.bat`、`.ps1` 内容。
+Linux/macOS 候选必须具有执行权限；npm 的 `codex.js` 入口通过当前 Node 启动，避免依赖 shell 初始化。Windows 标准 npm `codex.cmd` 也使用相邻 `node_modules/@openai/codex/bin/codex.js`，不会执行任意 `.cmd`、`.bat`、`.ps1` 内容。
 
 迁移到 Linux 时删除原 Windows 的 `agent.options.command`（以及与原安装绑定的 `agent.options.command_args`），再启用自动查找。systemd 不会自动读取 `.bashrc` 或 nvm 初始化脚本；如果 Codex 安装在另一套 Node 或自定义目录中，需要在 service 中添加该目录到 `PATH`，或设置 `Environment=CODEX_BIN=/absolute/path/to/codex`。修改 service 后执行 `systemctl daemon-reload` 并重启服务；Web 中保存工作区配置无需重启；手动修改 Codex 启动程序路径后需要重启。
 
@@ -161,7 +233,7 @@ ssh -N -L 4317:127.0.0.1:4317 runner@your-server
 
 ## 验证
 
-初始化和 CLI 超时/停止时，Linux 终止独立进程组，Windows 使用 `taskkill /t` 清理普通子进程树。初始化适用于安装、构建等有明确结束时间的命令；主动脱离进程组的守护程序需要由独立服务管理。
+初始化和 CLI 超时/停止时，Linux/macOS 终止独立进程组，Windows 使用 `taskkill /t` 清理普通子进程树。初始化适用于安装、构建等有明确结束时间的命令；主动脱离进程组的守护程序需要由独立服务管理。
 
 ```sh
 npm run db:generate
@@ -179,6 +251,6 @@ node test/browser/accounts.test.cjs
 
 浏览器 smoke 在 Linux/macOS 默认使用 Playwright Chromium；Windows 默认使用本机 Edge。`BROWSER_CHANNEL` 可显式选择已安装的浏览器渠道。执行核心与 HTTP 测试不依赖浏览器或真实模型。
 
-完整检查由 Jenkinsfile 按上述同一顺序执行，并额外包含视觉截图。双平台 CI 节点准备和运行步骤见 [平台验证说明](engineering/platform-verification.md)。
+完整检查由 Jenkinsfile 按上述同一顺序执行，并额外包含视觉截图。Windows / Linux / macOS 双架构 CI 节点准备和运行步骤见 [平台验证说明](engineering/platform-verification.md)。
 
 Ubuntu 26.04 使用当前 Playwright 版本安装测试浏览器时，需要显式选择兼容下载目标；具体命令见平台验证说明中的 Ubuntu 26.04 小节。

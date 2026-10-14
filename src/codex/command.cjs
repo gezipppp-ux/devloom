@@ -5,6 +5,7 @@ const { absolutePath } = require('../shared/paths.cjs');
 
 function resolveCodex(config = {}, options = {}) {
   const platform = options.platform || process.platform;
+  const arch = options.arch || process.arch;
   const env = options.env || process.env;
   const home = options.home || os.homedir();
   const node = options.node || process.execPath;
@@ -136,12 +137,15 @@ function resolveCodex(config = {}, options = {}) {
       }
     }
   } else {
+    // Homebrew uses a separate prefix on Apple Silicon. Follow the Node
+    // process architecture so an Intel/Rosetta process keeps its Intel tools.
+    if (platform === 'darwin' && arch === 'arm64') fallback.push('/opt/homebrew/bin');
     fallback.push('/usr/local/bin', '/usr/bin', '/bin');
   }
   result = search('codex', fallback);
   if (result) return result;
   throw Object.assign(new Error(
-    '未找到 Codex CLI。请为运行服务的用户安装并登录 Codex，将其目录加入服务 PATH，或设置 CODEX_BIN / codex.command 为可执行文件绝对路径。systemd 不会自动读取终端的 nvm 初始化配置；修改后请重启服务。',
+    '未找到 Codex CLI。请为运行服务的用户安装并登录 Codex，将其目录加入服务 PATH，或设置 CODEX_BIN / codex.command 为可执行文件绝对路径。systemd / launchd 不会自动读取终端的 nvm 或 Homebrew 初始化配置；修改后请重启服务。',
   ), { code: 'TOOL_NOT_FOUND' });
 }
 

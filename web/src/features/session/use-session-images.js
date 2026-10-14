@@ -24,6 +24,8 @@ export function useSessionImages({ active, canSend }) {
     generation++;
     for (const controller of controllers.values()) controller.abort();
     controllers.clear();
+    // A late response from the previous draft must not hold the new queue.
+    uploadQueue = Promise.resolve();
     for (const image of images.value) URL.revokeObjectURL(image.preview);
     images.value = [];
     error.value = "";

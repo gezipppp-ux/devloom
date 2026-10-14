@@ -14,23 +14,25 @@ const route = useRoute(), router = useRouter();
 const scopeOpen = computed(() => Boolean(route.query.release));
 const includeArchived = ref(false), editing = ref(false);
 const form = reactive({ id: "", name: "", description: "", targetDate: "", revision: 0 });
-const nameInput = ref();
+const nameInput = ref(), editorTrigger = ref(null);
 const archiveDialog = ref(), archiveTarget = ref(null);
+let archiveTrigger;
 const endpoint = `/projects/${props.projectId}/releases`;
 const { data, loading, saving, error, notice, reload, save } = useResource(() => appApi(`${endpoint}?includeArchived=${scopeOpen.value || includeArchived.value}`));
 const nameTouched = ref(false);
 const releases = computed(() => data.value?.items || []);
 const selectedRelease = computed(() => releases.value.find(release => release.id === route.query.release));
 const controlsLocked = computed(() => loading.value || saving.value || editing.value);
-defineExpose({ create: () => edit(), creationDisabled: controlsLocked });
+defineExpose({ create: event => edit({}, event), creationDisabled: controlsLocked });
 const namePattern = new RegExp(`^(?:${releaseNameRules.pattern})$`);
 const nameInvalid = computed(() => form.name.length > releaseNameRules.maxLength || form.name !== form.name.trim() || !namePattern.test(form.name));
 watch(() => props.canManage, allowed => {
   if (!allowed) { editing.value = false; closeArchive(); }
 });
 watch(() => route.query.release, () => { editing.value = false; closeArchive(); });
-async function edit(release = {}) {
+async function edit(release = {}, event) {
   if (!props.canManage || saving.value) return;
+  editorTrigger.value = event?.currentTarget || null;
   Object.assign(form, { id: "", name: "", description: "", targetDate: "", revision: 0 }, release, { targetDate: release.targetDate || "" });
   nameTouched.value = false;
   editing.value = true;
@@ -52,13 +54,17 @@ function submit() {
   if (nameInvalid.value) return;
   return save(`${endpoint}${form.id ? `/${form.id}` : ''}`, { name: form.name, description: form.description, targetDate: form.targetDate || null, ...(form.id ? { revision: form.revision } : {}) }, () => { editing.value = false; void reload(); });
 }
-function requestArchive(release) {
+function requestArchive(release, event) {
+  archiveTrigger = event?.currentTarget;
   archiveTarget.value = { ...release };
   archiveDialog.value.showModal();
 }
 function closeArchive() {
+  const wasOpen = archiveDialog.value?.open;
   archiveDialog.value?.close();
   archiveTarget.value = null;
+  if (wasOpen && archiveTrigger?.isConnected) archiveTrigger.focus();
+  archiveTrigger = null;
 }
 function archive(release) {
   if (!props.canManage || !release) return;
@@ -71,7 +77,7 @@ function archive(release) {
     <template v-if="!scopeOpen">
     <header v-if="!headerAction" class="project-heading release-heading">
       <div><div class="release-title"><h2 id="project-releases-title">{{ $t("版本") }}</h2><span v-if="data" class="release-count" :aria-label="$t('版本数量')">{{ releases.length }}</span></div><p class="field-hint">{{ $t("用清晰的范围，推动每一次交付。") }}</p></div>
-      <button v-if="canManage && !headerAction" class="primary" :disabled="controlsLocked" @click="edit()"><PlusOutlined aria-hidden="true" />{{ $t("新建版本") }}</button>
+      <button v-if="canManage && !headerAction" class="primary" :disabled="controlsLocked" @click="edit({}, $event)"><PlusOutlined aria-hidden="true" />{{ $t("新建版本") }}</button>
     </header>
     <div class="release-toolbar"><span v-if="projectName" class="release-project-badge">{{ projectName }}</span><div class="actions"><button class="release-quiet-button" :aria-label="$t('刷新版本')" :title="$t('刷新版本')" :disabled="controlsLocked" @click="reload"><ReloadOutlined aria-hidden="true" /></button><label class="release-archive-filter"><input v-model="includeArchived" type="checkbox" :aria-label="$t('包含已归档版本')" :disabled="controlsLocked" @change="reload" /><ClockCircleOutlined aria-hidden="true" />{{ $t('显示已归档') }}</label></div></div>
     <p v-if="loading" class="release-placeholder" role="status">{{ $t("正在读取版本…") }}</p>
@@ -86,9 +92,9 @@ function archive(release) {
     <div v-else class="release-empty"><TagOutlined aria-hidden="true" /><h3>{{ $t("暂无版本") }}</h3><p>{{ canManage ? $t("创建第一个版本，安排项目的交付内容。") : $t("项目尚未创建版本，可先查看未排期事项。") }}</p></div>
     <p class="release-note"><InfoCircleOutlined aria-hidden="true" /><span>{{ $t("归档要求所有事项已完成或取消，并且没有未结束开发任务。归档版本中的事项与任务只读。") }}</span></p>
     </template>
-    <ProjectReleaseDetail v-else-if="selectedRelease" :project-id="projectId" :project-name="projectName" :release="selectedRelease" :can-manage="canManage" :disabled="controlsLocked" @back="back" @edit="edit(selectedRelease)" @archive="selectedRelease.status === 'archived' ? archive(selectedRelease) : requestArchive(selectedRelease)" />
+    <ProjectReleaseDetail v-else-if="selectedRelease" :project-id="projectId" :project-name="projectName" :release="selectedRelease" :can-manage="canManage" :disabled="controlsLocked" @back="back" @edit="edit(selectedRelease, $event)" @archive="selectedRelease.status === 'archived' ? archive(selectedRelease) : requestArchive(selectedRelease, $event)" />
     <div v-else><p role="status">{{ loading ? $t('正在读取版本…') : $t('版本不可查看或已移出当前列表。') }}</p><button @click="back">{{ $t('返回版本') }}</button><button v-if="error" @click="reload">{{ $t('重试') }}</button><FeedbackMessage :message="error" type="error" /></div>
-    <ModalDialog :open="editing && canManage" :title="form.id ? $t('编辑版本') : $t('新建版本')" @close="cancelEdit">
+    <ModalDialog :open="editing && canManage" :return-focus="editorTrigger" :title="form.id ? $t('编辑版本') : $t('新建版本')" @close="cancelEdit">
       <FeedbackMessage :message="error" type="error" />
       <form class="project-form release-form" @submit.prevent="submit">
         <div>

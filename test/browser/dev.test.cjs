@@ -109,7 +109,8 @@ process.on('exit', () => record('exit'));
 }
 
 async function main() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "web-coding-dev-"));
+  const temporaryRoot = fs.realpathSync.native(os.tmpdir());
+  const directory = fs.mkdtempSync(path.join(temporaryRoot, "web-coding-dev-"));
   const processFile = path.join(directory, "processes.jsonl");
   const records = () =>
     fs.existsSync(processFile)
@@ -329,7 +330,7 @@ async function main() {
     }
     for (const cleanup of databaseCleanup) await cleanup();
     const resolved = path.resolve(directory);
-    assert.equal(path.dirname(resolved), path.resolve(os.tmpdir()));
+    assert.equal(path.dirname(resolved), temporaryRoot);
     assert.ok(path.basename(resolved).startsWith("web-coding-dev-"));
     const junction = path.join(resolved, "node_modules");
     if (fs.existsSync(junction)) {

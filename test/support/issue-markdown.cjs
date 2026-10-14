@@ -22,7 +22,7 @@ async function visual(page, label = "描述") {
 async function pasteImage(page, label = "描述", name = "pasted-proof.png", plain = "") {
   const content = await visual(page, label);
   await content.click();
-  await content.press("ControlOrMeta+End");
+  await content.press(process.platform === "darwin" ? "Meta+ArrowDown" : "Control+End");
   await content.evaluate((element, { data, name, plain }) => {
     const bytes = Uint8Array.from(atob(data), character => character.charCodeAt(0));
     const transfer = new DataTransfer();

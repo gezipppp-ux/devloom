@@ -81,6 +81,48 @@ test('Linux service without login PATH finds user installation and Node sibling 
   });
 });
 
+for (const [arch, prefix] of [['arm64', '/opt/homebrew'], ['x64', '/usr/local']]) {
+  test(`macOS ${arch} service finds the matching Homebrew Codex without a login PATH`, () => {
+    const options = { ...host('darwin', {
+      '/opt/homebrew/bin/codex': {},
+      '/usr/local/bin/codex': {},
+    }, { PATH: '/usr/bin:/bin' }), arch };
+    assert.equal(resolveCodex({}, options).command, `${prefix}/bin/codex`);
+  });
+
+  test(`macOS ${arch} Homebrew npm symlink uses the running Node and literal arguments`, () => {
+    const script = `${prefix}/lib/node_modules/@openai/codex/bin/codex.js`;
+    const options = { ...host('darwin', {
+      [`${prefix}/bin/codex`]: { target: script },
+      '/opt/node/bin/node': {},
+    }), arch };
+    assert.deepEqual(resolveCodex({ command_args: ['argument with spaces', '$literal'] }, options), {
+      command: '/opt/node/bin/node', args: [script, 'argument with spaces', '$literal'],
+    });
+  });
+}
+
+test('macOS Homebrew discovery preserves PATH and explicit overrides, and checks execution permission', () => {
+  const options = { ...host('darwin', {
+    '/custom tools/codex': {},
+    '/chosen/codex': {},
+    '/opt/homebrew/bin/codex': { executable: false },
+    '/usr/local/bin/codex': {},
+  }, { PATH: ':relative:/custom tools' }), arch: 'arm64' };
+  assert.equal(resolveCodex({}, options).command, '/custom tools/codex');
+  assert.equal(resolveCodex({}, { ...options, env: { CODEX_BIN: '/chosen/codex' } }).command, '/chosen/codex');
+  assert.throws(() => resolveCodex({}, { ...options, env: { CODEX_BIN: '/missing/codex' } }), /指定的命令不可用/);
+  assert.equal(resolveCodex({}, { ...options, env: {} }).command, '/usr/local/bin/codex');
+});
+
+test('Intel/Rosetta and Linux do not automatically select the Apple Silicon Homebrew prefix', () => {
+  for (const [platform, arch] of [['darwin', 'x64'], ['linux', 'arm64']]) {
+    assert.throws(() => resolveCodex({}, {
+      ...host(platform, { '/opt/homebrew/bin/codex': {} }), arch,
+    }), { code: 'TOOL_NOT_FOUND' });
+  }
+});
+
 test('explicit config and CODEX_BIN take precedence; invalid cross-platform config never silently falls back', () => {
   const options = host(
     'linux',

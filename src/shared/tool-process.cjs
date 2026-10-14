@@ -27,37 +27,49 @@ function runTool(command, args, { timeout = 15000, env = process.env } = {}) {
   });
 }
 
-function findExecutable(name) {
-  const key = Object.keys(process.env).find(key => key.toUpperCase() === "PATH");
-  for (const directory of (process.env[key] || "").split(path.delimiter)) {
-    const absolute = directory.replace(/^"(.*)"$/, "$1");
-    if (!path.isAbsolute(absolute)) continue;
-    const file = path.join(absolute, name);
+function findExecutable(name, { platform = process.platform, env = process.env, fs: io = fs, fallbackDirectories = [] } = {}) {
+  const windows = platform === "win32";
+  const paths = windows ? path.win32 : path.posix;
+  const key = Object.keys(env).find(key => windows ? key.toUpperCase() === "PATH" : key === "PATH");
+  for (const directory of [...(env[key] || "").split(paths.delimiter), ...fallbackDirectories]) {
+    const absolute = windows ? directory.replace(/^"(.*)"$/, "$1") : directory;
+    if (!paths.isAbsolute(absolute)) continue;
+    const file = paths.join(absolute, name);
     try {
       // Windows App Execution Aliases cannot be dereferenced with stat/realpath,
       // but CreateProcess can launch their registered application.
-      if (process.platform === "win32" && name === "winget.exe" &&
-          path.resolve(absolute).toLowerCase() === path.resolve(process.env.LOCALAPPDATA || "", "Microsoft/WindowsApps").toLowerCase() &&
-          fs.lstatSync(file).isSymbolicLink()) return file;
-      if (fs.statSync(file).isFile()) {
-        fs.accessSync(file, process.platform === "win32" ? fs.constants.F_OK : fs.constants.X_OK);
-        return fs.realpathSync(file);
+      if (windows && name === "winget.exe" &&
+          paths.resolve(absolute).toLowerCase() === paths.resolve(env.LOCALAPPDATA || "", "Microsoft/WindowsApps").toLowerCase() &&
+          io.lstatSync(file).isSymbolicLink()) return file;
+      if (io.statSync(file).isFile()) {
+        io.accessSync(file, windows ? fs.constants.F_OK : fs.constants.X_OK);
+        return io.realpathSync(file);
       }
     } catch { /* Continue through PATH. */ }
   }
   return null;
 }
 
-function npmCommand() {
-  const file = findExecutable(process.platform === "win32" ? "npm.cmd" : "npm");
+function npmCommand({ platform = process.platform, env = process.env, node = process.execPath, fs: io = fs } = {}) {
+  const windows = platform === "win32";
+  const paths = windows ? path.win32 : path.posix;
+  const nodeDirectory = paths.dirname(node);
+  const file = findExecutable(windows ? "npm.cmd" : "npm", { platform, env, fs: io, fallbackDirectories: [nodeDirectory] });
   // nvm 2 uses native proxy executables instead of npm.cmd on PATH.
-  const script = file ? (process.platform === "win32" ? path.join(path.dirname(file), "node_modules/npm/bin/npm-cli.js") : file)
-    : path.join(path.dirname(process.execPath), "node_modules/npm/bin/npm-cli.js");
-  if (!file && !fs.existsSync(script))
+  // POSIX Node distributions keep npm under <prefix>/lib, including nvm and
+  // Homebrew's versioned Cellar directories. launchd may omit their bin from PATH.
+  const script = file ? (windows ? paths.join(paths.dirname(file), "node_modules/npm/bin/npm-cli.js") : file)
+    : paths.join(nodeDirectory, windows ? "" : "../lib", "node_modules/npm/bin/npm-cli.js");
+  const readable = () => {
+    try { io.accessSync(script, fs.constants.R_OK); return io.statSync(script).isFile(); }
+    catch { return false; }
+  };
+  if (!file && !readable())
     throw Object.assign(new Error("未找到可用的 npm 启动入口，请使用 Node.js 原安装工具修复 npm。"), { code: "TOOL_NOT_FOUND" });
-  if (path.basename(script) !== "npm-cli.js" || !fs.existsSync(script))
+  if (paths.basename(script) !== "npm-cli.js" || !readable())
     throw new Error("未识别 npm 安装方式，请使用原安装工具管理。");
-  return { command: process.execPath, args: [script], script: fs.realpathSync(script) };
+  const resolved = io.realpathSync(script);
+  return { command: node, args: [resolved], script: resolved };
 }
 
 function sameFile(left, right) {

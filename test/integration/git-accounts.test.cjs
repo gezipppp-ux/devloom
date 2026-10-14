@@ -26,7 +26,7 @@ const { gitRemote } = require("../support/git-remote.cjs");
 const execute = promisify(execFile);
 
 async function fixture(t, options) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "web-coding-git-accounts-"));
+  const directory = fs.mkdtempSync(path.join(fs.realpathSync.native(os.tmpdir()), "web-coding-git-accounts-"));
   let database, remote;
   t.after(async () => { await remote?.close(); await database?.close(); fs.rmSync(directory, { recursive: true, force: true, maxRetries: 3 }); });
   database = await initializeTestDatabase(t, directory);

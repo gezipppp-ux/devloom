@@ -321,6 +321,7 @@ async function main() {
     await page.getByRole("combobox", { name: "权限模式", exact: true }).click();
     assert.equal(await page.locator('.ant-select-item-option:has(.app-select-option[data-value="ask"])').getAttribute('aria-selected'), 'true');
     await page.keyboard.press("Escape");
+    await page.getByRole("option").first().waitFor({ state: "hidden" });
     await page.screenshot({
       path: path.join(output, "workspace-rail-desktop.png"),
       fullPage: true,

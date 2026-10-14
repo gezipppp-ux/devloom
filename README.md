@@ -66,7 +66,7 @@ CLI Agent 已通过独立适配层接入，目前仅支持 Codex。项目协作�
 
 | 项目 | 要求 | 用途 |
 | --- | --- | --- |
-| 操作系统 | Windows、Linux 或 macOS（Intel / Apple Silicon），使用可写的本地安装与数据目录 | 应用运行与任务执行；Windows 与 Linux 有对应 CI 配置，macOS 仅按本机方式验证 |
+| 操作系统 | Windows、Linux 或 macOS（Intel / Apple Silicon），使用可写的本地安装与数据目录 | 应用运行与任务执行；CI 配置覆盖 Windows、Linux、macOS arm64/x64，需对应实机节点 |
 | Node.js | **22.13.0 或更高版本**，使用 22 LTS 或 24 以上的偶数主版本 | 后端、Vite 构建与脚本运行；Prisma 7 拒绝 Node 21、23 等非 LTS 主版本，`npm ci` 会直接失败 |
 | npm | 随 Node.js 安装，并能访问 npm registry | 按锁文件安装依赖 |
 | PostgreSQL | **17**（当前验证版本），独立数据库及账号 | 业务数据、会话、日志和附件持久化 |
@@ -86,7 +86,7 @@ CLI Agent 已通过独立适配层接入，目前仅支持 Codex。项目协作�
 
 管理员登录后可打开「系统设置 → 环境检测」（`/system?tab=environment`，旧地址 `/environment` 自动跳转），检测服务端 Codex CLI、npm、Git、Node.js 的版本、Codex 登录状态和目录写权限。点击「检查最新版本」查询官方来源；Node.js 以最新 LTS 为更新目标，网络异常会显示检查失败。
 
-标准 npm 全局安装的 Codex CLI、npm 可在页面确认后更新到展示的确切版本；执行中或等待审批的任务、克隆会阻止更新，更新期间暂不接受新的写入操作。关闭页面不会取消安装，返回页面可继续查看进度。安装使用当前服务账号权限，不自动提权；失败后请检查网络、目录权限和 Node.js 兼容性。Windows 的 Node.js 支持 nvm 1/2 或已识别的 winget 安装，Git 支持已识别的 winget 安装，均使用同一更新按钮。macOS（Intel 或 Apple Silicon）可运行服务，但未接入自动安装器：Git、Node.js 与 Codex CLI 需用 Homebrew 或 npm 在服务账号下安装，环境检测只显示版本和更新计划并禁用安装按钮。Node.js 完成后显示「已安装，待重启生效」；重启服务后才使用新运行时，跨主版本升级还需重新安装应用依赖。其他平台或无法确认归属的安装禁用按钮并说明原因，不展示更新指引。已有会话不会自动执行。
+标准 npm 全局安装的 Codex CLI、npm 可在页面确认后更新到展示的确切版本；执行中或等待审批的任务、克隆会阻止更新，更新期间暂不接受新的写入操作。关闭页面不会取消安装，返回页面可继续查看进度。安装使用当前服务账号权限，不自动提权；失败后请检查网络、目录权限和 Node.js 兼容性。Windows 的 Node.js 支持 nvm 1/2 或已识别的 winget 安装，Git 支持已识别的 winget 安装，均使用同一更新按钮。macOS（Intel 或 Apple Silicon）支持确认归属的 npm 全局 Codex 安装／更新及 npm 更新；Homebrew 管理的 Codex、Git 与 Node.js 使用原安装工具维护。Codex 自动查找覆盖 Apple Silicon 的 `/opt/homebrew/bin` 与 Intel 的 `/usr/local/bin`；npm 也会检查当前 Node 的安装目录。双架构安装与 launchd 配置见 [macOS 部署](docs/deployment.md#macos)。Node.js 完成后显示「已安装，待重启生效」；重启服务后才使用新运行时，跨主版本升级还需重新安装应用依赖。其他平台或无法确认归属的安装禁用按钮并说明原因，不展示更新指引。已有会话不会自动执行。
 
 基础检测不验证所有业务工具链、SSH 和外部服务网络连通性；仍需按实际项目配置。
 
@@ -397,7 +397,7 @@ shared/             # 前后端共用的数据契约
 config/             # 配置示例，不是生产配置来源
 test/               # 架构、单元、集成与浏览器测试
 docs/               # 使用、部署与工程文档
-Jenkinsfile         # Windows / Linux CI 流水线
+Jenkinsfile         # Windows / Linux / macOS arm64 与 x64 CI 流水线
 ```
 
 开发、重构或代码审查前，请阅读 [AGENTS.md](AGENTS.md)、[工程契约索引](docs/engineering/index.md) 与相关契约。提交使用 Conventional Commits 和中文描述。不要提交本地凭据、`config/*.local.json`、`state/`、`runs/`、数据库、密钥或业务目录。
@@ -433,10 +433,10 @@ Windows 浏览器测试默认使用本机 Edge；Linux/macOS 默认使用 Playwr
 | 文档 | 内容 |
 | --- | --- |
 | [使用手册](docs/user-guide.md) | 工作区、Git 账号、提示词、权限、开发任务、会话和代码查看 |
-| [部署说明](docs/deployment.md) | 独立安装、Codex 定位、Linux systemd、远程访问与平台差异 |
+| [部署说明](docs/deployment.md) | 独立安装、Codex 定位、Linux systemd、macOS launchd 与平台差异 |
 | [账号与数据库](docs/engineering/accounts-and-database.md) | 当前账号归属、设置范围、PostgreSQL、认证与数据库升级契约 |
 | [工程契约索引](docs/engineering/index.md) | 开发前需要阅读的行为约定 |
 | [模块与目录规范](docs/engineering/architecture.md) | 模块职责、依赖边界、目录与测试命名 |
 | [UI 设计契约](docs/engineering/ui-design.md) | B 方案中性协作设计、共享组件与响应式规范 |
 | [B 方案 UI 重构 PRD](docs/prd/ui-refactor.md) | 中性导航、完整设计图册、已确认原型与正式实施记录 |
-| [平台验证说明](docs/engineering/platform-verification.md) | Windows / Linux 测试环境与 Jenkins 配置 |
+| [平台验证说明](docs/engineering/platform-verification.md) | Windows / Linux / macOS 双架构测试环境与 Jenkins 配置 |

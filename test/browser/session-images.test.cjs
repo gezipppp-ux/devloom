@@ -73,6 +73,12 @@ async function verifyLateImageUpload(page, { pattern, leave, reopen }) {
   const freshUpload = page.waitForRequest((request) =>
     request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/message-images'));
   await pasteImages(page, ['新会话图片.png']);
+  // A new draft has its own queue even if an old response ignores abort.
+  // Keep routing installed until this request completes; removing a route
+  // while Chromium is continuing it can strand the intercepted request.
+  await imagesReady(page, 1);
+  assert.equal((await freshUpload).url(), oldUpload.response.url(),
+    'returning to a session keeps uploads scoped to the same workspace and run');
   await oldUpload.route.fulfill({
     response: oldUpload.response,
     headers: { ...oldUpload.response.headers(), 'x-fixture-image': 'old-upload' },
@@ -80,8 +86,6 @@ async function verifyLateImageUpload(page, { pattern, leave, reopen }) {
   release();
   await page.unroute(pattern, handler);
   await page.waitForFunction(() => window.processedImageUploads.includes('old-upload'));
-  assert.equal((await freshUpload).url(), oldUpload.response.url(),
-    'returning to a session keeps uploads scoped to the same workspace and run');
   await imagesReady(page, 1);
   assert.equal(await input.inputValue(), '保留切换后的新草稿');
   assert.deepEqual(await page.locator('.composer-image-list img').evaluateAll((images) =>
