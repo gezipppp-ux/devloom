@@ -35,7 +35,7 @@ async function confirm() {
 <template>
   <section class="environment-panel" :aria-label="$t('环境检测')">
     <header class="ui-settings-heading"><h2>{{ $t("环境检测") }}</h2></header>
-    <p class="muted">{{ $t("检查运行服务的服务器环境，自动安装缺失工具并管理更新。支持 Windows 和 Linux，安装方式以服务端可用的包管理器为准。") }}</p>
+    <p class="muted">{{ $t("检查运行服务的服务器环境，自动安装缺失工具并管理更新。支持 Windows、Linux 和 macOS，安装方式以服务端可用的包管理器为准。") }}</p>
     <div class="actions environment-actions">
       <button :disabled="disabled" @click="load()"><ReloadOutlined aria-hidden="true" />{{ loading ? $t("检测中…") : $t("重新检测") }}</button>
       <button class="primary" :disabled="disabled || !report" @click="load(true)">{{ checking ? $t("检查版本中…") : $t("检查最新版本") }}</button>

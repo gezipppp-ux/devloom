@@ -4,6 +4,13 @@ const os = require("node:os");
 const { absolutePath } = require("../shared/paths.cjs");
 
 async function directoryRoots() {
+  if (process.platform === "darwin")
+    return [
+      { name: "/", path: "/" },
+      { name: os.homedir(), path: os.homedir() },
+      { name: "/Volumes", path: "/Volumes" },
+      { name: "/usr/local", path: "/usr/local" },
+    ];
   if (process.platform !== "win32") return [{ name: "/", path: "/" }];
   const roots = await Promise.all(
     Array.from({ length: 26 }, async (_, index) => {

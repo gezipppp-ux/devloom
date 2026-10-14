@@ -358,7 +358,7 @@ export const enDetails = {
   "检查最新版本": "Check for updates",
   "检查版本中…": "Checking versions…",
   "检查运行 Web Coding 的服务器。已有合格版本保持不变，缺失工具按下方计划依次安装。": "Check the Web Coding server. Suitable versions are kept; missing tools are installed in the order below.",
-  "检查运行服务的服务器环境，自动安装缺失工具并管理更新。支持 Windows 和 Linux，安装方式以服务端可用的包管理器为准。": "Check the server environment, install missing tools and manage updates. Windows and Linux are supported, using available server package managers.",
+  "检查运行服务的服务器环境，自动安装缺失工具并管理更新。支持 Windows、Linux 和 macOS，安装方式以服务端可用的包管理器为准。": "Check the server environment, install missing tools and manage updates. Windows, Linux and macOS are supported, using available server package managers.",
   "检测中…": "Checking…",
   "检测将发送最小生成请求，可能产生少量费用。获取模型与保存不会发起生成。": "Testing sends a minimal generation request and may incur a small charge. Fetching models and saving do not generate content.",
   "检测模型": "Test model",

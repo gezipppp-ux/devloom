@@ -1,10 +1,10 @@
-# 独立安装与 Windows / Linux 部署
+# 独立安装与 Windows / Linux / macOS 部署
 
 应用为独立的 `web-coding` 项目。运行代码、前端构建、lint 与测试的依赖都在本项目声明，不需要 Vben、NestJS 或外部 workspace catalog。
 
 ## 独立安装
 
-启动需要 Node.js **22.13+**（推荐当前 LTS）、npm、PostgreSQL **17**（当前验证版本）。Git 与 Codex CLI 可在初始化向导检测和安装，安装器不可用时按提示在服务器处理；实际执行开发前须完成服务账号的 Codex 认证。将应用源码复制到单独目录；不复制 `node_modules`、运行记录和凭据。先设置独立的 `RUNNER_DATA_DIR` 和 `DATABASE_URL`。
+启动需要 Node.js **22.13+**（推荐当前 LTS）、npm、PostgreSQL **17**（当前验证版本）。Prisma 7 只支持 20.19+、22.12+ 和 24.0+，使用 Node 21、23 等非 LTS 主版本时 `npm ci` 会在 Prisma 预安装检查处直接失败，必须改用 22 LTS 或 24 以上版本。Git 与 Codex CLI 可在初始化向导检测和安装，安装器不可用时按提示在服务器处理；实际执行开发前须完成服务账号的 Codex 认证。将应用源码复制到单独目录；不复制 `node_modules`、运行记录和凭据。先设置独立的 `RUNNER_DATA_DIR` 和 `DATABASE_URL`。
 
 ```sh
 cd /opt/requirement-runner
@@ -48,6 +48,26 @@ npm run db:deploy
 密码在连接 URL 中需要百分号编码。默认端口仅绑定 `127.0.0.1:5432`，可通过 `POSTGRES_PORT` 调整。数据库保存在 Docker 命名卷，日常停止用 `docker compose stop`；数据库备份使用 `pg_dump` 等 PostgreSQL 工具。生产环境按运维要求配置连接权限、TLS 和备份。
 
 仓库的 npm 初始化、迁移、开发和启动命令通过 `--env-file-if-exists=.env` 读取安装目录中的可选 `.env`，进程已有环境变量优先；直接调用 Node.js（例如下方 systemd 服务）需显式提供环境变量或环境文件。Docker Compose 也可读取 `.env`，但只设置 `POSTGRES_PASSWORD` 不会自动生成应用所需的 `DATABASE_URL`。
+
+## macOS
+
+macOS（Intel 或 Apple Silicon）的安装、构建和启动命令与 Linux 相同；macOS 未接入 Jenkins 矩阵，本机结果不能替代双平台 CI 结论。除通用要求外注意：
+
+```sh
+export POSTGRES_PASSWORD='替换为独立随机密码'
+docker compose up -d postgres
+# 集成测试需要独立测试库，compose 只创建业务库
+docker compose exec postgres createdb -U web_coding test_web_coding
+export TEST_DATABASE_URL='postgresql://web_coding:替换为URL编码密码@127.0.0.1:5432/test_web_coding'
+```
+
+- 使用满足要求的 Node.js LTS（22.13+）。切换 Node.js 主版本后删除 `node_modules` 重新 `npm ci`，不要复用另一版本的依赖目录。
+- Codex CLI 用 `npm i -g @openai/codex` 或 Homebrew 安装，并在服务账号下完成 `codex login`。自动查找已覆盖 Intel Mac 的 `/usr/local/bin`；Apple Silicon 的 `/opt/homebrew/bin` 不在回退列表内，需让它在服务账号 `PATH` 中可见，或设置 `CODEX_BIN`。
+- 初始化向导的「环境检测」在 macOS 不提供安装／更新按钮，缺失工具需自行安装后重新检测；Codex 登录可在向导中选择稍后完成。
+- 数据目录与成员目录不要放在桌面、文稿、下载或 iCloud 同步目录：终端或 launchd 启动的服务进程会触发 macOS 隐私授权，云同步还会干扰 `node_modules`、`.git` 和 worktree。
+- 常驻服务可用 launchd，但需显式提供绝对路径的 `PATH`、`CODEX_BIN` 和 `RUNNER_DATA_DIR`，不会读取交互式 shell 的 nvm 或 Homebrew 初始化。
+- macOS 默认 APFS 大小写不敏感，而路径身份比较只在 Windows 下忽略大小写；同一数据根、仓库或 worktree 只按一种写法配置。
+- 若拉取镜像时报 `error getting credentials`（Docker Desktop 的 `credsStore` 凭据助手异常，公共镜像并不需要凭据），可让本次命令使用不含该字段的配置目录：`DOCKER_CONFIG=/path/to/config docker compose up -d postgres`，其中 `config/config.json` 只保留 `{"auths":{}}`、`{"currentContext":"desktop-linux"}`，并把 `~/.docker/cli-plugins` 链接到该目录的 `cli-plugins`；也可以直接重启 Docker Desktop 修复凭据助手。
 
 ## 持久化与配置
 

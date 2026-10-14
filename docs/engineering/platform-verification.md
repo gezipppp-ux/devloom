@@ -1,4 +1,4 @@
-# Windows / Linux 验证
+# Windows / Linux / macOS 验证
 
 支持 Node.js 22.13+、Git 和 npm。两个系统使用相同源码、锁文件和验证命令；每台机器分别 `npm ci`，不要跨系统复制 `node_modules`。
 
@@ -19,6 +19,8 @@ node test/browser/session.test.cjs && node test/browser/workspaces.test.cjs && n
 上述命令依次执行 lint、全部架构/单元/集成测试、前端构建、Web 功能回归和视觉截图。测试只使用 fake Codex 与临时 Git 仓库，不需要 Codex 登录，不执行真实需求。
 
 Linux 首次运行浏览器测试时，管理员需为测试节点安装 Chromium 系统依赖，例如 `npx playwright install --with-deps chromium`。Windows 默认使用本机 Edge；要使用上面安装的 Chromium，在 PowerShell 设置 `$env:BROWSER_CHANNEL = 'chromium'`；Linux 可在运行上述浏览器脚本前设置 `BROWSER_CHANNEL=chromium`。截图输出到被忽略的 `state/browser/`。
+
+macOS（Intel 或 Apple Silicon）可用于本机验证，命令与 Linux 相同，浏览器默认使用 Chromium（先执行 `npx playwright install chromium`）。macOS 未接入 Jenkins 矩阵，其结果属于本机验证。macOS 默认 APFS 大小写不敏感，而路径身份比较（`shared/paths.cjs`、数据根与仓库登记键）只在 Windows 下忽略大小写，因此同一数据根、仓库或 worktree 只按一种写法配置，不要用大小写区分两个目录。
 
 ### Ubuntu 26.04 的浏览器准备
 
@@ -48,6 +50,6 @@ BROWSER_CHANNEL=chromium node test/browser/session.test.cjs && node test/browser
 
 Linux CI 优先使用 Playwright 支持的发行版，如 Ubuntu 24.04。若节点为 Ubuntu 26.04 x64，为该 Jenkins 节点配置 `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64`，让安装步骤使用上述已验证的兼容构建；不要将此值设置到 Windows 节点。
 
-添加流水线文件不会自动创建 Jenkins 任务。合并前应查看两个平台的实际构建结果；未接入节点或未执行的平台应明确记录为未验证。
+添加流水线文件不会自动创建 Jenkins 任务。合并前应查看两个平台的实际构建结果；未接入节点或未执行的平台应明确记录为未验证。macOS 目前未接入 CI 矩阵，其结论只来自本机验证，不能声称已由流水线覆盖。
 
 每个平台使用 CI 工作目录下的 `verification/<平台>/` 独立检出。运行前清理该检出中的浏览器截图，归档路径保留平台目录，避免复用旧截图或两端同名截图互相覆盖。

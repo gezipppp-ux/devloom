@@ -28,7 +28,7 @@ class EnvironmentServices {
       return { ...presentEnvironmentTool(tool, installed, this.versions.get(tool.id), plan), pendingRestart: tool.id === "node" && Boolean(this.pendingNodeVersion) };
     }));
     const checks = [
-      { name: "操作系统", status: ["win32", "linux"].includes(process.platform) ? "pass" : "warning", detail: `${process.platform} / ${process.arch}（支持 Windows、Linux）` },
+      { name: "操作系统", status: ["win32", "linux", "darwin"].includes(process.platform) ? "pass" : "warning", detail: `${process.platform} / ${process.arch}（支持 Windows、Linux、macOS）` },
       { name: "数据目录可写", status: writableDirectory(this.dataDirectory) ? "pass" : "fail", detail: "数据库与上传数据存储目录" },
       { name: "成员目录可写", status: writableDirectory((await readSystemSettings(this.dataDirectory)).memberStorageRoot) ? "pass" : "fail", detail: "项目与任务目录，未创建时检查上级目录权限" },
     ];
