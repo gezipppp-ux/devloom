@@ -35,7 +35,7 @@ class AccountStore {
         } });
         if (initial) await this.database.client.systemSetup.updateMany({ where: { id: SETUP_ID, status: "awaiting_admin" }, data: {
           status: "pending", initialAdminId: row.id, steps: { admin: { status: "completed" } },
-          tokenHash: null, tokenExpiresAt: null, revision: { increment: 1 },
+          revision: { increment: 1 },
         } });
         return accountRecord(row);
       });

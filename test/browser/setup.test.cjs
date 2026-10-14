@@ -32,7 +32,7 @@ async function fixture(t, { missing = false } = {}) {
   };
   environment.checkLatest = environment.read;
   const app = createWebServer({ database, dataDirectory: directory, environment });
-  const origin = await app.listen(0), issued = await app.initializationToken();
+  const origin = await app.listen(0);
   const browser = await chromium.launch({ ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : process.platform === "win32" ? { channel: "msedge" } : {}), headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage(), errors = [];
@@ -41,11 +41,11 @@ async function fixture(t, { missing = false } = {}) {
   await context.addInitScript(() => { Object.defineProperty(window.crypto, "randomUUID", { value: undefined }); });
   t.after(async () => { await browser.close(); await app.close(); await database.close(); assert.deepEqual(errors, []); });
   fs.mkdirSync(output, { recursive: true });
-  return { page, context, database, origin, directory, token: issued.token, installs: () => installs };
+  return { page, context, database, origin, directory, installs: () => installs };
 }
 async function capture(page, name) {
-  for (const width of [1440, 768, 390, 320]) {
-    await page.setViewportSize({ width, height: 1000 });
+  for (const [width, height] of [[1920, 1080], [2560, 1440], [1440, 900], [1280, 720], [768, 1024], [390, 844], [320, 740]]) {
+    await page.setViewportSize({ width, height });
     await page.screenshot({ path: path.join(output, `${name}-${width}.png`), fullPage: true });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false, `${name} overflows at ${width}`);
     images.push(`${name}-${width}.png`);
@@ -54,11 +54,9 @@ async function capture(page, name) {
 }
 async function bootstrap(f) {
   const { page } = f;
-  await page.goto(`${f.origin}/setup#token=${f.token}`);
+  await page.goto(`${f.origin}/setup`);
   await page.getByLabel("设置密码", { exact: true }).waitFor();
-  await page.waitForURL(url => url.hash === "");
-  assert.equal(await page.getByLabel("初始化凭证", { exact: true }).inputValue(), f.token);
-  assert.equal(await page.evaluate(token => JSON.stringify({ local: { ...window.localStorage }, session: { ...window.sessionStorage } }).includes(token), f.token), false);
+  assert.equal(await page.locator("input").count(), 4);
   await capture(page, "administrator");
   await page.getByLabel("设置密码", { exact: true }).fill("fixture-password");
   await page.getByLabel("确认密码", { exact: true }).fill("fixture-password");

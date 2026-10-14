@@ -3,7 +3,6 @@ const { argument } = require("./arguments.cjs");
 const { root } = require("../config/runtime.cjs");
 const { createWebServer } = require("../http/server.cjs");
 const { requestOrigin } = require("../http/origin.cjs");
-const { printSetupLink } = require("./setup-link.cjs");
 
 async function main(argv = process.argv.slice(2)) {
   if (argument("--config", null, argv))
@@ -74,7 +73,6 @@ async function main(argv = process.argv.slice(2)) {
       },
     });
     const origin = await application.listen(port);
-    await printSetupLink(application, process.env.PUBLIC_ORIGIN || origin);
     process.stdout.write(
       `Web Coding Dev: ${origin}\n监听地址：${host}:${application.server.address().port}\n前端保存后自动更新。使用 dev:watch 时，后端修改会重启服务、中断活动任务并刷新页面。\n`,
     );

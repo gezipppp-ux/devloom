@@ -1,7 +1,15 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
 const { randomUUID } = require("node:crypto");
-const { setupDraftInput, setupStepInput, environmentReadiness } = require("../../src/domain/setup-state.cjs");
+const { setupAdminInput, setupDraftInput, setupStepInput, environmentReadiness } = require("../../src/domain/setup-state.cjs");
+
+test("initial admin accepts account details and rejects client-controlled privileges", () => {
+  const input = { username: "admin", displayName: "管理员", password: "fixture-password" };
+  assert.equal(setupAdminInput(input).role, "admin");
+  for (const extra of [{ role: "member" }, { departmentId: "department" }, { unknown: "value" }])
+    assert.throws(() => setupAdminInput({ ...input, ...extra }));
+  assert.throws(() => setupAdminInput({ ...input, password: "short" }));
+});
 
 test("setup drafts allow unfinished fields but reject passwords and credential-bearing repository URLs", () => {
   const input = { revision: 1, drafts: { accounts: [0, 1].map(() => ({ username: "", displayName: "", selected: true })) } };

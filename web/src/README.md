@@ -41,7 +41,7 @@
 
 依赖方向为 `main.js → app → features → shared`。应用壳层组合各功能；功能内的组件与辅助模块放在同一目录，功能之间通过壳层传入数据和事件协作。共享模块不引用应用或功能组件。
 
-`app/SetupPage.vue` 组合首次初始化：管理员表单位于 `features/accounts`，环境安装和目录选择位于 `features/settings`，步骤、非敏感草稿与结果位于 `features/setup`，通过 app 插槽协作。`shared/setup-steps.json` 为前后端步骤契约。路由和渲染门禁依据服务端初始化状态；一次性凭证从 fragment 读取后立即清除，仅存页面内存。UUID 提交复用公共 HTTP 兼容生成器，未知结果重试沿用原请求。密码在保存退出和卸载时清除，迟到响应受账号代际和组件生命周期保护。无首次登录冒泡引导。
+`app/SetupPage.vue` 组合首次初始化：管理员表单位于 `features/accounts`，环境安装和目录选择位于 `features/settings`，步骤、非敏感草稿与结果位于 `features/setup`，通过 app 插槽协作。`shared/setup-steps.json` 为前后端步骤契约。路由和渲染门禁依据服务端初始化状态；全新空部署直接创建管理员并自动登录。UUID 提交复用公共 HTTP 兼容生成器，未知结果重试沿用原请求。密码在保存退出和卸载时清除，迟到响应受账号代际和组件生命周期保护。无首次登录冒泡引导。
 
 需求／Bug 新增与编辑共用 `features/projects/IssueFields.vue`；五类正文通过共享 `MarkdownEditor`、`MarkdownContent` 和 `shared/components/markdown-content.js` 安全渲染。原 `features/session/requirement-content.js` 保留会话入口及图片／链接规则。项目附件草稿由 `use-project-attachments.js` 管理，读取完成后生成正文链接并同步序列化；保存前不上传，取消、卸载和上下文切换撤销 blob URL，迟到读取不得插回其他草稿。保存冲突保留附件并支持原有逐字段合并。
 

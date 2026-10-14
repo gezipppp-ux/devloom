@@ -46,12 +46,30 @@ test("setup migration classifies empty, admin-only and existing business install
   }
 });
 
+test("setup credential removal preserves initialization progress and operation records", async t => {
+  const { admin, schema } = await postgresFixture(t);
+  await admin.query(`SET search_path TO "${schema}"`);
+  await admin.query('CREATE TABLE "_prisma_migrations" (migration_name TEXT, finished_at TIMESTAMPTZ, rolled_back_at TIMESTAMPTZ)');
+  await admin.query(migration);
+  await admin.query(fs.readFileSync(path.join(root, "prisma/migrations/20261013150000_initialization_guide/migration.sql"), "utf8"));
+  await admin.query(`UPDATE system_setup SET status = 'pending', initial_admin_id = 'fixture-admin', revision = 5,
+    steps = '{"admin":{"status":"completed"}}', drafts = '{"directory":"/fixture/members"}',
+    token_hash = 'retired-token-hash', token_expires_at = CURRENT_TIMESTAMP;
+    INSERT INTO setup_operations (request_id, step, input_hash) VALUES ('fixture-request', 'directory', 'fixture-hash')`);
+  const { token_hash, token_expires_at, ...progress } = (await admin.query("SELECT * FROM system_setup")).rows[0];
+  assert.ok(token_hash && token_expires_at);
+  const operations = (await admin.query("SELECT * FROM setup_operations")).rows;
+  await admin.query(fs.readFileSync(path.join(root, "prisma/migrations/20261014160000_remove_setup_credentials/migration.sql"), "utf8"));
+  assert.deepEqual((await admin.query("SELECT * FROM system_setup")).rows, [progress]);
+  assert.deepEqual((await admin.query("SELECT * FROM setup_operations")).rows, operations);
+});
+
 test("fresh baseline matches Prisma, preserves database constraints and publishes both system workflows", async t => {
   const fixture = await postgresFixture(t);
   await fixture.deploy();
   await fixture.deploy();
   const database = await fixture.open();
-  assert.deepEqual(readPostgresMigrations().map(row => row.name), ["20261012200000_baseline", "20261013070000_mcp_access", "20261013110000_agent_suppliers", "20261013150000_initialization_guide", "20261013180000_project_directory_names", "20261013210000_neutral_workbench", "20261014120000_project_overview", "20261014150000_administrator_permissions"]);
+  assert.deepEqual(readPostgresMigrations().map(row => row.name), ["20261012200000_baseline", "20261013070000_mcp_access", "20261013110000_agent_suppliers", "20261013150000_initialization_guide", "20261013180000_project_directory_names", "20261013210000_neutral_workbench", "20261014120000_project_overview", "20261014150000_administrator_permissions", "20261014160000_remove_setup_credentials"]);
   const workflows = await database.client.systemWorkflow.findMany({ include: { versions: true }, orderBy: { type: "asc" } });
   assert.deepEqual(workflows.map(row => row.type), ["bug", "requirement"]);
   for (const row of workflows) {

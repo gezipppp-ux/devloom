@@ -7,7 +7,6 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "setup:link": "node --env-file-if-exists=.env src/cli/setup-link.cjs",
     "init:admin": "node --env-file-if-exists=.env src/cli/init-admin.cjs",
     "dev": "node --env-file-if-exists=.env src/cli/dev.cjs",
     "dev:watch": "node --env-file-if-exists=.env src/cli/dev-watch.cjs",

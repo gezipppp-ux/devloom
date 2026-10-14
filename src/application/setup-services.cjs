@@ -10,7 +10,6 @@ class SetupServices {
     this.store = new SetupStore(database);
     Object.assign(this, { accounts, projects, environment, directory });
   }
-  async issueToken() { return this.store.issueToken(); }
   async status(actor) { return presentSetupStatus(await this.store.read(), actor); }
   async gate(actor, method, pathname) {
     if (!required(await this.store.read())) return;
@@ -21,10 +20,10 @@ class SetupServices {
   }
   async bootstrap(input) {
     const value = setupAdminInput(input);
-    await this.store.verifyToken(await this.store.read(), value.setupToken);
+    await this.store.assertCanCreateAdmin();
     const prepared = await this.accounts.prepareCreation({ username: value.username, displayName: value.displayName, password: value.password }, true);
     return this.store.transaction(async () => {
-      await this.store.verifyToken(await this.store.read(), value.setupToken);
+      await this.store.assertCanCreateAdmin();
       const user = await this.accounts.createPrepared(prepared, null, true);
       await this.accounts.audit(user, "setup.admin.created", null, { targetUserId: user.id });
       return user;

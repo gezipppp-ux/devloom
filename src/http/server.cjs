@@ -646,7 +646,6 @@ function createWebServer({
       return accounts;
     },
     get projects() { return projects; },
-    async initializationToken() { await app.ready(); return setup ? setup.issueToken() : null; },
     async listen(port = 4317) {
       await app.ready();
       await app.listen({ port, host });

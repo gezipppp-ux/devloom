@@ -19,8 +19,7 @@ async function fixture(t) {
   const setup = new SetupServices(database, { accounts, projects, environment, directory });
   t.after(async () => { await projects.close(); await accounts.close(); await database.close(); });
   async function bootstrap() {
-    const { token } = await setup.issueToken();
-    return setup.bootstrap({ username: "admin", displayName: "初始化管理员", password, setupToken: token });
+    return setup.bootstrap({ username: "admin", displayName: "初始化管理员", password });
   }
   async function step(actor, name, value = {}, skip = false, requestId = randomUUID()) {
     const input = { revision: (await setup.read(actor)).revision, requestId, ...(skip ? { skip } : { value }) };
@@ -34,15 +33,10 @@ async function fixture(t) {
   return { directory, database, accounts, projects, environment, setup, bootstrap, step, prerequisites };
 }
 
-test("fresh setup consumes expiring token once and concurrent admin creation is atomic", async t => {
+test("fresh setup creates admin directly and concurrent admin creation is atomic", async t => {
   const f = await fixture(t);
   assert.deepEqual(await f.setup.status(), { needsAdmin: true });
-  const old = await f.setup.issueToken(), fresh = await f.setup.issueToken();
-  const input = { username: "admin", displayName: "管理员", password, setupToken: old.token };
-  await assert.rejects(f.setup.bootstrap(input), { statusCode: 403 });
-  await f.database.client.systemSetup.update({ where: { id: "installation" }, data: { tokenExpiresAt: new Date(0) } });
-  await assert.rejects(f.setup.bootstrap({ ...input, setupToken: fresh.token }), { statusCode: 403 });
-  input.setupToken = (await f.setup.issueToken()).token;
+  const input = { username: "admin", displayName: "管理员", password };
   const results = await Promise.allSettled([f.setup.bootstrap(input), f.setup.bootstrap({ ...input, username: "other" })]);
   assert.equal(results.filter(result => result.status === "fulfilled").length, 1);
   assert.equal(await f.database.client.user.count(), 1);
@@ -50,11 +44,11 @@ test("fresh setup consumes expiring token once and concurrent admin creation is 
   assert.equal(actor.mustChangePassword, false);
   assert.equal(actor.role, "admin");
   assert.equal((await f.setup.read(actor)).currentStep, "environment");
-  assert.equal(await f.setup.issueToken(), null);
   await assert.rejects(f.setup.bootstrap(input), { statusCode: 403 });
   const row = await f.database.client.systemSetup.findUnique({ where: { id: "installation" } });
-  assert.equal(row.tokenHash, null);
-  assert.ok(!JSON.stringify(row).includes(input.setupToken));
+  assert.equal(row.initialAdminId, actor.id);
+  assert.equal(row.status, "pending");
+  assert.equal(row.revision, 2);
   assert.notEqual((await f.database.client.user.findFirst()).passwordHash, password);
 });
 
@@ -109,11 +103,11 @@ test("setup rolls back conflicting resources, rechecks environment and resumes n
   assert.equal((await f.step(actor, "complete")).result.status, "completed");
 });
 
-test("HTTP bootstrap requires session CSRF and token, signs in admin and gates business routes", async t => {
+test("HTTP bootstrap requires session CSRF and origin, signs in admin and gates business routes", async t => {
   const f = await fixture(t);
   const app = createWebServer({ database: f.database, dataDirectory: f.directory, environment: f.environment });
   t.after(() => app.close());
-  const origin = await app.listen(0), issued = await app.initializationToken();
+  const origin = await app.listen(0);
   let cookie = "", csrf = "";
   async function request(url, input, headers = {}) {
     const response = await fetch(origin + url, { method: input === undefined ? "GET" : "POST", headers: { cookie, "x-csrf-token": csrf, "content-type": "application/json", ...headers }, ...(input === undefined ? {} : { body: JSON.stringify(input) }) });
@@ -123,7 +117,7 @@ test("HTTP bootstrap requires session CSRF and token, signs in admin and gates b
   }
   assert.deepEqual((await request("/api/setup/status")).data, { needsAdmin: true });
   await request("/api/auth/session");
-  const input = { username: "admin", displayName: "管理员", password, setupToken: issued.token };
+  const input = { username: "admin", displayName: "管理员", password };
   assert.equal((await request("/api/setup/admin", input, { "x-csrf-token": "wrong" })).status, 403);
   assert.equal((await request("/api/setup/admin", input, { origin: "https://evil.example" })).status, 403);
   assert.equal((await request("/api/setup/admin", { ...input, role: "admin" })).status, 400);
@@ -138,14 +132,18 @@ test("HTTP bootstrap requires session CSRF and token, signs in admin and gates b
   assert.equal((await request("/api/system/setup")).status, 401);
 });
 
-test("legacy admin CLI creation enters setup but configured installs never reopen", async t => {
+test("admin CLI creation enters setup but configured installs never reopen", async t => {
   const f = await fixture(t);
   const actor = await f.accounts.create({ username: "admin", password }, null, true);
   assert.equal((await f.setup.read(actor)).currentStep, "environment");
-  assert.equal(await f.setup.issueToken(), null);
+  await assert.rejects(f.bootstrap(), { code: "SETUP_ADMIN_EXISTS" });
   await f.database.client.systemSetup.update({ where: { id: "installation" }, data: { status: "not_required" } });
   assert.equal((await f.setup.status(actor)).required, false);
-  assert.equal(await f.setup.issueToken(), null);
+  await f.database.client.user.deleteMany();
+  await assert.rejects(f.bootstrap(), { code: "SETUP_ADMIN_EXISTS" });
+  const row = await f.database.client.systemSetup.findUnique({ where: { id: "installation" } });
+  assert.equal(row.status, "not_required");
+  assert.equal(await f.database.client.user.count(), 0);
 });
 
 test("setup rejects invalid directories, concurrent duplicate steps, revoked admins and member writes", async t => {

@@ -18,10 +18,8 @@ function envelope(input) {
     throw accountError("初始化请求标识无效。");
 }
 function setupAdminInput(input) {
-  object(input, ["username", "displayName", "password", "setupToken"]);
-  if (typeof input.setupToken !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(input.setupToken))
-    throw accountError("初始化凭证无效或已过期，请从服务终端获取新链接。", 403, "SETUP_TOKEN_INVALID");
-  return { ...validateAccountCreation({ username: input.username, displayName: input.displayName, password: input.password }, { initial: true }), setupToken: input.setupToken };
+  object(input, ["username", "displayName", "password"]);
+  return validateAccountCreation(input, { initial: true });
 }
 function setupStepInput(step, input) {
   object(input, ["revision", "requestId", "skip", "value"]);

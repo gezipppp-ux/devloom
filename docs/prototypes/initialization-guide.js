@@ -23,7 +23,7 @@
   const badge = (text, type = "") => `<span class="badge ${type}">${escape(text)}</span>`;
   const notice = (title, text, type = "") => `<div class="notice ${type}">${icon(type === "success" ? "check" : "info")}<div><strong>${escape(title)}</strong><p>${escape(text)}</p></div></div>`;
   const defaults = () => ({
-    step: 0, maxStep: 0, done: {}, paused: false, finished: false, scenario: "missing", bootstrapValid: true,
+    step: 0, maxStep: 0, done: {}, paused: false, finished: false, scenario: "missing",
     admin: null, adminDraft: { username: "admin", displayName: "管理员" },
     env: { git: false, codex: false, auth: false, deferred: false, issue: "", busy: "" },
     directory: "D:\\wt", directorySaved: false, directoryDenied: false, departments: false,
@@ -63,9 +63,7 @@
   }
   function accountStep() {
     if (state.admin) return top("管理员账号已创建", "后续步骤将以此账号完成系统配置。") + notice(state.admin.displayName, `登录名：${state.admin.username} · 系统管理员`, "success") + footer("继续配置");
-    if (state.bootstrapValid === false) return top("验证初始化入口", "首次创建管理员需要服务器提供的初始化凭证。") + notice("初始化链接已失效", "请从服务终端获取新的初始化链接，再继续创建管理员。", "warning") + `<div class="card"><h3>回到服务器获取初始化链接</h3><p class="muted">在尚未创建管理员的部署中，由运维重新签发初始化链接。新链接有效期为 30 分钟，成功创建管理员后立即失效。</p><button data-action="renew-link">模拟打开新的初始化链接</button><p class="hint">此按钮仅用于原型评审；正式版本不会公开重新签发凭证。</p></div>`;
     return top("先创建管理员账号", "由你管理成员、项目和系统配置。") +
-      notice("初始化入口已验证", "原型模拟已通过首次启动链接进入。正式版本使用服务终端提供的一次性链接。", "success") +
       `<div class="card"><div class="card-heading"><h3>管理员信息</h3>${badge("必填")}</div><div class="field-grid">${field("admin-username", "登录名", state.adminDraft.username, { hint: "3–64 位字母、数字、点、短横线或下划线。" })}${field("admin-display", "显示名称", state.adminDraft.displayName)}</div><div class="field-grid">${field("admin-password", "设置密码", secrets["admin-password"], { password: true, placeholder: "请使用演示密码", hint: "6–256 个字符，无预置密码。" })}${field("admin-confirm", "确认密码", secrets["admin-confirm"], { password: true, placeholder: "再次输入演示密码" })}</div><p class="hint">创建后自动登录并继续初始化。密码仅用于本次演示，不会发送或保存。</p></div>` +
       footer("创建管理员并继续", { caption: "管理员账号为必填步骤。测试成员将在后续按需创建。" });
   }
@@ -152,7 +150,7 @@
     scenario.disabled = Boolean(state.env.busy);
     document.querySelector(".identity").innerHTML = state.admin ? `<span class="avatar">A</span><span>${escape(state.admin.username)}<small>系统管理员</small></span>` : `<span class="badge">等待创建管理员</span>`;
     if (state.paused) {
-      app.innerHTML = `<section class="result-page"><div class="card"><div class="department-symbol">${icon("save")}</div><h1>已保存初始化进度</h1><p class="muted">${state.admin ? "正式版本会返回登录页；重新登录后继续未完成的步骤。" : "管理员尚未创建。正式版本再次进入时仍需验证初始化链接。"}</p><p>当前步骤：<strong>${labels[state.step]}</strong></p><p class="hint">演示进度仅保存在当前浏览器标签页；密码草稿已清除。</p><div class="inline-actions"><button class="primary" data-action="resume">继续初始化${icon("arrow")}</button></div></div></section>`;
+      app.innerHTML = `<section class="result-page"><div class="card"><div class="department-symbol">${icon("save")}</div><h1>已保存初始化进度</h1><p class="muted">${state.admin ? "正式版本会返回登录页；重新登录后继续未完成的步骤。" : "管理员尚未创建。再次进入初始化页面即可创建。"}</p><p>当前步骤：<strong>${labels[state.step]}</strong></p><p class="hint">演示进度仅保存在当前浏览器标签页；密码草稿已清除。</p><div class="inline-actions"><button class="primary" data-action="resume">继续初始化${icon("arrow")}</button></div></div></section>`;
       return;
     }
     if (state.finished) {
@@ -294,7 +292,6 @@
       case "resume": state.paused = false; persist(); render(true); break;
       case "finish": if (!canFinish()) return; state.finished = true; state.done[6] = "completed"; secrets = {}; persist(); render(); break;
       case "review": state.finished = false; state.step = 6; persist(); render(true); break;
-      case "renew-link": state.bootstrapValid = true; state.scenario = "missing"; persist(); render(true); break;
       case "reset": reset(); break;
     }
   });
@@ -302,7 +299,6 @@
   document.getElementById("scenario").addEventListener("change", event => {
     operation++;
     const scenario = event.target.value;
-    if (scenario === "token-expired") { state = defaults(); state.bootstrapValid = false; state.scenario = scenario; secrets = {}; errors = {}; persist(); render(true); return; }
     state.scenario = scenario;
     state.env = { git: false, codex: false, auth: false, deferred: false, issue: "", busy: "" };
     if (scenario === "ready") Object.assign(state.env, { git: true, codex: true, auth: true });

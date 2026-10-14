@@ -190,8 +190,6 @@ model SystemSetup {
   initialAdminId  String?   @map("initial_admin_id")
   steps           Json      @default("{}")
   drafts          Json      @default("{}")
-  tokenHash       String?   @map("token_hash")
-  tokenExpiresAt  DateTime? @map("token_expires_at") @db.Timestamptz(3)
   completedAt     DateTime? @map("completed_at") @db.Timestamptz(3)
   completedBy     String?   @map("completed_by")
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)

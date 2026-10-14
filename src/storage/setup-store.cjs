@@ -1,4 +1,4 @@
-const { createHash, createHmac, randomBytes, timingSafeEqual } = require("node:crypto");
+const { createHmac } = require("node:crypto");
 const { accountError } = require("../domain/account.cjs");
 const { SETUP_ID } = require("../domain/setup-state.cjs");
 
@@ -12,23 +12,10 @@ class SetupStore {
       throw error;
     }
   }
-  async issueToken() {
-    const token = randomBytes(32).toString("base64url");
-    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-    const issued = await this.transaction(async () => {
-      const row = await this.read();
-      if (row.status !== "awaiting_admin" || row.initialAdminId || await this.database.client.user.count()) return false;
-      await this.update(row.revision, { tokenHash: createHash("sha256").update(token).digest("hex"), tokenExpiresAt: expiresAt });
-      return true;
-    });
-    return issued ? { token, expiresAt } : null;
-  }
-  async verifyToken(row, token) {
-    const actual = createHash("sha256").update(token).digest();
-    const expected = Buffer.from(row.tokenHash || "", "hex");
-    if (row.status !== "awaiting_admin" || row.initialAdminId || !row.tokenExpiresAt || row.tokenExpiresAt.getTime() <= Date.now() ||
-        actual.length !== expected.length || !timingSafeEqual(actual, expected) || await this.database.client.user.count())
-      throw accountError("初始化凭证无效或已过期，请从服务终端获取新链接；已创建账号请直接登录。", 403, "SETUP_TOKEN_INVALID");
+  async assertCanCreateAdmin() {
+    const row = await this.read();
+    if (row.status !== "awaiting_admin" || row.initialAdminId || await this.database.client.user.count())
+      throw accountError("管理员已初始化，请直接登录继续。", 403, "SETUP_ADMIN_EXISTS");
   }
   fingerprint(step, value) {
     // Keyed fingerprints protect low-entropy initial passwords in idempotency records.
