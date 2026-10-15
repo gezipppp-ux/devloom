@@ -77,7 +77,7 @@ class GitAccountServices {
     if (!input || typeof input !== "object" || Array.isArray(input))
       throw accountError("Git 登录验证参数无效。");
     const { provider = "auto", ...draft } = input;
-    if (!["auto", "github", "gitee", "gitlab"].includes(provider))
+    if (!["auto", "github", "gitee", "gitlab", "gitea"].includes(provider))
       throw accountError("Git 登录验证服务类型无效。");
     const { value, previous } = id && !Object.keys(draft).length
       ? await this.store.read(gitAccountId(id), actor.id).then(value => ({ value, previous: value }))

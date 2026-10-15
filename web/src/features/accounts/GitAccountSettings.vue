@@ -133,7 +133,7 @@ const {
             autocomplete="new-password"
           />
           <p class="field-hint">
-            {{ $t("支持普通账号密码或个人访问令牌，具体由 Git 服务决定。") }}{{
+            {{ $t("仓库访问支持密码或个人访问令牌，具体由 Git 服务决定；下方的登录验证仅支持令牌。") }}{{
               form.id
                 ? $t("留空保留已保存密码。")
                 : $t("凭据加密保存，不会回显。")
@@ -167,12 +167,14 @@ const {
       </a-form-item>
       <a-form-item v-if="form.authType === 'http'" :label="$t('登录验证服务')" html-for="git-login-provider">
         <AppSelect native-events id="git-login-provider" v-model="provider" :disabled="busy" aria-describedby="git-login-hint">
-          <option value="auto">{{ $t("自动识别 Gitee / GitHub / GitLab 官方主机") }}</option>
+          <option value="auto">{{ $t("自动识别（官方主机 / 自建 Gitea）") }}</option>
           <option value="gitee">Gitee</option>
           <option value="github">GitHub / GitHub Enterprise</option>
           <option value="gitlab">{{ $t("GitLab / 自建 GitLab") }}</option>
+          <option value="gitea">{{ $t("Gitea / 自建 Gitea") }}</option>
         </AppSelect>
-        <p id="git-login-hint" class="field-hint">{{ $t("主机登录验证使用个人访问令牌，需允许读取本人资料；不支持普通密码。自建服务请选择对应类型，其他服务请在准备开发空间时验证。此选项仅用于本次验证。") }}</p>
+        <p id="git-login-hint" class="field-hint">{{ $t("自动识别 Gitee / GitHub / GitLab 官方主机和公开标识为 Gitea 的自建服务。其他自建服务请手动选择对应类型，此选项仅用于本次验证。") }}</p>
+        <p class="field-hint">{{ $t("验证需要可读取本人资料的个人访问令牌。Gitea 可在「设置 → 应用」生成令牌，至少启用 read:user；仓库读写还需对应仓库权限。验证不会保存账号，也不代表仓库权限。") }}</p>
         <p v-if="/^http:\/\//i.test(form.host.trim())" class="field-hint">{{ $t("HTTP 会以明文传输凭据，建议使用 HTTPS。") }}</p>
       </a-form-item>
       <p v-else class="field-hint">{{ $t("验证登录会使用当前公钥连接 Git 主机的 git 用户。请先将公钥添加到 Git 服务；验证不会保存或替换账号密钥。") }}</p>

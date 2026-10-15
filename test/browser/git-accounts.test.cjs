@@ -78,8 +78,10 @@ async function verifyGitAccounts(page, output) {
   assert.equal(accounts.length, 0);
   assert.equal(await section.getByLabel("密码或访问令牌", { exact: true }).inputValue(), 'fixture&password|%!"');
   fail = false;
+  await selectOption(section.getByLabel("登录验证服务", { exact: true }), "gitea");
   await verify.click();
   await page.locator('.operation-message[data-type="success"]').filter({ hasText: "Git 主机登录验证成功" }).waitFor();
+  assert.equal(writes.at(-1).provider, "gitea");
   assert.equal(accounts.length, 0, "verification must not save a draft");
   await save.click();
   await page.locator('.operation-message[data-type="success"]').filter({ hasText: "Git 账号已保存。准备项目开发空间时会验证实际仓库的访问权限。" }).waitFor();

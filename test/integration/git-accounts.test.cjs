@@ -83,6 +83,8 @@ test("host login verifies owned unsaved and saved credentials without projects, 
   assert.deepEqual(await services.list(actor), []);
   assert.equal(calls.at(-1).value.password, input.password);
   assert.equal(calls.at(-1).provider, "gitlab");
+  assert.deepEqual(await services.verify(actor, { ...input, provider: "gitea" }), { ok: true });
+  assert.equal(calls.at(-1).provider, "gitea");
   const saved = await services.save(actor, input);
   const { password, ...edit } = input;
   assert.ok(password);

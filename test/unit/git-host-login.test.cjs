@@ -13,6 +13,7 @@ test("HTTP host login authenticates the current user without a project, redirect
     ["https://gitlab.com", "auto", "https://gitlab.com/api/v4/user", "username"],
     ["https://company.example", "gitlab", "https://company.example/api/v4/user", "username"],
     ["https://company.example", "github", "https://company.example/api/v3/user", "login"],
+    ["http://git.example:3000", "gitea", "http://git.example:3000/api/v1/user", "login"],
   ]) {
     await verifyGitHostLogin({ ...http, host }, provider, { request: async (url, options) => {
       assert.equal(url, endpoint);
@@ -20,12 +21,75 @@ test("HTTP host login authenticates the current user without a project, redirect
       assert.equal(options.redirect, "manual");
       assert.ok(options.signal instanceof AbortSignal);
       assert.ok(Object.values(options.headers).some(value => value.includes(http.password)));
+      if (provider === "gitea") assert.equal(options.headers.Authorization, `token ${http.password}`);
       return { ok: true, json: async () => ({ id: 1, [field]: "Developer" }) };
     } });
   }
+});
+
+test("auto detects self-hosted Gitea before sending credentials to its current-user API", async () => {
+  for (const meta of [
+    '<meta name="author" content="Gitea - Git with a cup of tea">',
+    "<meta content='Gitea 1.22.0' name='generator'>",
+  ]) {
+    const calls = [];
+    await verifyGitHostLogin({ ...http, host: "http://git.example:3000" }, "auto", { request: async (url, options) => {
+      calls.push({ url, options });
+      assert.equal(options.redirect, "manual");
+      if (calls.length === 1) {
+        assert.equal(url, "http://git.example:3000/");
+        assert.deepEqual(options.headers, { Accept: "text/html", "User-Agent": "Web-Coding" });
+        return new Response(`<html><head>${meta}</head><body>Custom company name</body></html>`, { headers: { "content-type": "text/html; charset=utf-8" } });
+      }
+      assert.equal(url, "http://git.example:3000/api/v1/user");
+      assert.equal(options.headers.Authorization, `token ${http.password}`);
+      assert.equal(options.signal, calls[0].options.signal, "probe and authentication share one deadline");
+      return Response.json({ id: 1, login: "Developer" });
+    } });
+    assert.equal(calls.length, 2);
+  }
+});
+
+test("auto never authenticates unknown hosts or follows redirects and bounds public probe size", async () => {
+  for (const response of [
+    new Response('<title>Gitea documentation</title><a href="https://gitea.com">Gitea</a>', { headers: { "content-type": "text/html" } }),
+    new Response("", { status: 302, headers: { location: "https://other.example/" } }),
+    new Response("", { status: 404 }),
+    Response.json({ version: "1.22.0" }),
+    new Response("x".repeat(129 * 1024) + '<meta name="author" content="Gitea">', { headers: { "content-type": "text/html" } }),
+  ]) {
+    let requests = 0;
+    await assert.rejects(verifyGitHostLogin({ ...http, host: "http://unknown.example:3000" }, "auto", {
+      request: async (url, options) => {
+        assert.equal(++requests, 1);
+        assert.equal(url, "http://unknown.example:3000/");
+        assert.equal(options.redirect, "manual");
+        assert.equal(options.headers.Authorization, undefined);
+        assert.equal(options.headers["PRIVATE-TOKEN"], undefined);
+        return response;
+      },
+    }), /选择 Git 服务/);
+  }
   await assert.rejects(verifyGitHostLogin({ ...http, host: "https://unknown.example" }, "auto", {
-    request: () => assert.fail("unsupported hosts must not receive credentials"),
-  }), /选择 Git 服务/);
+    request: async () => { throw new Error("fixture-secret network detail"); },
+  }), error => {
+    assert.match(error.message, /自动识别失败或超时/);
+    assert.doesNotMatch(error.message, /fixture-secret|network detail/);
+    return true;
+  });
+  await assert.rejects(verifyGitHostLogin(http, "invalid", { request: () => assert.fail("invalid provider") }), /服务类型无效/);
+});
+
+test("HTTP login distinguishes a mismatched service endpoint from denied credentials and redirects", async () => {
+  for (const [status, message] of [[404, /接口不存在（404）.*Gitea 与 GitLab/], [401, /个人访问令牌/], [403, /个人访问令牌/], [302, /重定向/]]) {
+    await assert.rejects(verifyGitHostLogin({ ...http, host: "http://git.example:3000" }, "gitlab", {
+      request: async () => new Response("fixture-secret server detail", { status }),
+    }), error => {
+      assert.match(error.message, message);
+      assert.doesNotMatch(error.message, /fixture-secret|server detail/);
+      return true;
+    });
+  }
 });
 
 test("HTTP login rejects anonymous pages, wrong identities, denied tokens, redirects and network diagnostics", async () => {
