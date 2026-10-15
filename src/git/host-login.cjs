@@ -54,10 +54,22 @@ async function verifyHttp(account, provider, request) {
   let response, user;
   try {
     response = await request(endpoint, { headers, redirect: "manual", signal });
+    // Gitea also accepts account passwords through HTTP Basic authentication.
+    // Keep token authentication first; only an authentication rejection permits
+    // the password attempt, against the same endpoint and within one deadline.
+    if (provider === "gitea" && response.status === 401) {
+      await response.body?.cancel();
+      response = await request(endpoint, {
+        headers: { ...headers, Authorization: `Basic ${Buffer.from(`${account.username}:${account.password}`, "utf8").toString("base64")}` },
+        redirect: "manual", signal,
+      });
+    }
   } catch {
     // Never expose response bodies, headers, tokens or transport diagnostics.
     throw new Error("Git 主机登录验证失败或超时，请检查网络和服务类型后重试。");
   }
+  if (provider === "gitea" && (response.status === 401 || response.status === 403))
+    throw new Error("Gitea 登录验证失败，请检查用户名或邮箱、密码或访问令牌。启用双重验证时请使用个人访问令牌，并至少授予 read:user 权限。");
   if (response.status === 401 || response.status === 403)
     throw new Error("Git 登录验证失败，请使用可读取本人资料的个人访问令牌；此验证接口不支持普通账号密码。");
   if (response.status === 404)
@@ -68,7 +80,9 @@ async function verifyHttp(account, provider, request) {
   try { user = await response.json(); }
   catch { throw new Error("Git 主机未返回有效的登录身份，请检查服务类型后重试。"); }
   const login = provider === "gitlab" ? user?.username : user?.login;
-  if (!user?.id || typeof login !== "string" || login.toLowerCase() !== account.username.toLowerCase())
+  const suppliedLogin = account.username.toLowerCase();
+  const emailMatches = provider === "gitea" && typeof user?.email === "string" && user.email.toLowerCase() === suppliedLogin;
+  if (!user?.id || typeof login !== "string" || (!emailMatches && login.toLowerCase() !== suppliedLogin))
     throw new Error("登录验证返回的账号与填写的用户名不一致，或主机未返回有效的登录身份。请填写 Git 服务的登录用户名。");
 }
 

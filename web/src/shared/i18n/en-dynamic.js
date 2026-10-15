@@ -16,6 +16,7 @@ export const enDynamic = {
     "Codex 已返回结果": "Codex has responded",
     "Codex 开发": "Codex development",
     "Git 主机登录验证成功。验证不会保存修改；项目仓库权限会在准备开发空间时检测。": "Git host authentication verified. Changes were not saved. Repository access is checked when preparing a development space.",
+    "Gitea 登录验证失败，请检查用户名或邮箱、密码或访问令牌。启用双重验证时请使用个人访问令牌，并至少授予 read:user 权限。": "Gitea login verification failed. Check your username or email, password or access token. With two-factor authentication, use a personal access token with at least read:user permission.",
     "Git 登录接口不存在（404），请检查服务类型和主机地址。Gitea 与 GitLab 是不同的服务，请选择对应类型或使用自动识别。": "The Git login endpoint was not found (404). Check the service type and host address. Gitea and GitLab are different services; select the matching type or use auto-detection.",
     "Git 登录接口发生重定向，请填写最终主机地址后重试；验证不会携带凭据跟随跳转。": "The Git login endpoint redirected the request. Enter the final host address and retry; verification does not follow redirects with credentials.",
     "Git 主机自动识别失败或超时，请检查部署服务器的网络和主机地址，或手动选择 Git 服务后重试。": "Git host detection failed or timed out. Check the deployment server's network and host address, or select the Git service manually and retry.",

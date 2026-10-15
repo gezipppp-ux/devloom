@@ -50,6 +50,56 @@ test("auto detects self-hosted Gitea before sending credentials to its current-u
   }
 });
 
+test("Gitea verifies passwords with a username or email after rejecting token authentication", async () => {
+  for (const username of ["Developer", "Developer@example.test"]) {
+    const account = { ...http, host: "http://git.example:3000", username };
+    const calls = [];
+    await verifyGitHostLogin(account, "gitea", { request: async (url, options) => {
+      calls.push(options);
+      assert.equal(url, "http://git.example:3000/api/v1/user");
+      assert.equal(options.redirect, "manual");
+      if (calls.length === 1) {
+        assert.equal(options.headers.Authorization, `token ${http.password}`);
+        return new Response("unauthorized", { status: 401 });
+      }
+      assert.equal(calls.length, 2);
+      assert.equal(options.signal, calls[0].signal);
+      assert.equal(options.headers.Authorization, `Basic ${Buffer.from(`${username}:${http.password}`).toString("base64")}`);
+      return Response.json({ id: 1, login: "developer", email: "developer@example.test" });
+    } });
+    assert.equal(calls.length, 2);
+  }
+});
+
+test("Gitea only retries rejected authentication, never permissions, redirects or transport errors", async () => {
+  for (const status of [403, 302, 404, 500]) {
+    let calls = 0;
+    await assert.rejects(verifyGitHostLogin(http, "gitea", { request: async () => {
+      assert.equal(++calls, 1);
+      return new Response("fixture-secret", { status });
+    } }), error => !error.message.includes("fixture-secret"));
+  }
+  let calls = 0;
+  await assert.rejects(verifyGitHostLogin(http, "gitea", { request: async () => {
+    calls++;
+    return new Response("fixture-secret", { status: 401 });
+  } }), /Gitea 登录验证失败.*双重验证/);
+  assert.equal(calls, 2);
+  calls = 0;
+  await assert.rejects(verifyGitHostLogin(http, "gitea", { request: async () => {
+    assert.equal(++calls, 1);
+    throw new Error("fixture-secret");
+  } }), error => !error.message.includes("fixture-secret"));
+});
+
+test("email identity matching is limited to the authenticated Gitea user's own email", async () => {
+  for (const [provider, email, id] of [["gitea", "someone@example.test", 1], ["gitea", "developer@example.test", null], ["github", "developer@example.test", 1]]) {
+    await assert.rejects(verifyGitHostLogin({ ...http, username: "developer@example.test" }, provider, {
+      request: async () => Response.json({ id, login: "developer", email }),
+    }), /账号与填写的用户名不一致/);
+  }
+});
+
 test("auto never authenticates unknown hosts or follows redirects and bounds public probe size", async () => {
   for (const response of [
     new Response('<title>Gitea documentation</title><a href="https://gitea.com">Gitea</a>', { headers: { "content-type": "text/html" } }),

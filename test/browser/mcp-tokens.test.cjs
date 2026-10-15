@@ -35,7 +35,7 @@ async function verifyMcpTokens(page, output) {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
   });
   await section.getByRole("button", { name: "复制 MCP 地址", exact: true }).click();
-  await section.getByText("已复制。", { exact: true }).waitFor();
+  await page.locator('.operation-message[data-type="success"]').getByText("已复制。", { exact: true }).waitFor();
   assert.equal(await page.evaluate(() => window.fixtureClipboard.readText()), new URL("/mcp", page.url()).href);
   await page.evaluate(() => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: window.fixtureClipboard });

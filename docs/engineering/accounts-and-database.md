@@ -56,7 +56,7 @@
 - `POST /api/account/git-accounts/check` 检测新增草稿，`POST /api/account/git-accounts/:id/test` 检测已保存账号或编辑草稿；均需 `projectId`，不接受客户端指定任意仓库。
 - 个人 Git 账号表单另提供独立的「验证登录」。`POST /api/account/git-accounts/verify` 验证草稿，`POST /api/account/git-accounts/:id/verify` 验证本人已保存账号或编辑草稿，不需要项目、不保存账号、不消费 SSH 密钥草稿。网络返回后重新校验登录会话及已有账号修订号，迟到响应不能写入卸载或切换后的账号页面。
 - 主机登录验证中，SSH 通过服务端 OpenSSH 以 `git` 用户执行公钥认证，使用独立私钥及空配置；成功依据独立诊断文件中的 OpenSSH 认证事件，不依据远端欢迎文字或退出码。HTTP 使用 Gitee、GitHub、GitLab、Gitea 的当前用户 API，以请求头传递令牌、禁止重定向并核对返回登录名；`provider: auto|github|gitee|gitlab|gitea`，默认 `auto`。官方主机按 origin 识别；其他主机仅无凭据读取同 origin 首页（最多 128 KiB、禁止重定向），通过公开的 Gitea author/generator 元数据识别自建 Gitea，不根据端口或页面链接猜测接口。识别与认证共用 30 秒期限；无法识别时需手动选择服务。服务类型仅用于验证，不持久化。
-- Gitea 使用 `/api/v1/user` 和 `Authorization: token <令牌>`，至少需 `read:user`；GitLab 使用 `/api/v4/user` 和 `PRIVATE-TOKEN`，两者不能混用。主机 API 验证要求能读取本人资料的访问令牌，不支持普通密码；404 明确提示接口或服务类型不匹配，重定向、未知接口、网络错误、无效身份或令牌失败不视为登录成功。主机验证成功不代表仓库读取或推送权限。
+- Gitea 使用 `/api/v1/user`，先尝试 `Authorization: token <令牌>`（至少需 `read:user`），仅在 401 时使用同一地址、禁止重定向且共用期限的 HTTP Basic 验证用户名／邮箱与密码；403 权限不足、重定向或网络失败不切换认证方式。返回的登录名或本人邮箱必须与输入匹配；启用双重验证时需使用个人访问令牌。GitLab 使用 `/api/v4/user` 和 `PRIVATE-TOKEN`，两者不能混用。Gitee、GitHub、GitLab 主机 API 验证仍要求能读取本人资料的访问令牌。404 明确提示接口或服务类型不匹配，重定向、未知接口、网络错误、无效身份或凭据失败不视为登录成功。主机验证成功不代表仓库读取或推送权限。
 - 凭据以 AES-256-GCM 保存；临时私钥目录在 POSIX 限制模式，在 Windows 限制 ACL，操作结束清理。HTTP Basic 凭据通过仅对子进程生效的 Git 配置传递，不进入命令参数、远程 URL 或仓库配置；禁止跨站重定向。HTTP 明文传输有明确风险提示。
 - SSH 的 `-F` 指向私钥临时目录内的真实空配置文件，以隔离用户／系统 SSH 配置；不使用 Windows 与 Git 自带 OpenSSH 解释不一致的 `NUL` 或 `/dev/null`。配置文件与私钥同目录、同权限，并随连接或单次 Git 操作一起清理。
 - 关联工作区只保存 Git 账号 ID 与远程地址；克隆及 fetch 在确认远端地址未被改写后使用该账号。该工作区 Codex 会话中的 Git 网络操作也使用该账号。HTTP Basic 凭据仅注入对应 Codex 子进程的 Git 配置，并按保存远端的 URL origin 限定；SSH 私钥写入受限临时文件，并在会话客户端关闭时清理。凭据不写入远程 URL 或仓库配置。关联中的账号不能删除。测试不验证推送权限。
