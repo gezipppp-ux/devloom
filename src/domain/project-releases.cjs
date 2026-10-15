@@ -19,4 +19,4 @@ function releaseTargetDate(value) {
   return date;
 }
 
-module.exports = { releaseName, releaseTargetDate };
+module.exports = { releaseNameRules, releaseName, releaseTargetDate };

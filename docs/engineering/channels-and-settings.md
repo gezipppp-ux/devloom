@@ -66,3 +66,11 @@ Bad: saving a new root must not move a running or archived worktree or change it
 Wrong: the Web controller imports source-specific protocol helpers, or creates checkouts relative to its own installation folder.
 
 Correct: the controller resolves a registered source, the adapter maps source-specific fields, and the execution core uses configured repository/root with a persisted source identity.
+
+## 事项附件的执行输入
+
+Bug／需求模板要求 `{{title}}`、`{{content}}`、`{{attachments}}`；可选 `{{attachment_count}}`、`{{attachment_list}}`。不兼容旧图片占位符，已保存的自定义模板需要改用附件占位符或恢复默认；已有任务快照不改写。
+
+项目开发服务在开始开发及追加事项时构造完整附件清单：按实际签名识别的 PNG/JPEG/WebP 作为图片输入；其他附件由 ProjectDevelopmentStore 从同项目、同事项且非资产的 ProjectFile 读取，核对快照 SHA-256 和大小后，通过 artifact-store 保存并落盘。路径按项目、执行人、任务、事项、附件和摘要隔离，文件名只保留受限格式后缀，不进入仓库或 Git。提示词包含文件名、MIME、大小及 JSON 字符串形式的本地绝对路径，不使用需要 Cookie 的 HTTP 下载链接。
+
+准备与恢复文件在短数据库事务外完成；发送前再次检查权限。追加批次保存提示词快照，发送前重建丢失或损坏的本地缓存；文件缺失、归属或内容变化时停止发送并明确报错，不静默遗漏。业务数据仍以 PostgreSQL 为准。Codex 使用文件工具读取路径，PDF／Office 等格式依赖运行环境的解析工具，不承诺上传即解析成功，不自动执行附件程序。

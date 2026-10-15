@@ -26,17 +26,17 @@ async function body(request, limit = 256000) {
   return input;
 }
 
-async function imageBody(request) {
+async function fileBody(request) {
   if (Number(request.headers["content-length"]) > MAX_IMAGE_BYTES)
-    throw new Error("单张图片不能超过 10 MiB。");
+    throw new Error("单个附件不能超过 10 MiB。");
   const chunks = [];
   let size = 0;
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > MAX_IMAGE_BYTES) throw new Error("单张图片不能超过 10 MiB。");
+    if (size > MAX_IMAGE_BYTES) throw new Error("单个附件不能超过 10 MiB。");
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
 }
 
-module.exports = { json, body, imageBody };
+module.exports = { json, body, fileBody };

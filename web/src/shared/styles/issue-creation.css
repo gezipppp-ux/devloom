@@ -1,0 +1,37 @@
+.neutral-app .ui-content:has(.issue-create-page) { background: var(--surface); }
+.issue-create-page { max-width: 1200px; margin: 0 auto; min-width: 0; }
+.issue-create-back { display: flex; align-items: center; gap: 8px; margin-bottom: 24px; }
+.issue-create-back > span:last-child { color: var(--muted); border-left: 1px solid var(--line); padding-left: 12px; margin-left: 4px; overflow-wrap: anywhere; }
+.issue-create-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 32px; }
+.issue-create-heading h1 { margin: 0; font-size: clamp(28px, 2.3vw, 32px); line-height: 1.4; }
+.issue-create-heading > .app-select { width: 132px; flex-shrink: 0; }
+.neutral-app .issue-create-page .issue-create-form { width: 100%; max-width: none; gap: 0; }
+.issue-create-form .issue-fields-creation { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 40px; align-items: start; }
+.issue-create-form .issue-fields-main { gap: 32px; }
+.issue-create-form .issue-fields-content { margin: 0; gap: 24px; }
+.issue-create-form .issue-fields-properties { margin: 0; padding-left: 28px; border-left: 1px solid var(--line); gap: 24px; }
+.issue-create-form .issue-fields-people { margin: 0; padding-top: 28px; border-top: 1px solid var(--line); }
+.issue-create-form .issue-fields h2 { font-size: 16px; line-height: 1.5; font-weight: 600; margin: 0; }
+.issue-create-form .issue-responsibility-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 24px; }
+.issue-create-form .issue-fields-dates { display: grid; gap: 20px; border-top: 1px solid var(--line); padding-top: 24px; }
+.issue-create-form .field-hint { margin: 0; line-height: 1.7; }
+.issue-create-form .issue-fields-people .field-hint + .field-hint { margin-top: -12px; }
+.issue-create-footer { display: flex; justify-content: flex-end; gap: 12px; border-top: 1px solid var(--line); padding-top: 24px; margin-top: 32px; }
+@media (max-width: 1199px) {
+  .issue-create-form .issue-fields-creation { grid-template-columns: minmax(0, 1fr) 240px; gap: 28px; }
+  .issue-create-form .issue-fields-properties { padding-left: 24px; }
+}
+@media (max-width: 900px) {
+  .issue-create-form .issue-fields-creation { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .issue-create-form .issue-fields-properties { border-left: 0; padding-left: 0; padding-top: 24px; border-top: 1px solid var(--line); }
+}
+@media (max-width: 767px) {
+  .issue-create-heading { gap: 12px; margin-bottom: 24px; }
+  .issue-create-heading > .app-select { width: 100px; }
+  .issue-create-form .issue-responsibility-fields { grid-template-columns: minmax(0, 1fr); }
+  .issue-create-form .issue-fields-main { gap: 24px; }
+  .issue-create-form .issue-fields-people { padding-top: 24px; }
+  .issue-create-back { flex-wrap: wrap; }
+  .issue-create-footer { padding-bottom: env(safe-area-inset-bottom); }
+  .issue-create-page button { min-height: 44px; }
+}

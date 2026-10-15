@@ -16,6 +16,7 @@ import DeliveryDetail from "./DeliveryDetail.vue";
 import PublishDelivery from "./PublishDelivery.vue";
 import { workLocation } from "./work-navigation.js";
 import MergeDevelopmentDialog from "./MergeDevelopmentDialog.vue";
+import IssueCreateMenu from "./IssueCreateMenu.vue";
 const props = defineProps({ kind: { type: String, required: true }, projectId: { type: String, default: "" }, canPublish: Boolean });
 const emit = defineEmits(["create", "open-workspace"]);
 const route = useRoute(), router = useRouter();
@@ -49,7 +50,7 @@ function search() { void router.push({ query: { ...route.query, q: query.value |
     <DeliveryDetail v-if="kind === 'deliveries' && route.query.delivery && projectId" :key="String(route.query.delivery)" :project-id="projectId" :delivery-id="String(route.query.delivery)" @back="router.push({ query: { ...route.query, delivery: undefined } })" />
     <template v-else>
       <PageHeader :title="$t(headings[kind][0])" :description="$t(headings[kind][1])">
-        <button v-if="kind === 'issues'" class="primary" @click="emit('create')"><PlusOutlined aria-hidden="true" />{{ $t('新建事项') }}</button>
+        <IssueCreateMenu v-if="kind === 'issues'" @create="emit('create', $event)" />
         <button v-else-if="kind === 'deliveries' && canPublish" class="primary" @click="publishing = true"><PlusOutlined aria-hidden="true" />{{ $t('发布交付') }}</button>
       </PageHeader>
       <div v-if="kind === 'tasks'" class="development-entry"><div><button class="primary" @click="emit('create', 'manual')"><PlusOutlined aria-hidden="true" />{{ $t('独立开发') }}</button><p class="field-hint">{{ $t('无需关联需求或 Bug。') }}</p></div><button @click="router.push({ name: 'issues', query: projectId ? { projectId } : {} })">{{ $t('从事项开发') }}</button></div>

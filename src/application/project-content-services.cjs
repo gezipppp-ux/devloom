@@ -1,3 +1,4 @@
+const { WorkflowExecutionStore } = require("../storage/workflow-execution-store.cjs");
 const { issueAttachments, projectFileInput, previewMimeType } = require("../domain/project-files.cjs");
 const { ProjectContentStore } = require("../storage/project-content-store.cjs");
 const { issueRequestId, issueInput, issueTransition, pageInput, text, object, identifier, choice, ISSUE_TYPES, contentFields, assignmentFields } = require("../domain/project-issues.cjs");
@@ -6,15 +7,19 @@ const { accountError } = require("../domain/account.cjs");
 const { deliveryChecklist, deliveryReview } = require("../domain/deliverable-review.cjs");
 const { responsibilityFields, revision } = require("../domain/project-issues.cjs");
 const { issueWorkflowNode, assertIssueWritable } = require("../domain/issue-workflows.cjs");
-const { workflowHandler, canProcessWorkflowStep, assertWorkflowHandler, assertTransitionFields } = require("../domain/workflow-actions.cjs");
-const { WorkActionStore } = require("../storage/work-action-store.cjs");
+const { canProcessWorkflowStep } = require("../domain/workflow-actions.cjs");
+const { ProjectWorkflowServices } = require("./project-workflow-services.cjs");
+const { currentHandler, workflowEventEdge } = require("../domain/workflow-handoffs.cjs");
+const { ProjectDevelopmentStore } = require("../storage/project-development-store.cjs");
 const { presentIssueImages, presentIssue, presentAsset, presentProjectFile, presentPage, presentDeliverable } = require("./project-content-presenter.cjs");
 
 class ProjectContentServices {
   constructor(database, projects) {
     this.store = new ProjectContentStore(database);
     this.projects = projects;
-    this.actions = new WorkActionStore(database);
+    this.workflow = new ProjectWorkflowServices(database, projects);
+    this.development = new ProjectDevelopmentStore(database);
+    this.executionWorkflow = new WorkflowExecutionStore(database);
   }
   async authorized(projectId, actor, permissions) {
     let context;
@@ -43,8 +48,9 @@ class ProjectContentServices {
     page.includeArchived = input.includeArchived === "true" || input.includeArchived === "1";
     if (input.status) page.status = text(input.status, "状态", 100);
     return this.read(projectId, actor, ["issue.view"], async () => {
+      const { permissions } = await this.projects.authorize(projectId, actor, "issue.view");
       const result = await this.store.issues(projectId, page);
-      return { ...presentPage(result, row => presentIssue(row, actor.id)), people: await this.store.people(result.items.flatMap(issue => [issue.developerId, ...responsibilityFields.map(field => issue[field])])) };
+      return { ...presentPage(result, row => presentIssue(row, actor.id, permissions)), people: await this.store.people(result.items.flatMap(issue => [issue.developerId, ...responsibilityFields.map(field => issue[field])])) };
     });
   }
   async reviewers(projectId, actor) {
@@ -60,7 +66,8 @@ class ProjectContentServices {
   async readIssue(projectId, id, actor) {
     return this.read(projectId, actor, ["issue.view"], async () => {
       const issue = await this.store.issue(projectId, id);
-      return { ...presentIssue(issue, actor.id), images: presentIssueImages(await this.store.issuePreviewFiles(projectId, id), issue.source), people: await this.store.people([issue.createdById, issue.updatedById, issue.developerId, ...responsibilityFields.map(field => issue[field]), ...issue.watcherIds]) };
+      const { permissions } = await this.projects.authorize(projectId, actor, "issue.view");
+      return { ...presentIssue(issue, actor.id, permissions), images: presentIssueImages(await this.store.issuePreviewFiles(projectId, id), issue.source), people: await this.store.people([issue.createdById, issue.updatedById, issue.developerId, ...responsibilityFields.map(field => issue[field]), currentHandler(issue), ...issue.watcherIds]) };
     });
   }
   async createIssue(projectId, actor, input) {
@@ -74,7 +81,7 @@ class ProjectContentServices {
       await this.store.members(projectId, [...data.watcherIds, ...responsibilityFields.map(field => data[field])]);
       const issue = await this.store.createIssue(projectId, actor.id, data, { requestId, attachments });
       for (const file of attachments) await this.store.addFile(projectId, "issues", issue.id, actor.id, file);
-      return { ...presentIssue(issue, actor.id), images: presentIssueImages(await this.store.issuePreviewFiles(projectId, issue.id), issue.source) };
+      return { ...presentIssue(issue, actor.id, (await this.projects.authorize(projectId, actor, "project.view")).permissions), images: presentIssueImages(await this.store.issuePreviewFiles(projectId, issue.id), issue.source) };
     });
   }
   async updateIssue(projectId, id, actor, input) {
@@ -89,49 +96,34 @@ class ProjectContentServices {
       await this.store.members(projectId, [...(data.watcherIds || []), ...responsibilityFields.map(field => data[field])]);
       const issue = await this.store.updateIssue(projectId, id, actor.id, input.revision, data);
       for (const file of attachments) await this.store.addFile(projectId, "issues", id, actor.id, file);
-      return { ...presentIssue(issue, actor.id), images: presentIssueImages(await this.store.issuePreviewFiles(projectId, issue.id), issue.source) };
+      return { ...presentIssue(issue, actor.id, (await this.projects.authorize(projectId, actor, "project.view")).permissions), images: presentIssueImages(await this.store.issuePreviewFiles(projectId, issue.id), issue.source) };
     });
   }
   async transitionIssue(projectId, id, actor, input) {
     await this.authorized(projectId, actor, ["issue.view"]);
     return this.store.transaction(async () => {
       const current = await this.store.issue(projectId, id);
-      const transition = await this.validateTransition(current, actor, input);
-      const result = await this.store.updateIssue(projectId, id, actor.id, input.revision, { status: transition.status }, "transition", { reason: transition.reason });
-      await this.authorized(projectId, actor, [transition.permission]);
-      return { ...presentIssue(result, actor.id), images: presentIssueImages(await this.store.issuePreviewFiles(projectId, id), result.source) };
+      const transition = issueTransition(current, input);
+      if (current.revision !== input.revision) throw accountError("事项已变化，请刷新。", 409);
+      const edge = current.workflowVersion.definition.transitions.find(edge => edge.from === current.status && edge.to === transition.status && (!input.transitionId || edge.id === input.transitionId));
+      const result = await this.workflow.apply(current, actor, edge, { reason: transition.reason, handlerId: input.handlerId });
+      for (const taskId of await this.executionWorkflow.taskIds(id)) await this.executionWorkflow.settle(taskId);
+      return { ...presentIssue(result, actor.id, (await this.projects.authorize(projectId, actor, "project.view")).permissions), images: presentIssueImages(await this.store.issuePreviewFiles(projectId, id), result.source) };
     });
   }
-  async validateTransition(issue, actor, input) {
-    const transition = issueTransition(issue, input);
-    assertWorkflowHandler(issue, issueWorkflowNode(issue), actor.id);
-    const edge = issue.workflowVersion.definition.transitions.find(edge => edge.id === input.transitionId || (!input.transitionId && edge.from === issue.status && edge.to === input.status));
-    assertTransitionFields(issue, edge);
-    if (edge.requireAcceptedDelivery && !await this.store.hasAcceptedDelivery(issue.projectId, issue.id)) throw accountError("需要先通过最新交付的验收。", 409);
-    const next = issue.workflowVersion.definition.nodes.find(node => node.id === transition.status);
-    if (!["completed", "cancelled"].includes(next.kind)) {
-      const handlerId = workflowHandler(issue, next);
-      if (!handlerId) throw accountError("下一步骤尚未指定处理人，请先填写对应职责成员。", 409);
-      await this.store.members(issue.projectId, [handlerId]);
-      await this.authorizeStep(issue, next, { id: handlerId });
-    }
-    await this.authorized(issue.projectId, actor, ["issue.view", transition.permission]);
-    return transition;
-  }
-  async authorizeStep(issue, node, actor) {
-    const { permissions } = await this.projects.authorize(issue.projectId, actor, "issue.view");
-    if (!canProcessWorkflowStep(issue, node, permissions)) throw accountError("处理人没有当前步骤配置的操作权限。", 403);
-  }
-  async startIssueStep(projectId, id, actor, input) {
-    object(input, ["revision", "actionRevision"]); revision(input.revision); revision(input.actionRevision);
-    return this.mutate(projectId, actor, ["issue.view"], async () => {
-      const issue = await this.store.issue(projectId, id);
-      assertIssueWritable(issue);
-      assertWorkflowHandler(issue, issueWorkflowNode(issue), actor.id);
-      if (issue.revision !== input.revision) throw accountError("事项已变化，请刷新。", 409);
-      await this.authorizeStep(issue, issueWorkflowNode(issue), actor);
-      await this.actions.start(issue, actor.id, input.actionRevision);
-      return presentIssue(await this.store.issue(projectId, id), actor.id);
+  async reassignIssueStep(projectId, id, actor, input) {
+    object(input, ["revision", "handlerId"]); revision(input.revision);
+    const handlerId = identifier(input.handlerId, "处理人");
+    return this.mutate(projectId, actor, ["issue.view", "issue.assign"], async () => {
+      const issue = await this.store.issue(projectId, id), node = issueWorkflowNode(issue);
+      if (!issue.actions[0]) throw accountError("事项没有待处理步骤。", 409);
+      if (node.handler === "developer" && handlerId !== issue.developerId) throw accountError("请通过开发任务转派开发负责人。", 409);
+      const delivery = await this.store.latestDelivery(projectId, id);
+      if (delivery?.status === "pending" && delivery.actionId === issue.actions[0].id) throw accountError("请通过交付详情重新指定验证人。", 409);
+      await this.store.members(projectId, [handlerId]);
+      const { permissions } = await this.projects.authorize(projectId, { id: handlerId }, "issue.view");
+      if (!canProcessWorkflowStep(issue, node, permissions)) throw accountError("处理人没有当前步骤的操作权限。", 403);
+      return presentIssue(await this.store.updateIssue(projectId, id, actor.id, input.revision, {}, "step.assigned", { handlerId, explicitHandler: true }), actor.id);
     });
   }
   async children(projectId, id, actor, kind, input) {
@@ -147,27 +139,67 @@ class ProjectContentServices {
     const body = text(input.body, "评论", 60000, { required: true });
     return this.mutate(projectId, actor, ["comment.create"], async () => (await this.store.comment(projectId, id, actor.id, body)));
   }
+  async addDeliverables(projectId, actor, input) {
+    object(input, ["items"]);
+    if (!Array.isArray(input.items) || !input.items.length || input.items.length > 20 || new Set(input.items.map(item => item.issueId)).size !== input.items.length) throw accountError("请选择 1–20 个不同事项提交交付。", 400);
+    return this.mutate(projectId, actor, ["deliverable.create"], async () => {
+      const items = [];
+      for (const item of input.items) items.push(await this.addDeliverable(projectId, actor, item));
+      return { items };
+    });
+  }
   async addDeliverable(projectId, actor, input) {
-    object(input, ["body", "taskId", "issueId", "commit", "title", "reviewerId", "supersedesId", "previousRevision"]);
+    object(input, ["body", "taskId", "issueId", "commit", "title", "reviewerId", "supersedesId", "previousRevision", "requestId", "issueRevision"]);
     const issueId = input.issueId ? identifier(input.issueId, "事项") : null;
     const data = { body: text(input.body, "交付内容", 60000, { required: true }), taskId: input.taskId ? identifier(input.taskId, "开发任务") : null,
       commit: input.commit ? text(input.commit, "提交信息", 2000) : null };
     if (!issueId && !data.taskId) throw accountError("请选择交付事项或本人独立开发任务。", 400);
     return this.mutate(projectId, actor, ["deliverable.create", ...(data.taskId ? ["session.view"] : [])], async () => {
+      const requestId = input.requestId ? identifier(input.requestId, "提交标识") : undefined;
+      const existing = await this.store.deliveryRequest(requestId);
+      if (existing) {
+        if (existing.projectId !== projectId || existing.authorId !== actor.id || existing.issueId !== issueId || existing.taskId !== data.taskId || existing.body !== data.body || input.title !== undefined && existing.title !== text(input.title, "交付标题", 200, { required: true }) || input.reviewerId !== undefined && existing.reviewerId !== input.reviewerId || existing.commit !== data.commit || existing.supersedesId !== (input.supersedesId || null)) throw accountError("相同提交标识不能更改交付内容。", 409);
+        return presentDeliverable(existing);
+      }
+      if (requestId) data.requestId = requestId;
+      const task = await this.store.deliveryTask(projectId, issueId, actor.id, { ...data, supersedesId: input.supersedesId });
       if (input.supersedesId) {
         const previous = await this.store.readDeliverable(projectId, identifier(input.supersedesId, "退回交付"));
         revision(input.previousRevision);
         if (previous.authorId !== actor.id) throw accountError("只有原发布人能重新提交交付。", 403);
         if (previous.status !== "returned" || previous.next || previous.revision !== input.previousRevision) throw accountError("此交付不可重新提交，请刷新。", 409);
-        if (previous.issueId !== issueId || previous.taskId !== data.taskId) throw accountError("重新提交不能改变交付来源。", 400);
+        if (previous.issueId !== issueId) throw accountError("重新提交不能改变交付事项。", 400);
+        if (previous.taskId !== data.taskId) {
+          const priorTask = previous.taskId ? await this.development.task(projectId, previous.taskId) : null;
+          const claim = issueId ? (await this.store.issue(projectId, issueId)).developmentClaim : null;
+          if (!priorTask || !["cancelled", "completed"].includes(priorTask.status) || claim?.task.id !== task?.id) throw accountError("请先明确认领新的返工任务，再关联原退回交付。", 409);
+        }
         data.supersedesId = previous.id;
       }
       const issue = issueId ? await this.store.issue(projectId, issueId) : null;
+      if (issue && input.issueRevision !== undefined && issue.revision !== revision(input.issueRevision)) throw accountError("事项已变化，请刷新后重新提交。", 409);
       data.reviewerId = identifier(input.reviewerId || issue?.qaOwnerId || issue?.acceptanceOwnerId, "交付验证人");
       await this.store.members(projectId, [data.reviewerId]);
       await this.projects.authorize(projectId, { id: data.reviewerId }, "deliverable.review");
       const title = text(input.title ?? issue?.title, "交付标题", 200, { required: true });
-      return presentDeliverable(await this.store.deliverable(projectId, issueId, actor.id, { ...data, title, checklist: deliveryChecklist(issue) }));
+      if (issue) {
+        assertIssueWritable(issue);
+        const submission = workflowEventEdge(issue, "delivery.submitted");
+        const previous = await this.store.latestDelivery(projectId, issueId);
+        if (previous?.status === "pending") throw accountError("本事项已有待验证交付，请先处理该交付。", 409);
+        if (previous?.status === "returned" && data.supersedesId !== previous.id) throw accountError("请沿原退回交付重新提交。", 409);
+        if (submission.actor === "developer" && (!data.taskId || issue.developmentClaim?.task.id !== data.taskId || issue.developmentClaim.task.executorId !== actor.id)) throw accountError("送验必须关联本人当前开发任务。", 409);
+      }
+      if (task && task.status !== "completed") {
+        const execution = await this.development.execution(task);
+        if (!["completed", "failed", "interrupted", "cancelled"].includes(execution?.status)) throw accountError("执行仍在进行或结果未知，请先核对开发结果。", 409);
+      }
+      const delivery = await this.store.deliverable(projectId, issueId, actor.id, { ...data, title, checklist: deliveryChecklist(issue) });
+      if (issue) {
+        const next = await this.workflow.event(issue, actor, "delivery.submitted", { delivery, reviewerId: data.reviewerId, executorId: task?.executorId });
+        await this.store.bindDeliveryAction(delivery.id, next.actions[0]?.id || null);
+      }
+      return presentDeliverable(await this.store.readDeliverable(projectId, delivery.id));
     });
   }
   async readDeliverable(projectId, id, actor) {
@@ -175,7 +207,7 @@ class ProjectContentServices {
       const delivery = await this.store.readDeliverable(projectId, id);
       const issue = delivery.issueId ? await this.store.issue(projectId, delivery.issueId) : null;
       const context = await this.projects.authorize(projectId, actor, "collaboration.view");
-      return { delivery: presentDeliverable(delivery), issue: issue ? presentIssue(issue, actor.id) : null, canReview: delivery.reviewerId === actor.id, canResubmit: delivery.authorId === actor.id && delivery.status === "returned" && !delivery.next, permissions: context.project.status === "archived" ? context.permissions.filter(p => p.endsWith(".view")) : context.permissions, people: await this.store.people([delivery.authorId, delivery.reviewerId, delivery.reviewedById]) };
+      return { delivery: presentDeliverable(delivery), issue: issue ? presentIssue(issue, actor.id, context.permissions) : null, canReview: delivery.reviewerId === actor.id, canResubmit: delivery.authorId === actor.id && delivery.status === "returned" && !delivery.next, permissions: context.project.status === "archived" ? context.permissions.filter(p => p.endsWith(".view")) : context.permissions, people: await this.store.people([delivery.authorId, delivery.reviewerId, delivery.reviewedById]) };
     });
   }
   async beginDelivery(projectId, id, actor, input) {
@@ -184,7 +216,13 @@ class ProjectContentServices {
       const delivery = await this.store.readDeliverable(projectId, id);
       if (delivery.issueId) assertIssueWritable(await this.store.issue(projectId, delivery.issueId));
       if (delivery.reviewerId !== actor.id) throw accountError("此交付未分派给你验证。", 403);
-      return presentDeliverable(await this.store.beginDelivery(projectId, id, actor.id, input.revision));
+      const issue = await this.workflow.assertCurrentDelivery(delivery);
+      const saved = await this.store.beginDelivery(projectId, id, actor.id, input.revision);
+      if (issue) {
+        const next = await this.workflow.event(issue, actor, "verification.started", { delivery: saved, reviewerId: actor.id });
+        await this.store.bindDeliveryAction(id, next.actions[0]?.id || null);
+      }
+      return presentDeliverable(await this.store.readDeliverable(projectId, id));
     });
   }
   async reassignDelivery(projectId, id, actor, input) {
@@ -195,23 +233,26 @@ class ProjectContentServices {
       if (delivery.issueId) assertIssueWritable(await this.store.issue(projectId, delivery.issueId));
       await this.store.members(projectId, [reviewerId]);
       await this.projects.authorize(projectId, { id: reviewerId }, "deliverable.review");
-      return presentDeliverable(await this.store.reassignDelivery(projectId, id, actor.id, input.revision, reviewerId));
+      const issue = await this.workflow.assertCurrentDelivery(delivery);
+      await this.store.reassignDelivery(projectId, id, actor.id, input.revision, reviewerId);
+      if (issue) {
+        const { permissions } = await this.projects.authorize(projectId, { id: reviewerId }, "issue.view");
+        if (!canProcessWorkflowStep(issue, issueWorkflowNode(issue), permissions)) throw accountError("验证人没有当前步骤的操作权限。", 403);
+        const next = await this.store.updateIssue(projectId, issue.id, actor.id, issue.revision, {}, "step.assigned", { handlerId: reviewerId, explicitHandler: true });
+        await this.store.bindDeliveryAction(id, next.actions[0]?.id || null);
+      }
+      return presentDeliverable(await this.store.readDeliverable(projectId, id));
     });
   }
   async reviewDeliverable(projectId, id, actor, input) {
     return this.mutate(projectId, actor, ["collaboration.view", "deliverable.review"], async () => {
       const current = await this.store.readDeliverable(projectId, id);
       if (current.reviewerId !== actor.id) throw accountError("只有指定验证人能验收此交付。", 403);
+      const issue = await this.workflow.assertCurrentDelivery(current);
       const review = deliveryReview(input, current);
       const saved = await this.store.reviewDeliverable(projectId, id, actor.id, input.revision, review);
-      if (input.transitionId) {
-        if (!current.issueId) throw accountError("独立开发交付没有可流转的事项。", 400);
-        const issue = await this.store.issue(projectId, current.issueId);
-        const transition = await this.validateTransition(issue, actor, { transitionId: input.transitionId, revision: input.issueRevision, reason: review.reviewNote });
-        const target = issue.workflowVersion.definition.nodes.find(node => node.id === transition.status);
-        if ((review.status === "returned" && ["completed", "cancelled"].includes(target.kind)) || (review.status === "accepted" && target.kind === "cancelled")) throw accountError("验收结论与事项流转目标不一致。", 400);
-        await this.store.updateIssue(projectId, issue.id, actor.id, input.issueRevision, { status: transition.status }, "transition", { reason: transition.reason });
-      }
+      if (issue) await this.workflow.event(issue, actor, "verification." + review.status, { delivery: saved, reviewerId: actor.id, reason: review.reviewNote });
+      if (saved.taskId) await this.executionWorkflow.settle(saved.taskId);
       return presentDeliverable(saved);
     });
   }

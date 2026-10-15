@@ -1,17 +1,16 @@
 const { McpStore } = require("../storage/mcp-store.cjs");
 const { accountError } = require("../domain/account.cjs");
 const { mcpId, assertMcpScope } = require("../domain/mcp-access.cjs");
-const { pageInput, revision } = require("../domain/project-issues.cjs");
-const { projectFileInput } = require("../domain/project-files.cjs");
-const { imageExtension } = require("../domain/image-format.cjs");
+const { pageInput, revision, contentFields, assignmentFields, responsibilityFields } = require("../domain/project-issues.cjs");
+const { projectFileInput, previewMimeType } = require("../domain/project-files.cjs");
 const { presentMcpProject, presentMcpMember, presentMcpUpload, presentMcpIssue, presentMcpIssueResult } = require("./mcp-presenter.cjs");
 
 const markdownFields = ["description", "acceptanceCriteria", "reproductionSteps", "expectedResult", "actualResult"];
 const writeScopes = { create_release: "releases.write", create_issue: "issues.write", update_issue: "issues.write", assign_issue: "issues.assign" };
 class McpProjectServices {
-  constructor(database, { tokens, projects, content, lifecycle, development }) {
+  constructor(database, { tokens, projects, content, lifecycle, development, workflows }) {
     this.store = new McpStore(database);
-    Object.assign(this, { tokens, projects, content, lifecycle, development });
+    Object.assign(this, { tokens, projects, content, lifecycle, development, workflows });
   }
   async authorize(context, projectId, permission = "issue.view", scope = "read") {
     const token = await this.tokens.refresh(context, scope, projectId);
@@ -71,19 +70,18 @@ class McpProjectServices {
   async getIssue(context, input) {
     return this.read(context, input.projectId, () => this.issueResult(input.projectId, input.issueId, { id: context.userId }));
   }
+  async getIssueWorkflow(context, input) {
+    return this.read(context, input.projectId, () => this.workflows.readPublished(input.projectId, input.type, { id: context.userId }));
+  }
   async upload(context, projectId, requestId, input) {
     mcpId(projectId, "项目 ID"); mcpId(requestId);
     const file = projectFileInput(input);
-    try { imageExtension(file.data); } catch { throw accountError("仅支持实际 PNG、JPEG、WebP 图片。", 400); }
     return this.store.transaction(async () => {
-      const token = await this.tokens.refresh(context, "files.upload", projectId);
-      const permissionContext = await this.projects.authorize(projectId, { id: token.userId }, "issue.view");
-      const permission = permissionContext.permissions.includes("issue.create") ? "issue.create" : "issue.edit";
-      await this.projects.authorize(projectId, { id: token.userId }, permission);
+      const token = await this.tokens.refreshUpload(context, projectId);
       const result = await this.store.upload(token.userId, projectId, requestId, file);
-      await this.authorize(context, projectId, permission, "files.upload");
+      await this.tokens.refreshUpload(context, projectId);
       await this.store.audit(token.userId, token.id, "upload", projectId, requestId);
-      return presentMcpUpload(result);
+      return presentMcpUpload(result, previewMimeType(file.data));
     });
   }
   async write(context, kind, input, permissions, operation) {
@@ -114,7 +112,8 @@ class McpProjectServices {
   }
   async createRelease(context, input) {
     return this.write(context, "create_release", input, ["release.manage"], async actor =>
-      ({ release: await this.lifecycle.saveRelease(input.projectId, null, actor, { name: input.name, description: input.description || "" }) }));
+      ({ release: await this.lifecycle.saveRelease(input.projectId, null, actor, { name: input.name, description: input.description || "",
+        ...(Object.hasOwn(input, "targetDate") ? { targetDate: input.targetDate } : {}) }) }));
   }
   async issueInput(actor, projectId, input, issueId) {
     const ids = (input.attachmentIds || []).map(id => mcpId(id, "附件 ID"));
@@ -133,7 +132,7 @@ class McpProjectServices {
     return { value, ids };
   }
   async createIssue(context, input) {
-    const assigns = Boolean(input.developerId || input.watcherIds?.length || ["reporterId", "businessOwnerId", "qaOwnerId", "acceptanceOwnerId"].some(key => input[key]));
+    const assigns = Boolean(input.developerId || input.watcherIds?.length || responsibilityFields.some(key => input[key] && input[key] !== context.userId));
     return this.write(context, "create_issue", input, ["issue.create", ...(assigns ? ["issue.assign"] : [])], async actor => {
       const { value, ids } = await this.issueInput(actor, input.projectId, input);
       const issue = await this.content.createIssue(input.projectId, actor, value);
@@ -143,7 +142,11 @@ class McpProjectServices {
     });
   }
   async updateIssue(context, input) {
-    return this.write(context, "update_issue", input, ["issue.edit", ...(["watcherIds", "reporterId", "businessOwnerId", "qaOwnerId", "acceptanceOwnerId"].some(key => Object.hasOwn(input, key)) ? ["issue.assign"] : [])], async actor => {
+    const permissions = [
+      ...(input.attachmentIds?.length || contentFields.some(key => Object.hasOwn(input, key)) ? ["issue.edit"] : []),
+      ...(assignmentFields.some(key => Object.hasOwn(input, key)) ? ["issue.assign"] : []),
+    ];
+    return this.write(context, "update_issue", input, permissions, async actor => {
       const { value, ids } = await this.issueInput(actor, input.projectId, input, input.issueId);
       await this.content.updateIssue(input.projectId, input.issueId, actor, value);
       await this.store.bind(ids, input.issueId);

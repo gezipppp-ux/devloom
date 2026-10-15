@@ -51,7 +51,7 @@ async function verifyPromptSettings(browser, { origin, output, errors, workspace
     assert.ok(editorTop >= labelBottom + 7, "editor label keeps the shared 8px field spacing");
     assert.equal(await editor.inputValue(), initial.templates.requirement);
     assert.equal(await save.isDisabled(), true);
-    const custom = `自定义提示词：{{title}}\n{{content}}\n{{images}}\n<img src=x onerror="window.promptPreviewExecuted=true">\n$& 保留原文`;
+    const custom = `自定义提示词：{{title}}\n{{content}}\n{{attachments}}\n<img src=x onerror="window.promptPreviewExecuted=true">\n$& 保留原文`;
     await editor.fill(custom);
     await page.locator(".prompt-preview > summary").click();
     const preview = page.getByLabel("提示词示例预览", { exact: true });
@@ -60,10 +60,10 @@ async function verifyPromptSettings(browser, { origin, output, errors, workspace
     assert.equal(await preview.locator("img").count(), 0, "preview renders raw text, never HTML");
     assert.equal(await page.evaluate(() => window.promptPreviewExecuted), undefined);
     await editor.evaluate((field) => field.setSelectionRange(0, 0));
-    await page.getByRole("button", { name: "插入占位符 image_count", exact: true }).click();
-    const manualDraft = `{{image_count}}${custom}`;
+    await page.getByRole("button", { name: "插入占位符 attachment_count", exact: true }).click();
+    const manualDraft = `{{attachment_count}}${custom}`;
     assert.equal(await editor.inputValue(), manualDraft);
-    assert.equal(await editor.evaluate((field) => field.selectionStart), "{{image_count}}".length);
+    assert.equal(await editor.evaluate((field) => field.selectionStart), "{{attachment_count}}".length);
     assert.deepEqual(Object.keys(initial.catalog), ["bug", "requirement", "supplement"]);
     const request = page.waitForRequest((entry) => entry.url() === endpoint && entry.method() === "POST");
     await save.click();

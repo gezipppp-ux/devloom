@@ -58,7 +58,8 @@ async function main() {
   let browser;
   try {
     browser = await chromium.launch({ ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : process.platform === "win32" ? { channel: "msedge" } : {}), headless: true });
-    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const page = await context.newPage();
     await page.addInitScript(() => {
       // Ordinary HTTP LAN origins expose getRandomValues but not randomUUID.
       Object.defineProperty(window.crypto, "randomUUID", { value: undefined, configurable: true });
@@ -88,7 +89,7 @@ async function main() {
     assert.equal(await memberBugPrompt.isDisabled(), true, "ordinary project members cannot edit project defaults");
     await page.getByRole("group", { name: "提示词作用域" }).getByRole("button", { name: "我的配置", exact: true }).click();
     await page.getByRole("checkbox", { name: "自定义此提示词，仅对我生效" }).check();
-    await memberBugPrompt.fill("产品成员独立模板 {{title}}\n{{content}}\n{{images}}");
+    await memberBugPrompt.fill("产品成员独立模板 {{title}}\n{{content}}\n{{attachments}}");
     const memberPromptSaved = page.waitForResponse(response => response.url() === `${origin}/api/projects/${project.id}/prompts` && response.request().method() === "POST");
     await page.getByRole("button", { name: "保存我的提示词", exact: true }).click();
     assert.equal((await memberPromptSaved).status(), 200, "personal templates do not require project configuration or a development space");
@@ -107,7 +108,7 @@ async function main() {
     assert.equal(requests.some(request => request.url.endsWith("/api/account/git-accounts")), false, "product collaboration must not require Git setup");
     for (const [type, title] of [["需求", "支持验收的需求"], ["Bug", "可复现的缺陷"]]) {
       await tab(type);
-      await page.getByRole("button", { name: `新建${type}`, exact: true }).click();
+      await require("../support/browser-navigation.cjs").openIssueCreate(page, type);
       await page.getByLabel("标题", { exact: true }).fill(title);
       assert.equal(await page.getByLabel("描述", { exact: true }).getAttribute("contenteditable"), "true", "writing is visual by default");
       await setMarkdown(page, "描述", markdown);
@@ -190,8 +191,15 @@ async function main() {
       if (type === "Bug") { assert.equal(stored.severity, "major"); assert.equal(stored.expectedResult, "**预期完整显示**"); assert.equal(stored.actualResult, "实际出现错误"); }
       assert.equal(await database.client.projectFile.count({ where: { issueId } }), 2);
       assert.ok(new URL(issueUrl).searchParams.get("issue"), "issue detail has a stable shareable address");
-      await page.reload();
+      const directPage = await page.context().newPage();
+      try {
+        assert.equal((await directPage.goto(issueUrl)).status(), 200, "opening a detail URL serves the application");
+        await directPage.getByRole("heading", { name: title, exact: true }).waitFor();
+        assert.equal(directPage.url(), issueUrl, "direct navigation restores the same issue");
+      } finally { await directPage.close(); }
+      assert.equal((await page.reload()).status(), 200, "reloading a detail URL serves the application");
       await page.getByRole("heading", { name: title, exact: true }).waitFor();
+      assert.equal(page.url(), issueUrl, "reload restores the same issue");
       const savedImage = page.locator('.markdown-content img[alt="pasted-proof.png"]');
       await savedImage.waitFor();
       await savedImage.evaluate(image => image.complete ? undefined : new Promise(resolve => image.addEventListener("load", resolve, { once: true })));
@@ -211,15 +219,15 @@ async function main() {
       assert.equal(await database.client.developmentTask.count(), 0, "editing and assignment cannot start Codex");
     }
     await tab("Bug");
-    await page.getByRole("button", { name: "新建Bug", exact: true }).click();
+    await require("../support/browser-navigation.cjs").openIssueCreate(page, "Bug");
     await page.getByLabel("标题", { exact: true }).fill("取消的本地草稿");
     const beforeCancel = await database.client.projectFile.count();
     await pasteImage(page, "描述", "cancelled.png");
-    await page.getByRole("button", { name: "新建Bug", exact: true }).click();
-    await page.getByRole("button", { name: "新建Bug", exact: true }).click();
+    await page.getByRole("button", { name: "取消", exact: true }).click();
+    await require("../support/browser-navigation.cjs").openIssueCreate(page, "Bug");
     assert.equal(await page.getByLabel("标题", { exact: true }).inputValue(), "");
     assert.equal(await markdownValue(page), "");
-    assert.equal(await page.locator(".markdown-attachments li").count(), 0, "header toggle discards staged files");
+    assert.equal(await page.locator(".markdown-attachments li").count(), 0, "cancelling the creation page discards staged files");
     await pasteImage(page, "描述", "removed.png", "混合剪贴板说明");
     const linkedDraft = await markdownValue(page);
     const removedUrl = linkedDraft.match(/\/api\/projects\/[^)\s]+/)[0];
@@ -390,7 +398,7 @@ async function main() {
     assert.match(startedTask.snapshot.issues[0].description, /pasted-proof\.png/);
     assert.equal(startedTask.snapshot.issues[0].files.filter(file => file.mimeType === "image/png").length, 1);
     assert.ok(clients.flatMap(client => client.calls).some(call => call.method === "turn/start" && call.params.input.some(input => input.type === "localImage")), "explicit fake execution receives the persisted image");
-    assert.equal((await database.client.projectIssue.findFirst({ where: { projectId: project.id, number: 1 } })).status, "planned", "explicit execution does not advance business acceptance");
+    assert.equal((await database.client.projectIssue.findFirst({ where: { projectId: project.id, number: 1 } })).status, "developing", "real execution advances development without completing acceptance");
     await page.getByRole("button", { name: "■ 停止", exact: true }).click();
     await page.getByRole("button", { name: "返回项目协作", exact: true }).click();
     assert.equal(new URL(page.url()).searchParams.get("task"), planned.id, "return from session restores source task");
@@ -409,7 +417,10 @@ async function main() {
     assert.equal(bugSnapshot.severity, "major");
     assert.equal(bugSnapshot.files.filter(file => file.mimeType === "image/png").length, 1);
     assert.equal(clients.flatMap(client => client.calls).filter(call => call.method === "turn/start").length, 1, "saving an addition never sends it automatically");
+    const additionResponse = page.waitForResponse(response => /\/additions\/[^/]+\/continue$/.test(new URL(response.url()).pathname) && response.request().method() === "POST");
     await page.getByRole("button", { name: "发送资料并继续 Codex", exact: true }).click();
+    const additionResult = await additionResponse;
+    assert.equal(additionResult.status(), 202, await additionResult.text());
     await page.getByText("追加资料已发送。", { exact: true }).waitFor();
     assert.equal(clients.flatMap(client => client.calls).filter(call => call.method === "turn/start").length, 2);
     await page.getByRole("button", { name: "管理中心", exact: true }).click();

@@ -16,7 +16,7 @@ test("independent development accepts text or images and rejects invalid source 
 
 test("independent prompts apply the development template once and bound the rendered instruction", () => {
   const request = manualDevelopmentInput({ requestId: randomUUID(), title: "独立修复", content: "$& {{title}}", images: [], baseBranch: "main" });
-  const templates = { ...getPromptTemplates(), requirement: "Development {{title}}\n{{content}}\n{{images}}" };
+  const templates = { ...getPromptTemplates(), requirement: "Development {{title}}\n{{content}}\n{{attachments}}" };
   assert.match(manualDevelopmentPrompt(request, templates), /Development 独立修复\n\$& \{\{title\}\}/);
-  assert.throws(() => manualDevelopmentPrompt({ ...request, content: "a".repeat(40000) }, { ...templates, requirement: "{{title}}{{content}}{{content}}{{images}}" }), { statusCode: 400 });
+  assert.throws(() => manualDevelopmentPrompt({ ...request, content: "a".repeat(40000) }, { ...templates, requirement: "{{title}}{{content}}{{content}}{{attachments}}" }), { statusCode: 400 });
 });

@@ -1,3 +1,4 @@
+const { installReviewWorkflow } = require("../support/workflow-fixture.cjs");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { randomUUID } = require("node:crypto");
@@ -20,16 +21,17 @@ async function fixture(t) {
 }
 
 test("release archive refuses unresolved delivery reviews even when its issues are terminal", async t => {
-  const { actor, projectId, lifecycle, content } = await fixture(t);
+  const { database, actor, projectId, lifecycle, content } = await fixture(t);
+  await installReviewWorkflow(database);
   const release = await lifecycle.saveRelease(projectId, null, actor, { name: "v3.1" });
-  let issue = await content.createIssue(projectId, actor, { type: "bug", title: "Completed scope", releaseId: release.id });
-  issue = await content.transitionIssue(projectId, issue.id, actor, { revision: issue.revision, status: "cancelled", reason: "Out of scope" });
+  const issue = await content.createIssue(projectId, actor, { type: "requirement", title: "Completed scope", releaseId: release.id });
   const delivery = await content.addDeliverable(projectId, actor, { issueId: issue.id, body: "Handover evidence", reviewerId: actor.id });
+  // Seed an inconsistent terminal issue to exercise archive defense independently of workflow gates.
+  await database.client.projectIssue.update({ where: { id: issue.id }, data: { status: "done" } });
   await assert.rejects(lifecycle.archiveRelease(projectId, release.id, actor, { revision: 1 }, true), /交付/);
-  const returned = await content.reviewDeliverable(projectId, delivery.id, actor, { revision: 1, status: "returned", checkedItems: [], reviewNote: "Evidence missing" });
+  await database.client.projectDeliverable.update({ where: { id: delivery.id }, data: { status: "returned" } });
   await assert.rejects(lifecycle.archiveRelease(projectId, release.id, actor, { revision: 1 }, true), /交付/);
-  const next = await content.addDeliverable(projectId, actor, { issueId: issue.id, body: "Complete evidence", reviewerId: actor.id, supersedesId: delivery.id, previousRevision: returned.revision });
-  await content.reviewDeliverable(projectId, next.id, actor, { revision: 1, status: "accepted", checkedItems: next.checklist.map((_, i) => i) });
+  await database.client.projectDeliverable.update({ where: { id: delivery.id }, data: { status: "accepted" } });
   assert.equal((await lifecycle.archiveRelease(projectId, release.id, actor, { revision: 1 }, true)).status, "archived");
 });
 

@@ -12,6 +12,7 @@ import {
 import { Select } from "antdv-next";
 import { CheckOutlined } from "@antdv-next/icons";
 import { translate } from "../i18n/index.js";
+import { filterPinyinOption } from "./pinyin-search.js";
 import "../styles/select.css";
 
 function textOf(children) {
@@ -59,6 +60,7 @@ export default defineComponent({
     nativeEvents: Boolean,
     toolbar: Boolean,
     iconOnly: Boolean,
+    searchPinyin: Boolean,
   },
   emits: ["update:modelValue", "update:value", "change"],
   setup(props, { attrs, slots, emit, expose }) {
@@ -232,6 +234,12 @@ export default defineComponent({
             Select,
             {
               ...selectAttributes,
+              ...(props.searchPinyin
+                ? {
+                    showSearch: { filterOption: filterPinyinOption },
+                    notFoundContent: translate("没有匹配选项"),
+                  }
+                : {}),
               ref: select,
               class: "app-select-control",
               style: undefined,
@@ -261,7 +269,9 @@ export default defineComponent({
                   originNode,
                   slots.footer
                     ? h("div", { class: "app-select-footer" }, slots.footer())
-                    : null,
+                    : props.searchPinyin
+                      ? h("div", { class: "app-select-footer app-select-search-hint" }, translate("输入姓名、用户名、拼音或首字母搜索"))
+                      : null,
                 ]),
               ...(props.iconOnly
                 ? {

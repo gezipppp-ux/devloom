@@ -1,16 +1,20 @@
+const { workflowActorAllowed } = require("../domain/workflow-handoffs.cjs");
 const { issueWorkflowNode, issueDevelopmentAllowed } = require("../domain/issue-workflows.cjs");
-const { issueTransitions } = require("../domain/project-issues.cjs");
-const { workflowHandler, workflowStepPermissions } = require("../domain/workflow-actions.cjs");
+const { workflowHandler } = require("../domain/workflow-actions.cjs");
 
 function dates(row) {
   return { ...row, ...(row.createdAt ? { createdAt: row.createdAt.toISOString() } : {}), ...(row.updatedAt ? { updatedAt: row.updatedAt.toISOString() } : {}) };
 }
-function presentIssue(row, actorId) {
+function presentIssue(row, actorId, permissions = []) {
   const { source, release, workflowVersion, developmentClaim, actions = [], ...issue } = row;
   const action = actions[0];
   const needsAssignment = !workflowHandler(row, issueWorkflowNode(row));
-  const processing = action ? { id: action.id, handlerId: action.handlerId, status: action.status, category: action.category, revision: action.revision, needsAssignment, startPermissions: workflowStepPermissions(row, issueWorkflowNode(row)), canStart: !needsAssignment && action.handlerId === actorId && action.status === "ready" && release?.status !== "archived" } : null;
-  return { ...dates(issue), processing, development: developmentClaim ? { taskId: developmentClaim.task.id, executorId: developmentClaim.task.executorId, executorName: developmentClaim.task.executor.displayName } : null, release: release ? { id: release.id, name: release.name, status: release.status } : null, workflow: { id: workflowVersion.workflowId, version: workflowVersion.version, definition: workflowVersion.definition }, statusName: issueWorkflowNode(row)?.name || row.status, developmentAllowed: issueDevelopmentAllowed(row), availableTransitions: release?.status === "archived" || actorId && workflowHandler(row, issueWorkflowNode(row)) !== actorId ? [] : issueTransitions(row), source: source ? { channel: source.channel, scope: source.scope, type: source.type, externalId: source.externalId, url: source.url, capturedAt: source.capturedAt.toISOString() } : null };
+  const processing = action ? { id: action.id, handlerId: action.handlerId, status: action.status, category: action.category, revision: action.revision, needsAssignment } : null;
+  const workflowActions = release?.status === "archived" ? [] : workflowVersion.definition.transitions.filter(edge => edge.from === row.status).map(edge => {
+    const next = workflowVersion.definition.nodes.find(node => node.id === edge.to);
+    return { ...edge, status: edge.to, statusName: next.name, nextHandlerId: edge.assignment === "executor" ? row.developerId : workflowHandler(row, next), terminal: ["completed", "cancelled"].includes(next.kind) };
+  });
+  return { ...dates(issue), processing, development: developmentClaim ? { taskId: developmentClaim.task.id, executorId: developmentClaim.task.executorId, executorName: developmentClaim.task.executor.displayName } : null, release: release ? { id: release.id, name: release.name, status: release.status } : null, workflow: { id: workflowVersion.workflowId, version: workflowVersion.version, definition: workflowVersion.definition }, statusName: issueWorkflowNode(row)?.name || row.status, developmentAllowed: issueDevelopmentAllowed(row), assignmentAllowed: issueWorkflowNode(row)?.allowAssignment === true, workflowActions, availableTransitions: workflowActions.filter(edge => edge.trigger === "manual" && permissions.includes(edge.permission) && (!actorId || workflowActorAllowed(row, edge, actorId, permissions))), source: source ? { channel: source.channel, scope: source.scope, type: source.type, externalId: source.externalId, url: source.url, capturedAt: source.capturedAt.toISOString() } : null };
 }
 function presentIssueImages(rows, source) {
   const files = rows.map(presentProjectFile);

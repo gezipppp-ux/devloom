@@ -16,6 +16,15 @@ class McpStore {
   tokens(userId) { return this.database.client.mcpToken.findMany({ where: { userId }, orderBy: { createdAt: "desc" } }); }
   token(id) { return this.database.client.mcpToken.findUnique({ where: { id }, include: { user: true } }); }
   tokenBySecret(secret) { return this.database.client.mcpToken.findUnique({ where: { tokenHash: digest(secret) }, include: { user: true } }); }
+  uploadToken(id) { return this.database.client.mcpUploadToken.findUnique({ where: { id } }); }
+  uploadTokenBySecret(secret) { return this.database.client.mcpUploadToken.findUnique({ where: { tokenHash: digest(secret) } }); }
+  async createUploadToken(token, projectId) {
+    const secret = "wc_upload_" + randomBytes(32).toString("base64url");
+    await this.database.client.mcpUploadToken.deleteMany({ where: { expiresAt: { lte: new Date() } } });
+    const grant = await this.database.client.mcpUploadToken.create({ data: { tokenId: token.id, projectId,
+      tokenHash: digest(secret), expiresAt: new Date(Math.min(Date.now() + 86400000, token.expiresAt.getTime())) } });
+    return { grant, secret };
+  }
   async createToken(user, input) {
     const secret = "wc_mcp_" + randomBytes(32).toString("base64url");
     const { expiresInDays, ...data } = input;
@@ -42,7 +51,7 @@ class McpStore {
       return existing;
     }
     const pending = await table.aggregate({ where: { userId, issueId: null, expiresAt: { gt: new Date() } }, _sum: { size: true } });
-    if ((pending._sum.size || 0) + file.data.length > 100 * 1024 * 1024) throw accountError("暂存图片合计不能超过 100 MiB，请先发布或等待过期。", 400);
+    if ((pending._sum.size || 0) + file.data.length > 100 * 1024 * 1024) throw accountError("暂存附件合计不能超过 100 MiB，请先发布或等待过期。", 400);
     return table.create({ data: { id, userId, projectId, ...file, size: file.data.length, sha256, expiresAt: new Date(Date.now() + 86400000) } });
   }
   async attachments(userId, projectId, ids, issueId) {

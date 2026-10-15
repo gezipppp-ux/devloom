@@ -24,11 +24,11 @@ async function verifyProjectPromptSettings({ page, origin, project, projects, ad
   assert.equal(await bug.inputValue(), defaults.bug);
   assert.equal(await bug.isDisabled(), true);
   await scopes.getByRole("button", { name: "项目默认", exact: true }).click();
-  const customBug = `共享 Bug {{title}}\n{{content}}\n{{images}}`;
+  const customBug = `共享 Bug {{title}}\n{{content}}\n{{attachments}}`;
   await bug.fill(customBug);
   await types.getByRole("button", { name: "需求提示词", exact: true }).click();
   assert.equal(await requirement.inputValue(), defaults.requirement);
-  const customRequirement = `共享需求 {{title}}\n{{content}}\n{{images}}`;
+  const customRequirement = `共享需求 {{title}}\n{{content}}\n{{attachments}}`;
   await requirement.fill(customRequirement);
   await save("保存项目提示词");
   assert.deepEqual((await read()).projectTemplates, { ...defaults, bug: customBug, requirement: customRequirement });
@@ -37,12 +37,12 @@ async function verifyProjectPromptSettings({ page, origin, project, projects, ad
   assert.equal(await requirement.isDisabled(), true);
   await types.getByRole("button", { name: "Bug提示词", exact: true }).click();
   await toggle.check();
-  const personal = "我的 Bug {{title}}\n{{content}}\n{{images}}\n<img src=x onerror=alert(1)> $& {{image_count}}";
+  const personal = "我的 Bug {{title}}\n{{content}}\n{{attachments}}\n<img src=x onerror=alert(1)> $& {{attachment_count}}";
   await bug.fill(personal);
   await page.locator(".prompt-preview > summary").click();
   const preview = page.getByLabel("提示词示例预览", { exact: true });
   assert.equal(await preview.locator("img").count(), 0);
-  assert.ok((await preview.innerText()).includes("$& 1"));
+  assert.ok((await preview.innerText()).includes("$& 2"));
   await save("保存我的提示词");
   assert.deepEqual((await read()).overrides, { bug: personal });
   assert.equal((await read()).projectTemplates.bug, customBug);

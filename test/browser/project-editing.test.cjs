@@ -8,6 +8,7 @@ const { dismissOperationMessages } = require("../support/operation-feedback.cjs"
 const { pasteImage, markdownValue, visual, verifyVisualWriting, captureEditor } = require("../support/issue-markdown.cjs");
 
 async function main() {
+  await require("./person-select.test.cjs").personSelectChecks();
   await require("./operation-feedback.test.cjs").operationFeedbackChecks();
   const { createServer } = await import("vite"), { default: vue } = await import("@vitejs/plugin-vue");
   const project = { id: "p", name: "原项目", description: "原说明", ownerUserId: "u", revision: 1, settings: {} };
@@ -16,9 +17,10 @@ async function main() {
   const permissions = ["asset.view", "asset.edit", "issue.view", "issue.edit", "issue.accept", "collaboration.view", "comment.create", "deliverable.create", "session.start"];
   const source = `import {i18n} from '/src/shared/i18n/index.js';
 import {createApp,h,ref} from 'vue'; import {createRouter,createWebHistory} from 'vue-router'; import LocaleSelect from '/src/shared/components/LocaleSelect.vue';
-import OperationMessages from '/src/shared/components/OperationMessages.vue'; import Discussion from '/src/features/projects/IssueDiscussion.vue'; import Settings from '/src/features/projects/ProjectSettings.vue'; import Detail from '/src/features/projects/IssueDetail.vue'; import Assets from '/src/features/projects/ProjectAssets.vue'; import '/src/shared/styles/style.css';
-const router=createRouter({history:createWebHistory(),routes:[{path:'/:pathMatch(.*)*',component:{render:()=>null}}]}); await router.push(location.pathname+location.search); await router.isReady();
-const kind=new URLSearchParams(location.search).get('fixture'); const component={discussion:Discussion,settings:Settings,issue:Detail,assets:Assets}[kind];
+import MarkdownEditor from '/src/shared/components/MarkdownEditor.vue'; import OperationMessages from '/src/shared/components/OperationMessages.vue'; import Discussion from '/src/features/projects/IssueDiscussion.vue'; import Settings from '/src/features/projects/ProjectSettings.vue'; import Detail from '/src/features/projects/IssueDetail.vue'; import Assets from '/src/features/projects/ProjectAssets.vue'; import '/src/shared/styles/style.css';
+const router=createRouter({history:createWebHistory(),routes:[{path:'/deliveries',name:'deliveries',component:{render:()=>null}},{path:'/:pathMatch(.*)*',component:{render:()=>null}}]}); await router.push(location.pathname+location.search); await router.isReady();
+const EditorFixture={setup(){const values=ref(['','','']);return()=>h('div', ['描述','验收标准','复现步骤'].map((label,i)=>h(MarkdownEditor,{label,rows:i?4:6,modelValue:values.value[i],'onUpdate:modelValue':value=>values.value[i]=value})))}};
+const kind=new URLSearchParams(location.search).get('fixture'); const component={editor:EditorFixture,discussion:Discussion,settings:Settings,issue:Detail,assets:Assets}[kind];
 const currentProject=ref(${JSON.stringify(project)}), permissions=ref(${JSON.stringify(permissions)});
 createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),kind==='settings'?h('button',{onClick:()=>{currentProject.value={...currentProject.value,name:'父级刷新名称',revision:currentProject.value.revision+1}}},'模拟父级刷新'):null,kind==='discussion'?h('button',{onClick:()=>{permissions.value=permissions.value.includes('collaboration.view')?['issue.view']: ${JSON.stringify(permissions)}}},'切换讨论权限'):null,h(component,{project:currentProject.value,projectId:'p',issueId:'i',endpoint:'/projects/p/issues/i',permissions:permissions.value,canArchive:kind==='settings'})])}).use(router).use(i18n).mount('#app');`;
   const server = await createServer({ configFile: false, root: path.resolve("web"), logLevel: "error", plugins: [vue(), { name: "editing-fixture", resolveId(id) { if (id === "virtual:editing") return "\0editing"; }, load(id) { if (id === "\0editing") return source; }, configureServer(server) { server.middlewares.use(async (req, res, next) => { if (!req.url.startsWith("/fixture")) return next(); res.setHeader("Content-Type", "text/html"); res.end(await server.transformIndexHtml(req.url, '<html><body><main id="app"></main><script type="module" src="/@id/virtual:editing"></script></body></html>')); }); } }], server: { host: "127.0.0.1", port: 0 } });
@@ -26,6 +28,7 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),kind==='sett
   try {
     await server.listen(); const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
     browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : process.platform === "win32" ? { channel: "msedge" } : {}) });
+    await require("./markdown-loading.test.cjs").verifyMarkdownLoading({ browser, origin });
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }); const errors = [], writes = [];
     page.on("pageerror", error => { errors.push(error.message); console.error(error.message); });
 
@@ -53,9 +56,9 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),kind==='sett
     });
     const open = kind => page.goto(`${origin}/fixture?fixture=${kind}`);
     await open("discussion"); await page.getByLabel("评论内容").fill("评论草稿"); await page.getByRole("button", { name: "评论", exact: true }).click(); assert.equal(await page.getByLabel("评论内容").inputValue(), "评论草稿");
-    await page.getByRole("button", { name: "交付结果", exact: true }).click(); await page.getByLabel("交付说明").fill("交付草稿"); await page.getByRole("button", { name: "变更历史" }).click(); await page.getByRole("button", { name: "评论", exact: true }).click(); assert.equal(await page.getByLabel("评论内容").inputValue(), "评论草稿");
+    await page.getByRole("button", { name: "交付结果", exact: true }).click(); await page.getByRole("button", { name: "提交交付并送验", exact: true }).click(); await page.getByLabel("交付说明", { exact: true }).fill("交付草稿"); await page.keyboard.press("Escape"); await page.getByRole("button", { name: "变更历史" }).click(); await page.getByRole("button", { name: "评论", exact: true }).click(); assert.equal(await page.getByLabel("评论内容").inputValue(), "评论草稿");
     await page.getByRole("button", { name: "发表评论" }).click(); await page.waitForFunction(() => document.querySelector('button[type="submit"]').disabled); assert.ok(pendingComment); await page.getByLabel("评论内容").fill("提交后新增文字"); releaseComment(); await page.getByRole("button", { name: "发表评论", disabled: false }).waitFor(); assert.equal(await page.getByLabel("评论内容").inputValue(), "提交后新增文字");
-    await page.getByRole("button", { name: "交付结果", exact: true }).click(); assert.equal(await page.getByLabel("交付说明").inputValue(), "交付草稿");
+    await page.getByRole("button", { name: "交付结果", exact: true }).click(); await page.getByRole("button", { name: "提交交付并送验", exact: true }).waitFor();
     let releaseDiscussion, discussionStarted;
     const pendingDiscussion = new Promise(resolve => { discussionStarted = resolve; });
     await page.route('**/api/projects/p/issues/i/comments?*', async route => { discussionStarted(); await new Promise(resolve => { releaseDiscussion = resolve; }); await route.fulfill({ json: { items: [{ id: 'late', body: '撤权前迟到的评论' }], people: [] } }); }, { times: 1 });
@@ -76,7 +79,7 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),kind==='sett
     releaseComment();
     await page.getByText('暂无记录。', { exact: true }).waitFor();
     await page.getByRole('button', { name: '切换讨论权限' }).click();
-    await page.getByRole('button', { name: '交付结果', exact: true }).click(); assert.equal(await page.getByLabel('交付说明').inputValue(), '');
+    await page.getByRole('button', { name: '交付结果', exact: true }).click(); assert.equal(await page.getByLabel('交付说明').count(), 0);
     await open("settings"); const archived = page.waitForResponse(response => response.url().endsWith("/api/projects/p/archive") && response.request().method() === "POST"); await page.getByRole("button", { name: "确认归档项目", exact: true }).click(); assert.ok((await archived).ok()); assert.deepEqual(writes.at(-1), { pathname: "/api/projects/p/archive", input: { revision: 1 } }); await page.getByRole("button", { name: "模拟父级刷新" }).click(); assert.equal(await page.getByLabel("项目名称", { exact: true }).inputValue(), "父级刷新名称"); await page.getByLabel("项目名称", { exact: true }).fill("待保留草稿"); await page.getByRole("button", { name: "模拟父级刷新" }).click(); await page.getByText(/服务器上的项目已更新/).waitFor(); assert.equal(await page.getByLabel("项目名称", { exact: true }).inputValue(), "待保留草稿");
     await open("settings"); await page.getByLabel("项目名称", { exact: true }).fill("我的项目名称"); await page.getByRole("button", { name: "保存项目设置" }).click(); await page.locator('.operation-message[data-type="error"]').filter({ hasText: "项目已修改" }).last().waitFor(); await page.getByRole("button", { name: "保留草稿，加载最新内容" }).click(); await selectOption(page.getByLabel("项目名称冲突处理"), "draft"); await page.getByRole("button", { name: "确认合并并继续编辑" }).click(); assert.equal(await page.getByLabel("说明", { exact: true }).inputValue(), "他人说明"); await page.getByRole("button", { name: "保存项目设置" }).click(); await page.locator('.operation-message[data-type="success"]').filter({ hasText: "已保存。" }).last().waitFor(); assert.equal(writes.at(-1).input.revision, 2); assert.equal(writes.at(-1).input.name, "我的项目名称");
     assert.equal(await page.getByText(/TAPD|清除已保存 Cookie/).count(), 0);
@@ -94,33 +97,20 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),kind==='sett
     await selectOption(page.getByLabel("目标状态", { exact: true }), "develop");
     assert.equal(await page.getByLabel("原因", { exact: true }).getAttribute("required"), "");
     await page.getByLabel("原因", { exact: true }).fill("开始实现已确认的需求");
-    await page.getByRole("button", { name: "更新状态", exact: true }).click();
+    await page.getByRole("button", { name: "更新状态并交接", exact: true }).click();
     await page.getByText("当前没有可用的状态操作。", { exact: true }).waitFor();
     assert.deepEqual(writes.at(-1).input, { transitionId: "develop", reason: "开始实现已确认的需求", revision: 2 });
     assert.equal(writes.some(write => write.pathname.endsWith("/tasks")), false, "changing status never creates a development task");
     assert.equal(await page.getByLabel("评论内容").inputValue(), "切换编辑时保留讨论草稿");
-    // A general work step may use acceptance permission; category does not grant or deny starting.
-    let stepStarted = false, stepCategory = "work", stepPermissions = ["issue.accept"];
-    const stepIssue = () => ({ ...issue, availableTransitions: [], processing: { canStart: !stepStarted, category: stepCategory, handlerId: "u", status: stepStarted ? "active" : "ready", revision: stepStarted ? 5 : 4, startPermissions: stepPermissions } });
+    // Generic step-start is removed; verification is handled by the delivery action.
+    const stepIssue = () => ({ ...issue, availableTransitions: [], workflowActions: [{ trigger: "verification.accepted" }], processing: { category: "verification", handlerId: "u", status: "active", revision: 4 } });
     const stepRoute = async route => route.fulfill({ json: stepIssue() });
     await page.route("**/api/projects/p/issues/i", stepRoute);
-    await page.route("**/api/projects/p/issues/i/step/start", async route => {
-      writes.push({ pathname: new URL(route.request().url()).pathname, input: route.request().postDataJSON() });
-      stepStarted = true;
-      await route.fulfill({ json: stepIssue() });
-    });
-    await open("issue");
-    await page.getByRole("button", { name: "开始处理", exact: true }).click();
-    await page.getByRole("button", { name: "开始处理", exact: true }).waitFor({ state: "hidden" });
-    await page.getByText("当前处理人：产品成员 · 处理中", { exact: true }).waitFor();
-    assert.deepEqual(writes.at(-1).input, { revision: 1, actionRevision: 4 });
-    stepStarted = false; stepCategory = "verification"; stepPermissions = ["issue.transition"];
     await open("issue");
     await page.getByRole("heading", { name: "原事项", exact: true }).waitFor();
-    assert.equal(await page.getByRole("button", { name: "开始验证", exact: true }).count(), 0, "acceptance permission alone cannot start a verification step configured for transition permission");
-    stepPermissions = ["issue.transition", "issue.accept"];
-    await open("issue");
-    await page.getByRole("button", { name: "开始验证", exact: true }).waitFor();
+    assert.equal(await page.getByRole("button", { name: "开始处理", exact: true }).count(), 0);
+    assert.equal(await page.getByRole("button", { name: "开始验证", exact: true }).count(), 0);
+    await page.getByText("在交付详情中验证，结论会同步更新事项。", { exact: true }).waitFor();
     await page.unroute("**/api/projects/p/issues/i", stepRoute);
     // Load revision one for the edit baseline, then the latest version for conflict recovery.
     let issueReads = 0;
@@ -173,6 +163,7 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),kind==='sett
     await page.getByRole('button', { name: '保存资产' }).click(); await assetPending;
     assert.ok(writes.at(-1).pathname.endsWith('/assets/a')); releaseAsset();
     await page.getByRole('button', { name: '编辑资产', exact: true }).waitFor();
+    await require('./workflow-issue-fields.test.cjs').verifyWorkflowIssueFields({ page, origin, issue });
     await require('./i18n.test.cjs').verifyI18n({page,origin,writes});
     assert.deepEqual(errors, []); console.log("Project editing fake-API browser checks passed.");
   } finally { await browser?.close(); await server.close(); }

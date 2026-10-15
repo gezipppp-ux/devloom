@@ -4,6 +4,7 @@ import LoginPage from "../features/accounts/LoginPage.vue";
 import PasswordPage from "../features/accounts/PasswordPage.vue";
 import WorkbenchApp from "./WorkbenchApp.vue";
 import SetupPage from "./SetupPage.vue";
+import NotFoundPage from "./NotFoundPage.vue";
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -28,10 +29,12 @@ export const router = createRouter({
     { path: "/system", name: "system", component: WorkbenchApp, meta: { admin: true } },
     { path: "/environment", redirect: to => ({ name: "system", query: { ...to.query, tab: "environment" }, hash: to.hash }) },
     { path: "/accounts", name: "accounts", component: WorkbenchApp, meta: { admin: true } },
-    { path: "/:pathMatch(.*)*", redirect: "/" },
+    { path: "/404", name: "not-found", component: NotFoundPage, meta: { notFound: true } },
+    { path: "/:pathMatch(.*)*", name: "unknown-page", component: NotFoundPage, meta: { notFound: true } },
   ],
 });
 router.beforeEach(async (to) => {
+  if (to.meta.notFound) return true;
   if (!accountSession.ready) {
     try { await loadAccountSession(); } catch { /* Login provides a retry. */ }
   }

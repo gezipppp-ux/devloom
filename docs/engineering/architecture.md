@@ -66,8 +66,9 @@ docs/engineering/  # 行为契约与架构规则
 | 位置 | 拥有的职责 |
 | --- | --- |
 | application/mcp-token-services.cjs、mcp-project-services.cjs、mcp-presenter.cjs | 外部 Agent Token 生命周期、按当前授权查询和原子发布；公开结构不暴露凭据、私人会话或配置 |
-| storage/mcp-store.cjs、domain/mcp-access.cjs | 前者拥有 Token 摘要、图片暂存、幂等操作与审计，后者拥有纯输入及 scope 校验 |
-| http/mcp-api.cjs、mcp-tools.cjs | Bearer HTTP 上传、无状态 Streamable HTTP MCP、工具 schema；复用应用用例，不直接操作存储 |
+| storage/mcp-store.cjs、domain/mcp-access.cjs | 前者拥有 MCP/临时上传 Token 摘要、附件暂存、幂等操作与审计，后者拥有纯输入及 scope 校验 |
+| http/mcp-api.cjs、mcp-tools.cjs | 临时令牌 HTTP 附件上传、无状态 Streamable HTTP MCP、工具 schema；复用应用用例，不直接操作存储 |
+| application/mcp-skills-presenter.cjs、http/skills-page.cjs | 前者拥有公开技能文档的中英文内容，后者负责 HTML/Markdown 协商与页面呈现；无需登录且不包含账号数据或凭据 |
 | `cli/arguments.cjs` | Web 与开发服务的命令参数校验 |
 | `cli/init-admin.cjs`、`cli/web.cjs` | 管理员初始化和 Web 服务进程入口；导出 main，以主模块保护执行 |
 | `domain/setup-state.cjs`、`application/setup-services.cjs`、`setup-presenter.cjs` | 初始化输入/步骤规则、短事务用例与公开快照；外部环境和文件探测不进入数据库事务 |
@@ -81,10 +82,11 @@ docs/engineering/  # 行为契约与架构规则
 | `application/project-services.cjs`、`project-presenter.cjs` | 部门、项目及其仓库地址、成员权限和个人开发空间生命周期；公开字段由 presenter 脱敏 |
 | `application/workbench-services.cjs`、`work-action-presenter.cjs`、`attention-services.cjs` | 按当前分派、真实执行和权限聚合个人动作；首页、完整队列与通知使用同一快照，不把资源列表等同于待办 |
 | `storage/work-action-store.cjs`、`work-action-query-store.cjs`、`domain/workflow-actions.cjs` | 步骤轮次与分派的原子持久化、聚合候选查询、职责与栏目纯规则；详细定义见流程动作契约 |
+| `application/project-workflow-services.cjs`、`workflow-execution-services.cjs`、`storage/workflow-execution-store.cjs` | 统一交接门禁、持久真实执行事件与幂等恢复；状态和处理人原子更新，失败不重放 Agent |
 | `application/project-content-services.cjs`、`project-content-presenter.cjs` | 按不可变流程版本流转事项、评论／交付、项目附件、资产加密与独立敏感字段授权 |
 | `application/project-lifecycle-services.cjs`、`project-lifecycle-presenter.cjs` | 项目发布版本与归档门禁；storage 拥有事务与修订号 |
 | `application/system-workflow-services.cjs`、`system-workflow-presenter.cjs` | 系统管理员维护需求／Bug 全局流程与不可变发布版本，项目授权读取已发布版本；`domain/issue-workflows.cjs` 拥有图规则，`storage/system-workflow-store.cjs` 拥有无项目归属的流程持久化 |
-| `application/project-development-services.cjs`、`project-development-presenter.cjs` | 认领／指派规划、唯一活跃认领、内容快照、显式幂等启动、完成／取消及追加／发送；不推进业务状态、不读取资产 |
+| `application/project-development-services.cjs`、`project-development-presenter.cjs` | 认领／指派规划、唯一活跃认领、内容快照、显式幂等启动、完成／取消及追加／发送；通过业务事件协调事项交接，不读取资产 |
 | `application/project-branch-services.cjs`、`git/remote-branches.cjs` | 前者复核个人空间、凭据归属与权限；后者实时查询 origin 的分支，不以本地缓存回退 |
 | `storage/project-store.cjs`、`project-content-store.cjs`、`project-development-store.cjs` | 上述项目业务的 Prisma 持久化、修订号更新、同项目关联、加密和审计 |
 | `application/session-manager.cjs` | SessionManager 协调启动、继续、停止、操作互斥及生命周期 |
@@ -147,6 +149,7 @@ app 中的 `use-workspace-selection` 管理工作区与 URL，`use-workspace-con
 
 - 对外 npm 命令为 `init:admin`、`dev`、`dev:watch`、`build` 和 `start`，实际文件入口由 package.json 维护。systemd 的源码入口使用 `src/cli/web.cjs`，`src/http/server.cjs` 仅导出服务工厂。
 - 安装根由 `src/config/runtime.cjs` 定位；静态资源始终来自安装根 `web/dist`。`RUNNER_DATA_DIR` 只选择数据根。
+- `http/page-routes.cjs` 统一开发和生产服务的页面入口匹配，与 Vue Router 的页面路径保持一致。直接访问或刷新项目详情、工作队列等页面均返回 `index.html`，保留查询参数中的对象身份；`/404` 及浏览器导航到未知页面时以 HTTP 404 返回应用入口，显示公共错误页并保留原地址。API、MCP、Vite 源码和缺失静态资源不回退为应用 HTML，未构建时仍返回原构建错误。
 - 开发入口 `src/cli/dev.cjs` 可以向 HTTP 工厂注入非 API 页面处理器，以同端口 Vite 中间件替代静态页面；正式入口仍固定使用 `web/dist`。仅开发页面增加 HMR 所需的同源 WebSocket 和 blob worker CSP，HTTP 与 WebSocket 均校验 Host/Origin，Vite 源码访问只允许 `web/`、`shared/` 和依赖目录。
 - `src/cli/dev-watch.cjs` 拥有开发文件监听和子进程生命周期；变更合并后通过 IPC 请求关闭并等待旧进程退出，再启动替代进程。不能用 Windows 强制终止进程代替会话清理，也不能因热更新自动重跑需求。
 - 目录调整不迁移运行数据，不改 API、渠道 ID、session ID、source、run key、记录中的 worktree 路径或历史素材文件名。

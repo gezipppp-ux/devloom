@@ -8,6 +8,7 @@ const path = require("node:path");
 const { test } = require("node:test");
 const { postgresFixture } = require("../support/postgres.cjs");
 const { temporary } = require("../support/helpers.cjs");
+const { pageLocations } = require("../fixtures/page-routes.cjs");
 
 const root = path.resolve(__dirname, "../..");
 const entrypoint = path.join(root, "src", "cli", "dev.cjs");
@@ -203,6 +204,38 @@ test("development CLI serves Vite and workspace APIs on one guarded origin", asy
     );
     assert.ok(csp.includes("worker-src 'self' blob:"));
     assert.equal(csp.includes("'unsafe-eval'"), false);
+    const skills = await send(origin + "/skills");
+    assert.equal(skills.status, 200);
+    assert.match(skills.text, /create_upload_token/);
+    assert.doesNotMatch(skills.text, /\/src\/main\.js|\/\@vite\/client/);
+    const skillFile = await send(origin + "/skills/SKILL.md");
+    assert.equal(skillFile.status, 200);
+    assert.match(skillFile.text, /^---\nname: web-coding-mcp/);
+
+    for (const location of pageLocations) {
+      const response = await send(origin + location);
+      assert.equal(response.status, 200, location);
+      assert.match(response.headers["content-type"], /text\/html/, location);
+      assert.match(response.text, /\/src\/main\.js/, location);
+      assert.match(response.text, /\/\@vite\/client/, location);
+      assert.equal(response.headers.location, undefined, "deep links must not redirect to the root");
+    }
+    for (const location of ["/missing", "/assets/missing.js"])
+      assert.equal((await send(origin + location)).status, 404, location);
+    assert.equal((await send(`${origin}/mcp`)).status, 401, "MCP keeps its own authentication handler");
+    for (const location of ["/404", "/missing-page", "/projects/example/missing-page"]) {
+      const response = await send(origin + location, { headers: { accept: "text/html" } });
+      assert.equal(response.status, 404, location);
+      assert.match(response.headers["content-type"], /text\/html/);
+      assert.match(response.text, /\/src\/main\.js/);
+      assert.match(response.text, /\/\@vite\/client/);
+      const reload = await send(origin + location, { headers: { accept: "text/html", "if-none-match": response.headers.etag } });
+      assert.equal(reload.status, 404, "conditional reload keeps the error page and status");
+      assert.match(reload.text, /\/src\/main\.js/);
+    }
+    const missingScript = await send(`${origin}/assets/missing.js`, { headers: { accept: "text/html" } });
+    assert.equal(missingScript.status, 404);
+    assert.doesNotMatch(missingScript.text, /\/src\/main\.js/);
 
     const client = await send(`${origin}/@vite/client`);
     assert.equal(client.status, 200, client.text);
@@ -249,6 +282,9 @@ test("development CLI serves Vite and workspace APIs on one guarded origin", asy
       headers: { cookie },
     });
     assert.equal(bootstrap.status, 200);
+    const missingApi = await send(`${origin}/api/missing`, { headers: { cookie } });
+    assert.equal(missingApi.status, 404);
+    assert.match(missingApi.headers["content-type"], /application\/json/);
     const { token, workspaces } = JSON.parse(bootstrap.text);
     assert.equal(typeof token, "string");
     assert.deepEqual(workspaces, []);

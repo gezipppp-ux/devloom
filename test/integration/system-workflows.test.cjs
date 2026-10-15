@@ -56,6 +56,25 @@ test("system workflows are migration-seeded, shared across projects and keep imm
   assert.equal((await content.transitionIssue(projects[0].id, after[0].id, actor, { revision: 1, transitionId: "resolve", reason: "检查通过" })).status, "resolved");
 });
 
+test("all configured issue text fields can satisfy an immutable published workflow", async t => {
+  const { actor, admin, projects, workflows, content } = await fixture(t);
+  for (const [type, field] of [["requirement", "reproductionSteps"], ["bug", "acceptanceCriteria"]]) {
+    const definition = { nodes: [{ id: "start", name: "开始", kind: "initial", allowDevelopment: false }, { id: "done", name: "完成", kind: "completed", allowDevelopment: false }],
+      transitions: [{ id: "finish", from: "start", to: "done", name: "完成", permission: "issue.transition", requiresReason: false, requiredFields: [field] }] };
+    let { workflow } = await workflows.readWorkflow(type, admin);
+    ({ workflow } = await workflows.saveWorkflow(type, admin, { revision: workflow.revision, definition }));
+    ({ workflow } = await workflows.saveWorkflow(type, admin, { revision: workflow.revision }, true));
+    let issue = await content.createIssue(projects[0].id, actor, { type, title: "流程要求的文本资料" });
+    definition.transitions[0].requiredFields = [];
+    ({ workflow } = await workflows.saveWorkflow(type, admin, { revision: workflow.revision, definition }));
+    await workflows.saveWorkflow(type, admin, { revision: workflow.revision }, true);
+    await assert.rejects(content.transitionIssue(projects[0].id, issue.id, actor, { revision: issue.revision, transitionId: "finish" }), /资料尚未填写/);
+    issue = await content.updateIssue(projects[0].id, issue.id, actor, { revision: issue.revision, [field]: "明确且完整的资料" });
+    assert.deepEqual(issue.workflow.definition.transitions[0].requiredFields, [field]);
+    assert.equal((await content.transitionIssue(projects[0].id, issue.id, actor, { revision: issue.revision, transitionId: "finish" })).status, "done");
+  }
+});
+
 test("system workflow management rejects project owners and rechecks persisted administrator role", async t => {
   const { database, actor, admin, projects, workflows } = await fixture(t);
   let { workflow } = await workflows.readWorkflow("bug", admin);

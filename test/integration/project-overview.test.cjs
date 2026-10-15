@@ -1,3 +1,4 @@
+const { installReviewWorkflow } = require("../support/workflow-fixture.cjs");
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { temporary } = require("../support/helpers.cjs");
@@ -43,6 +44,7 @@ test("project activity exposes only authorized public actions, newest ten, witho
   const where = { projectId_userId: { projectId: project.id, userId: actor.id } };
   await database.client.projectMember.create({ data: { projectId: project.id, userId: actor.id, permissions } });
   const projects = new ProjectServices(database), content = new ProjectContentServices(database, projects), workbench = new WorkbenchServices(database, projects);
+  await installReviewWorkflow(database);
   const issue = await content.createIssue(project.id, actor, { type: "requirement", title: "Public title" });
   for (let index = 0; index < 12; index++) await content.store.issueHistory(project.id, issue.id, actor.id, "updated", { privateSession: "private-secret", index });
   const delivery = await content.addDeliverable(project.id, actor, { reviewerId: actor.id, issueId: issue.id, body: "Public delivery" });

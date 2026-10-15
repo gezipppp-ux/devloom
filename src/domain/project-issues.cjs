@@ -70,7 +70,7 @@ function issueTags(value) {
   return [...new Set(value.map(item => text(item, "标签", 30, { required: true })))];
 }
 function issueTransition(issue, input) {
-  object(input, ["transitionId", "status", "revision", "reason"]);
+  object(input, ["transitionId", "status", "revision", "reason", "handlerId"]);
   revision(input.revision);
   const allowed = issueTransitions(issue).find(entry => input.transitionId ? entry.id === input.transitionId : entry.status === input.status);
   if (!allowed) throw accountError("不允许此事项状态流转。", 409);
@@ -80,7 +80,7 @@ function issueTransition(issue, input) {
   return { status: allowed.status, reason, permission: allowed.permission };
 }
 function issueTransitions(issue) {
-  return (issue.workflowVersion?.definition?.transitions || []).filter(edge => edge.from === issue.status).map(edge => ({ id: edge.id, name: edge.name, status: edge.to, permission: edge.permission, requiresReason: edge.requiresReason }));
+  return (issue.workflowVersion?.definition?.transitions || []).filter(edge => edge.from === issue.status && edge.trigger === "manual").map(edge => ({ ...edge, status: edge.to, statusName: issue.workflowVersion.definition.nodes.find(node => node.id === edge.to)?.name }));
 }
 function pageInput(input = {}) {
   const limit = input.limit === undefined || input.limit === null ? 30 : Number(input.limit);

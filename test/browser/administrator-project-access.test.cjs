@@ -32,7 +32,7 @@ async function verifyAdministratorProjectAccess({ page, origin, projects, accoun
   assert.equal(await page.getByRole("button", { name: "保存成员", exact: true }).isEnabled(), true);
   // Inspect member management without adding the administrator to the project.
   await tab("需求");
-  await page.getByRole("button", { name: "新建需求", exact: true }).click();
+  await require("../support/browser-navigation.cjs").openIssueCreate(page);
   await page.getByLabel("标题", { exact: true }).fill("管理员创建协作事项");
   const issue = await save("保存事项", "/issues");
   await page.getByRole("heading", { name: "管理员创建协作事项", exact: true }).waitFor();

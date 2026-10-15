@@ -1,6 +1,7 @@
 const { validateBaseBranch } = require("./development-baseline.cjs");
 const { accountError } = require("./account.cjs");
 const { getPromptTemplates, renderPromptTemplate } = require("./prompt-templates.cjs");
+const { attachmentPrompt } = require("./attachment-prompts.cjs");
 const { object, text, identifiers, identifier, revision } = require("./project-issues.cjs");
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
@@ -47,8 +48,8 @@ function manualDevelopmentInput(input) {
 function manualDevelopmentPrompt(request, templates) {
   const type = "requirement";
   const prompt = renderPromptTemplate(type, templates[type], { title: request.title, content: request.content,
-    images: `本次独立开发附带 ${request.images.length} 张图片，顺序与上传顺序一致。`,
-    image_count: request.images.length, image_list: request.images.map((_, index) => `图片 ${index + 1}`).join("\n") });
+    attachments: `本次独立开发附带 ${request.images.length} 个图片附件，已作为图片输入发送，顺序与上传顺序一致。`,
+    attachment_count: request.images.length, attachment_list: request.images.map((_, index) => `附件 ${index + 1}：图片 ${index + 1}`).join("\n") });
   if (prompt.length > 60000) throw accountError("开发目标与提示词合计超过 60000 字，请缩短内容。", 400);
   return prompt;
 }
@@ -63,12 +64,12 @@ function developmentEditInput(input) {
   }
   return result;
 }
-function developmentPrompt(issues, addition = false, templates = getPromptTemplates(), supplement = {}) {
+function developmentPrompt(issues, addition = false, templates = getPromptTemplates(), supplement = {}, attachmentPaths = {}) {
   let imageOffset = 0;
   const content = [addition ? "以下是本轮明确追加的项目事项快照。请结合已有实现处理，不自动更改事项业务状态。" : "请实现以下项目事项，结合每条事项的验收要求与复现信息开展开发。事项业务状态由成员单独维护。",
     ...issues.map(issue => {
-      const files = (issue.files || []).filter(file => ["image/png", "image/jpeg", "image/webp"].includes(file.mimeType));
-      const imageList = files.map(file => `图片 ${++imageOffset}：${file.name}`).join("\n");
+      const attachments = attachmentPrompt(issue.files || [], attachmentPaths, imageOffset);
+      imageOffset = attachments.imageOffset;
       const details = [
         `--- 项目事项 #${issue.number}（${issue.type === "bug" ? "Bug" : "需求"}，修订 ${issue.revision}）---`,
         issue.description,
@@ -77,12 +78,10 @@ function developmentPrompt(issues, addition = false, templates = getPromptTempla
         issue.expectedResult ? `预期结果：\n${issue.expectedResult}` : "",
         issue.actualResult ? `实际结果：\n${issue.actualResult}` : "",
         issue.source?.url ? `来源：${issue.source.url}` : "",
-        issue.files?.length ? `事项附件：${issue.files.map(file => file.name).join("、")}。仅支持的图片附件会作为本轮图片传入。` : "",
       ].filter(Boolean).join("\n");
       return renderPromptTemplate(issue.type, templates[issue.type], {
         title: issue.title, content: details,
-        images: files.length ? `本事项附带 ${files.length} 张图片，编号对应本轮全部图片的发送顺序。\n${imageList}` : "本事项没有图片附件。",
-        image_count: files.length, image_list: imageList,
+        ...attachments,
       });
     }),
     ...(supplement.content ? [renderPromptTemplate("supplement", templates.supplement, {

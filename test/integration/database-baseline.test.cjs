@@ -96,7 +96,7 @@ test("fresh baseline matches Prisma, preserves database constraints and publishe
   await fixture.deploy();
   await fixture.deploy();
   const database = await fixture.open();
-  assert.deepEqual(readPostgresMigrations().map(row => row.name), ["20261012200000_baseline", "20261013070000_mcp_access", "20261013110000_agent_suppliers", "20261013150000_initialization_guide", "20261013180000_project_directory_names", "20261013210000_neutral_workbench", "20261014120000_project_overview", "20261014150000_administrator_permissions", "20261014160000_remove_setup_credentials", "20261014170000_project_deliveries", "20261014200000_workflow_responsibilities"]);
+  assert.deepEqual(readPostgresMigrations().map(row => row.name), ["20261012200000_baseline", "20261013070000_mcp_access", "20261013110000_agent_suppliers", "20261013150000_initialization_guide", "20261013180000_project_directory_names", "20261013210000_neutral_workbench", "20261014120000_project_overview", "20261014150000_administrator_permissions", "20261014160000_remove_setup_credentials", "20261014170000_project_deliveries", "20261014200000_workflow_responsibilities", "20261015120000_workflow_handoffs", "20261015150000_mcp_upload_tokens"]);
   const workflows = await database.client.systemWorkflow.findMany({ include: { versions: true }, orderBy: { type: "asc" } });
   assert.deepEqual(workflows.map(row => row.type), ["bug", "requirement"]);
   for (const row of workflows) {
@@ -112,7 +112,7 @@ test("fresh baseline matches Prisma, preserves database constraints and publishe
     "agent_supplier_selections_revision_check", "agent_supplier_uses_status_check", "agent_suppliers_mode_check", "agent_suppliers_revision_check",
     "project_assets_nonproduction_secret_check", "project_deliverables_revision_check", "project_deliverables_source", "project_deliverables_status_check", "project_files_single_parent_check", "project_files_size_check",
     "project_issues_due_date", "project_issues_number_check", "project_releases_status_check", "projects_directory_key_check", "projects_issue_sequence_check",
-    "system_setup_singleton_check", "system_setup_status_check", "system_workflows_type_check", "user_git_accounts_auth_type_check", "users_administrator_department_check", "users_role_check", "users_status_check", "work_actions_revision_check", "work_actions_status_check",
+    "system_setup_singleton_check", "system_setup_status_check", "system_workflows_type_check", "user_git_accounts_auth_type_check", "users_administrator_department_check", "users_role_check", "users_status_check", "work_actions_revision_check", "work_actions_status_check", "workflow_execution_events_status_check",
   ]);
   const cli = path.join(path.dirname(require.resolve("prisma/package.json")), "build/index.js");
   await promisify(execFile)(process.execPath, [cli, "migrate", "diff", "--from-config-datasource",

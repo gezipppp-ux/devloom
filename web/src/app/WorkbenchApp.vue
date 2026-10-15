@@ -21,6 +21,8 @@ import WorkbenchHome from "../features/projects/WorkbenchHome.vue";
 import WorkActionQueue from "../features/projects/WorkActionQueue.vue";
 import WorkQueue from "../features/projects/WorkQueue.vue";
 import GlobalSearch from "../features/projects/GlobalSearch.vue";
+import ProjectPickerDialog from "../features/projects/ProjectPickerDialog.vue";
+import { issueCreateLocation } from "../features/projects/work-navigation.js";
 import FeedbackMessage from "../shared/components/FeedbackMessage.vue";
 import ModalDialog from "../shared/components/ModalDialog.vue";
 import LocaleSelect from "../shared/components/LocaleSelect.vue";
@@ -38,16 +40,18 @@ const desktopNotifications = useDesktopNotifications();
 const attention = useAttentionNotifications(desktopNotifications.notifyAttention);
 const admin = computed(() => accountSession.user?.role === "admin");
 const logoutError = ref(""), menuOpen = ref(false), searchOpen = ref(false), createOpen = ref(false), createTarget = ref("issues");
-const createBusy = ref(false), createError = ref("");
-const createTitles = { issues: "选择事项所属项目", development: "选择开发项目", manual: "选择独立开发项目", history: "选择要查看历史会话的项目" };
+const createBusy = ref(false), createError = ref(""), createSelected = ref("");
+let createAttempt = 0;
+const createTitles = { issues: "选择事项所属项目", bugs: "选择事项所属项目", development: "选择开发项目", manual: "选择独立开发项目", history: "选择要查看历史会话的项目" };
+const createPurposes = { issues: "新建需求", bugs: "新建 Bug", development: "开发", manual: "独立开发", history: "历史会话" };
 const inWorkspace = computed(() => route.name === "workspace" && Boolean(route.query.workspace || standalone.value));
 const active = computed(() => inWorkspace.value || (route.name === "project" && route.query.tab === "tasks") ? "development" : route.name === "project" ? "projects" : route.name === "work" ? "workspace" : route.name);
 const contextId = computed(() => String(route.params.projectId || route.query.projectId || (inWorkspace.value ? current.value?.projectId || "" : "")));
-const breadcrumb = computed(() => route.name === "project" && route.query.tab === "tasks" ? route.query.taskStart ? "确认并开始开发" : route.query.task ? "开发任务详情" : "开发任务" : ({ workspace: "工作台", projects: "项目", project: "项目概览", issues: "事项", development: "开发", deliveries: "交付", personal: "个人设置", system: "管理中心", accounts: "管理中心", departments: "管理中心" })[route.name] || "工作台");
+const breadcrumb = computed(() => route.name === "project" && route.query.create === "1" && ['issues', 'bugs'].includes(route.query.tab) ? "新建事项" : route.name === "project" && route.query.tab === "tasks" ? route.query.taskStart ? "确认并开始开发" : route.query.task ? "开发任务详情" : "开发任务" : ({ workspace: "工作台", projects: "项目", project: "项目概览", issues: "事项", development: "开发", deliveries: "交付", personal: "个人设置", system: "管理中心", accounts: "管理中心", departments: "管理中心" })[route.name] || "工作台");
 const selectedProject = computed(() => projects.value.find(project => project.id === contextId.value));
 const personalReturn = computed(() => typeof route.query.returnTo === "string" && router.resolve(route.query.returnTo).name === "project" ? route.query.returnTo : "");
 const createProjects = computed(() => projects.value.filter(project => {
-  const permission = { issues: "issue.create", development: "code.view", manual: "session.start", history: "session.continue" }[createTarget.value];
+  const permission = { issues: "issue.create", bugs: "issue.create", development: "code.view", manual: "session.start", history: "session.continue" }[createTarget.value];
   return project.permissions.includes(permission) && (createTarget.value === "history" || project.status === "active");
 }));
 function selectTask(task) { if (route.query.task !== task) void router[route.query.task ? "push" : "replace"]({ query: { ...route.query, task, view: undefined } }); }
@@ -57,34 +61,35 @@ function openProject(value) { if (value?.delivery) { void router.push({ name: "d
 function tab(value) { void router.push({ query: { tab: value } }); }
 function contextChange(value) { if (route.name === "project" || inWorkspace.value) { value ? project(value) : page("projects"); return; } void router.push({ query: { ...route.query, projectId: value || undefined, delivery: undefined, offset: undefined } }); }
 function returnToProject() { const target = typeof route.query.returnTo === "string" ? router.resolve(route.query.returnTo) : null; if (target?.name === "project" && target.params.projectId === current.value?.projectId) void router.push(target.fullPath); else project(current.value.projectId); }
-function create(target = "issues") { createError.value = ""; createTarget.value = target; createOpen.value = true; }
+function closeCreate() { createAttempt++; createOpen.value = false; createBusy.value = false; createSelected.value = ""; }
+function create(target = "issues") { closeCreate(); createError.value = ""; createTarget.value = target; createOpen.value = true; }
 async function chooseCreate(id) {
-  if (createBusy.value) return;
-  const target = createTarget.value, location = route.fullPath;
+  if (createBusy.value || !createProjects.value.some(project => project.id === id)) return;
+  const target = createTarget.value, location = route.fullPath, attempt = ++createAttempt;
   if (["manual", "history"].includes(target)) {
-    createBusy.value = true; createError.value = "";
+    createBusy.value = true; createError.value = ""; createSelected.value = id;
     try {
       const result = await appApi(`/projects/${id}`);
-      if (!createOpen.value || createTarget.value !== target || route.fullPath !== location) return;
+      if (attempt !== createAttempt || !createOpen.value || createTarget.value !== target || route.fullPath !== location) return;
       if (result.space?.status === "ready") {
         const returnTo = router.resolve({ name: "project", params: { projectId: id }, query: { tab: "tasks" } }).fullPath;
-        await navigate(result.space.workspaceId, undefined, { view: target, returnTo });
-        createOpen.value = false;
+        await navigate(result.space.workspaceId, undefined, { view: target, returnTo, isCurrent: () => attempt === createAttempt && createOpen.value });
+        if (attempt === createAttempt) createOpen.value = false;
       } else {
         createOpen.value = false;
         await router.push({ name: "project", params: { projectId: id }, query: { tab: "development", openIntent: target } });
       }
-    } catch (failure) { if (createOpen.value && route.fullPath === location) createError.value = failure.message; }
-    finally { createBusy.value = false; }
+    } catch (failure) { if (attempt === createAttempt && createOpen.value && route.fullPath === location) createError.value = failure.message; }
+    finally { if (attempt === createAttempt) { createBusy.value = false; createSelected.value = ""; } }
     return;
   }
   createOpen.value = false;
-  void router.push({ name: "project", params: { projectId: id }, query: { tab: target, ...(target === "issues" ? { create: "1" } : {}) } });
+  void router.push(["issues", "bugs"].includes(target) ? issueCreateLocation(id, target, location) : { name: "project", params: { projectId: id }, query: { tab: target } });
 }
 async function logout() { try { await logoutAccount(); } catch (failure) { logoutError.value = failure.message; } }
 function shortcut(event) { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); searchOpen.value = !searchOpen.value; } }
-onMounted(() => document.addEventListener("keydown", shortcut)); onUnmounted(() => document.removeEventListener("keydown", shortcut));
-watch(() => route.fullPath, () => { menuOpen.value = false; });
+onMounted(() => document.addEventListener("keydown", shortcut)); onUnmounted(() => { createAttempt++; document.removeEventListener("keydown", shortcut); });
+watch(() => route.fullPath, () => { menuOpen.value = false; if (createOpen.value) closeCreate(); });
 </script>
 <template>
   <div class="authenticated-app neutral-app" :class="{ 'workspace-app': inWorkspace }">
@@ -106,6 +111,6 @@ watch(() => route.fullPath, () => { menuOpen.value = false; });
     <nav class="ui-bottom-nav" :aria-label="$t('移动端导航')"><NavigationLinks compact :active="active" @navigate="page" /></nav>
     <ModalDialog :open="menuOpen" :title="$t('导航')" @close="menuOpen = false"><nav class="ui-drawer-nav" :aria-label="$t('移动主导航')"><NavigationLinks :active="active" @navigate="page" /><button @click="page('personal')">{{ $t("个人设置") }}</button><button v-if="admin" @click="page('accounts')">{{ $t("管理中心") }}</button><button @click="logout">{{ $t("退出登录") }}</button></nav></ModalDialog>
     <GlobalSearch v-if="searchOpen" :projects="projects" @close="searchOpen = false" />
-    <ModalDialog :open="createOpen" :title="$t(createTitles[createTarget] || '选择开发项目')" @close="!createBusy && (createOpen = false)"><FeedbackMessage :message="createError" type="error" /><p v-if="createBusy" role="status">{{ $t('正在读取开发空间…') }}</p><div class="ui-project-choices"><button v-for="p in createProjects" :key="p.id" :disabled="createBusy" @click="chooseCreate(p.id)"><strong>{{ p.name }}</strong><span class="muted">{{ p.description }}</span></button><p v-if="!createProjects.length" class="muted">{{ $t("暂无允许此操作的项目，请先创建项目或联系项目负责人授权。") }}</p></div></ModalDialog>
+    <ProjectPickerDialog v-if="createOpen" :title="createTitles[createTarget] || '选择开发项目'" :purpose="createPurposes[createTarget] || '开发'" :projects="createProjects" :busy="createBusy" :selected-id="createSelected" :error="createError" @choose="chooseCreate" @close="closeCreate" />
   </div>
 </template>

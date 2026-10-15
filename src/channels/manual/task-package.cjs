@@ -42,16 +42,16 @@ async function buildManualTaskPackage({ item, directory, readImage, config = {} 
     .map((image) => `图片 ${image.index}：${image.path}`)
     .join('\n');
   const imageDescription = [
-    `附带 ${images.length} 张本地图片，顺序与用户上传顺序一致，请结合图片理解需求。`,
+    `附带 ${images.length} 个图片附件，已作为图片输入发送，请结合附件理解需求。`,
     ...(imageList ? [imageList] : []),
   ].join('\n');
   const type = item.type === 'bug' ? 'bug' : 'requirement';
   const prompt = item.rendered_prompt ? [item.markdown_description, imageDescription].join('\n\n') : renderPromptTemplate(type, getPromptTemplates(config)[type], {
     title: item.title,
     content: item.markdown_description,
-    images: imageDescription,
-    image_count: images.length,
-    image_list: imageList,
+    attachments: imageDescription,
+    attachment_count: images.length,
+    attachment_list: imageList,
   });
   return {
     workitem,

@@ -5,6 +5,9 @@ import { useRoute, useRouter } from "vue-router";
 import { appApi } from "../../shared/api/api.js";
 import { useResource } from "../../shared/api/use-resource.js";
 import ProjectIssues from "./ProjectIssues.vue";
+import IssueCreate from "./IssueCreate.vue";
+import IssueCreateMenu from "./IssueCreateMenu.vue";
+import { issueCreateLocation } from "./work-navigation.js";
 import ProjectAssets from "./ProjectAssets.vue";
 import ProjectMembers from "./ProjectMembers.vue";
 import ProjectPromptSettings from "./ProjectPromptSettings.vue";
@@ -50,9 +53,10 @@ const secondaryTabs = computed(() => tabs.value.filter(item => !primaryTabs.valu
 const currentTab = computed(() => tabs.value.some(item => item.id === props.tab) ? props.tab : "overview");
 const actionPanel = ref(null);
 const issueDetailOpen = computed(() => ['issues', 'bugs'].includes(currentTab.value) && typeof route.query.issue === 'string' && Boolean(route.query.issue));
+const issueCreateOpen = computed(() => ['issues', 'bugs'].includes(currentTab.value) && route.query.create === '1' && !issueDetailOpen.value);
 const releaseDetailOpen = computed(() => currentTab.value === 'releases' && typeof route.query.release === 'string' && Boolean(route.query.release));
 const taskDetailOpen = computed(() => currentTab.value === 'tasks' && typeof route.query.task === 'string' && Boolean(route.query.task));
-const standaloneDetail = computed(() => issueDetailOpen.value || releaseDetailOpen.value || taskDetailOpen.value);
+const standaloneDetail = computed(() => issueCreateOpen.value || issueDetailOpen.value || releaseDetailOpen.value || taskDetailOpen.value);
 const pageCopy = computed(() => ({
   releases: { title: '版本', description: '用清晰的范围，推动每一次交付。' },
   assets: { title: '项目资产', description: '把重要的文档、链接和上下文放在一起。' },
@@ -80,10 +84,11 @@ function returnToIssue() {
     <FeedbackMessage :message="error || visitError" type="error" /><FeedbackMessage :message="notice" type="success" />
     <p v-if="loading && !data" role="status">{{ $t("正在读取项目…") }}</p>
     <template v-if="data">
-      <PageHeader v-if="!standaloneDetail" :title="pageCopy ? $t(pageCopy.title) : data.project.name" :description="pageCopy ? $t(pageCopy.description) : data.project.description"><template #meta><p v-if="archived" class="warning">{{ $t('项目已归档，内容只读。') }}</p></template><button class="ui-icon-button" :aria-label="$t('刷新项目')" :title="$t('刷新项目')" :disabled="loading" @click="reload"><ReloadOutlined aria-hidden="true" /></button><template v-if="contextualAction"><button v-if="contentPermissions.includes(contextualAction.permission)" class="primary" :disabled="!actionPanel || actionPanel.creationDisabled" @click="actionPanel.create($event)"><PlusOutlined aria-hidden="true" />{{ $t(contextualAction.label) }}</button></template><button v-else-if="!pageCopy && contentPermissions.includes('issue.create')" class="primary" @click="router.push({ query: { tab: 'issues', create: '1' } })"><PlusOutlined aria-hidden="true" />{{ $t('新建事项') }}</button></PageHeader>
+      <PageHeader v-if="!standaloneDetail" :title="pageCopy ? $t(pageCopy.title) : data.project.name" :description="pageCopy ? $t(pageCopy.description) : data.project.description"><template #meta><p v-if="archived" class="warning">{{ $t('项目已归档，内容只读。') }}</p></template><button class="ui-icon-button" :aria-label="$t('刷新项目')" :title="$t('刷新项目')" :disabled="loading" @click="reload"><ReloadOutlined aria-hidden="true" /></button><template v-if="contextualAction"><button v-if="contentPermissions.includes(contextualAction.permission)" class="primary" :disabled="!actionPanel || actionPanel.creationDisabled" @click="actionPanel.create($event)"><PlusOutlined aria-hidden="true" />{{ $t(contextualAction.label) }}</button></template><IssueCreateMenu v-else-if="!pageCopy && !['issues', 'bugs'].includes(currentTab) && contentPermissions.includes('issue.create')" @create="target => router.push(issueCreateLocation(projectId, target, route.fullPath))" /></PageHeader>
       <div v-if="!standaloneDetail" class="project-tab-bar"><nav class="page-tabs project-navigation" :aria-label="$t('项目功能')"><button v-for="item in primaryTabs" :key="item.id" :class="{ active: currentTab === item.id }" :aria-current="currentTab === item.id ? 'page' : undefined" @click="emit('tab', item.id)">{{ $t(item.label) }}</button></nav><details v-if="secondaryTabs.length" class="project-more"><summary>{{ secondaryTabs.find(item => item.id === currentTab) ? $t(secondaryTabs.find(item => item.id === currentTab).label) : $t('协作入口') }}</summary><nav :aria-label="$t('项目协作')"><button v-for="item in secondaryTabs" :key="item.id" :aria-current="currentTab === item.id ? 'page' : undefined" @click="emit('tab', item.id); $event.target.closest('details').open = false">{{ $t(item.label) }}</button></nav></details></div>
       <p v-if="currentTab !== tab" class="warning" role="status">{{ $t("当前项目状态或你的分工未开放所选功能，可在下方查看当前权限。") }}</p>
-      <template v-if="currentTab === 'overview'">
+      <IssueCreate v-if="issueCreateOpen" :project-id="projectId" :project-name="data.project.name" :type="currentTab === 'bugs' ? 'bug' : 'requirement'" :permissions="contentPermissions" />
+      <template v-else-if="currentTab === 'overview'">
         <section v-if="managementOnly && !archived" class="project-setup-callout" :aria-label="$t('完成项目配置')">
           <h2>{{ $t("下一步：分配项目工作") }}</h2><p>{{ $t("你是项目负责人，已具备配置和成员管理权限。请为自己及参与者选择工作内容，需求、资产和开发入口会按授权显示。") }}</p>
           <button class="primary" @click="emit('tab', 'members')">{{ $t("配置本人及成员分工") }}</button>

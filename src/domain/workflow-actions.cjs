@@ -3,9 +3,12 @@ const { accountError } = require("./account.cjs");
 const handlerFields = Object.freeze({ businessOwner: "businessOwnerId", reporter: "reporterId", developer: "developerId", qaOwner: "qaOwnerId", acceptanceOwner: "acceptanceOwnerId" });
 const actionCategories = Object.freeze(["planning", "work", "development", "verification"]);
 const requiredFieldNames = Object.freeze(["description", "acceptanceCriteria", "reproductionSteps", "expectedResult", "actualResult", "releaseId", "qaOwnerId", "acceptanceOwnerId"]);
-function workflowHandler(issue, node) { return issue[handlerFields[node?.handler]] || null; }
+function workflowHandler(issue, node) {
+  const action = issue.actions?.find(action => action.nodeId === node?.id && ["ready", "active"].includes(action.status));
+  return action?.explicitHandler && node?.handler !== "developer" ? action.handlerId : issue[handlerFields[node?.handler]] || null;
+}
 function workflowStepPermissions(issue, node) {
-  return [...new Set((issue.workflowVersion?.definition?.transitions || []).filter(edge => edge.from === node?.id).map(edge => edge.permission))];
+  return [...new Set((issue.workflowVersion?.definition?.transitions || []).filter(edge => edge.from === node?.id).flatMap(edge => edge.trigger === "development.assigned" ? ["issue.assign", "session.start"] : [edge.permission]))];
 }
 function canProcessWorkflowStep(issue, node, permissions) {
   return permissions.includes("issue.view") && workflowStepPermissions(issue, node).some(permission => permissions.includes(permission));
@@ -24,9 +27,11 @@ function actionBucket(category, status) {
 }
 function developmentAction(task, execution, requests = []) {
   if (["completed", "cancelled", "merged"].includes(task.status)) return null;
+  if (task.workflowEvents?.length) return { bucket: "todo", label: "处理业务流转", phase: "流转受阻" };
   if (task.status === "planned") return { bucket: "todo", label: "开始开发", phase: "待开发" };
   if (requests.length) return { bucket: "todo", label: "处理审批或问题", phase: "等待你处理" };
   if (["running", "preparing", "starting"].includes(execution?.status)) return { bucket: "doing", label: "查看进度", phase: execution.status === "running" ? "执行中" : "准备环境" };
+  if (task.issueLinks?.length && task.issueLinks.every(link => link.issue.deliverables?.[0]?.taskId === task.id && (["pending", "returned"].includes(link.issue.deliverables[0].status) || !link.issue.workflowVersion?.definition.nodes.find(node => node.id === link.issue.status)?.allowDevelopment) || ["completed", "cancelled"].includes(link.issue.workflowVersion?.definition.nodes.find(node => node.id === link.issue.status)?.kind))) return null;
   if (["completed", "failed", "interrupted", "cancelled"].includes(execution?.status)) return { bucket: "todo", label: "整理成果", phase: "本轮已结束" };
   return { bucket: "todo", label: "核对原执行", phase: "执行结果待确认" };
 }

@@ -1,3 +1,4 @@
+const { installReviewWorkflow } = require("../support/workflow-fixture.cjs");
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
 const { randomUUID } = require("node:crypto");
@@ -72,8 +73,8 @@ test("project prompt defaults and member overrides isolate types, accounts and p
   assert.deepEqual((await f.database.client.project.findUnique({ where: { id: f.project.id } })).settings.prompts, defaults);
   await f.projects.saveMember(f.project.id, f.admin, { userId: f.member.id, permissions: ["project.view"] });
   await f.projects.saveMember(f.project.id, f.admin, { userId: f.analyst.id, permissions: ["project.view"] });
-  const personal = "私有修复说明 {{title}}\n{{content}}\n{{images}}";
-  const shared = "共享需求说明 {{title}}\n{{content}}\n{{images}}";
+  const personal = "私有修复说明 {{title}}\n{{content}}\n{{attachments}}";
+  const shared = "共享需求说明 {{title}}\n{{content}}\n{{attachments}}";
   const initial = await f.projects.promptSettings(f.project.id, f.member);
   assert.deepEqual(initial.templates, defaults);
   assert.equal(initial.canConfigure, false);
@@ -278,7 +279,7 @@ test("project settings propagate to prepared spaces without exposing secrets or 
   await f.projects.active.get(accepted.space.id).promise;
   const space = (await f.projects.space(f.project.id, f.member)).space;
   const before = await f.projects.store.readWorkspace(space.workspaceId, f.member.id);
-  const template = "Project instructions: {{title}}\n{{content}}\n{{images}}";
+  const template = "Project instructions: {{title}}\n{{content}}\n{{attachments}}";
   const retired = { tapd: { session: { cookie_header: "fixture-project-secret" } }, prompts: getPromptTemplates() };
   await f.projects.store.saveProject({ settings: retired, revision: 1 }, f.project.id);
   await f.projects.store.writeWorkspace(space.workspaceId, { ...before, tapd: retired.tapd, prompt_templates: retired.prompts });
@@ -470,6 +471,7 @@ test("administrators manage all collaboration without membership or department a
   const f = await fixture(t);
   const { ProjectContentServices } = require("../../src/application/project-content-services.cjs");
   const content = new ProjectContentServices(f.database, f.projects);
+  await installReviewWorkflow(f.database, undefined, "bug");
   await f.projects.saveMember(f.project.id, f.admin, { userId: f.member.id, permissions: grants });
   const observer = await f.accounts.create({ username: "observer", password: "fixture-password", role: "admin", departmentId: f.department.id }, f.admin);
   await f.accounts.store.update(observer.id, { departmentId: null });

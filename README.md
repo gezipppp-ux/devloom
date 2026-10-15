@@ -54,11 +54,13 @@ CLI Agent 已通过独立适配层接入，目前仅支持 Codex。项目协作�
 
 ### CLI Agent 通过 MCP 发布需求
 
-在「个人设置 → MCP 接入」创建个人 Token，复制统一 MCP 地址并配置到 Codex、Claude Code 或 Pi。「连接配置与图片上传」提供接入指南。支持查询项目、版本和成员、新建版本、发布／编辑需求与 Bug、指派负责人，以及查重和发布结果核验。Token 可限定项目、操作权限和有效期，并可随时撤销。
+在「个人设置 → MCP 接入」创建个人 Token，复制统一 MCP 地址并配置到 Codex、Claude Code 或 Pi。「连接 Agent 与使用指南」提供接入指南。支持查询项目、版本和成员、新建版本、发布／编辑需求与 Bug、指派负责人，以及查重和发布结果核验。Token 可限定项目、操作权限和有效期，并可随时撤销。
 
-图片通过带 Bearer Token 的 HTTP POST 上传，正文使用附件 ID 引用；Token 页面提供 curl、PowerShell、客户端配置和发布参数示例。单张最多 10 MiB、每次最多 20 张且合计 20 MiB；暂存有效期为 24 小时。发布与指派不会自动启动开发。
+附件先通过 MCP `create_upload_token` 申请临时上传 Token，再用它进行 HTTP POST 上传，正文使用附件 ID 引用。临时 Token 仅限指定项目，最长 24 小时有效，原 MCP Token 撤销后同步失效；不再接受直接用 MCP Token 上传。支持图片、文本、PDF、Office 等文件，单文件最多 10 MiB、每次最多 20 个且合计 20 MiB；暂存有效期为 24 小时。开发时实际 PNG、JPEG、WebP 作为图片输入，其他附件在提示词中提供执行机器的本地绝对路径，由 Agent 使用对应工具读取。发布与指派不会自动启动开发。
 
-完整接口、权限和重试规则见 [MCP 接入与图文发布](docs/engineering/mcp.md)。已有当前基线部署升级时，先运行 npm run build、npm run db:deploy，再重启服务。
+将站点的 `/skills` 链接发给 Agent（本机开发示例：[Skills 指南](http://127.0.0.1:5173/skills)），即可读取全部 13 个 MCP 工具的参数与权限、事项字段，以及需求／Bug 的完整发布流程和示例。MCP 支持截止日期 `dueDate`、标签 `tags`、版本目标日期 `targetDate`，并通过 `get_issue_workflow` 查询已发布流程。页面无需登录或 JavaScript，提供可直接保存的 `/skills/SKILL.md` 和安装提示词。Agent 需能访问该站点并支持技能文件；远程 Agent 使用可达部署地址，凭据单独配置。
+
+完整接口、权限和重试规则见 [MCP 接入、附件上传与 Skills](docs/engineering/mcp.md)。已有当前基线部署升级时，先运行 npm run build、npm run db:deploy，再重启服务。
 
 ## 环境要求
 

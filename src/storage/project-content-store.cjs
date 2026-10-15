@@ -81,7 +81,7 @@ class ProjectContentStore {
     }
     const updated = await this.database.client.projectIssue.updateMany({ where: { id, projectId, revision }, data: { ...data, updatedById: actorId, revision: { increment: 1 } } });
     if (!updated.count) throw conflict();
-    await new WorkActionStore(this.database).syncIssue(await this.issue(projectId, id));
+    await new WorkActionStore(this.database).syncIssue(await this.issue(projectId, id), { handlerId: extra.handlerId, explicitHandler: extra.explicitHandler });
     const after = await this.issue(projectId, id);
     await this.issueHistory(projectId, id, actorId, action, { before, after, ...extra });
     return after;
@@ -100,14 +100,20 @@ class ProjectContentStore {
     assertIssueWritable(await this.issue(projectId, issueId));
     return this.database.client.issueComment.create({ data: { projectId, issueId, authorId, body } });
   }
-  async deliverable(projectId, issueId, authorId, data) {
-    if (issueId) assertIssueWritable(await this.issue(projectId, issueId));
+  async deliveryTask(projectId, issueId, authorId, data) {
     if (data.taskId) {
       const task = await this.database.client.developmentTask.findFirst({ where: { projectId, id: data.taskId, executorId: authorId }, include: { release: true, issueLinks: true } });
-      if (!task || !task.runKey || !["started", "completed"].includes(task.status)) throw accountError("只能发布本人已启动的开发任务成果。", 400);
+      const eligible = ["started", "completed", ...(data.supersedesId ? ["cancelled"] : [])];
+      if (!task || !task.runKey || !eligible.includes(task.status)) throw accountError("只能发布本人已启动的开发任务成果。", 400);
       if (task.release?.status === "archived") throw accountError("已归档版本不能发布交付。", 409);
       if (issueId ? !task.issueLinks.some(link => link.issueId === issueId) : task.snapshot.kind !== "manual") throw accountError("交付来源与开发任务范围不一致。", 400);
+      return task;
     }
+    return null;
+  }
+  async deliverable(projectId, issueId, authorId, data) {
+    if (issueId) assertIssueWritable(await this.issue(projectId, issueId));
+    await this.deliveryTask(projectId, issueId, authorId, data);
     return this.database.client.projectDeliverable.create({ data: { projectId, issueId, authorId, ...data } });
   }
   async readDeliverable(projectId, id) {
@@ -123,12 +129,17 @@ class ProjectContentStore {
   }
   async reassignDelivery(projectId, id, actorId, revision, reviewerId) {
     const before = await this.readDeliverable(projectId, id);
-    const changed = await this.database.client.projectDeliverable.updateMany({ where: { projectId, id, revision, status: "pending" }, data: { reviewerId, verificationStartedAt: null, revision: { increment: 1 } } });
+    const changed = await this.database.client.projectDeliverable.updateMany({ where: { projectId, id, revision, status: "pending" }, data: { reviewerId, revision: { increment: 1 } } });
     if (!changed.count) throw conflict();
     if (before.issueId) await this.issueHistory(projectId, before.issueId, actorId, "delivery.reassigned", { deliveryId: id, beforeReviewerId: before.reviewerId, reviewerId });
     await this.audit(actorId, "delivery.reassigned", projectId, id);
     return this.readDeliverable(projectId, id);
   }
+  async latestDelivery(projectId, issueId) {
+    return this.database.client.projectDeliverable.findFirst({ where: { projectId, issueId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
+  }
+  async deliveryRequest(requestId) { return requestId ? this.database.client.projectDeliverable.findUnique({ where: { requestId } }) : null; }
+  async bindDeliveryAction(id, actionId) { return this.database.client.projectDeliverable.update({ where: { id }, data: { actionId } }); }
   async hasAcceptedDelivery(projectId, issueId) {
     const latest = await this.database.client.projectDeliverable.findFirst({ where: { projectId, issueId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { status: true } });
     return latest?.status === "accepted";

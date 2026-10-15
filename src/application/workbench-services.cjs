@@ -1,3 +1,4 @@
+const { WorkflowExecutionServices } = require("./workflow-execution-services.cjs");
 const { WorkbenchStore } = require("../storage/workbench-store.cjs");
 const { pageInput, choice, text, ISSUE_TYPES, PRIORITIES } = require("../domain/project-issues.cjs");
 const { accountError } = require("../domain/account.cjs");
@@ -8,7 +9,7 @@ const { issueWorkflowNode } = require("../domain/issue-workflows.cjs");
 const { workflowHandler, canProcessWorkflowStep } = require("../domain/workflow-actions.cjs");
 
 class WorkbenchServices {
-  constructor(database, projects, { workspaces } = {}) { this.store = new WorkbenchStore(database); this.actionStore = new WorkActionQueryStore(database); this.projects = projects; this.workspaces = workspaces; }
+  constructor(database, projects, { workspaces } = {}) { this.store = new WorkbenchStore(database); this.actionStore = new WorkActionQueryStore(database); this.projects = projects; this.workspaces = workspaces; this.workflowExecution = new WorkflowExecutionServices(database, projects); }
   async actionSnapshot(actor, input = {}) {
     const directory = await this.projects.list(actor);
     const projects = directory.projects.filter(project => project.status === "active" && (!input.projectId || project.id === input.projectId));
@@ -26,9 +27,12 @@ class WorkbenchServices {
       }
       await this.projects.workspaceAuthorization(space.workspaceId, actor, "session.approve");
     }
-    const snapshot = await this.actionStore.snapshot(projects.map(project => project.id), actor.id);
+    let snapshot = await this.actionStore.snapshot(projects.map(project => project.id), actor.id);
+    const recoverable = snapshot.tasks.filter(task => task.snapshot.workflowIntent && ["started", "unknown"].includes(task.status));
+    for (const task of recoverable) await this.workflowExecution.recoverTask(task);
+    if (recoverable.length) snapshot = await this.actionStore.snapshot(projects.map(project => project.id), actor.id);
     for (const action of snapshot.actions) {
-      const handlerId = workflowHandler(action.issue, issueWorkflowNode(action.issue));
+      const handlerId = workflowHandler({ ...action.issue, actions: [action] }, issueWorkflowNode(action.issue));
       action.assignmentProblem = !handlerId;
       if (handlerId) try {
         const context = await this.projects.authorize(action.projectId, { id: handlerId }, "issue.view");

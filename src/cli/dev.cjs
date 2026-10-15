@@ -3,6 +3,7 @@ const { argument } = require("./arguments.cjs");
 const { root } = require("../config/runtime.cjs");
 const { createWebServer } = require("../http/server.cjs");
 const { requestOrigin } = require("../http/origin.cjs");
+const { pageStatus } = require("../http/page-routes.cjs");
 
 async function main(argv = process.argv.slice(2)) {
   if (argument("--config", null, argv))
@@ -16,8 +17,18 @@ async function main(argv = process.argv.slice(2)) {
   const application = createWebServer({
     host,
     pageHandler(request, response, url) {
-      if (["/setup", "/login", "/password", "/personal", "/system", "/accounts", "/environment"].includes(url.pathname))
+      const statusCode = pageStatus(request, url);
+      if (statusCode)
         request.url = `/index.html${url.search}`;
+      if (statusCode === 404) {
+        // Vite's HTML sender sets 200 itself. Preserve the navigation's 404
+        // while leaving transformation failures and other statuses intact.
+        delete request.headers["if-none-match"];
+        const writeHead = response.writeHead;
+        response.writeHead = function (status, ...args) {
+          return writeHead.call(this, status === 200 ? 404 : status, ...args);
+        };
+      }
       // Only development pages need Vite's HMR socket and reconnect worker.
       // The HTTP adapter has already validated this request's host and origin.
       const socketOrigin = url.origin.replace(/^http:/, "ws:");
@@ -52,7 +63,7 @@ async function main(argv = process.argv.slice(2)) {
     const { createServer } = await import("vite");
     vite = await createServer({
       configFile: path.join(root, "web", "vite.config.mjs"),
-      // Only the explicit application routes above use the SPA entry.
+      // Only recognized application pages use the SPA entry.
       // Unknown files must not fall back to (and pretransform) index.html.
       appType: "mpa",
       // This .mjs config can be loaded directly without temporary build files.

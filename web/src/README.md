@@ -1,10 +1,14 @@
 # 前端模块边界
 
-个人设置的 MCP 接入由 features/accounts/McpTokenSettings.vue 管理，按需读取 Token 和项目范围。采用极简接入布局：连接配置、最近两枚 Token 和图片上传入口；完整列表与 Token 详情按需展开，创建表单和上传说明单独显示。创建时仅在当前组件内存展示一次明文，返回、关闭或卸载即清除。McpConnectionHelp.vue 提供客户端切换与身份验证，McpUploadHelp.vue 提供 HTTP 二进制上传和附件 ID 引用，创建表单保留可展开的上传示例。代码始终使用凭据占位符，不插入真实 Token；Pi 仅提供通用连接参数，不假定具体 MCP 扩展的配置格式。请求使用 useResource 的账号／卸载隔离；桌面和窄屏代码片段在本身区域滚动。
+`app/NotFoundPage.vue` 是 `/404` 与未匹配页面路径共用的公共错误页，未登录时也可显示，不读取账号或业务数据。它保留原访问路径（不显示查询参数），复用语言和主题设置，返回工作台时仍经过正常身份门禁；返回上一页只接受有效的站内历史，没有可用历史则回到工作台。开发和生产页面入口及 HTTP 404 状态由 `src/http/page-routes.cjs` 统一判定，接口、MCP 和缺失静态资源不进入此页面。
+
+个人设置的 MCP 接入由 features/accounts/McpTokenSettings.vue 管理，按需读取 Token 和项目范围。采用极简接入布局：连接配置、最近两枚 Token 和附件上传入口；完整列表与 Token 详情按需展开，创建表单和上传说明单独显示。创建时仅在当前组件内存展示一次明文，返回、关闭或卸载即清除。McpConnectionHelp.vue 提供客户端切换与身份验证，McpUploadHelp.vue 提供 HTTP 二进制上传和附件 ID 引用，创建表单保留可展开的上传示例。代码始终使用凭据占位符，不插入真实 Token；Pi 仅提供通用连接参数，不假定具体 MCP 扩展的配置格式。请求使用 useResource 的账号／卸载隔离；桌面和窄屏代码片段在本身区域滚动。
 
 `main.js` 是唯一入口，负责挂载 Vue、注册表单组件，并从共享样式读取主题变量。
 
 所有下拉选择使用 `shared/components/AppSelect.vue`，统一弹层、选中标记、禁用状态、键盘操作和深浅色；顶栏通过 `ToolbarSelect` 提供紧凑与图标样式。组件支持 `v-model`／`value`、`options` 分组、搜索、清空、多选和 `footer` 刷新区域；旧表单可保留 `<option>` 内容并用 `native-events` 接收 `{ target: { value, selectedOptions } }`。`required` 与禁用 fieldset 保留表单校验，弹窗或管理浮层中的选项挂在当前 dialog／popover 内以保持可交互。业务查询与提交仍由各功能组件负责，页面不直接使用原生 select 或组件库 Select。
+
+人员选择统一启用 `AppSelect` 的 `search-pinyin`，在当前已授权候选项内按显示名称、用户名、中文、全拼和拼音首字母过滤，不区分大小写；多选搜索保留已选人员，清空搜索恢复候选列表。包括事项责任人／关注人、当前／下一处理人、开发指派／转派、项目负责人／成员、资产负责人及交付验证人。候选资格和提交仍由功能及服务端校验，搜索不查询额外账号或改变人员 ID。
 
 外观由 `shared/styles/theme.js` 管理：默认跟随系统，也可通过顶栏头像前的 `ThemeSelect` 选择浅色或暗色。选择作为设备偏好保存在本机 `web-coding.theme`，跨标签同步；系统外观变化仅在跟随系统时生效。入口在挂载前应用主题并同步组件库算法和设计变量，卸载时释放监听；切换不重建页面、不清除草稿、不保存业务设置。全站颜色与原生控件 `color-scheme` 位于 `design-tokens.css`。
 
@@ -18,9 +22,11 @@
 
 项目卡片和项目动态复用 `shared/components/RelativeTime.vue`：当天不足一分钟显示「刚刚」，不足一小时显示分钟，不足六小时显示小时，其余显示「今天」；前一个本地自然日显示「昨天」，更早显示日期，跨年补年份。组件每 30 秒更新、卸载时清理计时器，悬停显示完整本地时间；通过默认作用域插槽的 `text` 添加「更新」等上下文文案。格式规则位于 `shared/i18n/relative-time.js`，跟随当前语言和浏览器时区，异常时间显示未知、未来时间显示完整日期时间。
 
-跨项目的工作台、搜索与事项／本人开发／交付队列由 `features/projects/` 组合，复用 `WorkItemList`；`PageHeader`、`FilterBar`、`EmptyState`、`PagePagination`、`StatusBadge`、`ModalDialog` 为共享呈现组件。分页、权限及提交由所属业务组件和 API 负责。项目内需求／Bug 分类保留完整批量分配和版本筛选，主「事项」提供统一跨项目查询。
+跨项目的工作台、搜索与事项／本人开发／交付队列由 `features/projects/` 组合；`PageHeader`、`FilterBar`、`EmptyState`、`PagePagination`、`StatusBadge`、`ModalDialog` 为共享呈现组件。分页、权限及提交由所属业务组件和 API 负责。项目内需求／Bug 分类保留完整批量分配和版本筛选，主「事项」提供统一跨项目查询。
 
-原型对齐后的项目目录使用 `ProjectCard`，项目概览由 `ProjectDashboard` 组合真实事项／交付计数、当前版本和项目资产；请求失败显示错误与重试，不把未知计数显示为零。`WorkItemTable` 复用事项和开发队列的桌面表格／移动条目；`WorkItemList` 复用工作台、交付和搜索结果。项目详情的主导航为概览、版本、资产、成员、设置、提示词，其余协作入口在展开菜单中保留原深链。
+事项创建、独立开发和历史会话入口共用 `ProjectPickerDialog` 的精简项目列表；App 拥有按操作筛选项目和路由协调，取消与重开使旧空间查询失效。`GlobalSearch` 使用输入框与紧凑结果行，`use-global-search.js` 拥有最近项目读取、200ms 防抖、部分失败和卸载／查询代际隔离，沿用真实聚合接口与 `workLocation` 深链。`ModalDialog` 的 header 插槽承载专用头部，原生模态负责焦点限制，关闭或卸载恢复触发点焦点。交互约定见[项目选择与快捷搜索](../../docs/prd/quick-entry.md)。
+
+原型对齐后的项目目录使用 `ProjectCard`，项目概览由 `ProjectDashboard` 组合真实事项／交付计数、当前版本和项目资产；请求失败显示错误与重试，不把未知计数显示为零。`WorkItemTable` 复用事项和开发队列的桌面表格／移动条目；`WorkItemList` 呈现交付等完整工作列表。项目详情的主导航为概览、版本、资产、成员、设置、提示词，其余协作入口在展开菜单中保留原深链。
 
 `SettingsLayout` 复用个人设置与管理中心的分类导航；`app/SystemSettings.vue` 组合账号、部门、流程、供应商、环境、目录及初始化记录，原 `/accounts`、`/departments`、`/system?tab=` 地址继续生效。个人设置按资料与偏好、Git、MCP、账号安全组织；切换分类保留资料与默认值草稿，离开敏感凭据页面清理组件内明文。新建账号／项目使用共享模态框，账号列表的管理菜单保留原有操作。
 
@@ -49,6 +55,8 @@
 
 需求／Bug 新增与编辑共用 `features/projects/IssueFields.vue`；五类正文通过共享 `MarkdownEditor`、`MarkdownContent` 和 `shared/components/markdown-content.js` 安全渲染。原 `features/session/requirement-content.js` 保留会话入口及图片／链接规则。项目附件草稿由 `use-project-attachments.js` 管理，读取完成后生成正文链接并同步序列化；保存前不上传，取消、卸载和上下文切换撤销 blob URL，迟到读取不得插回其他草稿。保存冲突保留附件并支持原有逐字段合并。
 
+新建入口复用 `IssueCreateMenu` 选择需求或 Bug，`IssueCreate` 拥有独立新建页的草稿、流程查询与保存生命周期，保留 `?tab=issues|bugs&create=1` 深链。类型切换不重建同项目的表单，取消返回来源并清理附件；保存成功替换新建地址为事项详情。`IssueFields` 的 creation 布局将责任人与关注人放在左侧正文下方，日期与标签在右侧展开，窄屏按正文、人员、属性重排；编辑态继续复用相同字段规则。方案见[事项新建页](../../docs/prd/issue-creation.md)。
+
 `MarkdownEditor` 默认懒加载 `VisualMarkdownEditor`（Tiptap），提供可视图文编辑，另保留 Markdown 源码和预览模式。图片节点仅通过已验证映射显示，文档保留原始附件路径，blob URL 不得序列化入正文。剪贴板 HTML 只取纯文本，不作为可执行内容解析。源码到可视化的转换先检查语义等价，不支持无损转换时保留原文。初始化、外部合并、移除附件和上下文重置建立新的撤销基线，普通编辑保留撤销／重做；异步插图使用映射后的光标书签，源码模式在读取附件期间禁用输入，避免位置漂移。
 
 项目协作版本以「我的项目」为默认首页，`/projects/:projectId` 展示按权限开放的业务页面。创建项目直接填写 Git 仓库地址，项目设置管理地址，已分配开发空间时只读展示并说明原因；没有独立仓库目录页面或仓库选择接口。`/?workspace=<id>&task=<runKey>` 进入本人已准备的执行空间，个人创建空间入口不再提供。系统入口为部门与权限、账号管理和系统设置。项目页面的请求和写入生命周期由 `shared/api/use-resource.js` 处理，项目组件按项目 ID 重建；定期重检项目权限，撤权时移除不可访问内容。项目内容通过安全 Markdown 展示，附件下载经过项目和资源归属校验，不渲染外部未过滤 HTML。下列历史执行工作台组件说明只适用于被授权的开发空间。
@@ -65,7 +73,7 @@ Vue 组件使用 PascalCase 文件名；JavaScript 辅助模块使用 kebab-case
 
 应用组件只组合界面和处理界面状态：`App.vue` 控制受保护页面的渲染边界；`WorkbenchApp.vue` 组合账号导航、设置页面与工作区，并持有工作区弹窗引用；`WorkspaceConsole.vue` 持有页面切换、输入草稿和滚动位置。数据生命周期按职责分离：
 
-- `app/use-workspace-selection.js` 负责首次 bootstrap、工作区选择和 Vue Router query 更新；默认选择使用 replace 固定，页内切换使用 push，浏览器前进和后退同步恢复选择。`WorkbenchApp.vue` 按工作区 UUID 重建 console，隔离草稿及异步生命周期；重命名仅更新目录和标题，不重建 console。
+- `app/use-workspace-selection.js` 负责首次 bootstrap、工作区选择和 Vue Router query 更新；默认选择使用 replace 固定，页内切换使用 push，浏览器前进和后退同步恢复选择。可取消入口传入 `isCurrent`，工作区读取完成后再次校验操作有效性再跳转。`WorkbenchApp.vue` 按工作区 UUID 重建 console，隔离草稿及异步生命周期；重命名仅更新目录和标题，不重建 console。
 - `app/router.js` 使用 Vue Router 管理登录、首次改密、工作台、个人设置、系统设置和账号管理；工作区仍由 query 参数选择。`App.vue` 在账号身份变化时重建整个受保护页面，`WorkbenchApp.vue` 在工作区变化时重建 console。导航保留其他 query、hash 和用户 history state。
 - `shared/api/account-session.js` 保存当前账号和个人设置的内存投影，数据由数据库 API 持久化。401、SSE 身份失效以及跨标签退出清空投影；HTTP 请求带账号代际，迟到响应不能进入新账号。LocalStorage 只用作无业务内容的身份变化通知。
 - `app/SystemSettings.vue` 组合管理员的目录设置、环境检测和系统流程编排；账号业务页面属于 `features/accounts/`：`LoginPage.vue` 负责登录，`PasswordPage.vue` 组合首次改密入口，两类改密入口复用 `PasswordForm.vue`；`PersonalSettings.vue` 管理账号默认模型、强度、权限、通知和改密；`AccountManagement.vue` 管理账号身份，不提供读取他人工作区的入口。工作区配置仍由所有者在 `features/settings` 管理。
@@ -120,3 +128,7 @@ ProjectPermissionEditor 在部门模式显示功能上限，在成员模式显�
 全局开发列表复用项目内的 `MergeDevelopmentDialog`，仍只允许同项目、同版本、未启动的本人任务合并，最多 20 条事项；合并栏仅在选择后出现。`workbench-presenter` 复用开发任务 presenter 返回关联范围、修订号和真实权限，不从前端状态推断合并及会话访问资格。“项目全部任务”使用顶部所选项目直接进入既有项目列表；“独立开发”“历史会话”先选择获授权项目，有就绪空间时通过 `view=manual|history` 打开既有表单或归档弹窗，尚未就绪时进入代码与环境准备页。入口和环境准备均不自动执行 Agent，归档会话保持本人空间隔离。
 
 2026-10-14 职责与工作台实施：`WorkbenchHome` / `WorkActionQueue` / `WorkActionList` 展示 `/workbench/actions` 的个人动作；资源列表继续用于浏览。`IssueFields` 明确职责与关注关系，`IssueDetail` 显示当前处理人并开始步骤；`SystemWorkflows` 编辑节点职责/类别和连线资料/交付门禁。交付发布选择验证人，`DeliveryDetail` 提供开始验证、转派和保留原记录的重新提交。通知直接使用相同个人动作快照；语言与账号切换继续保留既有请求代际规则。详细业务契约见[流程动作](../../docs/engineering/workflow-actions.md)。
+
+MCP 接入支持图片及普通附件，PNG/JPEG/WebP 按实际签名识别为图片输入，其他文件在开发时以本地路径交给 Agent 读取。`McpUploadHelp` 展示申请临时上传 Token、上传与发布三步；`McpTokenSettings` 提供公开 `/skills` 指南与复制链接。该页面由后端直接输出完整 HTML，避免未登录跳转或依赖 Vue 执行而阻止 Agent 读取；不进入受保护 Vue 路由。
+
+MarkdownEditor 对异步写作组件保留加载高度；加载失败时展示原因并提供可保存的 Markdown 源码输入。加载过程中可以主动切换源码，完成加载不会改写草稿。写作区高度按 rows 保留至少 160px，需求与 Bug 的空字段也必须保持可编辑空间。

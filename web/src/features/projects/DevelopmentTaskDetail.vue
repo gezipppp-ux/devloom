@@ -278,7 +278,8 @@ async function submitConfirmation() {
               maxlength="200"
               :disabled="saving" /></label
           ><label v-if="canAssign"
-            >{{ $t("开发负责人") }}<AppSelect native-events
+            >{{ $t("开发负责人") }}<AppSelect search-pinyin native-events
+              :aria-label="$t('开发负责人')"
               v-model="executorId"
               :disabled="
                 saving || members.loading.value || Boolean(members.error.value)
@@ -300,7 +301,7 @@ async function submitConfirmation() {
                 :key="member.userId"
                 :value="member.userId"
               >
-                {{ member.displayName }}
+                {{ member.displayName }}（{{ member.username }}）
               </option>
             </AppSelect></label
           >
@@ -490,7 +491,7 @@ async function submitConfirmation() {
         class="development-panel development-next"
         aria-labelledby="development-next-title"
       >
-        <div class="development-states"><span class="development-task-status">{{ $t('任务：') }}{{ $t(developmentTaskLabels[task.status] || task.status) }}</span><span class="development-execution-status">Codex：{{ $t(codexStatus) }}</span></div>
+        <div v-if="task.workflowErrors?.length" class="warning"><p v-for="entry in task.workflowErrors" :key="entry.id">{{ entry.error }}</p><button :disabled="busy" @click="mutate('workflow/retry', {}, '已重新核对业务流转。')">{{ $t('仅重试业务流转') }}</button></div><p v-if="task.deliveryPhase" class="field-hint">{{ $t(task.deliveryPhase) }}</p><ul v-if="task.scope?.length" class="project-records"><li v-for="issue in task.scope" :key="issue.id">{{ issue.title }} · {{ issue.statusName }}<a v-if="issue.delivery" :href="'/deliveries?projectId=' + projectId + '&delivery=' + issue.delivery.id">{{ $t('查看交付与验收') }}</a></li></ul><div class="development-states"><span class="development-task-status">{{ $t('任务：') }}{{ $t(developmentTaskLabels[task.status] || task.status) }}</span><span class="development-execution-status">Codex：{{ $t(codexStatus) }}</span></div>
         <p class="development-eyebrow">
           {{
             ["completed", "cancelled", "merged"].includes(task.status) ||

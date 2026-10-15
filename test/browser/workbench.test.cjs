@@ -12,7 +12,7 @@ async function verifyWorkbench(browser) {
   const origin = 'http://127.0.0.1:49025', base = `/api/projects/${projectId}`;
   const output = path.resolve('state/browser/workbench'); fs.mkdirSync(output, {recursive:true});
   const project = fixture.response(new URL(origin + '/api/projects')).projects[0];
-  const issue = { ...fixture.response(new URL(origin + base + '/issues/search')), dueDate: '2026-10-20', tags: ['体验', 'MVP'] };
+  const issue = { ...fixture.response(new URL(origin + base + '/issues/search')), dueDate: '2026-10-20', tags: ['体验', 'MVP'], workflowActions: [{ trigger: 'delivery.submitted', statusName: '待验证' }, { trigger: 'verification.started', statusName: '验证中' }, { trigger: 'verification.accepted', statusName: '已实现' }, { trigger: 'verification.returned', statusName: '待返工' }] };
   let delivery = { id: 'delivery-1', projectId, issueId: issue.id, title: '客户搜索交付', body: '功能说明与验证记录', status: 'pending', revision: 1, checklist: ['搜索结果符合筛选条件', '移动端可完成操作'], checkedItems: [], authorId: 'visual-admin', reviewerId: 'visual-admin', commit: 'abc123', createdAt: '2026-10-14T08:00:00Z' };
   let resubmitted;
   const requests = [], errors = [];
@@ -52,6 +52,7 @@ async function verifyWorkbench(browser) {
         const second=url.searchParams.get('offset')==='30';
         return send({items:[second ? {...issue,id:'issue-31',number:31,title:'第二页的事项'} : issue],nextOffset:second?null:30});
       }
+      if (endpoint.startsWith(base + '/issues/') && !input) return send({ ...issue, id: endpoint.split('/').at(-1) });
       if (endpoint.endsWith('/deliveries') && input) { assert.equal(endpoint,base+'/deliveries'); if (input.supersedesId) { resubmitted = { ...delivery, ...input, id: 'delivery-2', status: 'pending', revision: 1, checkedItems: [], reviewedAt: null }; return send(resubmitted); } return send({...delivery,id:'delivery-1',...input}); }
       if (endpoint === base + '/deliveries/delivery-2') return send({delivery:resubmitted,issue,canReview:true,permissions:fixture.permissions,people:issue.people});
       if (endpoint === base + '/deliveries/delivery-1') return send({delivery,issue,canReview:true,canResubmit:delivery.status === 'returned',permissions:fixture.permissions,people:issue.people});
@@ -71,7 +72,7 @@ async function verifyWorkbench(browser) {
     await page.goto(origin);
     await page.getByRole('heading',{name:'工作台',exact:true}).waitFor();
     await page.locator('.work-action').first().waitFor();
-    await page.locator('.ui-home-section').first().getByRole('button', { name: /查看全部/ }).click();
+    await page.locator('.ui-home-section').first().getByRole('link', { name: /查看全部/ }).click();
     await page.waitForURL(url => url.pathname === '/work' && url.searchParams.get('bucket') === 'todo');
     await page.locator('.work-action').first().waitFor();
     assert.equal(await page.locator('.work-action').count(), 1, 'home and full queue keep the same action scope');
@@ -145,7 +146,6 @@ async function verifyWorkbench(browser) {
     await page.goto(origin);
     await page.getByRole('button',{name:'Search everything',exact:true}).click();
     await page.getByRole('dialog').getByRole('searchbox').fill('搜索');
-    await page.getByRole('dialog').getByRole('button',{name:'Search',exact:true}).click();
     await page.getByRole('dialog').getByText('客户搜索交付',{exact:true}).waitFor();
     await page.keyboard.press('Escape');
     await page.goto(origin+`/deliveries?projectId=${projectId}`);
@@ -155,7 +155,7 @@ async function verifyWorkbench(browser) {
     await selectOption(dialog.getByLabel('Related issue',{exact:true}), 'issue-31');
     await dialog.getByLabel('Delivery notes',{exact:true}).fill('发布内容保留原文 @ {name}');
     await selectOption(dialog.getByLabel('Delivery reviewer',{exact:true}), 'visual-admin');
-    const publish=dialog.getByRole('button',{name:'Publish delivery',exact:true});
+    const publish=dialog.getByRole('button',{name:'Submit delivery for verification',exact:true});
     assert.equal(await publish.isEnabled(),false,'sharing requires explicit confirmation');
     await dialog.getByRole('checkbox').check();
     await publish.click();
@@ -170,7 +170,7 @@ async function verifyWorkbench(browser) {
     await page.getByRole('heading',{name:'Review record',exact:true}).waitFor();
     const review=requests.find(r=>r.endpoint.endsWith('/review'));
     assert.deepEqual(review.input,{revision:1,status:'accepted',checkedItems:[0,1],reviewNote:'核对完成'});
-    assert.equal(requests.some(r=>r.input&&(r.endpoint.endsWith('/start')||r.endpoint.endsWith('/transition'))),false,'review never starts an Agent or silently transitions an issue');
+    assert.equal(requests.some(r=>r.input&&(r.endpoint.endsWith('/start')||r.endpoint.endsWith('/transition'))),false,'review sends a single verdict; the server owns the configured issue handoff');
     delivery={...delivery,status:'pending',reviewedAt:null,checkedItems:[],reviewNote:'',revision:3};
     reviewForbidden=true;
     await page.reload();
@@ -193,7 +193,7 @@ async function verifyWorkbench(browser) {
     const revisionDialog = page.getByRole('dialog');
     await revisionDialog.getByLabel('Delivery notes', { exact: true }).fill('已补充移动端验证证据');
     await revisionDialog.getByRole('checkbox').check();
-    await revisionDialog.getByRole('button', { name: 'Publish delivery', exact: true }).click();
+    await revisionDialog.getByRole('button', { name: 'Submit delivery for verification', exact: true }).click();
     await page.waitForURL(url => url.searchParams.get('delivery') === 'delivery-2');
     assert.equal(resubmitted.supersedesId, 'delivery-1');
     assert.equal(resubmitted.reviewerId, 'visual-admin');

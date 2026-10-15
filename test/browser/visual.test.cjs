@@ -17,6 +17,7 @@ const { promptTemplateCatalog, MAX_PROMPT_TEMPLATE_LENGTH } = require("../../src
 const { messageMarkdown } = require("../fixtures/message-markdown.cjs");
 const { projectVisual } = require("../fixtures/project-visual.cjs");
 const { verifyReleaseViewStates } = require("./project-releases.test.cjs");
+const { verifyIssueCreation, checkIssueCreationLayout } = require("./issue-creation.test.cjs");
 const { structuredPatch } = require("diff");
 
 async function main() {
@@ -182,6 +183,8 @@ async function main() {
       // Keep classic scrollbar space visible so short/long page shifts are detectable.
       ignoreDefaultArgs: ["--hide-scrollbars"],
     });
+    await require("./not-found.test.cjs").verifyNotFound(browser);
+    await require("./skills.test.cjs").verifySkills(browser, origin, output);
     const page = await browser.newPage({
       viewport: { width: 1440, height: 1200 },
     });
@@ -524,6 +527,7 @@ async function main() {
             'compact status controls stay inside the viewport');
         }
       }
+      await verifyIssueCreation({ page, origin, projects });
       for (const width of [2560, 1920, 1440, 1280, 1100, 768, 390, 320]) {
         scenario = "session";
         await page.setViewportSize({ width, height: { 2560: 1440, 1920: 1080, 1440: 900, 1280: 720, 1100: 900, 768: 1024, 390: 844, 320: 740 }[width] });
@@ -541,9 +545,14 @@ async function main() {
         await tab('需求');
         await page.getByRole('button', { name: '优化客户搜索体验', exact: true }).waitFor();
         await capture('12-project-issues-' + width);
-        await page.getByRole('button', { name: '新建需求', exact: true }).click();
+        await require('../support/browser-navigation.cjs').openIssueCreate(page);
         await page.getByLabel('标题', { exact: true }).fill('补齐客户详情页面空状态');
+        await checkIssueCreationLayout(page, width);
         await capture('12-project-issue-create-' + width);
+        await selectOption(page.getByLabel('事项类型', { exact: true }), 'bug');
+        await page.getByRole('heading', { name: '新建 Bug', exact: true }).waitFor();
+        await checkIssueCreationLayout(page, width);
+        await capture('12-project-bug-create-' + width);
         await page.getByRole('button', { name: '取消', exact: true }).click();
         await page.getByRole('button', { name: '优化客户搜索体验', exact: true }).click();
         await page.getByRole('button', { name: '编辑事项', exact: true }).waitFor();
@@ -670,6 +679,7 @@ async function main() {
       }
     }
     await require('./workbench.test.cjs').verifyWorkbench(browser);
+    await require('./quick-entry.test.cjs').verifyQuickEntry(browser);
     await captureProjects();
     await page.setViewportSize({ width: 1920, height: 1080 });
     await load();

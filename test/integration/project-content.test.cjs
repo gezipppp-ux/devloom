@@ -1,3 +1,4 @@
+const { installReviewWorkflow } = require("../support/workflow-fixture.cjs");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { temporary } = require("../support/helpers.cjs");
@@ -41,35 +42,35 @@ test("historical source snapshots and images survive local requirement and bug e
   }
 });
 
-test("project issues enforce membership, assignment, versioned acceptance and revision history without starting execution", async t => {
+test("project issues enforce membership, assignment, acceptance and revision history without starting execution", async t => {
   const { database, permissions, actor, outsider, project, services, setPermissions } = await fixture(t);
+  await installReviewWorkflow(database);
   const issue = await services.createIssue(project.id, actor, { qaOwnerId: actor.id, type: "requirement", title: "可验收需求", watcherIds: [actor.id], acceptanceCriteria: "可验证" });
   assert.equal(issue.number, 1);
-  assert.equal(issue.status, "planned");
-  assert.equal(await database.client.developmentTask.count(), 0);
+  assert.equal(issue.status, "draft");
   await assert.rejects(services.readIssue(project.id, issue.id, outsider), { statusCode: 404 });
   await assert.rejects(services.createIssue(project.id, actor, { type: "bug", title: "缺陷", watcherIds: [outsider.id] }), /有效项目成员/);
   const outcomes = await Promise.allSettled(["甲", "乙"].map(title => services.updateIssue(project.id, issue.id, actor, { title, revision: 1 })));
   assert.equal(outcomes.filter(result => result.status === "fulfilled").length, 1);
   assert.equal(outcomes.find(result => result.status === "rejected").reason.statusCode, 409);
-  await database.client.projectIssue.update({ where: { id: issue.id }, data: { developerId: actor.id } });
-  let current = await services.readIssue(project.id, issue.id, actor);
-  for (const status of ["developing", "pending_verification", "verifying"]) current = await services.transitionIssue(project.id, issue.id, actor, { status, revision: current.revision });
+  const delivery = await services.addDeliverable(project.id, actor, { issueId: issue.id, body: "完成交付", commit: "abc123" });
+  const review = { revision: delivery.revision, status: "accepted", checkedItems: delivery.checklist.map((_, i) => i) };
   await setPermissions(permissions.filter(permission => permission !== "issue.accept"));
-  await assert.rejects(services.transitionIssue(project.id, issue.id, actor, { status: "implemented", revision: current.revision }), { statusCode: 403 });
+  await assert.rejects(services.reviewDeliverable(project.id, delivery.id, actor, review), { statusCode: 403 });
   await setPermissions(permissions);
-  current = await services.transitionIssue(project.id, issue.id, actor, { status: "implemented", revision: current.revision });
-  await assert.rejects(services.transitionIssue(project.id, issue.id, actor, { status: "planned", revision: current.revision }), /原因/);
-  current = await services.transitionIssue(project.id, issue.id, actor, { status: "planned", revision: current.revision, reason: "再次打开" });
+  await services.reviewDeliverable(project.id, delivery.id, actor, review);
+  let current = await services.readIssue(project.id, issue.id, actor);
+  assert.equal(current.status, "done");
+  await assert.rejects(services.transitionIssue(project.id, issue.id, actor, { status: "draft", revision: current.revision }), /原因/);
+  current = await services.transitionIssue(project.id, issue.id, actor, { status: "draft", revision: current.revision, reason: "再次打开" });
   await services.addComment(project.id, issue.id, actor, { body: "评审说明" });
-  await services.addDeliverable(project.id, actor, { issueId: issue.id, body: "完成交付", commit: "abc123" });
-  await assert.rejects(services.addDeliverable(project.id, actor, { issueId: issue.id, body: "非法任务", taskId: "foreign-task" }), /本人已启动/);
+  await assert.rejects(services.addDeliverable(project.id, actor, { issueId: issue.id, body: "非法任务", taskId: "foreign-task" }), { statusCode: 400 });
   assert.equal((await services.children(project.id, issue.id, actor, "comments", {})).items[0].body, "评审说明");
   const history = await services.children(project.id, issue.id, actor, "history", { limit: 2 });
   assert.equal(history.items.length, 2);
   assert.equal(history.nextOffset, 2);
   assert.equal(history.items[0].data.reason, "再次打开");
-  assert.equal((await services.listIssues(project.id, actor, { status: "planned", query: current.title })).items.length, 1);
+  assert.equal((await services.listIssues(project.id, actor, { status: "draft", query: current.title })).items.length, 1);
   assert.equal(await database.client.developmentTask.count(), 0);
 });
 

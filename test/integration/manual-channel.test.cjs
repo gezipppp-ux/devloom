@@ -91,7 +91,7 @@ test('manual channel validates input, preserves full text and copies image-only 
     { index: 2, source: `manual-image:${second.id}`, name: '02.jpg' },
   ]);
   assert.ok(prepared.task.prompt.includes([
-    '附带 2 张本地图片，顺序与用户上传顺序一致，请结合图片理解需求。',
+    '附带 2 个图片附件，已作为图片输入发送，请结合附件理解需求。',
     `图片 1：${prepared.task.images[0].path}`,
     `图片 2：${prepared.task.images[1].path}`,
   ].join('\n')));

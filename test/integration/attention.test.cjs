@@ -1,3 +1,4 @@
+const { installReviewWorkflow } = require("../support/workflow-fixture.cjs");
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { temporary } = require("../support/helpers.cjs");
@@ -9,6 +10,7 @@ const { projectPermissionCatalog } = require("../../src/domain/project-permissio
 
 test("attention aggregates only own actionable session requests and deliveries the actor can accept", async t => {
   const database = await initializeTestDatabase(t, temporary(t));
+  await installReviewWorkflow(database);
   const permissions = projectPermissionCatalog.filter(item => item.scope === "project").map(item => item.id);
   const department = await database.client.department.create({ data: { name: "Team", permissions } });
   const actor = await database.client.user.create({ data: { username: "owner", displayName: "Owner", passwordHash: "unused", departmentId: department.id } });
@@ -16,8 +18,10 @@ test("attention aggregates only own actionable session requests and deliveries t
   const project = await database.client.project.create({ data: { name: "Project", directoryName: "attention", directoryKey: "attention", remoteUrl: "https://example.test/repo.git", ownerUserId: actor.id } });
   for (const user of [actor, outsider]) await database.client.projectMember.create({ data: { projectId: project.id, userId: user.id, permissions } });
   const projects = new ProjectServices(database), content = new ProjectContentServices(database, projects);
-  const issue = await content.createIssue(project.id, actor, { type: "requirement", title: "UI review" });
+  const issue = await content.createIssue(project.id, actor, { type: "requirement", title: "UI review", businessOwnerId: outsider.id });
+  await content.createIssue(project.id, actor, { type: "requirement", title: "Separate pending work" });
   const delivery = await content.addDeliverable(project.id, outsider, { reviewerId: actor.id, issueId: issue.id, body: "Check UI" });
+  await content.updateIssue(project.id, issue.id, actor, { revision: (await content.readIssue(project.id, issue.id, actor)).revision, businessOwnerId: actor.id });
   const workspace = await database.client.workspace.create({ data: { ownerUserId: actor.id, name: "Own space" } });
   const foreignWorkspace = await database.client.workspace.create({ data: { ownerUserId: outsider.id, name: "Other space" } });
   for (const [user, row] of [[actor, workspace], [outsider, foreignWorkspace]]) await database.client.developmentSpace.create({ data: { projectId: project.id, userId: user.id, workspaceId: row.id, status: "ready" } });

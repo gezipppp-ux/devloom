@@ -21,7 +21,7 @@ async function main() {
   const dist = path.resolve(__dirname, '../../web/dist');
   const requests = [], errors = [];
   let runs = [], taskStatus = 'running';
-  const browser = await chromium.launch({ ...(process.platform === 'win32' ? { channel: 'msedge' } : {}), headless: true });
+  const browser = await chromium.launch({ ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : process.platform === 'win32' ? { channel: 'msedge' } : {}), headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, hasTouch: true });
     await page.addInitScript(() => {

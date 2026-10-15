@@ -18,7 +18,7 @@ const {
 const { readOptional, writeConfig } = require("../../src/storage/json-files.cjs");
 const { seedWorkspaceProject } = require("../support/workspace-project.cjs");
 
-const manualTemplate = "自定义手动模板\n{{title}}\n{{content}}\n{{images}}";
+const manualTemplate = "自定义手动模板\n{{title}}\n{{content}}\n{{attachments}}";
 
 function workspaceCatalog(directory) {
   return new WorkspaceManager({
@@ -149,13 +149,13 @@ test("workspace prompt settings guard writes, isolate credentials and persist te
   const persisted = fs.readFileSync(file, "utf8");
   for (const input of [
     { unknown: manualTemplate },
-    { requirement: manualTemplate, tapd: "{{title}}\n{{content}}\n{{images}}" },
+    { requirement: manualTemplate, tapd: "{{title}}\n{{content}}\n{{attachments}}" },
     { requirement: `${manualTemplate}\n{{cookie}}` },
     { requirement: `${manualTemplate}\n{{unknown}}` },
-    { requirement: "{{title}}\n{{images}}" },
+    { requirement: "{{title}}\n{{attachments}}" },
     { requirement: 7 },
     { tapd: [] },
-    { tapd_fusion: "{{title}}{{images}}{{supplement}}" },
+    { tapd_fusion: "{{title}}{{attachments}}{{supplement}}" },
     { requirement: "" },
     { requirement: `${manualTemplate}${"x".repeat(20000)}` },
   ]) {

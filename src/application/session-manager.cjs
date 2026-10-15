@@ -39,6 +39,7 @@ class SessionManager extends EventEmitter {
     gitOperationCredentials,
     authorize = async () => {},
     authorizeRun = async () => {},
+    onExecutionEvent = async () => {},
     worktreeReason = defaultWorktreeReason,
     apiPrefix = "/api",
   }) {
@@ -90,6 +91,7 @@ class SessionManager extends EventEmitter {
       settings: this.settings,
       apiPrefix,
       emit: (event) => this.emit("event", event),
+      onExecutionEvent,
       synchronizeHistory: async (key) => (await this.views.synchronizeHistory(key)),
     });
     this.views = new SessionViews({
@@ -250,7 +252,7 @@ class SessionManager extends EventEmitter {
   // Caller holds the session operation lock. A dispatch hook persists addition
   // intent immediately before RPC so unknown outcomes are never replayed.
   async sendInput(key, input, beforeDispatch) {
-    await this.authorizeRun(key);
+    await this.authorizeRun(key, beforeDispatch ? "append" : "continue");
     if (input.some(part => part.type === "image")) assertCapability(this.agent, "images");
     let dispatchedTurnId;
     const runtime = await this.attach(key);
@@ -273,6 +275,7 @@ class SessionManager extends EventEmitter {
       }));
     } else {
       let result;
+      let dispatched = false;
       const state = (await this.store.read(key));
       const selection = (await this.settings.read(key, state)).selection;
       try {
@@ -291,6 +294,8 @@ class SessionManager extends EventEmitter {
         runtime.executionPermission = "session.continue";
         await beforeDispatch?.();
         await this.authorize("session.continue");
+        await this.authorizeRun(key, "dispatch");
+        dispatched = true;
         result = await this.agent.startTurn({
           sessionId: runtime.sessionId, input, cwd: state.worktree.path, selection: prepared,
         });
@@ -298,6 +303,10 @@ class SessionManager extends EventEmitter {
         (await this.settings.applied(key, runtime.supplier ? prepared : selection));
       } catch (error) {
         await this.agent.cancelPreparation?.(key);
+        if (dispatched) await this.events.enqueue(key, async () => {
+          const current = await this.store.read(key);
+          if (!runtime.turnId && current.execution?.status === "starting") await this.store.update(key, { execution: { status: "unknown", error: presentError(error).message } });
+        });
         runtime.connected = false;
         runtime.status = "disconnected";
         (await this.publish(runtime, { type: "state", error: presentError(error).message }));
@@ -551,7 +560,7 @@ class SessionManager extends EventEmitter {
             await this.authorizeRun(key, "start");
             (await this.events.persist(runtime));
             await this.authorize("session.start");
-            await this.authorizeRun(key, "start");
+            await this.authorizeRun(key, "dispatch");
             this.assertOpen();
             return new Promise((resolve, reject) => {
               const initial = { resolve, reject, onStarted, started: false };
@@ -692,6 +701,7 @@ class SessionManager extends EventEmitter {
         (input.confirmBranch !== undefined && typeof input.confirmBranch !== "string") ||
         input.confirm !== true
       ) throw new Error("请明确确认永久删除会话。");
+      await this.authorizeRun(key, "delete");
       const state = (await this.store.read(key));
       const reason = this.git.activeReason(key);
       if (reason) throw new Error(reason.replace("删除 Worktree", "删除会话"));

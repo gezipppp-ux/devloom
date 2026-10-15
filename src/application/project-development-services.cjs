@@ -6,7 +6,11 @@ const { issueDevelopmentAllowed, assertIssueWritable } = require("../domain/issu
 const { pageInput, identifier, object, revision } = require("../domain/project-issues.cjs");
 const { accountError } = require("../domain/account.cjs");
 const { presentError } = require("./error-presenter.cjs");
+const { ProjectWorkflowServices } = require("./project-workflow-services.cjs");
+const { issueWorkflowNode } = require("../domain/issue-workflows.cjs");
+const { WorkflowExecutionServices } = require("./workflow-execution-services.cjs");
 const { presentDevelopment } = require("./project-development-presenter.cjs");
+const { isImageAttachment } = require("../domain/attachment-prompts.cjs");
 
 class ProjectDevelopmentServices {
   constructor(database, projects, workspaces) {
@@ -15,12 +19,16 @@ class ProjectDevelopmentServices {
     this.projects = projects;
     this.workspaces = workspaces;
     this.starting = new Set();
+    this.workflow = new ProjectWorkflowServices(database, projects);
+    this.workflowExecution = new WorkflowExecutionServices(database, projects);
   }
   async authorize(projectId, actor, permission) {
     await this.projects.authorize(projectId, actor, "issue.view");
     return this.projects.authorize(projectId, actor, permission);
   }
   async present(task, actor, detail = false) {
+    await this.workflowExecution.recoverTask(task);
+    task = await this.store.task(task.projectId, task.id);
     const execution = await this.store.execution(task);
     const { permissions, project } = await this.authorize(task.projectId, actor, "issue.view");
     return presentDevelopment(task, actor.id, execution, { detail, permissions, projectStatus: project.status });
@@ -39,6 +47,14 @@ class ProjectDevelopmentServices {
     await this.authorize(projectId, actor, "issue.view");
     return { task };
   }
+  async retryWorkflow(projectId, id, actor, input) {
+    object(input, ["revision"]); revision(input.revision);
+    await this.authorize(projectId, actor, "session.start");
+    const task = await this.store.task(projectId, id);
+    if (task.executorId !== actor.id || task.revision !== input.revision) throw accountError("任务归属或修订已变化。", 409);
+    await this.workflowExecution.recoverTask(task, true);
+    return this.read(projectId, id, actor);
+  }
   async readSession(projectId, actor, input) {
     await this.authorize(projectId, actor, "session.view");
     if (typeof input.runKey !== "string" || !input.runKey || input.runKey.length > 200) throw accountError("会话标识无效。", 400);
@@ -47,7 +63,7 @@ class ProjectDevelopmentServices {
     return { task };
   }
   async images(projectId, issues) {
-    const images = issues.flatMap(issue => (issue.files || []).filter(file => ["image/png", "image/jpeg", "image/webp"].includes(file.mimeType)).map(file => ({ ...file, issueId: issue.id })));
+    const images = issues.flatMap(issue => (issue.files || []).filter(isImageAttachment).map(file => ({ ...file, issueId: issue.id })));
     if (images.length > 20) throw accountError("所选事项图片合计超过 20 张，请拆分开发任务。", 400);
     const values = [];
     for (const file of images) values.push(await this.store.issueImage(projectId, file.issueId, file.id));
@@ -75,8 +91,15 @@ class ProjectDevelopmentServices {
       const existing = await this.store.assignmentBatch(projectId, actor.id, request.requestId);
       if (existing.length) { this.store.sameAssignment(existing, request); return { tasks: existing, reused: true }; }
       const issues = await this.store.issues(projectId, request.issueIds);
-      for (const issue of issues) this.assertIssues([issue], issue.releaseId);
-      return { tasks: await this.store.assign(projectId, actor.id, request, issues), reused: false };
+      for (const issue of issues) {
+        this.assertIssues([issue], issue.releaseId);
+        if (!issueWorkflowNode(issue).allowAssignment) throw accountError("当前节点不允许认领或指派，请先完成前置流程。", 409);
+      }
+      const tasks = await this.store.assign(projectId, actor.id, request, issues);
+      for (const issue of await this.store.issues(projectId, request.issueIds)) {
+        if (issueWorkflowNode(issue).handler !== "developer" || issue.workflowVersion.definition.transitions.some(edge => edge.from === issue.status && edge.trigger === "development.assigned")) await this.workflow.event(issue, actor, "development.assigned", { executorId: request.executorId });
+      }
+      return { tasks, reused: false };
     });
     return { tasks: await Promise.all(accepted.tasks.map(task => this.present(task, actor, true))), reused: accepted.reused };
   }
@@ -117,13 +140,19 @@ class ProjectDevelopmentServices {
       }
       const issues = await this.store.issues(projectId, request.issueIds || current.snapshot.issues.map(issue => issue.id));
       this.assertIssues(issues, current.releaseId);
-      return this.store.replacePlan(current, request, issues, actor.id);
+      const added = issues.filter(issue => !current.snapshot.issues.some(previous => previous.id === issue.id));
+      if (added.some(issue => !issueWorkflowNode(issue).allowAssignment)) throw accountError("新增事项当前不允许认领或指派。", 409);
+      const saved = await this.store.replacePlan(current, request, issues, actor.id);
+      for (const issue of await this.store.issues(projectId, added.map(issue => issue.id))) {
+        if (issueWorkflowNode(issue).handler !== "developer" || issue.workflowVersion.definition.transitions.some(edge => edge.from === issue.status && edge.trigger === "development.assigned")) await this.workflow.event(issue, actor, "development.assigned", { executorId: saved.executorId });
+      }
+      return saved;
     });
     return { task: await this.present(task, actor, true) };
   }
   async start(projectId, id, actor, input) {
     const request = developmentStartInput(input);
-    const accepted = await this.store.transaction(async () => {
+    const prepared = await this.store.transaction(async () => {
       await this.authorize(projectId, actor, "session.start");
       const current = await this.store.task(projectId, id);
       if (current.executorId !== actor.id) throw accountError("只有任务执行人能开始开发。", 403);
@@ -138,16 +167,46 @@ class ProjectDevelopmentServices {
       this.assertIssues(issues, current.releaseId, true);
       const prompt = developmentPrompt(issues, false, await this.projects.effectivePrompts(projectId, actor), {
         title: current.snapshot.title, content: request.supplementaryPrompt,
-      });
+      }, this.store.attachmentPaths(current, issues));
       const defaults = await this.accounts.settings(actor.id);
       const selection = Object.fromEntries(["model", "reasoningEffort", "permissionMode"].map(field => [field,
         Object.hasOwn(request, field) ? request[field] : defaults[field] ?? ""]));
-      const task = await this.store.acceptStart(current, space, request, issues, prompt, selection);
+      return { task: current, space, issues, prompt, selection, created: true };
+    });
+    if (!prepared.created) return { task: await this.present(prepared.task, actor, true), reused: true };
+    // Validate and stage inputs without freezing the plan or holding a database transaction.
+    const context = await this.workspaces.get(prepared.space.workspaceId, actor);
+    const selection = await context.sessions.validateStartSelection(prepared.selection);
+    await this.store.materializeAttachments(prepared.task, prepared.issues);
+    await this.authorize(projectId, actor, "session.start");
+    const imageIds = [];
+    for (const bytes of await this.images(projectId, prepared.issues)) {
       await this.authorize(projectId, actor, "session.start");
+      imageIds.push((await context.channels.get("manual").uploadImage(bytes)).id);
+    }
+    await context.channels.get("manual").resolve({ requestId: id, title: prepared.task.snapshot.title,
+      content: prepared.prompt, renderedPrompt: true, images: imageIds });
+    const accepted = await this.store.transaction(async () => {
+      await this.authorize(projectId, actor, "session.start");
+      const current = await this.store.task(projectId, id);
+      if (current.executorId !== actor.id) throw accountError("只有任务执行人能开始开发。", 403);
+      if (current.snapshot.startRequest) {
+        if (!isDeepStrictEqual(current.snapshot.startRequest, request)) throw accountError("任务已接受启动请求，不能修改参数或再次启动。", 409);
+        return { task: current, created: false };
+      }
+      this.assertRevision(current, request.revision);
+      if (current.status !== "planned") throw accountError("仅待开发任务可以启动。", 409);
+      const space = await this.store.space(projectId, actor.id);
+      const issues = await this.store.issues(projectId, current.snapshot.issues.map(issue => issue.id));
+      this.assertIssues(issues, current.releaseId, true);
+      if (!isDeepStrictEqual(space, prepared.space) || !isDeepStrictEqual(issues, prepared.issues))
+        throw accountError("开发空间或事项资料已变化，请刷新后重新开始开发。", 409);
+      const task = await this.store.acceptStart(current, space, request, issues, prepared.prompt, selection);
+      await this.workflowExecution.prepare(task, actor);
       return { task, created: true };
     });
     if (!accepted.created) return { task: await this.present(accepted.task, actor, true), reused: true };
-    return this.launchAccepted(accepted.task, actor);
+    return this.launchAccepted(accepted.task, actor, { context, imageIds });
   }
   async readManual(projectId, actor, input) {
     object(input, ["requestId"]);
@@ -179,28 +238,22 @@ class ProjectDevelopmentServices {
       return { task: await this.store.acceptManual(projectId, actor.id, currentSpace, request, prompt, selection), created: true };
     });
     if (!accepted.created) return { task: await this.present(accepted.task, actor, true), reused: true };
-    return this.launchAccepted(accepted.task, actor, true);
+    return this.launchAccepted(accepted.task, actor, { context, imageIds: request.images, returnFailure: true });
   }
-  async launchAccepted(task, actor, returnFailure = false) {
+  async launchAccepted(task, actor, { context, imageIds, returnFailure = false }) {
     const projectId = task.projectId;
     this.starting.add(task.id);
     try {
-      const context = await this.workspaces.get(task.workspaceId, actor);
-      const imageIds = [...(task.snapshot.manual?.images || [])];
-      for (const bytes of await this.images(projectId, task.snapshot.issues)) {
-        await this.authorize(projectId, actor, "session.start");
-        imageIds.push((await context.channels.get("manual").uploadImage(bytes)).id);
-      }
       await this.authorize(projectId, actor, "session.start");
       await this.store.space(projectId, actor.id);
       const started = await context.sessions.start({ channel: "manual", requestId: task.id,
         baseBranch: task.snapshot.baseBranch, title: task.snapshot.title, content: task.snapshot.prompt, renderedPrompt: true,
         images: imageIds, ...task.snapshot.selection });
       if (started.key !== task.runKey) throw new Error("开发任务与会话身份不一致，请检查已记录任务。");
-      task = await this.store.transaction(async () => this.store.update(await this.store.task(projectId, task.id), { status: "started" }));
+      task = await this.workflowExecution.store.transaction(async () => this.store.update(await this.store.task(projectId, task.id), { status: "started" }));
     } catch (error) {
       const safe = presentError(error);
-      task = await this.store.transaction(async () => this.store.update(await this.store.task(projectId, task.id), { status: "unknown", error: safe.message }));
+      task = await this.workflowExecution.store.transaction(async () => this.store.update(await this.store.task(projectId, task.id), { status: "unknown", error: safe.message }));
       if (!returnFailure) throw safe;
     } finally { this.starting.delete(task.id); }
     await this.authorize(projectId, actor, "session.start");
@@ -225,11 +278,13 @@ class ProjectDevelopmentServices {
       if (this.starting.has(task.id)) throw accountError("开发任务正在准备，请等待执行结束。", 409);
       const issues = await this.store.issues(projectId, [...task.snapshot.issues.map(issue => issue.id), ...task.snapshot.additions.flatMap(batch => batch.issueIds)]);
       this.assertIssues(issues, task.releaseId);
+      if (status === "cancelled" && task.issueLinks.some(link => link.issue.deliverables?.[0]?.status === "pending")) throw accountError("交付正在验证，不能取消开发任务；请先完成本轮验证。", 409);
       if (task.runKey) {
         const execution = await this.store.execution(task);
         if (!execution || !["completed", "failed", "interrupted", "cancelled"].includes(execution.status))
           throw accountError("执行仍在进行或状态不明，请先确认原会话已结束。", 409);
       }
+      if (status === "completed" && task.snapshot.kind !== "manual" && issues.some(issue => !["completed", "cancelled"].includes(issueWorkflowNode(issue).kind))) throw accountError("关联事项尚未完成验收；请提交交付并等待验证，或明确取消开发任务。", 409);
       return this.store.finish(task, status, actor.id);
     });
     let task;
@@ -255,14 +310,21 @@ class ProjectDevelopmentServices {
       const existing = task.snapshot.additions.find(batch => batch.requestId === request.requestId);
       let issues = existing?.issues || await this.store.issues(projectId, request.issueIds);
       if (!existing) {
-        this.assertIssues(issues, task.releaseId, true);
+        this.assertIssues(issues, task.releaseId);
+        if (issues.some(issue => !issueWorkflowNode(issue).allowAssignment)) throw accountError("当前事项不允许加入开发，请先完成前置流程。", 409);
         issues = await this.store.assignIssues(projectId, issues, task.executorId, actor.id);
+        for (const issue of issues) if (issueWorkflowNode(issue).handler !== "developer" || issue.workflowVersion.definition.transitions.some(edge => edge.from === issue.status && edge.trigger === "development.assigned")) await this.workflow.event(issue, actor, "development.assigned", { executorId: task.executorId });
+        issues = await this.store.issues(projectId, request.issueIds);
       }
-      const prompt = existing ? existing.prompt : developmentPrompt(issues, true, await this.projects.effectivePrompts(projectId, actor));
+      const prompt = existing ? existing.prompt : developmentPrompt(issues, true, await this.projects.effectivePrompts(projectId, actor), {}, this.store.attachmentPaths(task, issues));
       const result = await this.store.addIssues(task, request, issues, prompt);
       await this.authorize(projectId, actor, "session.continue");
       return result;
     });
+    if (result.batch.status === "ready") {
+      await this.store.materializeAttachments(result.task, result.batch.issues);
+      await this.authorize(projectId, actor, "session.continue");
+    }
     if (request.send && result.batch.status === "ready") return this.continueAddition(projectId, id, actor, request.requestId);
     return { task: await this.present(result.task, actor, true), reused: result.reused };
   }
@@ -276,6 +338,8 @@ class ProjectDevelopmentServices {
     const context = await this.workspaces.get(task.workspaceId, actor);
     let dispatched = false;
     try {
+      await this.store.materializeAttachments(task, batch.issues);
+      await this.authorize(projectId, actor, "session.continue");
       const imageIds = batch.messageImageIds || [];
       if (!batch.messageImageIds) {
         for (const bytes of await this.images(projectId, batch.issues)) {
@@ -290,22 +354,23 @@ class ProjectDevelopmentServices {
       const input = [{ type: "text", text: batch.prompt }];
       for (const imageId of imageIds) input.push({ type: "image", path: await context.sessions.messageImagePath(task.runKey, imageId) });
       const sent = await context.sessions.exclusive(task.runKey, async () => context.sessions.sendInput(task.runKey, input, async () => {
-        await this.store.transaction(async () => {
+        await this.workflowExecution.store.transaction(async () => {
           await this.authorize(projectId, actor, "session.continue");
           await this.store.space(projectId, actor.id);
           const current = await this.store.task(projectId, id);
           this.assertExecutor(current, actor);
           const issues = await this.store.issues(projectId, batch.issueIds);
           this.assertIssues(issues, current.releaseId, true);
-          await this.store.updateBatch(current, requestId, { status: "sending" }, "ready");
+          const pending = await this.store.updateBatch(current, requestId, { status: "sending" }, "ready");
+          await this.workflowExecution.prepare(pending, actor);
         });
         dispatched = true;
       }));
-      const updated = await this.store.transaction(async () => this.store.updateBatch(await this.store.task(projectId, id), requestId,
+      const updated = await this.workflowExecution.store.transaction(async () => this.store.updateBatch(await this.store.task(projectId, id), requestId,
         { status: "sent", sentAt: new Date().toISOString(), turnId: sent.dispatchedTurnId || sent.turnId || null }, "sending"));
       return { task: await this.present(updated, actor, true) };
     } catch (error) {
-      if (dispatched) await this.store.transaction(async () => this.store.updateBatch(await this.store.task(projectId, id), requestId,
+      if (dispatched) await this.workflowExecution.store.transaction(async () => this.store.updateBatch(await this.store.task(projectId, id), requestId,
         { status: "unknown", error: presentError(error).message }, "sending"));
       throw presentError(error);
     }

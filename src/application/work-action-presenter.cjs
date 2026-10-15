@@ -5,15 +5,20 @@ function presentWorkActions(snapshot, projects, pending = new Map()) {
   const directory = new Map(projects.map(project => [project.id, project]));
   const base = (row, kind) => ({ id: row.id, kind, projectId: row.projectId, projectName: directory.get(row.projectId).name, createdAt: row.createdAt.toISOString(), dueDate: row.dueDate || null, priority: row.priority || "normal" });
   const items = [];
+  const deliveries = snapshot.deliveries.filter(delivery =>
+    ["collaboration.view", "issue.view", delivery.assignmentProblem ? "issue.assign" : delivery.status === "returned" ? "deliverable.create" : "deliverable.review"]
+      .every(permission => directory.get(delivery.projectId).permissions.includes(permission)));
+  const pendingIssueIds = new Set(deliveries.filter(delivery => !delivery.assignmentProblem && ["pending", "returned"].includes(delivery.status)).map(delivery => delivery.issueId));
+  const returnedIssueIds = new Set(deliveries.filter(delivery => delivery.status === "returned").map(delivery => delivery.issueId));
   for (const action of snapshot.actions) {
     const project = directory.get(action.projectId), issue = action.issue;
-    const node = issueWorkflowNode(issue), needsAssignment = action.assignmentProblem || !workflowHandler(issue, node);
+    const node = issueWorkflowNode(issue), needsAssignment = action.assignmentProblem || !workflowHandler({ ...issue, actions: [action] }, node);
     if (!project.permissions.includes("issue.view") || (needsAssignment ? !project.permissions.includes("issue.assign") : !canProcessWorkflowStep(issue, node, project.permissions))) continue;
     const claim = issue.developmentClaim;
     if (needsAssignment && node.handler === "developer" && snapshot.tasks.some(task => task.assignmentProblem && task.id === claim?.taskId)) continue;
-    if (!needsAssignment && (action.category === "verification" && snapshot.pendingIssueIds.includes(issue.id) || action.category === "development" && claim?.task.executorId === action.handlerId)) continue;
+    if (!needsAssignment && (returnedIssueIds.has(issue.id) || action.category === "verification" && pendingIssueIds.has(issue.id) || action.category === "development" && claim?.task.executorId === action.handlerId)) continue;
     items.push({ ...base(action, "issue"), issueId: issue.id, number: issue.number, title: issue.title, priority: issue.priority, dueDate: issue.dueDate,
-      bucket: needsAssignment ? "todo" : actionBucket(action.category, action.status), phase: node.name, label: needsAssignment ? "分派处理人" : action.category === "verification" ? action.status === "ready" ? "开始验证" : "继续验证" : action.status === "ready" ? "开始处理" : "继续处理", reason: needsAssignment ? "当前步骤处理人缺失或权限失效，需要业务负责人分派" : "流程当前步骤已分派给你", status: action.status, revision: action.revision });
+      bucket: needsAssignment ? "todo" : actionBucket(action.category, action.status), phase: node.name, label: needsAssignment ? "分派处理人" : action.category === "verification" ? "处理验证" : "推进事项", reason: needsAssignment ? "当前步骤处理人缺失或权限失效，需要业务负责人分派" : "流程当前步骤已分派给你", status: action.status, revision: action.revision });
   }
   for (const task of snapshot.tasks) {
     const project = directory.get(task.projectId);
@@ -33,10 +38,9 @@ function presentWorkActions(snapshot, projects, pending = new Map()) {
     items.push({ id: `${session.workspaceId}/${session.key}`, kind: "session", projectId: session.projectId, projectName: directory.get(session.projectId).name,
       title: session.title, workspaceId: session.workspaceId, runKey: session.key, bucket: "todo", label: "处理审批或问题", phase: "等待你处理", reason: "本轮执行等待你的决定", blocking: true, priority: "normal", createdAt: session.updatedAt || "", notificationKey: session.requests.map(request => `${request.turnId}:${request.id}`).sort().join("/") });
   }
-  for (const delivery of snapshot.deliveries) {
+  for (const delivery of deliveries) {
     const returned = delivery.status === "returned";
     const recovery = delivery.assignmentProblem;
-    if (!["collaboration.view", "issue.view", recovery ? "issue.assign" : returned ? "deliverable.create" : "deliverable.review"].every(permission => directory.get(delivery.projectId).permissions.includes(permission))) continue;
     if (recovery) { items.push({ ...base(delivery, "delivery"), deliveryId: delivery.id, title: delivery.title, bucket: "todo", phase: "等待分派处理人", label: "重新指定验证人", reason: "交付验证人权限已失效", revision: delivery.revision }); continue; }
     items.push({ ...base(delivery, "delivery"), deliveryId: delivery.id, issueId: delivery.issueId, title: delivery.title, bucket: returned ? "todo" : "verify", phase: returned ? "交付退回" : delivery.verificationStartedAt ? "验证中" : "待开始验证", label: returned ? "修改并重新提交" : delivery.verificationStartedAt ? "继续验证" : "开始验证", reason: returned ? "你发布的交付被退回，请处理验证意见" : "你是此交付的指定验证人", revision: delivery.revision, priority: delivery.issue?.priority || "normal", dueDate: delivery.issue?.dueDate || null });
   }

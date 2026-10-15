@@ -10,7 +10,7 @@ Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install
 
 - 系统供应商、原生直连、密钥及下一轮会话切换遵循 [Agent 供应商](./agent-suppliers.md)；首期仅实现 Codex，不提供路由转换。
 
-- 外部 Agent 的 MCP 接入、个人 Token 和受鉴权 HTTP 图片上传遵循 [MCP 契约](./mcp.md)；不复用浏览器 CSRF token，也不自动启动开发。
+- 外部 Agent 的 MCP 接入、个人 Token 和临时令牌 HTTP 附件上传与公开 Skills 指南遵循 [MCP 契约](./mcp.md)；不复用浏览器 CSRF token，也不自动启动开发。
 
 - 当前版本仅支持全新部署，不兼容或迁移旧数据。数据库使用单一安装基线，旧 PostgreSQL 迁移链及 SQLite 脚本已删除；运行时不推断旧来源或回退旧任务文件。以 [PostgreSQL 接入](./postgresql.md) 为准。
 

@@ -105,9 +105,24 @@ model McpToken {
   expiresAt   DateTime  @map("expires_at") @db.Timestamptz(3)
   revokedAt   DateTime? @map("revoked_at") @db.Timestamptz(3)
   lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz(3)
+  uploadTokens McpUploadToken[]
 
   @@index([userId, createdAt])
   @@map("mcp_tokens")
+}
+
+model McpUploadToken {
+  id         String   @id @default(uuid())
+  tokenId    String   @map("token_id")
+  token      McpToken @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+  projectId  String   @map("project_id")
+  tokenHash  String   @unique @map("token_hash")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(3)
+
+  @@index([tokenId])
+  @@index([expiresAt])
+  @@map("mcp_upload_tokens")
 }
 
 model McpUpload {
@@ -545,6 +560,8 @@ model ProjectDeliverable {
   issueId   String?  @map("issue_id")
   authorId  String   @map("author_id")
   reviewerId String @map("reviewer_id")
+  actionId String? @map("action_id")
+  requestId String? @unique @map("request_id")
   supersedesId String? @unique @map("supersedes_id")
   previous ProjectDeliverable? @relation("DeliveryRevisions", fields: [supersedesId], references: [id], onDelete: Restrict)
   next ProjectDeliverable? @relation("DeliveryRevisions")
@@ -578,6 +595,7 @@ model WorkAction {
   nodeId String @map("node_id")
   sequence Int
   handlerId String @map("handler_id")
+  explicitHandler Boolean @default(false) @map("explicit_handler")
   category String
   status String @default("ready")
   revision Int @default(1)
@@ -705,11 +723,25 @@ model DevelopmentTask {
   claims      IssueDevelopmentClaim[]
   issueLinks  TaskIssueLink[]
   deliverables ProjectDeliverable[]
+  workflowEvents WorkflowExecutionEvent[]
 
   @@unique([projectId, id])
   @@unique([projectId, creatorId, requestId])
   @@unique([workspaceId, runKey])
   @@map("development_tasks")
+}
+
+model WorkflowExecutionEvent {
+  id String @id @default(uuid())
+  taskId String @map("task_id")
+  turnId String @map("turn_id")
+  steps Json
+  status String @default("pending")
+  error String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  task DevelopmentTask @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  @@unique([taskId, turnId])
+  @@map("workflow_execution_events")
 }
 
 model TaskIssueLink {

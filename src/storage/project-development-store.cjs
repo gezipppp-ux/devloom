@@ -1,9 +1,11 @@
 const path = require("node:path");
-const { randomUUID } = require("node:crypto");
+const { randomUUID, createHash } = require("node:crypto");
 const { isDeepStrictEqual } = require("node:util");
 const { accountError } = require("../domain/account.cjs");
 const { runKey } = require("../domain/run-identity.cjs");
 const { ProjectContentStore } = require("./project-content-store.cjs");
+const { writeArtifact } = require("./artifact-store.cjs");
+const { isImageAttachment } = require("../domain/attachment-prompts.cjs");
 
 function missing() { return accountError("开发任务不存在。", 404); }
 function conflict() { return accountError("开发任务已变更，请刷新后重试。", 409); }
@@ -25,15 +27,40 @@ class ProjectDevelopmentStore {
   }
   async issues(projectId, ids) {
     const rows = await this.database.client.projectIssue.findMany({ where: { projectId, id: { in: ids } }, include: {
-      release: true, workflowVersion: true,
+      release: true, workflowVersion: true, actions: { where: { status: { in: ["ready", "active"] } } },
       source: { select: { channel: true, scope: true, type: true, externalId: true, url: true } },
       files: { select: { id: true, name: true, mimeType: true, size: true, sha256: true } },
     } });
     if (rows.length !== ids.length) throw accountError("事项不存在或不属于当前项目。", 404);
+    const content = new ProjectContentStore(this.database);
+    for (const row of rows) row.files = await content.filePreviews(projectId, row.files);
     return ids.map(id => json(rows.find(row => row.id === id)));
   }
+  attachmentPaths(task, issues) {
+    const digest = value => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+    const directory = path.join(this.database.dataRoot, "state", "development-attachments",
+      digest([task.projectId, task.executorId, task.id]));
+    return Object.fromEntries(issues.flatMap(issue => (issue.files || []).filter(file => !isImageAttachment(file)).map(file => {
+      // Keep the format suffix for parsers, but never use a supplied name as a path.
+      const extension = /\.[a-z0-9]{1,12}$/i.exec(file.name)?.[0].toLowerCase() || "";
+      return [file.id, path.join(directory, digest([issue.id, file.id, file.sha256]) + extension)];
+    })));
+  }
+  async materializeAttachments(task, issues) {
+    const paths = this.attachmentPaths(task, issues);
+    for (const issue of issues) for (const snapshot of issue.files || []) {
+      if (!paths[snapshot.id]) continue;
+      const file = await this.database.client.projectFile.findFirst({ where: {
+        id: snapshot.id, projectId: task.projectId, issueId: issue.id, assetId: null,
+      } });
+      if (!file || file.sha256 !== snapshot.sha256 || file.size !== snapshot.size ||
+          createHash("sha256").update(file.data).digest("hex") !== snapshot.sha256)
+        throw accountError(`事项附件不存在或内容已变化，请重新确认资料：${snapshot.name}`, 409);
+      await writeArtifact(paths[snapshot.id], Buffer.from(file.data), { materialize: true, mimeType: file.mimeType });
+    }
+  }
   async task(projectId, id) {
-    const task = await this.database.client.developmentTask.findFirst({ where: { projectId, id }, include: { executor: { select: { id: true, displayName: true } }, release: true } });
+    const task = await this.database.client.developmentTask.findFirst({ where: { projectId, id }, include: { executor: { select: { id: true, displayName: true } }, release: true, workflowEvents: { where: { status: "blocked" } }, issueLinks: { include: { issue: { include: { workflowVersion: true, deliverables: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1 } } } } } } });
     if (!task) throw missing();
     return task;
   }

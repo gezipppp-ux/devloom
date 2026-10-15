@@ -7,7 +7,7 @@ function deliveryChecklist(issue) {
   return [...(criteria.length ? criteria : ["交付结果符合事项描述与预期"]), "相关验证已完成，结果可复核", "交付说明与提交信息完整"];
 }
 function deliveryReview(input, delivery) {
-  object(input, ["revision", "status", "checkedItems", "reviewNote", "transitionId", "issueRevision"]);
+  object(input, ["revision", "status", "checkedItems", "reviewNote"]);
   revision(input.revision);
   const status = choice(input.status, ["accepted", "returned"], "验收结果");
   const reviewNote = text(input.reviewNote || "", "验收说明", 4000);

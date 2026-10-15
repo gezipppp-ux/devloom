@@ -2,6 +2,12 @@ export const issueContentFields = ["releaseId", "title", "description", "priorit
 export const issueResponsibilityFields = ["reporterId", "businessOwnerId", "qaOwnerId", "acceptanceOwnerId"];
 export const issueMarkdownFields = ["description", "acceptanceCriteria", "reproductionSteps", "expectedResult", "actualResult"];
 
+export function issueDetailFields(type, workflow, values = {}) {
+  const fields = [["acceptanceCriteria", "验收标准"], ["reproductionSteps", "复现步骤"], ["expectedResult", "预期结果"], ["actualResult", "实际结果"]];
+  const required = new Set((workflow?.transitions || []).flatMap(edge => edge.requiredFields || []));
+  return fields.filter(([key]) => (type === "bug" ? key !== "acceptanceCriteria" : key === "acceptanceCriteria") || required.has(key) || values[key]?.trim());
+}
+
 export function emptyIssue() {
   return { releaseId: null, title: "", description: "", priority: "normal", acceptanceCriteria: "", reproductionSteps: "", expectedResult: "", actualResult: "", severity: "normal", dueDate: null, tags: [], developerId: null, reporterId: null, businessOwnerId: null, qaOwnerId: null, acceptanceOwnerId: null, watcherIds: [] };
 }

@@ -66,9 +66,8 @@ test('clear facing sides use straight lines in all directions and with unequal p
       assertAvoidsNodes(edge.path, nodes, NODE_WIDTH, NODE_HEIGHT, edge.id);
     }
   }
-  const definition = defaultWorkflow('requirement');
-  Object.assign(definition.nodes.find(node => node.id === 'rejected'), { x: 56, y: 360 });
-  const routes = workflowRoutes(definition.nodes, definition.transitions);
+  const definition = { nodes: [{ id: 'planned', x: 40, y: 40 }, { id: 'rejected', x: 56, y: 360 }, { id: 'other', x: 420, y: 40 }], transitions: [{ id: 'planned_rejected', from: 'planned', to: 'rejected' }, { id: 'rejected_planned', from: 'rejected', to: 'planned' }, { id: 'other_rejected', from: 'other', to: 'rejected' }] };
+  const routes = workflowRoutes(definition.nodes, definition.transitions.map(edge => ({ ...edge, name: edge.id })));
   for (const id of ['planned_rejected', 'rejected_planned']) {
     const edge = routes.find(edge => edge.id === id);
     assert.equal(new Set(edge.points.map(point => point.x)).size, 1, `${id}: unequal fan-in and a small node offset must not introduce a dogleg`);

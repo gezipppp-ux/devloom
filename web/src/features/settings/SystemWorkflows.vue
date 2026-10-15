@@ -1,4 +1,5 @@
 <script setup>
+import workflowEvents from "../../../../shared/workflow-events.json";
 import AppSelect from "../../shared/components/AppSelect.vue";
 import { computed, nextTick, ref, watch } from "vue";
 import { createRequestId } from "../../shared/api/request-id.js";
@@ -8,6 +9,10 @@ import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import WorkflowGraph from "../../shared/components/WorkflowGraph.vue";
 import { freeNodePosition, workflowNodes } from "../../shared/components/workflow-routing.js";
 
+const actorLabels = { handler: "当前处理人", developer: "开发负责人", reviewer: "本轮验证人", assigner: "分派协调人" };
+const assignmentLabels = { role: "目标节点职责", selection: "本次选择处理人", executor: "当前开发执行人", reviewer: "本轮验证人" };
+const simulationNode = ref(""), simulationEvent = ref("manual");
+const simulation = computed(() => definition.value.transitions.filter(item => item.from === simulationNode.value && item.trigger === simulationEvent.value));
 const type = ref("requirement"), definition = ref({ nodes: [], transitions: [] });
 const selected = ref(""), selectedEdge = ref(""), deleting = ref(false), editor = ref(), graph = ref();
 const endpoint = () => `/system/workflows/${type.value}`;
@@ -31,17 +36,18 @@ async function focusName() { await nextTick(); editor.value?.querySelector('inpu
 function addNode(position) {
   if (saving.value || loading.value) return;
   if (definition.value.nodes.length >= 100) { error.value = '最多支持 100 个状态。'; return; }
-  const value = { id: id('node'), name: "新状态", kind: "normal", allowDevelopment: false, handler: "businessOwner", category: "work", ...freeNodePosition(position, workflowNodes(definition.value)) };
+  const value = { id: id('node'), name: "新状态", kind: "normal", allowDevelopment: false, allowAssignment: false, active: false, handler: "businessOwner", category: "work", ...freeNodePosition(position, workflowNodes(definition.value)) };
   definition.value.nodes.push(value); selectNode(value.id); void focusName();
 }
 function addEdge({ from, to }) {
   if (saving.value || from === to) return;
   if (definition.value.transitions.length >= 500) { error.value = '最多支持 500 条连线。'; return; }
-  const value = { id: id('edge'), from, to, name: "流转", permission: "issue.transition", requiresReason: false };
+  const value = { id: id('edge'), from, to, name: "流转", permission: "issue.transition", requiresReason: false, trigger: "manual", actor: "handler", assignment: "role" };
   definition.value.transitions.push(value); selectEdge(value.id); void focusName();
 }
 function moveNode(value) { if (!saving.value) Object.assign(definition.value.nodes.find(item => item.id === value.id), value); }
-function changeKind() { if (terminal.value) node.value.allowDevelopment = false; }
+function changeKind() { if (terminal.value) { node.value.allowDevelopment = false; node.value.allowAssignment = false; node.value.active = false; } }
+function changeTrigger() { edge.value.actor = workflowEvents[edge.value.trigger].actors[0]; edge.value.assignment = ["delivery.submitted", "verification.started"].includes(edge.value.trigger) ? "reviewer" : edge.value.trigger.startsWith("development.") ? "executor" : "role"; }
 async function requestDelete() {
   if (saving.value) return;
   deleting.value = true;
@@ -81,6 +87,8 @@ async function persist(publish = false) {
               <label>{{ $t('处理职责') }}<AppSelect v-model="node.handler" :aria-label="$t('处理职责')"><option v-for="[value, label] in [['businessOwner','业务负责人'], ['reporter','提报人'], ['developer','开发负责人'], ['qaOwner','测试负责人'], ['acceptanceOwner','业务验收人']]" :key="value" :value="value">{{ $t(label) }}</option></AppSelect></label>
               <label>{{ $t('工作类别') }}<AppSelect v-model="node.category" :aria-label="$t('工作类别')"><option v-for="[value, label] in [['planning','规划与评审'], ['work','一般处理'], ['development','开发'], ['verification','测试与验收']]" :key="value" :value="value">{{ $t(label) }}</option></AppSelect></label>
               <p class="field-hint">{{ $t('流程按职责分派当前处理人，工作类别决定个人工作台栏目。') }}</p>
+              <label class="permission-choice"><input v-model="node.allowAssignment" type="checkbox" :disabled="terminal" />{{ $t("允许认领或指派") }}</label>
+              <label class="permission-choice"><input v-model="node.active" type="checkbox" :disabled="terminal" />{{ $t("进入后为处理中") }}</label>
               <label class="permission-choice"><input v-model="node.allowDevelopment" type="checkbox" :disabled="terminal" />{{ $t("允许开始开发") }}</label>
               <p v-if="terminal" class="field-hint">{{ $t("完成、取消状态不允许开始开发。") }}</p>
             </template>
@@ -89,6 +97,10 @@ async function persist(publish = false) {
               <label>{{ $t("操作名称") }}<input v-model="edge.name" maxlength="80" /></label>
               <label>{{ $t("来源状态") }}<AppSelect native-events v-model="edge.from" :aria-label="$t('来源状态')"><option v-for="item in definition.nodes" :key="item.id" :value="item.id" :disabled="item.id === edge.to">{{ item.name }}</option></AppSelect></label>
               <label>{{ $t("目标状态") }}<AppSelect native-events v-model="edge.to" :aria-label="$t('目标状态')"><option v-for="item in definition.nodes" :key="item.id" :value="item.id" :disabled="item.id === edge.from">{{ item.name }}</option></AppSelect></label>
+              <label>{{ $t('触发事件') }}<AppSelect native-events v-model="edge.trigger" :aria-label="$t('触发事件')" @change="changeTrigger"><option v-for="(event, id) in workflowEvents" :key="id" :value="id">{{ $t(event.label) }}</option></AppSelect></label>
+              <label>{{ $t('操作主体') }}<AppSelect v-model="edge.actor" :aria-label="$t('操作主体')"><option v-for="actor in workflowEvents[edge.trigger]?.actors || []" :key="actor" :value="actor">{{ $t(actorLabels[actor]) }}</option></AppSelect></label>
+              <label>{{ $t('下一处理人规则') }}<AppSelect v-model="edge.assignment" :aria-label="$t('下一处理人规则')"><option v-for="(label, id) in assignmentLabels" :key="id" :value="id" :disabled="id === 'reviewer' && !['delivery.submitted', 'verification.started'].includes(edge.trigger)">{{ $t(label) }}</option></AppSelect></label>
+              <label class="permission-choice"><input v-model="edge.requireDelivery" type="checkbox" />{{ $t('必须有有效交付') }}</label>
               <label>{{ $t("所需权限") }}<AppSelect native-events v-model="edge.permission" :aria-label="$t('所需权限')"><option value="issue.transition">{{ $t("事项流转") }}</option><option value="issue.accept">{{ $t("事项验收") }}</option></AppSelect></label>
               <label>{{ $t('流转必填资料') }}<AppSelect native-events multiple :aria-label="$t('流转必填资料')" @change="edge.requiredFields = [...$event.target.selectedOptions].map(option => option.value)"><option v-for="[value, label] in [['description','描述'], ['acceptanceCriteria','验收标准'], ['reproductionSteps','复现步骤'], ['expectedResult','预期结果'], ['actualResult','实际结果'], ['releaseId','目标版本'], ['qaOwnerId','测试负责人'], ['acceptanceOwnerId','业务验收人']]" :key="value" :value="value" :selected="edge.requiredFields?.includes(value)">{{ $t(label) }}</option></AppSelect></label>
               <label class="permission-choice"><input type="checkbox" v-model="edge.requireAcceptedDelivery" />{{ $t('必须已有通过验收的交付') }}</label>
@@ -103,6 +115,7 @@ async function persist(publish = false) {
         </template>
         <template #actions="{ fullscreen }"><p v-if="fullscreen && (error || notice)" class="canvas-feedback" :class="{ 'is-error': error }" :role="error ? 'alert' : 'status'">{{ error || notice }}</p><div class="actions"><button :disabled="loading || saving" @click="persist()">{{ $t("保存流程草稿") }}</button><button class="primary" :disabled="loading || saving" @click="persist(true)">{{ saving ? $t("正在保存…") : $t("校验并发布流程") }}</button></div></template>
       </WorkflowGraph>
+      <details class="workflow-preview"><summary>{{ $t('模拟一次交接') }}</summary><div class="project-form"><label>{{ $t('来源状态') }}<AppSelect v-model="simulationNode"><option v-for="item in definition.nodes" :key="item.id" :value="item.id">{{ item.name }}</option></AppSelect></label><label>{{ $t('触发事件') }}<AppSelect v-model="simulationEvent"><option v-for="(event, id) in workflowEvents" :key="id" :value="id">{{ $t(event.label) }}</option></AppSelect></label><p v-if="!simulation.length">{{ $t('此事件没有配置流转。') }}</p><p v-for="item in simulation" :key="item.id">{{ item.name }} → {{ definition.nodes.find(node => node.id === item.to)?.name }} · {{ $t(assignmentLabels[item.assignment]) }}<span v-if="item.requiresReason"> · {{ $t('必须填写原因') }}</span><span v-if="item.requiredFields?.length"> · {{ $t('流转必填资料') }}：{{ item.requiredFields.join('、') }}</span></p><p class="field-hint">{{ $t('仅预览规则，不执行开发或修改事项；实际提交仍校验资料和人员权限。') }}</p></div></details>
       <p class="field-hint">{{ $t("修改先保留为草稿；发布不会改变已有事项绑定的流程。") }}</p>
     </template>
   </section>

@@ -13,7 +13,9 @@ async function navigateWorkspace(page, workspace) {
   }, workspace.id);
 }
 async function openProjectTab(page, name) {
-  await page.locator('.project-tab-bar, .issue-back, .development-heading').first().waitFor();
+  await page.locator('.project-tab-bar, .issue-back, .issue-create-back, .development-heading').first().waitFor();
+  const createBack = page.locator('.issue-create-back');
+  if (await createBack.isVisible()) await createBack.click();
   const back = page.locator('button.issue-back');
   if (await back.isVisible()) await back.click();
   const taskConfirmationBack = page.getByRole('button', { name: '返回任务详情', exact: true });
@@ -38,4 +40,8 @@ async function openSessionContext(page, name = '会话信息') {
   const button = page.getByRole('button', { name, exact: true });
   if (await button.getAttribute('aria-expanded') !== 'true') await button.click();
 }
-module.exports = { navigateWorkspace, openProjectTab, openSessionList, openSessionContext };
+async function openIssueCreate(page, type = '需求') {
+  await page.getByRole('button', { name: '新建事项', exact: true }).click();
+  await page.getByRole('menuitem', { name: type === 'Bug' ? '新建 Bug' : '新建需求', exact: true }).click();
+}
+module.exports = { navigateWorkspace, openProjectTab, openSessionList, openSessionContext, openIssueCreate };

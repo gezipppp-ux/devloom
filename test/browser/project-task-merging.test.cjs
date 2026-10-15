@@ -74,15 +74,41 @@ async function verifyProjectTaskMerging({ page, origin, project, database, conte
   await page.getByRole("button", { name: "返回项目协作", exact: true }).click();
   await page.getByRole("heading", { name: "搜索功能与缺陷统一开发", exact: true }).waitFor();
   await page.getByRole("button", { name: "刷新状态", exact: true }).click();
-  await page.getByRole("button", { name: "标记开发任务完成", exact: true }).click();
-  await page.getByRole("button", { name: "确认完成开发任务", exact: true }).click();
-  await page.getByText("任务：已完成", { exact: true }).waitFor();
-  assert.equal(await database.client.issueDevelopmentClaim.count({ where: { taskId: id } }), 0);
-  for (const issue of issues) {
-    let current = await content.readIssue(project.id, issue.id, admin);
-    current = await content.transitionIssue(project.id, issue.id, admin, { revision: current.revision, status: "developing" });
-    await content.transitionIssue(project.id, issue.id, admin, { revision: current.revision, status: "pending_verification" });
+  assert.equal(await page.getByRole("button", { name: "标记开发任务完成", exact: true }).count(), 0, "unverified scope cannot be marked completed");
+  await page.goto(origin + '/projects/' + project.id + '?tab=issues&issue=' + issues[0].id);
+  await page.getByRole("button", { name: "提交交付并送验", exact: true }).click();
+  const publishing = page.getByRole("dialog", { name: "整理成果", exact: true });
+  await publishing.getByLabel("交付说明", { exact: true }).fill("合并范围已完成实现，验证搜索结果和移动端布局。");
+  await selectOption(publishing.getByLabel("交付验证人", { exact: true }), admin.id);
+  await publishing.getByRole("checkbox", { name: issues[1].title, exact: true }).check();
+  await publishing.getByRole("checkbox", { name: /我确认将以上交付说明/ }).check();
+  for (const width of [1920, 2560, 1440, 1280, 768, 390, 320]) {
+    await page.setViewportSize({ width, height: width < 768 ? 844 : 1080 });
+    assert.ok(await publishing.evaluate(element => element.scrollWidth <= element.clientWidth));
+    await publishing.getByRole("button", { name: "提交交付并送验", exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(output, 'workflow-delivery-' + width + '.png') });
   }
+  const submitted = page.waitForResponse(response => response.url().endsWith('/deliveries/batch') && response.request().method() === 'POST');
+  await publishing.getByRole("button", { name: "提交交付并送验", exact: true }).click();
+  const submission = await submitted;
+  assert.equal(submission.status(), 201, await submission.text());
+  await publishing.waitFor({ state: "hidden" });
+  const deliveries = await database.client.projectDeliverable.findMany({ where: { taskId: id } });
+  assert.equal(deliveries.length, 2);
+  assert.equal((await database.client.developmentTask.findUnique({ where: { id } })).status, "started");
+  for (const delivery of deliveries) {
+    assert.equal((await content.readIssue(project.id, delivery.issueId, admin)).status, "pending_verification");
+    await page.goto(origin + '/deliveries?projectId=' + project.id + '&delivery=' + delivery.id);
+    await page.getByRole("button", { name: "开始验证", exact: true }).click();
+    await page.getByRole("button", { name: "开始验证", exact: true }).waitFor({ state: "hidden" });
+    assert.equal((await content.readIssue(project.id, delivery.issueId, admin)).status, "verifying");
+    for (const checkbox of await page.getByRole("checkbox").all()) if (await checkbox.isEnabled()) await checkbox.check();
+    await page.getByRole("button", { name: "通过验收", exact: true }).click();
+    await page.getByRole("heading", { name: "验收记录", exact: true }).waitFor();
+    assert.equal((await content.readIssue(project.id, delivery.issueId, admin)).status, "implemented");
+  }
+  assert.equal((await database.client.developmentTask.findUnique({ where: { id } })).status, "completed");
+  assert.equal(await database.client.issueDevelopmentClaim.count({ where: { taskId: id } }), 0);
   await content.createIssue(project.id, admin, { type: "requirement", title: "批量分配：尚未认领的事项" });
   await page.goto(`${origin}/projects/${project.id}?tab=issues&q=${encodeURIComponent("批量分配")}`);
   for (const issue of issues) {
@@ -90,7 +116,7 @@ async function verifyProjectTaskMerging({ page, origin, project, database, conte
     await row.getByText("无进行中的开发任务", { exact: false }).waitFor();
     const text = await row.innerText();
     assert.ok((await row.locator('td[data-label="开发负责人"]').innerText()).includes(admin.displayName), "completed development still shows the responsible developer beside the avatar");
-    assert.ok(text.includes("待验证"));
+    assert.ok(text.includes("已实现"));
     assert.equal(text.includes("待认领"), false, "no active task does not mean no responsible developer");
   }
   const unassigned = page.locator(".ui-data-table tbody tr").filter({ hasText: "批量分配：尚未认领的事项" });

@@ -106,10 +106,13 @@
 .ui-badge-accent { color: var(--highlight); background: var(--selected); }
 .ui-home-layout { grid-template-columns: minmax(0, 1fr) 264px; gap: 44px; }
 .ui-home-stream { gap: 34px; }
-.ui-home-section h2 { font-size: 16px; }
-.ui-section-tasks h2 { border-color: #a7bdd8; }
-.ui-section-deliveries h2 { border-color: #a5cbbb; }
-.ui-home-section header a { display: inline-flex; align-items: center; gap: 8px; }
+.ui-home-section > header { margin-bottom: 14px; }
+.ui-home-section > header h2 { display: flex; align-items: center; gap: 10px; padding: 0; border: 0; font-size: 18px; line-height: 26px; }
+.ui-home-section > header h2::before { content: ''; width: 3px; height: 16px; border-radius: 2px; background: var(--highlight); }
+.ui-home-section-doing > header h2::before { background: var(--tone-blue); }
+.ui-home-section-verify > header h2::before { background: var(--success); }
+.ui-home-count { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); background: var(--surface); font-size: 12px; font-weight: 400; line-height: 18px; }
+.ui-home-section header a { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; min-height: 28px; font-size: 13px; }
 .ui-work-row { padding: 20px 24px; min-height: 90px; gap: 20px; color: var(--ink); font-weight: 400; }
 .ui-work-row:hover:not(:disabled) { background: var(--surface-hover); }
 .ui-work-symbol { width: 34px; height: 34px; flex-basis: 34px; border-radius: 8px; font-size: 17px; background: var(--selected); }
@@ -180,6 +183,7 @@
   .ui-selectable-table .ui-table-title { padding-right: 44px; }
   .ui-data-table td { padding: 6px 0; border: 0; } .ui-data-table td[data-label] { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
   .ui-data-table td[data-label]::before { content: attr(data-label); color: var(--muted); flex: 0 0 auto; } .ui-table-action button { min-height: 44px; }
+  .ui-home-section > header { gap: 8px; margin-bottom: 10px; } .ui-home-section > header h2 { gap: 8px; font-size: 16px; } .ui-home-section header a { min-height: 44px; font-size: 12px; }
   .ui-work-row { padding: 18px 16px; gap: 12px; flex-wrap: wrap; } .ui-work-description { flex-basis: calc(100% - 50px); } .ui-work-person { margin-left: 46px; width: auto; flex: 1; } .ui-work-date { display: none; } .ui-row-action { min-height: 36px; min-width: 60px; }
   .ui-settings-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
   .ui-settings-menu { flex-direction: row; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 16px; } .ui-settings-menu > p { display: none; }

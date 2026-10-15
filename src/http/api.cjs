@@ -1,6 +1,6 @@
 const { RUN_KEY } = require("../domain/run-identity.cjs");
 const { WorkspaceServices } = require("../application/workspace-services.cjs");
-const { json, body, imageBody } = require("./messages.cjs");
+const { json, body, fileBody } = require("./messages.cjs");
 const { sendFile } = require("./assets.cjs");
 const { accountError } = require("../domain/account.cjs");
 
@@ -24,7 +24,7 @@ async function readApiBody(request, url) {
     );
   const projectFile = /^\/api\/projects\/[^/]+\/(?:issues|assets)\/[^/]+\/files$/.test(pathname);
   if (request.method === "POST" && /^\/api\/projects\/[^/]+\/issues(?:\/[^/]+)?$/.test(pathname)) return body(request, 30 * 1024 * 1024);
-  return imageUpload || projectFile ? (await imageBody(request)) : (await body(request));
+  return imageUpload || projectFile ? (await fileBody(request)) : (await body(request));
 }
 
 async function serveApi(

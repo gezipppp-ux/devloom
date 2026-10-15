@@ -1,5 +1,6 @@
 const { accountError } = require("./account.cjs");
 
+const workflowEvents = require("../../shared/workflow-events.json");
 const { handlerFields, actionCategories, requiredFieldNames } = require("./workflow-actions.cjs");
 
 function invalid(message) { throw accountError(message, 400); }
@@ -9,23 +10,38 @@ function workflowDefinition(input, { publish = false } = {}) {
   const validId = id => typeof id === "string" && /^[a-zA-Z0-9_-]{1,100}$/.test(id);
   const validName = name => typeof name === "string" && name.trim().length > 0 && name.length <= 100 && !/[\u0000-\u001f]/.test(name);
   const nodes = input.nodes.map(node => {
-    if (!node || Object.keys(node).some(key => !["id", "name", "kind", "allowDevelopment", "x", "y", "handler", "category"].includes(key)) || !validId(node.id) || ids.has(node.id) || !validName(node.name) || !["initial", "normal", "completed", "cancelled"].includes(node.kind) || typeof node.allowDevelopment !== "boolean") invalid("流程节点标识、名称或属性无效。");
+    if (!node || Object.keys(node).some(key => !["id", "name", "kind", "allowDevelopment", "x", "y", "handler", "category", "allowAssignment", "active"].includes(key)) || !validId(node.id) || ids.has(node.id) || !validName(node.name) || !["initial", "normal", "completed", "cancelled"].includes(node.kind) || typeof node.allowDevelopment !== "boolean") invalid("流程节点标识、名称或属性无效。");
     ids.add(node.id);
     if (["completed", "cancelled"].includes(node.kind) && node.allowDevelopment) invalid("完成或取消节点不能允许开发。");
     for (const key of ["x", "y"]) if (node[key] !== undefined && (!Number.isFinite(node[key]) || Math.abs(node[key]) > 100000)) invalid("节点坐标无效。");
     const handler = node.handler === undefined ? "businessOwner" : node.handler, category = node.category === undefined ? "work" : node.category;
     if (!Object.hasOwn(handlerFields, handler) || !actionCategories.includes(category)) invalid("处理职责或工作类别无效。");
-    return { ...node, name: node.name.trim(), handler, category };
+    for (const key of ["allowAssignment", "active"]) if (node[key] !== undefined && typeof node[key] !== "boolean") invalid("节点动作属性无效。");
+    if (["completed", "cancelled"].includes(node.kind) && node.allowAssignment) invalid("结束节点不能允许分派开发。");
+    return { ...node, name: node.name.trim(), handler, category, allowAssignment: node.allowAssignment === true, active: node.active === true };
   });
   const edgeIds = new Set();
   const transitions = input.transitions.map(edge => {
-    if (!edge || Object.keys(edge).some(key => !["id", "from", "to", "name", "permission", "requiresReason", "requiredFields", "requireAcceptedDelivery"].includes(key)) || !validId(edge.id) || edgeIds.has(edge.id) || !ids.has(edge.from) || !ids.has(edge.to) || edge.from === edge.to || !validName(edge.name) || !["issue.transition", "issue.accept"].includes(edge.permission) || typeof edge.requiresReason !== "boolean") invalid("流程连线、操作权限或名称无效。");
+    if (!edge || Object.keys(edge).some(key => !["id", "from", "to", "name", "permission", "requiresReason", "requiredFields", "requireAcceptedDelivery", "trigger", "actor", "assignment", "requireDelivery"].includes(key)) || !validId(edge.id) || edgeIds.has(edge.id) || !ids.has(edge.from) || !ids.has(edge.to) || edge.from === edge.to || !validName(edge.name) || !["issue.transition", "issue.accept"].includes(edge.permission) || typeof edge.requiresReason !== "boolean") invalid("流程连线、操作权限或名称无效。");
     if (edge.requiredFields !== undefined && (!Array.isArray(edge.requiredFields) || edge.requiredFields.some(field => !requiredFieldNames.includes(field)) || new Set(edge.requiredFields).size !== edge.requiredFields.length)) invalid("必填字段无效。");
     if (edge.requireAcceptedDelivery !== undefined && typeof edge.requireAcceptedDelivery !== "boolean") invalid("交付门禁无效。");
+    const trigger = edge.trigger ?? "manual", actor = edge.actor ?? "handler", assignment = edge.assignment ?? "role";
+    if (!Object.hasOwn(workflowEvents, trigger) || !workflowEvents[trigger].actors.includes(actor) || !["role", "selection", "executor", "reviewer"].includes(assignment)) invalid("流转触发事件、操作主体或交接规则无效。");
+    if (edge.requireDelivery !== undefined && typeof edge.requireDelivery !== "boolean") invalid("交付证据门禁无效。");
+    if (assignment === "reviewer" && !["delivery.submitted", "verification.started"].includes(trigger)) invalid("仅送验或开始验证可以采用本轮验证人。");
+    if (trigger === "verification.accepted" && nodes.find(node => node.id === edge.to)?.kind === "cancelled") invalid("验证通过不能进入取消节点。");
+    if (trigger === "verification.returned" && ["completed", "cancelled"].includes(nodes.find(node => node.id === edge.to)?.kind)) invalid("退回修改不能进入结束节点。");
     edgeIds.add(edge.id);
-    return { ...edge, name: edge.name.trim() };
+    return { ...edge, name: edge.name.trim(), trigger, actor, assignment };
   });
   if (publish) {
+    const eventKeys = new Set();
+    for (const edge of transitions.filter(edge => edge.trigger !== "manual")) {
+      const key = edge.from + ":" + edge.trigger;
+      if (eventKeys.has(key)) invalid("同一节点的同一业务事件只能配置一条流转。");
+      eventKeys.add(key);
+    }
+    for (const node of nodes) if (node.allowAssignment && !transitions.some(edge => edge.from === node.id && edge.trigger === "development.assigned") && node.handler !== "developer") invalid("允许认领的节点必须配置开发分派流转。");
     const initial = nodes.filter(node => node.kind === "initial");
     if (initial.length !== 1) invalid("流程必须有且仅有一个初始节点。");
     if (!nodes.some(node => ["completed", "cancelled"].includes(node.kind))) invalid("流程必须包含完成或取消节点。");
@@ -39,47 +55,39 @@ function workflowDefinition(input, { publish = false } = {}) {
   return { nodes, transitions };
 }
 function defaultWorkflow(type) {
-  const responsibility = node => ({ handler: ["pending_verification", "verifying", "resolved"].includes(node.id) ? "qaOwner" : node.id === "verified" ? "acceptanceOwner" : ["developing", "processing", "failed"].includes(node.id) ? "developer" : "businessOwner", category: ["pending_verification", "verifying", "resolved", "verified"].includes(node.id) ? "verification" : ["developing", "processing", "failed"].includes(node.id) ? "development" : "planning" });
-  if (type === "requirement") {
-    const nodes = [
-      { id: "planned", name: "规划中", kind: "initial", allowDevelopment: true },
-      { id: "developing", name: "开发中", kind: "normal", allowDevelopment: true },
-      { id: "pending_verification", name: "待验证", kind: "normal", allowDevelopment: false },
-      { id: "verifying", name: "验证中", kind: "normal", allowDevelopment: false },
-      { id: "implemented", name: "已实现", kind: "completed", allowDevelopment: false },
-      { id: "rejected", name: "已拒绝", kind: "cancelled", allowDevelopment: false },
-    ].map((node, index) => ({ ...node, ...responsibility(node), x: index < 5 ? index * 240 + 40 : 520, y: index < 5 ? 40 : 240 }));
-    const edges = [
-      ["planned", "developing", "开始开发"], ["developing", "pending_verification", "提交验证"],
-      ["pending_verification", "verifying", "开始验证"], ["verifying", "implemented", "验证通过"],
-      ["developing", "planned", "退回规划"], ["pending_verification", "developing", "退回开发"],
-      ["verifying", "developing", "验证失败"], ["implemented", "planned", "重新打开"], ["rejected", "planned", "重新规划"],
-      ...["planned", "developing", "pending_verification", "verifying"].map(from => [from, "rejected", "拒绝"]),
-    ];
-    return { nodes, transitions: edges.map(([from, to, name]) => ({ id: `${from}_${to}`, from, to, name,
-      permission: ["pending_verification", "verifying"].includes(from) ? "issue.accept" : "issue.transition",
-      requiresReason: ["implemented", "rejected"].includes(from) || to === "rejected" || to === "planned" || (["pending_verification", "verifying"].includes(from) && to === "developing") })) };
-  }
+  const bug = type === "bug";
+  const ids = { initial: bug ? "pending" : "planned", developing: bug ? "processing" : "developing", waiting: bug ? "resolved" : "pending_verification", done: bug ? "closed" : "implemented", rejected: bug ? "cancelled" : "rejected" };
+  const makeNode = (id, name, kind, handler, category, allowDevelopment = false, extra = {}) => ({ id, name, kind, handler, category, allowDevelopment, allowAssignment: false, active: false, ...extra });
   const nodes = [
-    { id: "pending", name: "待处理", kind: "initial", allowDevelopment: true },
-    { id: "processing", name: "处理中", kind: "normal", allowDevelopment: true },
-    { id: "resolved", name: "已解决待验证", kind: "normal", allowDevelopment: false },
-    { id: "verified", name: "已验证待关闭", kind: "normal", allowDevelopment: false },
-    { id: "closed", name: "已关闭", kind: "completed", allowDevelopment: false },
-    { id: "failed", name: "失败待处理", kind: "normal", allowDevelopment: true },
-    { id: "cancelled", name: "已取消", kind: "cancelled", allowDevelopment: false },
-  ].map((node, index) => ({ ...node, ...responsibility(node), x: index < 5 ? index * 240 + 40 : index === 5 ? 280 : 760, y: index < 5 ? 40 : 240 }));
-  const edges = [
-    ["pending", "processing", "开始处理"], ["processing", "resolved", "提交验证"],
-    ["resolved", "verified", "验证通过"], ["verified", "closed", "关闭缺陷"],
-    ["resolved", "failed", "验证失败"], ["verified", "failed", "退回处理"], ["failed", "processing", "重新处理"],
-    ["processing", "pending", "退回待处理"], ["closed", "pending", "重新打开"], ["cancelled", "pending", "恢复处理"],
-    ...["pending", "processing", "resolved", "verified", "failed"].map(from => [from, "cancelled", "取消"]),
-  ];
-  return { nodes, transitions: edges.map(([from, to, name]) => ({ id: `${from}_${to}`, from, to, name,
-    permission: ["resolved", "verified"].includes(from) ? "issue.accept" : "issue.transition",
-    requiresReason: ["closed", "cancelled"].includes(from) || ["cancelled", "failed", "pending"].includes(to) })) };
-
+    makeNode(ids.initial, bug ? "待确认" : "规划中", "initial", "businessOwner", "planning", false, { allowAssignment: true }),
+    makeNode("ready", "待开发", "normal", "developer", "development", true, { allowAssignment: true }),
+    makeNode(ids.developing, bug ? "修复中" : "开发中", "normal", "developer", "development", true, { active: true, allowAssignment: true }),
+    makeNode(ids.waiting, "待验证", "normal", "qaOwner", "verification"),
+    makeNode("verifying", "验证中", "normal", "qaOwner", "verification", false, { active: true }),
+    ...(bug ? [makeNode("verified", "待业务验收", "normal", "acceptanceOwner", "verification")] : []),
+    makeNode(ids.done, bug ? "已关闭" : "已实现", "completed", "businessOwner", "work"),
+    makeNode("rework", "待返工", "normal", "developer", "development", true, { allowAssignment: true }),
+    makeNode(ids.rejected, bug ? "已取消" : "已拒绝", "cancelled", "businessOwner", "work"),
+  ].map((node, i) => ({ ...node, x: 40 + (i % 5) * 240, y: 40 + Math.floor(i / 5) * 240 }));
+  const transitions = [];
+  const edge = (from, to, name, trigger, actor, assignment = "role", extra = {}) => transitions.push({ id: from + "_" + to, from, to, name, trigger, actor, assignment, permission: trigger.startsWith("verification.") || from === "verified" ? "issue.accept" : "issue.transition", requiresReason: false, ...extra });
+  edge(ids.initial, "ready", "安排开发", "development.assigned", "assigner", "executor");
+  edge("ready", ids.developing, "开始开发", "development.started", "developer", "executor");
+  edge("rework", ids.developing, "继续开发", "development.started", "developer", "executor");
+  edge(ids.developing, ids.waiting, "提交验证", "delivery.submitted", "developer", "reviewer", { requireDelivery: true });
+  edge("rework", ids.waiting, "重新提交验证", "delivery.submitted", "developer", "reviewer", { requireDelivery: true });
+  edge(ids.waiting, "verifying", "开始验证", "verification.started", "reviewer", "reviewer");
+  for (const from of [ids.waiting, "verifying"]) {
+    edge(from, bug ? "verified" : ids.done, "验证通过", "verification.accepted", "reviewer", "role", { requireAcceptedDelivery: true });
+    edge(from, "rework", "退回修改", "verification.returned", "reviewer", "executor", { requiresReason: true });
+  }
+  if (bug) {
+    edge("verified", ids.done, "业务验收通过", "manual", "handler", "role", { requireAcceptedDelivery: true });
+    edge("verified", "rework", "退回修改", "manual", "handler", "executor", { requiresReason: true });
+  }
+  for (const from of [ids.done, ids.rejected]) edge(from, ids.initial, "重新打开", "manual", "assigner", "selection", { requiresReason: true });
+  for (const from of nodes.filter(node => !["completed", "cancelled"].includes(node.kind)).map(node => node.id)) edge(from, ids.rejected, "取消事项", "manual", "handler", "role", { requiresReason: true });
+  return { nodes, transitions };
 }
 function issueWorkflowNode(issue) { return issue.workflowVersion?.definition?.nodes.find(node => node.id === issue.status); }
 function issueDevelopmentAllowed(issue) { const node = issueWorkflowNode(issue); return issue.release?.status !== "archived" && !["completed", "cancelled"].includes(node?.kind) && node?.allowDevelopment === true; }

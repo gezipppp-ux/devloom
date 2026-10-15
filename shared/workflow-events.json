@@ -1,0 +1,9 @@
+{
+  "manual": { "label": "人工流转", "actors": ["handler", "developer", "assigner"] },
+  "development.assigned": { "label": "指派或认领开发", "actors": ["assigner"] },
+  "development.started": { "label": "真实开发开始", "actors": ["developer"] },
+  "delivery.submitted": { "label": "提交交付并送验", "actors": ["developer", "handler"] },
+  "verification.started": { "label": "开始验证", "actors": ["reviewer"] },
+  "verification.accepted": { "label": "验证通过", "actors": ["reviewer"] },
+  "verification.returned": { "label": "退回修改", "actors": ["reviewer"] }
+}

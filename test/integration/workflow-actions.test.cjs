@@ -1,3 +1,4 @@
+const { reviewWorkflow, installReviewWorkflow, recordDevelopmentTurn } = require("../support/workflow-fixture.cjs");
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { randomUUID } = require("node:crypto");
@@ -40,53 +41,49 @@ function grant(f, user, permissions) {
   return f.database.client.projectMember.update({ where: { projectId_userId: { projectId: f.project.id, userId: user.id } }, data: { permissions } });
 }
 
-for (const [category, permission, readyBucket, activeBucket] of [["work", "issue.accept", "todo", "doing"], ["verification", "issue.transition", "verify", "verify"]]) {
-  test(`workflow ${category} handlers enter, start and complete using configured ${permission}`, async t => {
+for (const [category, permission, readyBucket] of [["work", "issue.accept", "doing"], ["verification", "issue.transition", "verify"]]) {
+  test(`workflow ${category} handlers enter active nodes and complete using configured ${permission}`, async t => {
     const f = await fixture(t);
-    await publish(f, { nodes: [node("plan", "initial", "businessOwner", "planning"), node("review", "normal", "qaOwner", category), node("done", "completed", "businessOwner", "work")], transitions: [edge("submit", "plan", "review", "issue.transition"), edge("accept", "review", "done", permission)] });
+    await publish(f, { nodes: [node("plan", "initial", "businessOwner", "planning"), { ...node("review", "normal", "qaOwner", category), active: true }, node("done", "completed", "businessOwner", "work")], transitions: [edge("submit", "plan", "review", "issue.transition"), edge("accept", "review", "done", permission)] });
     await grant(f, f.qa, ["project.view", "issue.view", permission]);
     let issue = await f.create();
     issue = await f.content.transitionIssue(f.project.id, issue.id, f.owner, { revision: issue.revision, transitionId: "submit" });
-    assert.deepEqual(issue.processing.startPermissions, [permission]);
+    assert.equal(issue.processing.status, "active");
     assert.equal((await f.workbench.actions(f.owner)).total, 0);
     assert.deepEqual((await f.workbench.actions(f.qa)).items.map(item => [item.issueId, item.bucket]), [[issue.id, readyBucket]]);
-    issue = await f.content.startIssueStep(f.project.id, issue.id, f.qa, { revision: issue.revision, actionRevision: issue.processing.revision });
-    assert.equal((await f.workbench.actions(f.qa)).items[0].bucket, activeBucket);
+
     await f.content.transitionIssue(f.project.id, issue.id, f.qa, { revision: issue.revision, transitionId: "accept" });
     assert.equal((await f.workbench.actions(f.qa)).total, 0);
   });
 }
 
-test("one configured permission permits starting while each transition still requires its own permission", async t => {
+test("each configured transition requires its own permission and revoked handlers get recovery", async t => {
   const f = await fixture(t);
   await publish(f, { nodes: [node("plan", "initial", "businessOwner", "planning"), node("review", "normal", "qaOwner", "work"), node("done", "completed", "businessOwner", "work")], transitions: [edge("submit", "plan", "review", "issue.transition"), edge("return", "review", "plan", "issue.transition"), edge("accept", "review", "done", "issue.accept")] });
   await grant(f, f.qa, ["project.view", "issue.view", "issue.accept"]);
   let issue = await f.create();
   issue = await f.content.transitionIssue(f.project.id, issue.id, f.owner, { revision: issue.revision, transitionId: "submit" });
-  assert.deepEqual(issue.processing.startPermissions, ["issue.transition", "issue.accept"]);
-  issue = await f.content.startIssueStep(f.project.id, issue.id, f.qa, { revision: issue.revision, actionRevision: issue.processing.revision });
+  assert.equal((await f.content.readIssue(f.project.id, issue.id, f.qa)).availableTransitions.length, 1);
   await assert.rejects(f.content.transitionIssue(f.project.id, issue.id, f.qa, { revision: issue.revision, transitionId: "return" }), { statusCode: 403 });
   assert.equal((await f.content.readIssue(f.project.id, issue.id, f.qa)).status, "review");
   await grant(f, f.qa, ["project.view", "issue.view"]);
   assert.equal((await f.workbench.actions(f.qa)).total, 0);
   assert.equal((await f.workbench.actions(f.owner)).items[0].label, "分派处理人");
-  await assert.rejects(f.content.startIssueStep(f.project.id, issue.id, f.qa, { revision: issue.revision, actionRevision: issue.processing.revision }), { statusCode: 403 });
+  await assert.rejects(f.content.transitionIssue(f.project.id, issue.id, f.qa, { revision: issue.revision, transitionId: "accept" }), { statusCode: 403 });
   await grant(f, f.qa, ["project.view", "issue.view", "issue.transition"]);
   assert.equal((await f.workbench.actions(f.owner)).total, 0);
   assert.equal((await f.workbench.actions(f.qa)).total, 1);
   await f.content.transitionIssue(f.project.id, issue.id, f.qa, { revision: issue.revision, transitionId: "return" });
 });
 
-test("development deduplication keeps another handler's step and merges only the same person's task", async t => {
+test("custom planning handoff preserves a distinct handler and deduplicates only the executor", async t => {
   const f = await fixture(t);
-  await publish(f, { nodes: [node("review", "initial", "businessOwner", "development"), node("done", "completed", "businessOwner", "work")], transitions: [edge("done", "review", "done", "issue.transition")] });
+  await publish(f, { nodes: [{ ...node("plan", "initial", "businessOwner", "planning"), allowAssignment: true }, node("review", "normal", "businessOwner", "development"), node("done", "completed", "businessOwner", "work")], transitions: [{ ...edge("assign", "plan", "review", "issue.transition"), trigger: "development.assigned", actor: "assigner", assignment: "role" }, edge("done", "review", "done", "issue.transition")] });
   const issue = await f.create();
   const task = (await f.development.create(f.project.id, f.owner, { requestId: randomUUID(), executorId: f.dev.id, issueIds: [issue.id] })).tasks[0];
   assert.equal((await f.content.readIssue(f.project.id, issue.id, f.owner)).processing.handlerId, f.owner.id);
   assert.deepEqual((await f.workbench.actions(f.owner)).items.map(item => [item.kind, item.issueId]), [["issue", issue.id]]);
   assert.deepEqual((await f.workbench.actions(f.dev)).items.map(item => [item.kind, item.taskId]), [["task", task.id]]);
-  const attention = new AttentionServices(f.database, { projects: f.projects });
-  assert.equal((await attention.list(f.owner)).items[0].issueId, issue.id);
   await f.development.update(f.project.id, task.id, f.owner, { revision: task.revision, executorId: f.owner.id });
   assert.deepEqual((await f.workbench.actions(f.owner)).items.map(item => [item.kind, item.taskId]), [["task", task.id]]);
   assert.equal((await f.workbench.actions(f.dev)).total, 0);
@@ -97,7 +94,6 @@ test("revoked development permissions yield a single coordinator action and plan
   let issue = await f.create();
   const task = (await f.development.create(f.project.id, f.owner, { requestId: randomUUID(), executorId: f.dev.id, issueIds: [issue.id] })).tasks[0];
   issue = await f.content.readIssue(f.project.id, issue.id, f.owner);
-  await f.content.transitionIssue(f.project.id, issue.id, f.owner, { revision: issue.revision, status: "developing" });
   const attention = new AttentionServices(f.database, { projects: f.projects });
   for (const revoked of [["session.start"], ["issue.view"], ["session.start", "issue.transition"]]) {
     await grant(f, f.dev, f.permissions.filter(p => !revoked.includes(p)));
@@ -124,10 +120,6 @@ test("merged task recovery reaches each business owner without exposing a privat
   const issues = [await f.create(), await f.create({ businessOwnerId: f.qa.id })];
   const assigned = await f.development.create(f.project.id, f.owner, { requestId: randomUUID(), executorId: f.dev.id, issueIds: issues.map(issue => issue.id) });
   const { task } = await f.development.merge(f.project.id, f.dev, { requestId: randomUUID(), title: "Combined work", tasks: assigned.tasks.map(task => ({ id: task.id, revision: task.revision })) });
-  for (const [index, actor] of [f.owner, f.qa].entries()) {
-    const issue = await f.content.readIssue(f.project.id, issues[index].id, actor);
-    await f.content.transitionIssue(f.project.id, issue.id, actor, { revision: issue.revision, status: "developing" });
-  }
   const workspace = await f.database.client.workspace.create({ data: { ownerUserId: f.dev.id, name: "Private workspace" } });
   const stored = await f.database.client.developmentTask.findUniqueOrThrow({ where: { id: task.id } });
   await f.database.client.developmentTask.update({ where: { id: task.id }, data: { status: "started", workspaceId: workspace.id, runKey: "private-run", snapshot: { ...stored.snapshot, prompt: "private-prompt" } } });
@@ -150,7 +142,6 @@ test("release archive filters both executor work and assignment recovery without
   let issue = await f.create({ releaseId: release.id });
   const task = (await f.development.create(f.project.id, f.owner, { requestId: randomUUID(), executorId: f.dev.id, issueIds: [issue.id] })).tasks[0];
   issue = await f.content.readIssue(f.project.id, issue.id, f.owner);
-  await f.content.transitionIssue(f.project.id, issue.id, f.owner, { revision: issue.revision, status: "developing" });
   assert.equal((await f.workbench.actions(f.dev)).items[0].taskId, task.id);
   // Seed archived state directly to verify read filtering independently of the archive command's gates.
   await f.database.client.projectRelease.update({ where: { id: release.id }, data: { status: "archived" } });
@@ -161,50 +152,62 @@ test("release archive filters both executor work and assignment recovery without
   assert.equal((await f.workbench.actions(f.owner)).items[0].taskId, task.id);
 });
 
-test("workflow responsibilities hand off actions, watchers and administrators never inherit them, and stale starts cannot act", async t => {
+test("responsibilities hand off on assignment and delivery; stale owners and watchers cannot act", async t => {
   const f = await fixture(t), { project, content, workbench, owner, dev, qa, watcher, admin } = f;
-  let issue = await f.create();
-  assert.equal(issue.reporterId, owner.id);
-  assert.equal((await workbench.actions(owner, { bucket: "todo" })).total, 1);
+  const original = await f.create();
+  assert.equal(original.reporterId, owner.id);
+  assert.equal((await workbench.actions(owner)).total, 1);
   for (const user of [dev, qa, watcher, admin]) assert.equal((await workbench.actions(user)).total, 0);
-  const original = issue;
-  issue = await content.startIssueStep(project.id, issue.id, owner, { revision: issue.revision, actionRevision: issue.processing.revision });
-  assert.equal((await workbench.actions(owner, { bucket: "doing" })).total, 1);
-  await content.startIssueStep(project.id, issue.id, owner, { revision: original.revision, actionRevision: original.processing.revision });
-  assert.equal(await f.database.client.issueHistory.count({ where: { action: "step.started" } }), 1, "retry does not duplicate step history");
-  await assert.rejects(content.transitionIssue(project.id, issue.id, owner, { revision: issue.revision, status: "developing" }), /处理人/);
-  const task = (await f.development.create(project.id, owner, { requestId: randomUUID(), executorId: dev.id, issueIds: [issue.id] })).tasks[0];
-  issue = await content.readIssue(project.id, issue.id, owner);
-  issue = await content.transitionIssue(project.id, issue.id, owner, { revision: issue.revision, status: "developing" });
+  const task = (await f.development.create(project.id, owner, { requestId: randomUUID(), executorId: dev.id, issueIds: [original.id] })).tasks[0];
+  let issue = await content.readIssue(project.id, original.id, dev);
   assert.equal(issue.processing.handlerId, dev.id);
-  assert.equal((await workbench.actions(owner)).total, 0, "old business step ended on handoff");
-  assert.deepEqual((await workbench.actions(dev)).items.map(item => [item.kind, item.bucket]), [["task", "todo"]], "planned development is not doing, and hides only its developer step");
+  assert.equal(issue.status, "ready");
+  assert.equal((await workbench.actions(owner)).total, 0);
+  assert.deepEqual((await workbench.actions(dev)).items.map(item => [item.kind, item.bucket]), [["task", "todo"]]);
   assert.equal(await f.database.client.run.count(), 0);
-  await assert.rejects(content.startIssueStep(project.id, issue.id, owner, { revision: original.revision, actionRevision: original.processing.revision }), { statusCode: 403 });
-  await f.development.finish(project.id, task.id, dev, { revision: task.revision }, "cancelled");
-  assert.equal((await workbench.actions(owner)).items[0].label, "分派处理人", "cancelling a developer task sends missing assignment to the business owner");
-  await f.development.create(project.id, owner, { requestId: randomUUID(), executorId: dev.id, issueIds: [issue.id] });
-  issue = await content.readIssue(project.id, issue.id, dev);
-  issue = await content.transitionIssue(project.id, issue.id, dev, { revision: issue.revision, status: "pending_verification" });
-  assert.equal(issue.processing.handlerId, qa.id);
+  await assert.rejects(content.transitionIssue(project.id, issue.id, owner, { revision: original.revision, status: "rejected", reason: "stale" }), { statusCode: 409 });
+  await recordDevelopmentTurn(f.database, f.development, project.id, task.id, dev);
+  const delivery = await content.addDeliverable(project.id, dev, { issueId: issue.id, taskId: task.id, body: "Evidence", reviewerId: qa.id });
   assert.equal((await workbench.actions(qa, { bucket: "verify" })).total, 1);
-  issue = await content.startIssueStep(project.id, issue.id, qa, { revision: issue.revision, actionRevision: issue.processing.revision });
-  assert.equal((await workbench.actions(qa, { bucket: "verify" })).total, 1, "started verification remains in verification");
+  const current = await content.beginDelivery(project.id, delivery.id, qa, { revision: delivery.revision });
   assert.equal((await workbench.actions(qa, { bucket: "doing" })).total, 0);
-  const oldQaStep = issue;
-  issue = await content.updateIssue(project.id, issue.id, owner, { revision: issue.revision, qaOwnerId: watcher.id });
+  await content.reassignDelivery(project.id, delivery.id, owner, { revision: current.revision, reviewerId: watcher.id });
   assert.equal((await workbench.actions(qa)).total, 0);
-  assert.equal((await workbench.actions(watcher, { bucket: "verify" })).total, 1, "watcher becomes actionable only after explicit assignment");
-  await assert.rejects(content.startIssueStep(project.id, issue.id, qa, { revision: oldQaStep.revision, actionRevision: oldQaStep.processing.revision }), { statusCode: 403 });
+  assert.equal((await workbench.actions(watcher, { bucket: "verify" })).total, 1);
+  await assert.rejects(content.reviewDeliverable(project.id, delivery.id, qa, { revision: current.revision, status: "accepted", checkedItems: [0, 1, 2] }), { statusCode: 403 });
   assert.equal(await f.database.client.workAction.count({ where: { issueId: issue.id, status: { in: ["ready", "active"] } } }), 1);
-  await f.database.client.projectMember.update({ where: { projectId_userId: { projectId: project.id, userId: watcher.id } }, data: { permissions: ["project.view", "issue.view"] } });
+  await grant(f, watcher, ["project.view", "issue.view"]);
   assert.equal((await workbench.actions(watcher)).total, 0);
-  assert.equal((await workbench.actions(owner)).items[0].label, "分派处理人", "revoked handler is visible as a recovery action to the business owner");
+  assert.ok((await workbench.actions(owner)).items.some(item => item.label === "重新指定验证人"));
+});
+
+test("verification steps survive inaccessible deliveries and return after delivery review", async t => {
+  const f = await fixture(t);
+  const definition = reviewWorkflow();
+  definition.nodes.find(node => node.id === "draft").handler = "qaOwner";
+  await installReviewWorkflow(f.database, definition);
+  const issue = await f.create();
+  const delivery = await f.content.addDeliverable(f.project.id, f.qa, { issueId: issue.id, body: "Result", reviewerId: f.qa.id });
+  const attention = new AttentionServices(f.database, { projects: f.projects });
+  assert.deepEqual((await f.workbench.actions(f.qa)).items.map(item => item.kind), ["delivery"]);
+  for (const revoked of ["deliverable.review", "collaboration.view"]) {
+    await grant(f, f.qa, f.permissions.filter(p => p !== revoked));
+    const page = await f.workbench.actions(f.qa);
+    assert.deepEqual(page.items.map(item => [item.kind, item.issueId]), [["issue", issue.id]]);
+    assert.equal(page.counts.verify, 1);
+    assert.equal((await attention.list(f.qa)).items[0].issueId, issue.id);
+  }
+  await grant(f, f.qa, f.permissions);
+  assert.deepEqual((await f.workbench.actions(f.qa)).items.map(item => item.kind), ["delivery"]);
+  await f.content.reviewDeliverable(f.project.id, delivery.id, f.qa, { revision: delivery.revision, status: "returned", checkedItems: [], reviewNote: "Revise" });
+  assert.deepEqual((await f.workbench.actions(f.qa)).items.map(item => [item.kind, item.issueId]), [["delivery", issue.id]]);
 });
 
 test("delivery return, explicit reviewer and resubmission preserve history and produce the same notifications as workbench", async t => {
   const f = await fixture(t), { project, content, workbench, owner, dev, qa } = f;
-  const issue = await f.create();
+  await installReviewWorkflow(f.database);
+  const issue = await f.create({ businessOwnerId: dev.id });
+  const separateIssue = await f.create();
   await assert.rejects(content.addDeliverable(project.id, dev, { issueId: issue.id, body: "Result", reviewerId: "missing-user" }), /有效项目成员/);
   const delivery = await content.addDeliverable(project.id, dev, { issueId: issue.id, body: "Result", reviewerId: qa.id });
   assert.equal((await workbench.actions(owner)).items[0].kind, "issue", "delivery must not hide a different person's planning action");
@@ -227,7 +230,8 @@ test("delivery return, explicit reviewer and resubmission preserve history and p
   const page = await workbench.actions(qa, { bucket: "verify", limit: 1 });
   assert.equal(page.total, 1); assert.equal(page.counts.verify, 1);
   assert.equal((await attention.list(qa)).items[0].deliveryId, page.items[0].deliveryId);
-  assert.equal((await attention.list(owner)).items[0].issueId, issue.id);
+  assert.equal((await attention.list(owner)).items[0].issueId, separateIssue.id);
+  await content.updateIssue(project.id, issue.id, owner, { revision: (await content.readIssue(project.id, issue.id, owner)).revision, businessOwnerId: owner.id });
   await f.database.client.projectMember.update({ where: { projectId_userId: { projectId: project.id, userId: qa.id } }, data: { permissions: ["project.view", "issue.view"] } });
   assert.equal((await workbench.actions(qa)).total, 0);
   assert.ok((await workbench.actions(owner)).items.some(item => item.label === "重新指定验证人"));
@@ -238,27 +242,19 @@ test("delivery return, explicit reviewer and resubmission preserve history and p
   await assert.rejects(content.reviewDeliverable(project.id, reassigned.id, qa, { revision: 1, status: "accepted", checkedItems: [0, 1, 2] }), { statusCode: 403 });
 });
 
-test("published workflow fields and delivery gates apply atomically to both direct transitions and combined reviews", async t => {
-  const f = await fixture(t), { project, content, workflows, owner, qa, admin } = f;
-  let { workflow } = await workflows.readWorkflow("requirement", admin);
-  const definition = { nodes: [
-    { id: "review", name: "QA", kind: "initial", allowDevelopment: false, handler: "qaOwner", category: "verification" },
-    { id: "done", name: "Done", kind: "completed", allowDevelopment: false, handler: "businessOwner", category: "work" },
-  ], transitions: [{ id: "accept", from: "review", to: "done", name: "Accept", permission: "issue.accept", requiresReason: false, requiredFields: ["acceptanceCriteria"], requireAcceptedDelivery: true }] };
-  ({ workflow } = await workflows.saveWorkflow("requirement", admin, { revision: workflow.revision, definition }));
-  await workflows.saveWorkflow("requirement", admin, { revision: workflow.revision }, true);
+test("published workflow fields and delivery gates roll back a review with an invalid handoff", async t => {
+  const f = await fixture(t), { project, content, owner, qa } = f;
+  const definition = reviewWorkflow();
+  for (const edge of definition.transitions.filter(edge => edge.trigger === "verification.accepted")) Object.assign(edge, { requiredFields: ["acceptanceCriteria"], requireAcceptedDelivery: true });
+  await publish(f, definition);
   let issue = await f.create();
-  assert.equal(issue.processing.handlerId, qa.id);
-  await assert.rejects(content.transitionIssue(project.id, issue.id, qa, { transitionId: "accept", revision: issue.revision }), /验收标准/);
-  const delivery = await content.addDeliverable(project.id, owner, { issueId: issue.id, body: "Result" });
-  const review = { revision: 1, status: "accepted", checkedItems: delivery.checklist.map((_, i) => i), transitionId: "accept", issueRevision: issue.revision };
+  const delivery = await content.addDeliverable(project.id, owner, { issueId: issue.id, body: "Result", reviewerId: qa.id });
+  const review = { revision: 1, status: "accepted", checkedItems: delivery.checklist.map((_, i) => i) };
   await assert.rejects(content.reviewDeliverable(project.id, delivery.id, qa, review), /验收标准/);
-  assert.equal((await content.readDeliverable(project.id, delivery.id, qa)).delivery.status, "pending", "failed handoff rolls back the review too");
-  issue = await content.updateIssue(project.id, issue.id, owner, { revision: issue.revision, acceptanceCriteria: "Expected result" });
-  await assert.rejects(content.transitionIssue(project.id, issue.id, qa, { transitionId: "accept", revision: issue.revision }), /最新交付/);
-  await assert.rejects(content.reviewDeliverable(project.id, delivery.id, qa, { ...review, status: "returned", reviewNote: "Fail", issueRevision: issue.revision }), /验收|一致/);
   assert.equal((await content.readDeliverable(project.id, delivery.id, qa)).delivery.status, "pending");
-  await content.reviewDeliverable(project.id, delivery.id, qa, { ...review, issueRevision: issue.revision });
+  issue = await content.readIssue(project.id, issue.id, owner);
+  await content.updateIssue(project.id, issue.id, owner, { revision: issue.revision, acceptanceCriteria: "Expected result" });
+  await content.reviewDeliverable(project.id, delivery.id, qa, review);
   assert.equal((await content.readIssue(project.id, issue.id, qa)).status, "done");
   assert.equal((await f.workbench.actions(qa)).total, 0);
   assert.equal(await f.database.client.run.count(), 0);

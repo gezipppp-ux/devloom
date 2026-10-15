@@ -34,7 +34,8 @@
   color: var(--muted);
 }
 .app-select-icon .ant-select-content {
-  justify-content: center;
+  margin-inline-end: 0;
+  text-align: center;
 }
 .app-select-popup {
   min-width: 176px;
@@ -109,6 +110,15 @@
   border: 0 !important;
   clip-path: inset(50%);
   overflow: hidden;
+}
+.app-select-search-hint {
+  margin-top: 4px;
+  padding: 8px 10px 4px;
+  border-top: 1px solid var(--field-border);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: normal;
 }
 @media (max-width: 767px) {
   .app-select .ant-select,

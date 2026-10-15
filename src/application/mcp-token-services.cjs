@@ -1,7 +1,7 @@
 const { McpStore } = require("../storage/mcp-store.cjs");
 const { tokenInput, mcpId, assertMcpScope, mcpScopes } = require("../domain/mcp-access.cjs");
 const { accountError } = require("../domain/account.cjs");
-const { presentMcpToken, presentMcpIdentity, presentMcpProject } = require("./mcp-presenter.cjs");
+const { presentMcpToken, presentMcpIdentity, presentMcpProject, presentMcpUploadToken } = require("./mcp-presenter.cjs");
 
 class McpTokenServices {
   constructor(database, projects) { this.store = new McpStore(database); this.projects = projects; }
@@ -54,6 +54,44 @@ class McpTokenServices {
     if (token.userId !== context.userId) throw accountError("MCP 身份已失效。", 401);
     assertMcpScope(token, scope, projectId);
     return token;
+  }
+  async uploadAccess(context, projectId) {
+    const token = await this.refresh(context, "files.upload", projectId);
+    const actor = { id: token.userId };
+    const access = await this.projects.authorize(projectId, actor, "issue.view");
+    await this.projects.authorize(projectId, actor, access.permissions.includes("issue.create") ? "issue.create" : "issue.edit");
+    return token;
+  }
+  async createUploadToken(context, { projectId }) {
+    mcpId(projectId, "项目 ID");
+    return this.store.transaction(async () => {
+      const token = await this.uploadAccess(context, projectId);
+      const { grant, secret } = await this.store.createUploadToken(token, projectId);
+      await this.uploadAccess(context, projectId);
+      await this.store.audit(token.userId, token.id, "upload_token.created", projectId);
+      return presentMcpUploadToken(grant, secret);
+    });
+  }
+  validateUploadToken(grant, projectId) {
+    if (!grant || grant.expiresAt <= new Date())
+      throw accountError("临时上传 Token 无效或已过期，请通过 MCP 重新申请。", 401, "UPLOAD_TOKEN_INVALID");
+    if (grant.projectId !== projectId) throw accountError("临时上传 Token 仅限指定项目使用。", 403, "UPLOAD_PROJECT_DENIED");
+    return grant;
+  }
+  async authenticateUpload(header, projectId) {
+    if (typeof header !== "string" || !/^Bearer wc_upload_[A-Za-z0-9_-]{43}$/.test(header))
+      throw accountError("请通过 MCP create_upload_token 获取临时上传 Token，再使用 Authorization: Bearer 上传附件。", 401, "UPLOAD_TOKEN_REQUIRED");
+    const grant = this.validateUploadToken(await this.store.uploadTokenBySecret(header.slice(7)), projectId);
+    const token = this.validate(await this.store.token(grant.tokenId));
+    const context = { id: token.id, userId: token.userId, uploadTokenId: grant.id };
+    await this.refreshUpload(context, projectId);
+    if (!token.lastUsedAt || Date.now() - token.lastUsedAt.getTime() > 60000) await this.store.touch(token.id);
+    return context;
+  }
+  async refreshUpload(context, projectId) {
+    const grant = this.validateUploadToken(context.uploadTokenId && await this.store.uploadToken(context.uploadTokenId), projectId);
+    if (grant.tokenId !== context.id) throw accountError("临时上传身份已失效。", 401, "UPLOAD_TOKEN_INVALID");
+    return this.uploadAccess(context, projectId);
   }
   async whoami(context) { return presentMcpIdentity(await this.refresh(context)); }
 }

@@ -6,6 +6,7 @@ const { defaultWorkflow } = require('../../src/domain/issue-workflows.cjs');
 
 async function verifyWorkflowCanvas({ page, origin, output }) {
   const workflows = Object.fromEntries(['requirement', 'bug'].map(type => [type, { revision: 1, publishedVersion: 1, draft: defaultWorkflow(type) }]));
+  const initialEdges = workflows.requirement.draft.transitions.length, initialNodes = workflows.requirement.draft.nodes.length;
   let failSave = false, holdSave = false, releaseSave, saveStarted;
   const writes = [];
   await page.route('**/api/system/workflows/**', async route => {
@@ -67,7 +68,7 @@ async function verifyWorkflowCanvas({ page, origin, output }) {
     await page.screenshot({ path: path.join(output, `workflow-preview-${sourceName}.png`), fullPage: true });
     await page.keyboard.press('Escape'); await page.mouse.up();
     assert.equal(await graph.locator('.connection-preview').count(), 0);
-    assert.equal(await graph.locator('.edge-line').count(), 13, 'cancelled previews cannot create a transition');
+    assert.equal(await graph.locator('.edge-line').count(), initialEdges, 'cancelled previews cannot create a transition');
   };
   await verifyPreview('规划中', '已实现');
   await verifyPreview('已实现', '规划中');
@@ -118,9 +119,10 @@ async function verifyWorkflowCanvas({ page, origin, output }) {
   assert.deepEqual(await graph.locator('.workflow-node').evaluateAll(nodes => nodes.map(node => node.getAttribute('transform'))), savedPositions);
   await page.getByRole('button', { name: '适应画布', exact: true }).click();
   await verifyCurves();
+  for (const node of workflows.requirement.draft.nodes) if (!['planned', 'rejected'].includes(node.id)) node.x += 1000;
   Object.assign(workflows.requirement.draft.nodes.find(node => node.id === 'rejected'), { x: 56, y: 360 });
   await page.goto(origin + '/system?tab=workflows'); await graph.waitFor();
-  for (const name of ['连线：重新规划，已拒绝 → 规划中', '连线：拒绝，规划中 → 已拒绝']) {
+  for (const name of ['连线：重新打开，已拒绝 → 规划中', '连线：取消事项，规划中 → 已拒绝']) {
     const xs = await page.getByRole('button', { name, exact: true }).locator('.edge-line').evaluate(path => {
       const length = path.getTotalLength();
       return Array.from({ length: 21 }, (_, i) => path.getPointAtLength(length * i / 20).x);
@@ -173,7 +175,7 @@ async function verifyWorkflowCanvas({ page, origin, output }) {
   await selectOption(page.getByLabel('所需权限', { exact: true }), 'issue.accept');
   await selectOption(page.getByLabel('流转必填资料', { exact: true }), ['acceptanceCriteria', 'qaOwnerId']);
   await page.getByLabel('必须已有通过验收的交付', { exact: true }).check();
-  assert.equal(await graph.locator('.edge-line').count(), 14);
+  assert.equal(await graph.locator('.edge-line').count(), initialEdges + 1);
   await verifyCurves();
   await page.getByLabel('操作名称', { exact: true }).press('Escape');
   const selectedEdge = page.getByRole('button', { name: '连线：画布连接，画布内规划 → 开发中', exact: true });
@@ -199,10 +201,10 @@ async function verifyWorkflowCanvas({ page, origin, output }) {
   assert.equal(await page.getByLabel('允许开始开发', { exact: true }).isDisabled(), true);
   await page.getByRole('button', { name: '删除状态', exact: true }).click();
   await page.getByRole('button', { name: '取消删除', exact: true }).click();
-  assert.equal(await graph.locator('.workflow-node').count(), 7);
+  assert.equal(await graph.locator('.workflow-node').count(), initialNodes + 1);
   await page.getByRole('button', { name: '删除状态', exact: true }).click();
   await page.getByRole('button', { name: '确认删除', exact: true }).click();
-  assert.equal(await graph.locator('.workflow-node').count(), 6);
+  assert.equal(await graph.locator('.workflow-node').count(), initialNodes);
   // Two taps connect states without needing a precision drag on touchscreens.
   const tapPort = async name => {
     const port = page.getByRole('button', { name, exact: true });
@@ -214,11 +216,11 @@ async function verifyWorkflowCanvas({ page, origin, output }) {
   await page.getByLabel('操作名称', { exact: true }).fill('触屏连接');
   await page.getByRole('button', { name: '删除连线', exact: true }).click();
   await page.getByRole('button', { name: '确认删除', exact: true }).click();
-  assert.equal(await graph.locator('.edge-line').count(), 14);
+  assert.equal(await graph.locator('.edge-line').count(), initialEdges + 1);
   failSave = true;
   await page.getByRole('button', { name: '保存流程草稿', exact: true }).click();
   await page.getByText('流程已被其他管理员修改，请重新读取。', { exact: true }).waitFor();
-  assert.equal(await graph.locator('.edge-line').count(), 14, 'save failure retains local edits');
+  assert.equal(await graph.locator('.edge-line').count(), initialEdges + 1, 'save failure retains local edits');
   failSave = false; holdSave = true;
   const started = new Promise(resolve => { saveStarted = resolve; });
   await page.getByRole('button', { name: '保存流程草稿', exact: true }).click(); await started;
@@ -235,10 +237,10 @@ async function verifyWorkflowCanvas({ page, origin, output }) {
   assert.deepEqual(workflows.requirement.draft.transitions.at(-1).requiredFields, ['acceptanceCriteria', 'qaOwnerId']);
   assert.equal(workflows.requirement.draft.transitions.at(-1).requireAcceptedDelivery, true);
   await page.getByRole('group', { name: '流程类型', exact: true }).getByRole('button', { name: 'Bug 流程', exact: true }).click();
-  await page.getByRole('button', { name: '待处理', exact: true }).waitFor();
+  await page.getByRole('button', { name: '待确认', exact: true }).waitFor();
   assert.equal(await page.getByLabel('状态名称', { exact: true }).count(), 0, 'type switch clears inline editor');
   await verifyCurves();
-  await page.getByRole('button', { name: '待处理', exact: true }).click();
+  await page.getByRole('button', { name: '待确认', exact: true }).click();
   await page.getByLabel('状态名称', { exact: true }).fill('很长的状态名称用于验证画布内编辑的窄屏换行和完整内容可访问性');
   await page.locator('.operation-message-close').evaluateAll(buttons => buttons.forEach(button => button.click()));
   for (const width of [1440, 768, 390, 320]) {

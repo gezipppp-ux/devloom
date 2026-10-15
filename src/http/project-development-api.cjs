@@ -13,6 +13,7 @@ async function serveProjectDevelopment(request, response, url, { services, actor
   if (id === "session" && !action && request.method === "GET") return send(200, await services.readSession(projectId, actor, Object.fromEntries(url.searchParams)));
   if (id && !action && request.method === "GET") return send(200, await services.read(projectId, id, actor));
   if (id && !action && request.method === "POST") return send(200, await services.update(projectId, id, actor, input));
+  if (id && action === "workflow/retry" && request.method === "POST") return send(200, await services.retryWorkflow(projectId, id, actor, input));
   if (id && action === "start" && request.method === "POST") return send(202, await services.start(projectId, id, actor, input));
   if (id && ["complete", "cancel"].includes(action) && request.method === "POST") return send(200, await services.finish(projectId, id, actor, input, action === "complete" ? "completed" : "cancelled"));
   if (id && action === "issues" && request.method === "POST") return send(200, await services.append(projectId, id, actor, input));

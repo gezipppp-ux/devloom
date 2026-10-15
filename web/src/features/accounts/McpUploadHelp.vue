@@ -5,11 +5,11 @@ const props = defineProps({ origin: { type: String, required: true } });
 defineEmits(["copy"]);
 const language = ref("curl");
 const shell = computed(() => [
-  '# 在本地环境变量中配置 WEB_CODING_TOKEN，勿把真实 Token 写入示例文件。',
+  '# 将 create_upload_token 返回的 uploadToken 放入临时环境变量 WEB_CODING_UPLOAD_TOKEN。',
   '# PROJECT_ID 从 list_projects 获取；每个文件生成一个 UUIDv4 上传标识。',
   'curl --fail-with-body --request POST \\',
   '  "' + props.origin + '/api/mcp/projects/<PROJECT_ID>/uploads?name=screenshot.png" \\',
-  '  --header "Authorization: Bearer $WEB_CODING_TOKEN" \\',
+  '  --header "Authorization: Bearer $WEB_CODING_UPLOAD_TOKEN" \\',
   '  --header "Idempotency-Key: <UPLOAD_UUID>" \\',
   '  --header "Content-Type: image/png" \\',
   '  --data-binary "@screenshot.png"',
@@ -17,7 +17,7 @@ const shell = computed(() => [
 const powershell = computed(() => [
   '$uploadId = [guid]::NewGuid().ToString() # 重试同一文件时保留这个值',
   '$uploadHeaders = @{',
-  '  Authorization = "Bearer $env:WEB_CODING_TOKEN"',
+  '  Authorization = "Bearer $env:WEB_CODING_UPLOAD_TOKEN"',
   '  "Idempotency-Key" = $uploadId',
   '}',
   '$uploadUrl = "' + props.origin + '/api/mcp/projects/<PROJECT_ID>/uploads?name=screenshot.png"',
@@ -30,13 +30,15 @@ const uploadCommand = computed(() => language.value === "curl" ? shell.value : p
 </script>
 <template>
   <section class="mcp-upload-help" :aria-label="$t('HTTP 上传说明')">
-    <div><h3>{{ $t("1. 使用 Token 上传图片") }}</h3><p class="field-hint">{{ $t("通过") }} <code>list_projects</code> {{ $t("获取项目 ID。HTTP POST 上传原始二进制，使用同一枚 Token，需开启“上传图片附件”。") }}</p></div>
+    <div><h3>{{ $t("1. 通过 MCP 申请临时上传 Token") }}</h3><p class="field-hint">{{ $t("先用 list_projects 获取项目 ID，再调用 create_upload_token。MCP Token 需拥有 files.upload 权限。") }}</p><pre class="mcp-code"><code>{{ JSON.stringify({ projectId: "&lt;PROJECT_ID&gt;" }, null, 2) }}</code></pre><p class="field-hint">{{ $t("返回 uploadToken、uploadPath 和 expiresAt。临时 Token 仅限指定项目上传，最长有效 24 小时，不晚于 MCP Token 到期；原 Token 撤销后同步失效。") }}</p></div>
+    <div><h3>{{ $t("2. 使用临时 Token 上传附件") }}</h3><p class="field-hint">{{ $t("附件上传接口只接受临时上传 Token。将 uploadToken 放入 WEB_CODING_UPLOAD_TOKEN，使用 HTTP POST 上传文件原始二进制。") }}</p></div>
     <div class="mcp-row mcp-between"><div class="mcp-segments" role="group" :aria-label="$t('上传命令语言')"><button v-for="name in ['curl', 'PowerShell']" :key="name" type="button" :aria-pressed="language === name" @click="language = name">{{ name }}</button></div><button type="button" class="text-button" :aria-label="$t('复制上传示例')" @click="$emit('copy', uploadCommand)"><CopyOutlined aria-hidden="true" /></button></div>
     <pre class="mcp-code"><code>{{ uploadCommand }}</code></pre>
-    <div><h3>{{ $t("2. 引用附件 ID，发布需求或 Bug") }}</h3><p class="field-hint">{{ $t("响应包含") }} <code>attachmentId</code> {{ $t("和") }} <code>markdown</code>{{ $t("。在正文引用图片，同时把 ID 放入") }} <code>attachmentIds</code>{{ $t("。调用") }} <code>create_issue</code> {{ $t("发布，或用") }} <code>update_issue</code> {{ $t("补充图片。") }}</p></div>
-    <pre class="mcp-code"><code>![说明](attachment:&lt;ATTACHMENT_ID&gt;)</code></pre>
+    <div><h3>{{ $t("3. 引用附件，发布需求或 Bug") }}</h3><p class="field-hint">{{ $t("响应包含") }} <code>attachmentId</code> {{ $t("和") }} <code>markdown</code>{{ $t("。在正文引用附件，同时把 ID 放入") }} <code>attachmentIds</code>{{ $t("。调用") }} <code>create_issue</code> {{ $t("发布，或用") }} <code>update_issue</code> {{ $t("补充附件。") }}</p></div>
+    <pre class="mcp-code"><code>[附件说明](attachment:&lt;ATTACHMENT_ID&gt;)</code></pre>
     <details><summary>{{ $t("发布 Bug 的完整 MCP 参数") }}</summary><pre class="mcp-code"><code>{{ issueExample }}</code></pre><p class="field-hint">{{ $t("没有负责人或关注人时可省略对应字段；需求使用 type: requirement，可另外填写 acceptanceCriteria。版本用 releaseId 指定。") }}</p></details>
-    <p class="field-hint">{{ $t("支持 PNG、JPEG、WebP；单张最多 10 MiB，每次最多 20 张、合计 20 MiB。暂存图片 24 小时有效，每人暂存最多 100 MiB。文件名含中文或空格时需先做 URL 编码。") }}</p>
-    <details><summary>{{ $t("上传重试与指派规则") }}</summary><p class="field-hint">{{ $t("每个文件生成一个 UUIDv4 作为 Idempotency-Key，上传超时后使用相同标识和相同文件重试。发布超时后保留 requestId 和全部原参数，可调用 get_request_result 查询。上传失败或已过期时先处理图片，不要省略后发布。") }}</p><p class="field-hint">{{ $t("一名开发负责人和多名关注人。负责人需有项目开发资格；创建与指派不会自动启动开发。") }}</p></details>
+    <p class="field-hint">{{ $t("支持图片、文本、PDF、Office 等文件；单个最多 10 MiB，每次最多 20 个、合计 20 MiB。暂存附件 24 小时有效，每人暂存最多 100 MiB。文件名需 URL 编码。") }}</p>
+    <p class="field-hint">{{ $t("PNG、JPEG、WebP 直接作为图片输入；其他附件向 Codex 提供本地路径，是否能解析取决于运行环境中的工具。") }}</p>
+    <details><summary>{{ $t("上传重试与指派规则") }}</summary><p class="field-hint">{{ $t("每个文件生成一个 UUIDv4 作为 Idempotency-Key，上传超时后使用相同标识和相同文件重试。发布超时后保留 requestId 和全部原参数，可调用 get_request_result 查询。上传失败或已过期时先处理附件，不要省略后发布。") }}</p><p class="field-hint">{{ $t("一名开发负责人和多名关注人。负责人需有项目开发资格；创建与指派不会自动启动开发。") }}</p></details>
   </section>
 </template>

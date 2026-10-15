@@ -29,7 +29,8 @@ async function verifyMcpTokens(page, output) {
   await section.getByText("尚未创建 Token", { exact: true }).waitFor();
   assert.equal(await section.getByLabel("Token 名称").count(), 0, "Creation must not crowd the overview");
   assert.equal(await section.getByLabel("MCP 地址", { exact: true }).inputValue(), new URL("/mcp", page.url()).href);
-  await section.getByRole("button", { name: "连接配置与图片上传", exact: true }).click();
+  assert.equal(await section.getByRole("link", { name: "打开 Skills 指南", exact: true }).getAttribute("href"), new URL("/skills", page.url()).href);
+  await section.getByRole("button", { name: "连接 Agent 与使用指南", exact: true }).click();
   await section.getByRole("button", { name: "Claude Code", exact: true }).click();
   assert.match(await section.locator(".mcp-code").first().innerText(), /mcpServers/);
   await section.getByRole("button", { name: "Pi", exact: true }).click();
@@ -69,11 +70,14 @@ async function verifyMcpTokens(page, output) {
   assert.equal(await section.locator(".mcp-token").count(), 2);
   await section.getByRole("button", { name: "查看全部", exact: true }).click();
   assert.equal(await section.locator(".mcp-token").count(), 3);
-  await section.getByRole("button", { name: "连接配置与图片上传", exact: true }).click();
+  await section.getByRole("button", { name: "连接 Agent 与使用指南", exact: true }).click();
   await section.getByRole("button", { name: "查看用法", exact: true }).click();
   const help = section.getByRole("region", { name: "HTTP 上传说明" });
   assert.match(await help.innerText(), /attachmentIds/);
   assert.match(await help.innerText(), /Idempotency-Key/);
+  assert.match(await help.innerText(), /create_upload_token/);
+  assert.match(await help.innerText(), /WEB_CODING_UPLOAD_TOKEN/);
+  assert.doesNotMatch(await help.innerText(), /Bearer \$(?:env:)?WEB_CODING_TOKEN/);
   assert.equal((await help.innerText()).includes(secret), false);
   await help.getByRole("button", { name: "PowerShell", exact: true }).click();
   assert.match(await help.innerText(), /Invoke-RestMethod/);

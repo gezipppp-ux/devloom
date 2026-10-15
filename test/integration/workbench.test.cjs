@@ -1,3 +1,4 @@
+const { installReviewWorkflow } = require("../support/workflow-fixture.cjs");
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { temporary } = require("../support/helpers.cjs");
@@ -9,6 +10,7 @@ const { projectPermissionCatalog } = require("../../src/domain/project-permissio
 
 test("workbench aggregates only authorized content and delivery reviews are atomic and auditable", async t => {
   const database = await initializeTestDatabase(t, temporary(t));
+  await installReviewWorkflow(database);
   const permissions = projectPermissionCatalog.filter(p => p.scope === "project").map(p => p.id);
   const department = await database.client.department.create({ data: { name: "Team", permissions } });
   const actor = await database.client.user.create({ data: { username: "owner", displayName: "Owner", passwordHash: "unused", departmentId: department.id } });
@@ -34,7 +36,7 @@ test("workbench aggregates only authorized content and delivery reviews are atom
   assert.equal((await content.readDeliverable(project.id, delivery.id, actor)).delivery.revision, 2);
   assert.equal((await workbench.list("deliveries", actor, { status: "pending" })).total, 0);
   assert.equal(await database.client.issueHistory.count({ where: { issueId: issue.id, action: "delivery.reviewed" } }), 1);
-  assert.equal((await content.readIssue(project.id, issue.id, actor)).status, "planned", "review does not silently change issue workflow");
+  assert.equal((await content.readIssue(project.id, issue.id, actor)).status, result.find(value => value.status === "fulfilled").value.status === "accepted" ? "done" : "draft", "the winning verdict atomically advances the configured issue workflow");
   assert.equal(await database.client.developmentTask.count(), 0, "publishing and reviewing never starts execution");
   for (const executor of [actor, outsider]) await database.client.developmentTask.create({ data: { projectId: project.id, executorId: executor.id, creatorId: actor.id, requestId: executor.id, snapshot: { title: "Private task " + executor.id, issues: [] } } });
   const tasks = await workbench.list("tasks", actor, { query: "Private task" });

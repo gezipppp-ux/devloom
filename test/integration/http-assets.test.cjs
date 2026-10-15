@@ -4,6 +4,7 @@ const path = require("node:path");
 const { test } = require("node:test");
 const { createWebServer } = require("../../src/http/server.cjs");
 const { temporary, png } = require("../support/helpers.cjs");
+const { pageLocations } = require("../fixtures/page-routes.cjs");
 
 async function serve(t, staticDirectory) {
   const application = createWebServer({ testIdentity: true,
@@ -14,6 +15,37 @@ async function serve(t, staticDirectory) {
   t.after(() => application.close());
   return origin;
 }
+
+test("production serves the entry page for direct application and detail links", async (t) => {
+  const directory = temporary(t);
+  const html = "<!doctype html><html><body><div id=\"app\"></div></body></html>";
+  fs.writeFileSync(path.join(directory, "index.html"), html);
+  const origin = await serve(t, directory);
+  for (const location of pageLocations) {
+    const response = await fetch(origin + location);
+    assert.equal(response.status, 200, location);
+    assert.match(response.headers.get("content-type"), /text\/html/, location);
+    assert.equal(await response.text(), html, location);
+    assert.equal(response.url, origin + location, "the detail URL must remain intact");
+  }
+  for (const location of ["/missing", "/assets/missing.js", "/api/missing", "/mcp"]) {
+    const response = await fetch(origin + location);
+    assert.equal(response.status, 404, location);
+    assert.doesNotMatch(response.headers.get("content-type"), /text\/html/, location);
+  }
+  for (const location of ["/404", "/missing-page", "/projects/example/missing-page"]) {
+    const response = await fetch(origin + location, { headers: { accept: "text/html" } });
+    assert.equal(response.status, 404, location);
+    assert.match(response.headers.get("content-type"), /text\/html/);
+    assert.equal(await response.text(), html);
+    assert.equal(response.url, origin + location);
+  }
+  for (const location of ["/assets/missing.js", "/api/missing", "/mcp", "/@fs/private", "/src/private"]) {
+    const response = await fetch(origin + location, { headers: { accept: "text/html" } });
+    assert.equal(response.status, 404, location);
+    assert.doesNotMatch(response.headers.get("content-type"), /text\/html/, location);
+  }
+});
 
 test("static assets preserve encoded Unicode and space paths and extension casing", async (t) => {
   const directory = temporary(t);

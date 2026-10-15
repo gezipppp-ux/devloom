@@ -1,6 +1,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { randomUUID } = require("node:crypto");
+const path = require("node:path");
 const { temporary } = require("../support/helpers.cjs");
 const { initializeTestDatabase } = require("../support/database.cjs");
 const { ProjectServices } = require("../../src/application/project-services.cjs");
@@ -22,7 +23,10 @@ test("independent delivery validates private task ownership, project and source,
   const projects = new ProjectServices(database), content = new ProjectContentServices(database, projects);
   const workbench = new WorkbenchServices(database, projects), development = new ProjectDevelopmentServices(database, projects, {});
   const attention = new AttentionServices(database, { projects, workspaces: {} });
-  const createTask = overrides => database.client.developmentTask.create({ data: { projectId: project.id, executorId: actor.id, creatorId: actor.id, requestId: randomUUID(), workspaceId: randomUUID(), runKey: randomUUID(), status: "started", snapshot: { kind: "manual", title: "Independent refactor", issues: [], additions: [] }, ...overrides } });
+  const createTask = async overrides => { const task = await database.client.developmentTask.create({ data: { projectId: project.id, executorId: actor.id, creatorId: actor.id, requestId: randomUUID(), workspaceId: randomUUID(), runKey: randomUUID(), status: "started", snapshot: { kind: "manual", title: "Independent refactor", issues: [], additions: [] }, ...overrides } });
+    await database.client.workspace.create({ data: { id: task.workspaceId, name: "Fixture " + task.id, ownerUserId: task.executorId } });
+    if (task.runKey) await database.writeDocument(path.join(database.dataRoot, "workspaces", task.workspaceId, "runs", task.runKey, "run.json"), { execution: { status: "completed" } });
+    return task; };
   const task = await createTask({});
   assert.equal((await development.readSession(project.id, actor, { runKey: task.runKey })).task.id, task.id);
   await assert.rejects(development.readSession(project.id, other, { runKey: task.runKey }), { statusCode: 404 });

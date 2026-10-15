@@ -266,6 +266,20 @@ async function main() {
     assert.equal(output.match(/后端代码已修改/g)?.length, 1);
     assert.equal(output.match(/Web Coding Dev:/g)?.length, 2);
 
+    for (const location of [
+      `/projects/${workspace.projectId}?tab=issues&issue=issue-1`,
+      `/projects/${workspace.projectId}?tab=tasks&task=task-1&taskStart=1`,
+      "/work?bucket=verify",
+    ]) {
+      const url = origin + location;
+      assert.equal((await page.goto(url)).status(), 200, `direct navigation: ${location}`);
+      await page.getByRole("heading", { name: "After hot update" }).waitFor();
+      assert.equal(page.url(), url, "direct navigation preserves the detail query");
+      assert.equal((await page.reload()).status(), 200, `reload: ${location}`);
+      await page.getByRole("heading", { name: "After hot update" }).waitFor();
+      assert.equal(page.url(), url, "reload preserves the detail query");
+    }
+
     await browser.close();
     browser = undefined;
     child.send({ type: "dev:shutdown" });

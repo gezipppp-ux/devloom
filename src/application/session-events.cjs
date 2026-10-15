@@ -5,7 +5,7 @@ const { assertCapability } = require("../domain/agent-contract.cjs");
 
 // Projects normalized agent events and interactive requests into one workspace's runtime.
 class SessionEvents {
-  constructor({ store, agent, sessions, settings, emit, apiPrefix, synchronizeHistory }) {
+  constructor({ store, agent, sessions, settings, emit, apiPrefix, synchronizeHistory, onExecutionEvent = async () => {} }) {
     /** @type {import('../storage/run-store.cjs').RunStore} */
     this.store = store;
     this.agent = agent;
@@ -13,6 +13,7 @@ class SessionEvents {
     /** @type {import('./session-settings.cjs').SessionSettings} */
     this.settings = settings;
     this.synchronizeHistory = synchronizeHistory;
+    this.onExecutionEvent = onExecutionEvent;
     this.emit = emit;
     this.presenter = new SessionPresenter({ store, settings, apiPrefix, agent });
     this.pendingCallbacks = new Set();
@@ -176,6 +177,10 @@ class SessionEvents {
     try {
       (await this.store.recordNotification?.(runtime.key, event));
       if (type === "turn-started") {
+        try { await this.onExecutionEvent(runtime.key, event); }
+        catch (error) { await this.publish(runtime, { type: "notice", text: "业务流转尚未完成，请在开发任务中核对：" + presentError(error).message }); }
+      }
+      if (type === "turn-started") {
         if (runtime.supplier) await this.store.log(runtime.key, {
           type: "turn-configuration", turnId: event.turn.id, supplier: runtime.supplier,
           selection: runtime.activeExecutionSettings, at: new Date().toISOString(),
@@ -209,6 +214,8 @@ class SessionEvents {
         (await this.persist(runtime));
       } else if (type === "turn-completed") {
         await this.completed(runtime, event.turn);
+        try { await this.onExecutionEvent(runtime.key, event); }
+        catch (error) { await this.publish(runtime, { type: "notice", text: "业务流转尚未完成，请在开发任务中核对：" + presentError(error).message }); }
       } else if (type === "item") {
         const previous = runtime.items.get(event.item.id);
         const item = (await this.presenter.item(

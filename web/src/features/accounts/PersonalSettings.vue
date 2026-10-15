@@ -64,7 +64,10 @@ async function save() {
     </div>
     <McpTokenSettings v-if="currentTab === 'mcp'" />
     <GitAccountSettings v-if="currentTab === 'git'" />
-    <FormSection v-if="currentTab === 'security'" :title="$t('账号安全')" :description="$t('修改登录密码。')"><PasswordForm /></FormSection>
+    <section v-if="currentTab === 'security'" :aria-label="$t('账号安全')">
+      <header class="ui-settings-heading"><div><h2>{{ $t('账号安全') }}</h2><p>{{ $t('修改登录密码。') }}</p></div></header>
+      <PasswordForm />
+    </section>
     </SettingsLayout>
   </section>
 </template>
