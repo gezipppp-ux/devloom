@@ -53,6 +53,20 @@ The screenshots below show the current English interface with demo data.
 
 ![MCP access and personal token management](docs/assets/readme/en/mcp.png)
 
+## Community
+
+<div align="center">
+  <a href="docs/assets/readme/community/devloom-wechat-group-10.jpg">
+    <img src="docs/assets/readme/community/devloom-wechat-group-10.jpg" alt="DevLoom WeChat community Group 10 QR code" width="360" />
+  </a>
+  <br />
+  <strong>DevLoom WeChat community · Group 10</strong>
+  <br />
+  Scan the QR code to join discussions with other DevLoom users. Click the image to view it at full size.
+  <br />
+  <sub>Invitation QR codes are refreshed periodically. If it has expired, revisit this section for the latest code.</sub>
+</div>
+
 ## Getting started
 
 The server needs Node.js 22.13+ (LTS), PostgreSQL, Git, and the runtime for an integrated Agent. Team members access the workspace through a browser.

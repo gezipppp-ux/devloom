@@ -4,6 +4,7 @@
 
 - `en/`：英文界面与英文演示内容，由默认英文 `README.md` 引用。
 - `zh-CN/`：中文界面与中文演示内容，由 `README.zh-CN.md` 引用。
+- `community/`：中英文 README 共用的 DevLoom 微信交流群二维码。
 
 两种语言使用相同的四个场景：
 
