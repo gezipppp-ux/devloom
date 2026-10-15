@@ -53,6 +53,20 @@ DevLoom 是一个面向团队的 Web 开发工作台。产品和测试人员整�
 
 ![MCP 接入与个人 Token 管理](docs/assets/readme/zh-CN/mcp.png)
 
+## 加入交流群
+
+<div align="center">
+  <a href="docs/assets/readme/community/devloom-wechat-group-10.jpg">
+    <img src="docs/assets/readme/community/devloom-wechat-group-10.jpg" alt="DevLoom 交流 10 群二维码" width="360" />
+  </a>
+  <br />
+  <strong>DevLoom 交流 10 群</strong>
+  <br />
+  扫描二维码，和其他 DevLoom 用户一起交流；点击图片可查看大图。
+  <br />
+  <sub>入群二维码会定期更新，如已失效，请重新打开本页面获取最新二维码。</sub>
+</div>
+
 ## 开始使用
 
 服务端需要 Node.js 22.13+（LTS）、PostgreSQL、Git 和已接入的 Agent 运行环境；团队成员通过浏览器访问。
