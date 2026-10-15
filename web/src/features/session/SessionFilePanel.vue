@@ -2,7 +2,8 @@
 import AppSelect from "../../shared/components/AppSelect.vue";
 import { formatDate } from "../../shared/i18n/index.js";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
-/* global document, navigator */
+import { copyText } from "../../shared/components/clipboard.js";
+/* global document */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { CloseOutlined, ReloadOutlined, CopyOutlined, FileTextOutlined } from "@antdv-next/icons";
 import { useSessionFile, useSessionFileList } from "./use-session-files.js";
@@ -32,7 +33,7 @@ function choose(path, line = null) { selected.value = path; targetLine.value = l
 function reload() { void refresh(); void list.refresh(); }
 async function copy() {
   copied.value = "";
-  try { await navigator.clipboard.writeText(source.value); copied.value = "已复制"; }
+  try { await copyText(source.value); copied.value = "已复制"; }
   catch { copied.value = "复制不可用，可选中源码复制。"; }
 }
 function escape(event) {

@@ -1,10 +1,11 @@
 <script setup>
 import AppSelect from "../../shared/components/AppSelect.vue";
 import { formatDate, translate, formatNumber } from "../../shared/i18n/index.js";
-/* global window, navigator */
+/* global window */
 import { computed, nextTick, onUnmounted, reactive, ref } from "vue";
 import { ArrowLeftOutlined, ArrowRightOutlined, CopyOutlined, DownOutlined, KeyOutlined, PaperClipOutlined, PlusOutlined, ReloadOutlined } from "@antdv-next/icons";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
+import { copyText } from "../../shared/components/clipboard.js";
 import { appApi } from "../../shared/api/api.js";
 import { useResource } from "../../shared/api/use-resource.js";
 import McpConnectionHelp from "./McpConnectionHelp.vue";
@@ -49,7 +50,7 @@ function create() {
 async function copy(value) {
   const expected = copyGeneration;
   notice.value = ""; error.value = "";
-  try { await navigator.clipboard.writeText(value); if (alive && expected === copyGeneration) notice.value = "已复制。"; }
+  try { await copyText(value); if (alive && expected === copyGeneration) notice.value = "已复制。"; }
   catch { if (alive && expected === copyGeneration) error.value = "无法自动复制，请选中文本后手动复制。"; }
 }
 function requestRevoke(token, event) {

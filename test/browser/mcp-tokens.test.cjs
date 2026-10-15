@@ -1,4 +1,4 @@
-/* global document, window */
+/* global document, navigator, window */
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const scopes = require("../../shared/mcp-scopes.json");
@@ -30,6 +30,17 @@ async function verifyMcpTokens(page, output) {
   assert.equal(await section.getByLabel("Token 名称").count(), 0, "Creation must not crowd the overview");
   assert.equal(await section.getByLabel("MCP 地址", { exact: true }).inputValue(), new URL("/mcp", page.url()).href);
   assert.equal(await section.getByRole("link", { name: "打开 Skills 指南", exact: true }).getAttribute("href"), new URL("/skills", page.url()).href);
+  await page.evaluate(() => {
+    window.fixtureClipboard = navigator.clipboard;
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+  });
+  await section.getByRole("button", { name: "复制 MCP 地址", exact: true }).click();
+  await section.getByText("已复制。", { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => window.fixtureClipboard.readText()), new URL("/mcp", page.url()).href);
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: window.fixtureClipboard });
+    delete window.fixtureClipboard;
+  });
   await section.getByRole("button", { name: "连接 Agent 与使用指南", exact: true }).click();
   await section.getByRole("button", { name: "Claude Code", exact: true }).click();
   assert.match(await section.locator(".mcp-code").first().innerText(), /mcpServers/);

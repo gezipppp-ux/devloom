@@ -43,6 +43,7 @@ async function main() {
   try {
     browser = await chromium.launch({ ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : process.platform === "win32" ? { channel: "msedge" } : {}), headless: true });
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin });
     await context.route("**/api/**", async (route) => {
       const request = route.request(), url = new URL(request.url());
       const endpoint = url.pathname;
