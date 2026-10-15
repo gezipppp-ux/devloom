@@ -2514,7 +2514,7 @@ main {
 .mcp-card { min-width: 0; padding: 24px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); }
 .mcp-settings h3 { margin: 0; font-size: 16px; }
 .mcp-settings .field-hint { margin: 0; }
-.mcp-connection, .mcp-upload-help, .mcp-secret { display: grid; gap: 16px; min-width: 0; }
+.mcp-connection, .mcp-upload-help { display: grid; gap: 16px; min-width: 0; }
 .mcp-settings summary { cursor: pointer; padding-block: 8px; font-size: 12px; }
 .mcp-settings details > .field-hint, .mcp-settings details > .mcp-code { margin-top: 12px; }
 .mcp-code { margin: 0; max-width: 100%; overflow: auto; white-space: pre; overflow-wrap: normal; padding: 16px; background: var(--soft); border-radius: var(--radius-control); font: 12px/1.75 var(--font-code); }
@@ -2548,7 +2548,7 @@ main {
 .mcp-upload-entry p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
 .mcp-create-form { display: grid; gap: 24px; }
 .mcp-form-fields { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 20px; }
-.mcp-form-fields > label, .mcp-secret > label { display: grid; gap: 8px; min-width: 0; font-size: 13px; }
+.mcp-form-fields > label { display: grid; gap: 8px; min-width: 0; font-size: 13px; }
 .mcp-create-form fieldset { padding: 0; margin: 0; min-width: 0; border: 0; }
 .mcp-create-form legend { padding: 0; margin-bottom: 12px; font-size: 13px; }
 .mcp-permissions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; }
@@ -2558,13 +2558,7 @@ main {
 .mcp-choice > .muted { white-space: nowrap; }
 .mcp-create-form fieldset > .field-hint { margin-top: 12px; }
 .mcp-project-choices { display: grid; gap: 12px; margin-top: 12px; padding: 16px; background: var(--soft); border-radius: var(--radius-control); }
-.mcp-upload-hint { padding: 16px; border-radius: var(--radius-control); background: var(--sidebar); }
-.mcp-upload-hint h3 { font-size: 14px; }
-.mcp-upload-hint > p { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
-.mcp-upload-hint .mcp-upload-help { margin-top: 16px; }
-.mcp-upload-hint .mcp-code { background: var(--surface); }
 .mcp-form-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-top: 20px; border-top: 1px solid var(--line); }
-.mcp-warning { margin: 0; padding: 14px 16px; background: var(--warning-soft); color: var(--warning); border-radius: var(--radius-control); font-size: 13px; }
 @media (max-width: 768px) {
   .mcp-card { padding: 20px; }
   .mcp-form-fields, .mcp-permissions { grid-template-columns: minmax(0, 1fr); }

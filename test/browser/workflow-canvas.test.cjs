@@ -4,6 +4,61 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { defaultWorkflow } = require('../../src/domain/issue-workflows.cjs');
 
+async function verifyWorkflowFocus({ page, graph, output }) {
+  const rejected = graph.getByRole('button', { name: '已拒绝', exact: true });
+  const completed = graph.getByRole('button', { name: '已实现', exact: true });
+  const incoming = graph.getByRole('button', { name: '连线：取消事项，待开发 → 已拒绝', exact: true });
+  const unrelated = graph.getByRole('button', { name: '连线：安排开发，规划中 → 待开发', exact: true });
+  const opacity = element => element.evaluate(node => Number(window.getComputedStyle(node).opacity));
+  const positions = await graph.locator('.workflow-node').evaluateAll(nodes => nodes.map(node => node.getAttribute('transform')));
+  await rejected.click();
+  await graph.locator('.workflow-focus-mask').waitFor();
+  assert.deepEqual(await graph.locator('.workflow-node.is-muted').evaluateAll(nodes => nodes.map(node => node.dataset.nodeId)), ['implemented']);
+  assert.equal(await graph.locator('.workflow-edge:not(.is-muted)').count(), 7, 'both incoming cancellation edges and the outgoing reopen edge remain clear');
+  assert.equal(await opacity(incoming), 1);
+  assert.equal(await opacity(unrelated), .18, 'an edge between two neighbors is not directly related to the selection');
+  assert.equal(await opacity(completed), .18);
+  const theme = page.getByRole('combobox', { name: '外观主题', exact: true });
+  const fills = [];
+  for (const value of ['light', 'dark']) {
+    await selectOption(theme, value);
+    await page.waitForFunction(expected => document.documentElement.dataset.theme === expected, value);
+    const colors = await incoming.locator('.edge-line').evaluate(path => {
+      const style = window.getComputedStyle(path), canvas = path.closest('.workflow-canvas'), mask = canvas.querySelector('.workflow-focus-mask');
+      return { edge: style.stroke, danger: style.getPropertyValue('--danger').trim(), mask: window.getComputedStyle(mask).fill, canvas: window.getComputedStyle(canvas).backgroundColor, pointerEvents: window.getComputedStyle(mask).pointerEvents };
+    });
+    const rgb = hex => `rgb(${hex.slice(1).match(/../g).map(value => parseInt(value, 16)).join(', ')})`;
+    assert.equal(colors.edge, rgb(colors.danger), 'highlighting retains the cancellation color in either theme');
+    assert.equal(colors.mask, colors.canvas, 'the soft mask follows the current canvas theme');
+    assert.equal(colors.pointerEvents, 'none', 'the mask cannot intercept canvas gestures');
+    fills.push(colors.mask);
+    assert.equal(await rejected.getAttribute('aria-pressed'), 'true');
+    assert.deepEqual(await graph.locator('.workflow-node').evaluateAll(nodes => nodes.map(node => node.getAttribute('transform'))), positions, 'theme and selection leave saved geometry intact');
+    await page.locator('.workflow-canvas').screenshot({ path: path.join(output, `workflow-focus-${value}.png`) });
+  }
+  assert.notEqual(fills[0], fills[1]);
+  await incoming.focus(); await incoming.press('Enter');
+  assert.equal(await incoming.evaluate(node => document.activeElement === node), true, 'selecting an edge retains keyboard focus');
+  assert.equal(await graph.locator('.workflow-edge:not(.is-muted)').count(), 1);
+  assert.deepEqual(await graph.locator('.workflow-node:not(.is-muted)').evaluateAll(nodes => nodes.map(node => node.dataset.nodeId).sort()), ['ready', 'rejected']);
+  assert.equal(await page.getByLabel('操作名称', { exact: true }).inputValue(), '取消事项');
+  // Muted states remain available to pointer and keyboard users.
+  await completed.focus();
+  assert.equal(await opacity(completed), 1, 'keyboard focus makes a muted state legible');
+  await completed.press('Enter');
+  assert.equal(await page.getByLabel('状态名称', { exact: true }).inputValue(), '已实现');
+  await rejected.click();
+  assert.equal(await rejected.getAttribute('aria-pressed'), 'true', 'a muted state can be selected with the pointer');
+  const port = graph.getByRole('button', { name: '连接 已拒绝', exact: true });
+  await port.focus(); await port.press('Enter');
+  assert.equal(await graph.locator('.workflow-focus-mask').count(), 0, 'connecting exposes all target states');
+  assert.equal(await graph.locator('.is-muted').count(), 0);
+  await port.press('Escape');
+  await graph.locator('.workflow-focus-mask').waitFor({ state: 'hidden' });
+  assert.equal(await graph.locator('.is-muted').count(), 0, 'clearing restores the complete graph');
+  await selectOption(theme, 'light');
+}
+
 async function verifyWorkflowCanvas({ page, origin, output }) {
   const workflows = Object.fromEntries(['requirement', 'bug'].map(type => [type, { revision: 1, publishedVersion: 1, draft: defaultWorkflow(type) }]));
   const initialEdges = workflows.requirement.draft.transitions.length, initialNodes = workflows.requirement.draft.nodes.length;
@@ -143,6 +198,7 @@ async function verifyWorkflowCanvas({ page, origin, output }) {
   // Restore the unsaved fixture so the existing editing and persistence checks start from its original layout.
   workflows.requirement.draft = defaultWorkflow('requirement');
   await page.goto(origin + '/system?tab=workflows'); await graph.waitFor();
+  await verifyWorkflowFocus({ page, graph, output });
   const planned = page.getByRole('button', { name: '规划中', exact: true });
   await planned.click();
   await page.getByLabel('状态名称', { exact: true }).fill('画布内规划');
@@ -197,6 +253,8 @@ async function verifyWorkflowCanvas({ page, origin, output }) {
   });
   await graph.dblclick({ position: empty });
   await page.getByLabel('状态名称', { exact: true }).fill('在画布新建的状态');
+  assert.equal(await graph.locator('.workflow-node:not(.is-muted)').count(), 1, 'a new isolated state remains clear without inventing related neighbors');
+  assert.equal(await graph.locator('.workflow-edge:not(.is-muted)').count(), 0);
   await selectOption(page.getByLabel('状态类型', { exact: true }), 'completed');
   assert.equal(await page.getByLabel('允许开始开发', { exact: true }).isDisabled(), true);
   await page.getByRole('button', { name: '删除状态', exact: true }).click();
@@ -243,8 +301,8 @@ async function verifyWorkflowCanvas({ page, origin, output }) {
   await page.getByRole('button', { name: '待确认', exact: true }).click();
   await page.getByLabel('状态名称', { exact: true }).fill('很长的状态名称用于验证画布内编辑的窄屏换行和完整内容可访问性');
   await page.locator('.operation-message-close').evaluateAll(buttons => buttons.forEach(button => button.click()));
-  for (const width of [1440, 768, 390, 320]) {
-    await page.setViewportSize({ width, height: 1000 });
+  for (const [width, height] of [[1920, 1080], [2560, 1440], [1440, 900], [1280, 720], [768, 1024], [390, 844], [320, 740]]) {
+    await page.setViewportSize({ width, height });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `workflow overflow at ${width}`);
     const input = await page.getByLabel('状态名称', { exact: true }).boundingBox();
     assert.ok(input.x >= 0 && input.x + input.width <= width, `inline editor outside viewport at ${width}`);

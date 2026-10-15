@@ -68,7 +68,7 @@ docs/engineering/  # 行为契约与架构规则
 | application/mcp-token-services.cjs、mcp-project-services.cjs、mcp-presenter.cjs | 外部 Agent Token 生命周期、按当前授权查询和原子发布；公开结构不暴露凭据、私人会话或配置 |
 | storage/mcp-store.cjs、domain/mcp-access.cjs | 前者拥有 MCP/临时上传 Token 摘要、附件暂存、幂等操作与审计，后者拥有纯输入及 scope 校验 |
 | http/mcp-api.cjs、mcp-tools.cjs | 临时令牌 HTTP 附件上传、无状态 Streamable HTTP MCP、工具 schema；复用应用用例，不直接操作存储 |
-| application/mcp-skills-presenter.cjs、http/skills-page.cjs | 前者拥有公开技能文档的中英文内容，后者负责 HTML/Markdown 协商与页面呈现；无需登录且不包含账号数据或凭据 |
+| storage/skill-package-store.cjs、application/skill-package-services.cjs、skill-package-presenter.cjs、http/skills-page.cjs | 依次负责正式技能资源读取与打包、完整发布快照、清单与动态地址、公开路由与中文指南；正文唯一来源为 resources/skills/web-coding-issue-authoring/ |
 | `cli/arguments.cjs` | Web 与开发服务的命令参数校验 |
 | `cli/init-admin.cjs`、`cli/web.cjs` | 管理员初始化和 Web 服务进程入口；导出 main，以主模块保护执行 |
 | `domain/setup-state.cjs`、`application/setup-services.cjs`、`setup-presenter.cjs` | 初始化输入/步骤规则、短事务用例与公开快照；外部环境和文件探测不进入数据库事务 |

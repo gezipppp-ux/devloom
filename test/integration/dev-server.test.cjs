@@ -206,11 +206,12 @@ test("development CLI serves Vite and workspace APIs on one guarded origin", asy
     assert.equal(csp.includes("'unsafe-eval'"), false);
     const skills = await send(origin + "/skills");
     assert.equal(skills.status, 200);
-    assert.match(skills.text, /create_upload_token/);
+    assert.match(skills.text, /web-coding-issue-authoring/);
     assert.doesNotMatch(skills.text, /\/src\/main\.js|\/\@vite\/client/);
-    const skillFile = await send(origin + "/skills/SKILL.md");
+    const manifest = JSON.parse((await send(origin + "/skills/web-coding-issue-authoring/manifest.json")).text);
+    const skillFile = await send(manifest.entryUrl);
     assert.equal(skillFile.status, 200);
-    assert.match(skillFile.text, /^---\nname: web-coding-mcp/);
+    assert.match(skillFile.text, /^---\nname: web-coding-issue-authoring/);
 
     for (const location of pageLocations) {
       const response = await send(origin + location);

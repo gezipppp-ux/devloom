@@ -29,6 +29,7 @@ const { McpTokenServices } = require("../application/mcp-token-services.cjs");
 const { McpProjectServices } = require("../application/mcp-project-services.cjs");
 const { isMcpRequest, registerMcpRoutes, serveMcpAccount } = require("./mcp-api.cjs");
 const { registerSkillsRoutes } = require("./skills-page.cjs");
+const { SkillPackageServices } = require("../application/skill-package-services.cjs");
 const { serveProjectContent } = require("./project-content-api.cjs");
 const { serveProjectDevelopment } = require("./project-development-api.cjs");
 const { serveProjectLifecycle } = require("./project-lifecycle-api.cjs");
@@ -144,6 +145,7 @@ function createWebServer({
   let projectBranches;
   let mcpTokens;
   let mcpProjects;
+  const skills = new SkillPackageServices();
   let setup;
   let closing = false, closePromise;
   const ownedDatabase = !testIdentity && !database;
@@ -168,7 +170,7 @@ function createWebServer({
       systemWorkflows = new SystemWorkflowServices(accounts.database, accounts, projects);
       agentSuppliers = new AgentSupplierServices(accounts.database, { accounts, changed: () => workspaces.suppliersChanged?.() });
       projectBranches = new ProjectBranchServices(accounts.database, projects);
-      mcpTokens = new McpTokenServices(accounts.database, projects);
+      mcpTokens = new McpTokenServices(accounts.database, projects, skills);
       mcpProjects = new McpProjectServices(accounts.database, { tokens: mcpTokens, projects, content: projectContent, lifecycle: projectLifecycle, development: projectDevelopment, workflows: systemWorkflows });
       await projects.initialize();
       workspaces.authorizeProject = (id, actor, permission) => projects.workspaceAuthorization(id, actor, permission);
@@ -259,7 +261,7 @@ function createWebServer({
           request.applicationWorkspace,
         ));
     });
-    registerSkillsRoutes(instance);
+    registerSkillsRoutes(instance, skills);
     if (mcpTokens) registerMcpRoutes(instance, { tokens: mcpTokens, services: mcpProjects, isBusy: () => environment.status().busy });
     const dispatch = async (request, reply) => {
       await handle(request, reply);

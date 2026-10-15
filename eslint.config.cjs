@@ -21,7 +21,7 @@ module.exports = [
     },
   },
   {
-    files: ['src/**/*.cjs', 'test/**/*.cjs'],
+    files: ['src/**/*.cjs', 'test/**/*.cjs', 'resources/skills/**/*.cjs'],
     languageOptions: {
       sourceType: 'commonjs',
       globals: Object.fromEntries(

@@ -17,7 +17,7 @@ const fields = {
   attachmentIds: z.array(id).max(20).optional().describe("先通过受鉴权 HTTP 上传；正文用 attachment:附件ID 引用。不可传本地路径或 base64。"),
 };
 const commands = [
-  ["whoami", "验证当前 Token、身份、授权范围和 HTTP 上传规则。", {}, null],
+  ["whoami", "验证当前 Token、身份、授权范围和 HTTP 上传规则；runtime 返回当前站点与 MCP 地址，skills 返回技能版本、安装清单和完整包地址。", {}, null],
   ["create_upload_token", "为指定项目签发仅用于 HTTP 附件上传的临时 Token，最长 24 小时且不晚于 MCP Token 到期时间。不能用于 MCP 调用；到期后重新申请。", {
     projectId: id,
   }, null, "files.upload"],
@@ -58,11 +58,11 @@ function createMcpServer({ context, tokens, services, isBusy, origin }) {
   const server = new McpServer({ name: "web-coding", version: "1.0.0" }, {
     instructions: "先查询项目、版本、成员和 get_issue_workflow 已发布流程，发布前查重。事项支持截止日期 dueDate、标签 tags，版本支持目标日期 targetDate。发布及编辑使用稳定 UUIDv4 requestId，超时查询原请求或原样重试。" +
       "附件上传前调用 create_upload_token({projectId}) 获取最长 24 小时有效的临时上传 Token；MCP Token 不能直接上传。" +
-      "附件从客户端通过 POST " + origin + "/api/mcp/projects/{projectId}/uploads?name=文件名 上传原始二进制；" +
+      "使用 create_upload_token 返回的 uploadUrl 添加 name 查询参数，POST 原始二进制；地址须与 whoami.runtime.siteOrigin 同源。" +
       "请求头 Authorization: Bearer <uploadToken>、Idempotency-Key: <UUIDv4>、Content-Type 为文件实际 MIME 类型，未知用 application/octet-stream。" +
       "成功返回 attachmentId 和 markdown；ID 传入 create_issue/update_issue 的 attachmentIds，markdown 放入正文。图片用 ![说明](attachment:附件ID)，普通文件用 [说明](attachment:附件ID)。" +
       "支持图片及普通文件，单个 10 MiB，每次发布最多 20 个/20 MiB，暂存 24 小时。PNG/JPEG/WebP 在开发时作为图片输入，其他文件通过提示词中的本地路径读取。上传失败不能省略附件发布。" +
-      "上传参数不接受文件路径，不自动启动开发。完整技能指南：" + origin + "/skills。返回的 url 为站内路径，站点地址为 " + origin + "。",
+      "上传参数不接受文件路径，不自动启动开发。通过 whoami.skills 获取技能清单和完整包，安装 web-coding-issue-authoring；事项的相对 url 以 whoami.runtime.siteOrigin 解析。",
     maxToolInputElements: 1000,
   });
   for (const [name, description, shape, method, scope] of commands) {
@@ -71,8 +71,8 @@ function createMcpServer({ context, tokens, services, isBusy, origin }) {
       annotations: { readOnlyHint: !scope, destructiveHint: Boolean(scope) && name !== "create_upload_token", idempotentHint: name !== "create_upload_token", openWorldHint: false } }, async input => {
       try {
         if (scope && isBusy()) return toolError(409, "MAINTENANCE", "环境工具正在更新，请完成后重试。");
-        const result = name === "create_upload_token" ? await tokens.createUploadToken(context, input)
-          : method ? await services[method](context, input) : await tokens.whoami(context);
+        const result = name === "create_upload_token" ? await tokens.createUploadToken(context, input, origin)
+          : method ? await services[method](context, input) : await tokens.whoami(context, origin);
         return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
       } catch (error) {
         return toolError(error.statusCode || 500, error.code || "MCP_OPERATION_FAILED",

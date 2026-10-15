@@ -1,0 +1,4 @@
+interface:
+  display_name: "Web Coding 需求与 Bug 提报"
+  short_description: "帮助产品、运营与研发补齐原型、业务规则和验收门禁，通过 MCP 提报需求与 Bug"
+  default_prompt: "使用 $web-coding-issue-authoring 整理我的需求或 Bug，检查必需资料、实施边界和验收标准，并按我的授权通过 Web Coding MCP 发布。"

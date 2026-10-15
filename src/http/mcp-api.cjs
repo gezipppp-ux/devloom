@@ -36,7 +36,7 @@ function registerMcpRoutes(instance, { tokens, services, isBusy }) {
       } finally { await server.close(); }
     } });
   instance.get("/api/mcp/whoami", { onRequest: authenticate(), config: { rateLimit: { max: 180, timeWindow: "1 minute" } } },
-    async request => tokens.whoami(request.mcpContext));
+    async request => tokens.whoami(request.mcpContext, request.applicationUrl.origin));
   instance.post("/api/mcp/projects/:projectId/uploads", {
     onRequest: authenticate(true), config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
   }, async (request, reply) => {

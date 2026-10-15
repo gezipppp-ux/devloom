@@ -5,17 +5,19 @@ function presentMcpToken(row, user = row.user) {
     status: row.revokedAt ? "revoked" : row.expiresAt <= new Date() ? "expired" :
       user && row.authVersion !== user.authVersion ? "invalidated" : "active" };
 }
-function presentMcpIdentity(token) {
+function presentMcpIdentity(token, origin, skills) {
   return { user: { id: token.user.id, username: token.user.username, displayName: token.user.displayName },
-    token: presentMcpToken(token), skillsPath: "/skills", skillFilePath: "/skills/SKILL.md", uploadPath: "/api/mcp/projects/{projectId}/uploads",
+    token: presentMcpToken(token), runtime: { siteOrigin: origin, mcpUrl: new URL("/mcp", origin).href }, skills,
+    uploadPath: "/api/mcp/projects/{projectId}/uploads",
     upload: { method: "POST", authorization: "Bearer", tokenTool: "create_upload_token", tokenMaxAgeHours: 24,
       credential: "temporary_upload_token", requestIdHeader: "Idempotency-Key", maxBytes: 10 * 1024 * 1024,
       maxAttachments: 20, maxTotalBytes: 20 * 1024 * 1024, expiresInHours: 24, mimeTypes: ["*/*"],
       imageInputMimeTypes: ["image/png", "image/jpeg", "image/webp"], otherAttachmentInput: "local_path" } };
 }
-function presentMcpUploadToken(grant, secret) {
+function presentMcpUploadToken(grant, secret, origin) {
   return { uploadToken: secret, projectId: grant.projectId, expiresAt: grant.expiresAt.toISOString(),
-    uploadPath: "/api/mcp/projects/" + grant.projectId + "/uploads", method: "POST", authorization: "Bearer" };
+    uploadPath: "/api/mcp/projects/" + grant.projectId + "/uploads",
+    uploadUrl: new URL("/api/mcp/projects/" + grant.projectId + "/uploads", origin).href, method: "POST", authorization: "Bearer" };
 }
 function presentMcpUpload(row, previewMimeType) {
   return { attachmentId: row.id, name: row.name, mimeType: row.mimeType, size: row.size, sha256: row.sha256,

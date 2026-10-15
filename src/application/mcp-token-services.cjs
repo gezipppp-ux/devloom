@@ -2,9 +2,10 @@ const { McpStore } = require("../storage/mcp-store.cjs");
 const { tokenInput, mcpId, assertMcpScope, mcpScopes } = require("../domain/mcp-access.cjs");
 const { accountError } = require("../domain/account.cjs");
 const { presentMcpToken, presentMcpIdentity, presentMcpProject, presentMcpUploadToken } = require("./mcp-presenter.cjs");
+const { SkillPackageServices } = require("./skill-package-services.cjs");
 
 class McpTokenServices {
-  constructor(database, projects) { this.store = new McpStore(database); this.projects = projects; }
+  constructor(database, projects, skills = new SkillPackageServices()) { this.store = new McpStore(database); this.projects = projects; this.skills = skills; }
   async currentUser(actor) {
     const user = actor?.id && await this.store.user(actor.id);
     if (!user || user.status !== "active" || user.mustChangePassword) throw accountError("请先登录并完成密码修改。", 401);
@@ -62,14 +63,14 @@ class McpTokenServices {
     await this.projects.authorize(projectId, actor, access.permissions.includes("issue.create") ? "issue.create" : "issue.edit");
     return token;
   }
-  async createUploadToken(context, { projectId }) {
+  async createUploadToken(context, { projectId }, origin) {
     mcpId(projectId, "项目 ID");
     return this.store.transaction(async () => {
       const token = await this.uploadAccess(context, projectId);
       const { grant, secret } = await this.store.createUploadToken(token, projectId);
       await this.uploadAccess(context, projectId);
       await this.store.audit(token.userId, token.id, "upload_token.created", projectId);
-      return presentMcpUploadToken(grant, secret);
+      return presentMcpUploadToken(grant, secret, origin);
     });
   }
   validateUploadToken(grant, projectId) {
@@ -93,6 +94,11 @@ class McpTokenServices {
     if (grant.tokenId !== context.id) throw accountError("临时上传身份已失效。", 401, "UPLOAD_TOKEN_INVALID");
     return this.uploadAccess(context, projectId);
   }
-  async whoami(context) { return presentMcpIdentity(await this.refresh(context)); }
+  async whoami(context, origin) {
+    const token = await this.refresh(context);
+    const skills = await this.skills.describe(origin);
+    await this.refresh(context);
+    return presentMcpIdentity(token, origin, skills);
+  }
 }
 module.exports = { McpTokenServices };

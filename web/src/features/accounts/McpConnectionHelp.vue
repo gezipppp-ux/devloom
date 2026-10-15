@@ -19,6 +19,6 @@ const verify = computed(() => 'curl --fail-with-body "' + props.origin + '/api/m
     <pre class="mcp-code"><code>{{ configuration }}</code></pre>
     <p v-if="client === 'Pi'" class="field-hint">{{ $t("在 Pi 使用的 MCP 扩展中配置以上连接参数；配置字段和环境变量写法以该扩展为准。") }}</p>
     <p v-else class="field-hint">{{ $t("放入客户端个人配置，并让客户端进程读取环境变量") }} <code>WEB_CODING_TOKEN</code>。</p>
-    <details><summary>{{ $t("验证身份与凭证说明") }}</summary><p class="field-hint">{{ $t("所有用户使用同一地址，通过个人 Token 识别身份。连接后调用") }} <code>whoami</code> {{ $t("验证，或使用下方 HTTP 请求。") }}</p><pre class="mcp-code"><code>{{ verify }}</code></pre><p class="field-hint">{{ $t("Token 只在创建时完整显示。请保存在本地环境变量中，不要粘贴到聊天、项目文件或 URL。权限始终受当前项目授权限制。") }}</p></details>
+    <details><summary>{{ $t("验证身份与凭证说明") }}</summary><p class="field-hint">{{ $t("所有用户使用同一地址，通过个人 Token 识别身份。连接后调用") }} <code>whoami</code> {{ $t("验证，或使用下方 HTTP 请求。") }}</p><pre class="mcp-code"><code>{{ verify }}</code></pre><p class="field-hint">{{ $t("Token 只在创建时完整显示。可复制完整配置提示词给你选择的 Agent，让它保存到客户端凭据配置或本地环境变量。不要写入项目文件、Skills、日志或 URL。") }}</p></details>
   </section>
 </template>

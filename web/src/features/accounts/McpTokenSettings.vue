@@ -10,9 +10,10 @@ import { appApi } from "../../shared/api/api.js";
 import { useResource } from "../../shared/api/use-resource.js";
 import McpConnectionHelp from "./McpConnectionHelp.vue";
 import McpUploadHelp from "./McpUploadHelp.vue";
+import McpTokenCreated from "./McpTokenCreated.vue";
 
-const expanded = ref(true), view = ref("overview"), showAll = ref(false), secret = ref("");
-const revokeTarget = ref(null), confirmation = ref(null), nameInput = ref(null), secretInput = ref(null), createButton = ref(null), manageButton = ref(null), backButton = ref(null);
+const expanded = ref(true), view = ref("overview"), showAll = ref(false), created = ref(null);
+const revokeTarget = ref(null), confirmation = ref(null), nameInput = ref(null), createButton = ref(null), manageButton = ref(null), backButton = ref(null);
 const form = reactive({ name: "", expiresInDays: 30, allProjects: true, projectIds: [], scopes: ["read", "issues.write", "issues.assign", "releases.write", "files.upload"] });
 const { data, loading, saving, error, notice, reload, perform } = useResource(() => appApi("/account/mcp-tokens"));
 const origin = window.location.origin;
@@ -21,18 +22,18 @@ const skillsUrl = new URL("/skills", origin).href;
 const canCreate = computed(() => form.name.trim() && (form.allProjects || form.projectIds.length) && data.value && !loading.value && !saving.value);
 const visibleTokens = computed(() => showAll.value ? data.value?.tokens || [] : (data.value?.tokens || []).slice(0, 2));
 const title = computed(() => ({ overview: "MCP 接入", guide: "连接 Agent 与使用指南", create: "创建 MCP Token", created: "Token 已创建", upload: "附件上传与需求发布" })[view.value]);
-const description = computed(() => ({ overview: "连接你的 Agent，查询项目并发布需求或 Bug。", guide: "配置 MCP 连接，再按指南上传附件和发布事项。", create: "按 Agent 或设备区分凭证，方便管理与撤销。", created: "保存凭证后，将它配置到你的客户端。", upload: "通过 MCP 申请临时上传 Token，上传附件后与需求一并发布。" })[view.value]);
+const description = computed(() => ({ overview: "连接你的 Agent，查询项目并发布需求或 Bug。", guide: "配置 MCP 连接，再按指南上传附件和发布事项。", create: "设置名称、有效期和授权范围，创建后直接交给 Agent 配置。", created: "复制一次，发送一次。剩余配置交给 Agent。", upload: "通过 MCP 申请临时上传 Token，上传附件后与需求一并发布。" })[view.value]);
 let returnFocus, alive = true, copyGeneration = 0;
 function open() { expanded.value = true; view.value = "overview"; void reload(); }
 async function close() {
   if (saving.value) return;
-  expanded.value = false; secret.value = ""; view.value = "overview"; copyGeneration++;
+  expanded.value = false; created.value = null; view.value = "overview"; copyGeneration++;
   await nextTick(); manageButton.value?.focus();
 }
 async function navigate(target, event) {
   if (saving.value) return;
   returnFocus = event?.currentTarget || returnFocus;
-  secret.value = ""; view.value = target; copyGeneration++;
+  created.value = null; view.value = target; copyGeneration++;
   await nextTick();
   if (target === "create") nameInput.value?.focus();
   else if (target === "overview") (returnFocus?.isConnected ? returnFocus : createButton.value)?.focus();
@@ -40,11 +41,11 @@ async function navigate(target, event) {
 }
 function create() {
   if (!canCreate.value) return;
-  secret.value = "";
+  created.value = null;
   return perform(() => appApi("/account/mcp-tokens", { ...form, projectIds: form.allProjects ? [] : [...form.projectIds], scopes: [...form.scopes] }),
     result => {
-      secret.value = result.secret; view.value = "created"; form.name = "";
-      void nextTick(() => secretInput.value?.focus()); void reload();
+      created.value = { token: result.token, secret: result.secret }; view.value = "created"; form.name = "";
+      void reload();
     }, "MCP Token 已创建，请保存这次显示的完整 Token。");
 }
 async function copy(value) {
@@ -67,7 +68,7 @@ function revoke() {
 function statusLabel(token) { return { active: "可用", expired: "已过期", revoked: "已撤销", invalidated: "账号凭据已变更" }[token.status] || "不可用"; }
 function date(value) { return value ? formatDate(value, { hour: "2-digit", minute: "2-digit" }) : translate("尚未使用"); }
 function projectLabel(token) { return token.allProjects ? translate("全部可访问项目") : translate("{count} 个指定项目", { count: formatNumber(token.projectIds.length) }); }
-onUnmounted(() => { alive = false; secret.value = ""; copyGeneration++; });
+onUnmounted(() => { alive = false; created.value = null; copyGeneration++; });
 </script>
 <template>
   <section class="mcp-access" :aria-label="$t('MCP 接入')">
@@ -105,20 +106,14 @@ onUnmounted(() => { alive = false; secret.value = ""; copyGeneration++; });
         <McpConnectionHelp :origin="origin" @copy="copy" />
         <section class="mcp-upload-entry"><PaperClipOutlined aria-hidden="true" /><div><h3>{{ $t("附件上传与需求发布") }}</h3><p>{{ $t("申请临时上传 Token → 上传附件 → 发布需求或 Bug") }}</p></div><button type="button" class="text-button" @click="navigate('upload', $event)">{{ $t("查看用法") }} <ArrowRightOutlined aria-hidden="true" /></button></section>
       </template>
-      <section v-if="view === 'overview' || view === 'guide'" class="mcp-card mcp-skills-entry"><div><h3>{{ $t("Agent Skills 指南") }}</h3><p class="field-hint">{{ $t("把指南链接发给 Agent，读取并保存连接、附件上传与需求发布技能。") }}</p></div><div class="mcp-row"><a :href="skillsUrl" target="_blank" rel="noopener">{{ $t("打开 Skills 指南") }} <ArrowRightOutlined aria-hidden="true" /></a><button type="button" @click="copy(skillsUrl)"><CopyOutlined aria-hidden="true" />{{ $t("复制指南链接") }}</button></div></section>
+      <section v-if="view === 'overview' || view === 'guide'" class="mcp-card mcp-skills-entry"><div><h3>{{ $t("需求与 Bug 提报技能") }}</h3><p class="field-hint">{{ $t("把指南链接发给 Agent，安装完整技能包，并在使用时检查更新。") }}</p></div><div class="mcp-row"><a :href="skillsUrl" target="_blank" rel="noopener">{{ $t("打开 Skills 指南") }} <ArrowRightOutlined aria-hidden="true" /></a><button type="button" @click="copy(skillsUrl)"><CopyOutlined aria-hidden="true" />{{ $t("复制指南链接") }}</button></div></section>
       <form v-if="view === 'create' && data" class="mcp-card mcp-create-form" @submit.prevent="create">
         <div class="mcp-form-fields"><label>{{ $t("Token 名称") }}<input ref="nameInput" v-model="form.name" required maxlength="100" :placeholder="$t('例如：工作电脑 Codex')" :disabled="saving" /></label><label>{{ $t("有效期") }}<AppSelect native-events v-model.number="form.expiresInDays" :disabled="saving"><option :value="7">{{ $t("7 天") }}</option><option :value="30">{{ $t("30 天") }}</option><option :value="90">{{ $t("90 天") }}</option><option :value="365">{{ $t("365 天") }}</option></AppSelect></label></div>
         <fieldset :disabled="saving"><legend>{{ $t("允许的操作") }}</legend><div class="mcp-permissions"><label v-for="scope in data.scopes" :key="scope.id" class="mcp-choice"><input v-model="form.scopes" type="checkbox" :value="scope.id" :disabled="scope.id === 'read'" />{{ $t(scope.label) }}<span v-if="scope.id === 'read'" class="muted">{{ $t("（必选）") }}</span></label></div></fieldset>
         <fieldset :disabled="saving"><legend>{{ $t("项目范围") }}</legend><div class="mcp-row"><label class="mcp-choice"><input v-model="form.allProjects" type="radio" :value="true" name="mcp-project-range" />{{ $t("全部可访问项目") }}</label><label class="mcp-choice"><input v-model="form.allProjects" type="radio" :value="false" name="mcp-project-range" />{{ $t("指定项目") }}</label></div><p class="field-hint">{{ form.allProjects ? $t("包含当前及以后可访问的项目，实际权限受项目授权限制。") : $t("至少选择一个项目，实际权限受项目授权限制。") }}</p><div v-if="!form.allProjects" class="mcp-project-choices"><label v-for="project in data.projects" :key="project.id" class="mcp-choice"><input v-model="form.projectIds" type="checkbox" :value="project.id" />{{ project.name }}</label><p v-if="!data.projects.length" class="muted">{{ $t("暂无可授权的项目。") }}</p></div></fieldset>
-        <div class="mcp-upload-hint"><h3><PaperClipOutlined aria-hidden="true" />{{ $t("需要为需求添加附件？") }}</h3><p>{{ $t("先通过 MCP 申请临时上传 Token，再上传附件并引用附件 ID。") }}</p><details><summary>{{ $t("查看 HTTP 上传示例") }}</summary><McpUploadHelp :origin="origin" @copy="copy" /></details></div>
-        <p class="field-hint">{{ $t("指派采用一名开发负责人和多名关注人。负责人需有项目开发资格；创建与指派不会自动启动开发。") }}</p>
         <footer class="mcp-form-footer"><p class="field-hint">{{ $t("完整 Token 仅在创建成功时显示一次。") }}</p><button class="primary" :disabled="!canCreate">{{ saving ? $t("正在提交…") : $t("创建 MCP Token") }}</button></footer>
       </form>
-      <template v-if="view === 'created'">
-        <section v-if="secret" class="mcp-card mcp-secret" :aria-label="$t('Token 保存提示')"><p class="mcp-warning">{{ $t("请保存完整 Token，离开此页面后无法再次查看。") }}</p><label>{{ $t("新建 Token") }}<input ref="secretInput" :value="secret" readonly autocomplete="off" spellcheck="false" /></label><div class="mcp-row"><button type="button" @click="copy(secret)">{{ $t("复制 Token") }}</button><button type="button" class="text-button" @click="navigate('overview')">{{ $t("清除显示") }}</button></div></section>
-        <McpConnectionHelp :origin="origin" @copy="copy" />
-        <div class="mcp-row mcp-between"><button type="button" class="text-button" @click="navigate('upload', $event)"><PaperClipOutlined aria-hidden="true" />{{ $t("附件上传用法") }}</button><button type="button" class="primary" @click="navigate('overview')">{{ $t("已保存，返回列表") }}</button></div>
-      </template>
+      <McpTokenCreated v-if="view === 'created' && created" :token="created.token" :secret="created.secret" :origin="origin" @done="navigate('overview')" />
       <McpUploadHelp v-if="view === 'upload'" class="mcp-card" :origin="origin" @copy="copy" />
     </div>
     <dialog ref="confirmation" class="workspace-dialog" aria-labelledby="mcp-revoke-title" @cancel.prevent="!saving && closeRevoke()">

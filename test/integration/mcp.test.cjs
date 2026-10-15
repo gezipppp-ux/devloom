@@ -250,7 +250,7 @@ test("temporary upload credentials are project-scoped, expiring, revocable and n
   assert.equal(await f.database.client.mcpUpload.count(), 1);
 });
 
-test("MCP schemas cover current issue fields and both language guides publish complete requirement and bug examples", async t => {
+test("MCP schemas and skill discovery preserve complete requirement and bug publication", async t => {
   const f = await fixture(t), client = await f.connect(), projectId = f.project.id;
   const tools = (await client.listTools()).tools;
   const toolNames = tools.map(tool => tool.name).sort();
@@ -259,48 +259,57 @@ test("MCP schemas cover current issue fields and both language guides publish co
       [...contentFields, ...assignmentFields, "attachmentIds", ...transport].sort(), "MCP fields must match the domain contract");
   }
   const release = (await call(client, "create_release", { projectId, requestId: randomUUID(), name: "v2.0", targetDate: "2026-11-30" })).release;
-  for (const language of ["zh", "en"]) {
-    const markdown = await (await fetch(f.origin + "/skills/SKILL.md?lang=" + language)).text();
-    const documentedTools = [...markdown.matchAll(/^### ([a-z_]+)$/gm)].map(match => match[1]).sort();
-    assert.deepEqual(documentedTools, toolNames, "guide must document every advertised tool exactly once");
-    for (const tool of tools) for (const field of Object.keys(tool.inputSchema.properties))
-      assert.ok(markdown.includes("`" + field + "`"), language + " guide documents " + tool.name + "." + field);
-    const examples = [...markdown.matchAll(/```json\n([\s\S]*?)\n```/g)].map(match => JSON.parse(match[1])).filter(input => input.type);
-    assert.deepEqual(examples.map(input => input.type), ["requirement", "bug"]);
-    for (const example of examples) {
-      const workflow = (await call(client, "get_issue_workflow", { projectId, type: example.type })).workflow;
-      const version = workflow.versions.find(row => row.version === workflow.publishedVersion);
-      assert.ok(version.definition.nodes.some(node => node.kind === "initial"));
-      const replacements = { "<PROJECT_ID>": projectId, "<REQUEST_UUID_V4>": randomUUID(), "<RELEASE_ID>": release.id,
-        "<REPORTER_ID>": f.admin.id, "<BUSINESS_OWNER_ID>": f.admin.id, "<QA_OWNER_ID>": f.members[0].id,
-        "<ACCEPTANCE_OWNER_ID>": f.members[1].id, "<WATCHER_ID>": f.members[1].id };
-      for (const placeholder of example.attachmentIds) {
-        const screenshot = placeholder === "<SCREENSHOT_ID>";
-        const uploaded = await f.request("/api/mcp/projects/" + projectId + "/uploads?name=" + (screenshot ? "shot.png" : "reference.md"), {
-          method: "POST", secret: f.uploadCredential.uploadToken, body: screenshot ? png : Buffer.from("# Reference\nExample fixture"),
-          headers: { "content-type": screenshot ? "image/png" : "text/markdown", "idempotency-key": randomUUID() },
-        });
-        assert.equal(uploaded.status, 201);
-        replacements[placeholder] = uploaded.data.attachmentId;
-      }
-      const input = JSON.parse(JSON.stringify(example).replace(/<[A-Z0-9_]+>/g, placeholder => {
-        assert.ok(replacements[placeholder], "known guide placeholder: " + placeholder);
-        return replacements[placeholder];
-      }));
-      const created = await call(client, "create_issue", input);
-      const result = await call(client, "get_issue", { projectId, issueId: created.issue.id });
-      assert.equal(result.issue.type, input.type);
-      for (const field of [...contentFields, ...assignmentFields].filter(field => Object.hasOwn(input, field))) {
-        const expected = typeof input[field] === "string" ? input[field].replaceAll("attachment:", "/api/projects/" + projectId + "/files/") : input[field];
-        assert.deepEqual(result.issue[field], expected, language + " " + input.type + " persists " + field);
-      }
-      assert.equal(result.issue.status, version.definition.nodes.find(node => node.kind === "initial").id);
-      assert.equal(result.developmentTask, null);
-      assert.deepEqual(result.attachments.map(file => file.id).sort(), input.attachmentIds.toSorted());
-      assert.equal((await call(client, "create_issue", input)).issue.id, result.issue.id);
+  const identity = await call(client, "whoami");
+  assert.equal(identity.runtime.siteOrigin, f.origin);
+  assert.equal(identity.runtime.mcpUrl, f.origin + "/mcp");
+  assert.equal(identity.skills.name, "web-coding-issue-authoring");
+  assert.equal(identity.skills.manifestUrl, f.origin + "/skills/web-coding-issue-authoring/manifest.json");
+  const httpIdentity = await f.request("/api/mcp/whoami");
+  assert.deepEqual(httpIdentity.data.runtime, identity.runtime);
+  assert.deepEqual(httpIdentity.data.skills, identity.skills);
+  assert.equal(f.uploadCredential.uploadUrl, f.origin + f.uploadCredential.uploadPath);
+  const manifest = await (await fetch(identity.skills.manifestUrl)).json();
+  const protocol = await (await fetch(manifest.files.find(file => file.path === "references/mcp-publishing.md").url)).text();
+  for (const name of toolNames) assert.ok(protocol.includes(name), "publishing reference explains " + name);
+  for (const type of ["requirement", "bug"]) {
+    const example = { type, projectId: "<PROJECT_ID>", requestId: "<REQUEST_UUID_V4>", title: "技能协议字段往返 " + type,
+      description: "已核验的资料 [原型](attachment:<REFERENCE_ID>)", acceptanceCriteria: "按编号规则验证结果",
+      reproductionSteps: "1. 打开测试页面\n2. 提交测试数据", expectedResult: "显示已约定结果", actualResult: "观察到测试偏差",
+      priority: "high", severity: "major", releaseId: "<RELEASE_ID>", dueDate: "2026-11-20", tags: ["技能测试"],
+      reporterId: "<REPORTER_ID>", businessOwnerId: "<BUSINESS_OWNER_ID>", qaOwnerId: "<QA_OWNER_ID>",
+      acceptanceOwnerId: "<ACCEPTANCE_OWNER_ID>", watcherIds: ["<WATCHER_ID>"], attachmentIds: ["<REFERENCE_ID>"] };
+    const workflow = (await call(client, "get_issue_workflow", { projectId, type: example.type })).workflow;
+    const version = workflow.versions.find(row => row.version === workflow.publishedVersion);
+    assert.ok(version.definition.nodes.some(node => node.kind === "initial"));
+    const replacements = { "<PROJECT_ID>": projectId, "<REQUEST_UUID_V4>": randomUUID(), "<RELEASE_ID>": release.id,
+      "<REPORTER_ID>": f.admin.id, "<BUSINESS_OWNER_ID>": f.admin.id, "<QA_OWNER_ID>": f.members[0].id,
+      "<ACCEPTANCE_OWNER_ID>": f.members[1].id, "<WATCHER_ID>": f.members[1].id };
+    for (const placeholder of example.attachmentIds) {
+      const screenshot = placeholder === "<SCREENSHOT_ID>";
+      const uploaded = await f.request("/api/mcp/projects/" + projectId + "/uploads?name=" + (screenshot ? "shot.png" : "reference.md"), {
+        method: "POST", secret: f.uploadCredential.uploadToken, body: screenshot ? png : Buffer.from("# Reference\nExample fixture"),
+        headers: { "content-type": screenshot ? "image/png" : "text/markdown", "idempotency-key": randomUUID() },
+      });
+      assert.equal(uploaded.status, 201);
+      replacements[placeholder] = uploaded.data.attachmentId;
     }
+    const input = JSON.parse(JSON.stringify(example).replace(/<[A-Z0-9_]+>/g, placeholder => {
+      assert.ok(replacements[placeholder], "known guide placeholder: " + placeholder);
+      return replacements[placeholder];
+    }));
+    const created = await call(client, "create_issue", input);
+    const result = await call(client, "get_issue", { projectId, issueId: created.issue.id });
+    assert.equal(result.issue.type, input.type);
+    for (const field of [...contentFields, ...assignmentFields].filter(field => Object.hasOwn(input, field))) {
+      const expected = typeof input[field] === "string" ? input[field].replaceAll("attachment:", "/api/projects/" + projectId + "/files/") : input[field];
+      assert.deepEqual(result.issue[field], expected, input.type + " persists " + field);
+    }
+    assert.equal(result.issue.status, version.definition.nodes.find(node => node.kind === "initial").id);
+    assert.equal(result.developmentTask, null);
+    assert.deepEqual(result.attachments.map(file => file.id).sort(), input.attachmentIds.toSorted());
+    assert.equal((await call(client, "create_issue", input)).issue.id, result.issue.id);
   }
-  assert.equal(await f.database.client.projectIssue.count(), 4);
+  assert.equal(await f.database.client.projectIssue.count(), 2);
   assert.equal(await f.database.client.developmentTask.count(), 0);
   assert.equal(await f.database.client.run.count(), 0);
 });

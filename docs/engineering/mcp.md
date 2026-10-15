@@ -2,7 +2,11 @@
 
 控制台入口为「个人设置 → MCP 接入」，默认展示连接地址和个人 Token 列表；「连接 Agent 与使用指南」提供客户端配置和上传指南。后端提供同源 /mcp 地址，使用官方 TypeScript SDK 的无状态 Streamable HTTP；只接受 POST，不创建持久 MCP 会话、不提供旧 SSE 传输。支持 HTTP MCP 的 Codex、Claude Code、Pi 可配置此地址。
 
-接入概览集中展示客户端配置、最近两枚 Token 和附件上传入口；完整列表、权限详情和创建表单按需展开。创建页面保留 HTTP 上传说明，成功后独立显示一次完整 Token，返回其他视图或关闭时清除。Pi 的具体配置方式取决于所使用的 MCP 扩展，控制台只提供通用连接参数。
+接入概览集中展示连接地址、最近两枚 Token 和 Skills 指南；完整列表、权限详情和创建表单按需展开。创建表单只保留名称、有效期、操作权限和项目范围，HTTP 上传说明放在使用指南中。创建成功采用已选定的 [B 方案](../prototypes/mcp-token-setup/index.html?view=b)：左侧显示复制、发送、查看结果三步，右侧显示真实 Token 名称、完整凭据、项目范围与带时区的到期时间，提供一键复制及可展开的完整配置提示词。复制成功只推进到发送步骤，不推断已连接或已设置提醒。Pi 的具体配置方式取决于所使用的 MCP 扩展，控制台只提供通用连接参数。
+
+复制内容在浏览器内生成，包含当前站点的 Skills 来源、MCP 地址、创建响应中的 secret 与 token.expiresAt（保留 ISO 8601 时区）、安装／更新及连接验证步骤、到期提醒要求。提示词要求 Agent 保存到客户端凭据配置或环境变量，不复述凭据、不写入项目／Skills／日志／提醒。页面不持久化完整凭据或提示词，返回、收起或卸载时清除内存，列表刷新不替换创建结果；语言切换保留同一 Token；技能与配置提示词当前只提供中文，复制失败展开文本供手动复制。通用指南和公开 Skills 不含实际 Token。
+
+提醒由接收提示词的 Agent 执行：每次使用前检查，剩余不足 7 天时提醒，过期停止业务调用；客户端支持且用户请求时在到期前 3 天安排一次，已进入该时间段则当场提醒，不支持调度则明确只能在使用时提醒。连接后以 whoami.token.expiresAt 为准，不把复制或保存配置当作连接验证成功。Web Coding 不新增定时任务或代替 Agent 设置提醒。
 
 ## 身份与权限
 
@@ -11,7 +15,7 @@
 - 请求使用 Authorization: Bearer <Token>；不接受 URL 中的 Token。MCP 请求使用个人 MCP Token，HTTP 上传仅使用 MCP 签发的临时上传 Token；读取请求体后再次检查；应用写事务再次验证账号、Token、项目权限和归档状态。
 - 权限目录为 shared/mcp-scopes.json：read、issues.write、issues.assign、releases.write、files.upload。有效操作取 Token scope 与当前用户项目权限的交集。可限制指定项目，或明确授权全部当前及以后可访问项目。
 - 撤销、过期、账号停用、强制改密或账号 authVersion 变化使 Token 失效。改名不失效；项目撤权在后续操作中生效。管理员现有项目管理特例继续适用，Token 不授予额外开发资格。
-- /api/mcp/whoami 返回当前身份、Token 公共元数据及上传约定，适合验证配置；不返回凭据摘要。
+- /api/mcp/whoami 与 MCP whoami 返回当前身份、Token 公共元数据、上传约定、runtime.siteOrigin/mcpUrl 和 skills（name、version、guideUrl、manifestUrl、entryUrl、packageUrl）。地址来自经过验证的 request.applicationUrl.origin；不返回凭据摘要。
 - MCP 保留现有 Host/Origin 校验和 PUBLIC_ORIGIN HTTPS 部署规则。只对明确的 MCP/Bearer 路由免除浏览器 CSRF，其他 API 不接受此豁免。
 
 ## 工具
@@ -41,7 +45,7 @@ get_issue_workflow 复用 SystemWorkflowServices.readPublished，要求 Token re
 
 ## 受鉴权 HTTP 附件上传
 
-客户端先调用 MCP `create_upload_token({projectId})`，取得 `uploadToken`、`uploadPath`、`expiresAt`。令牌仅允许该项目上传，可在有效期内复用；最长 24 小时，不晚于原 MCP Token 到期时间。原 Token 撤销、账号停用／改密或项目权限变化立即影响上传。申请无需 requestId，响应丢失可重新申请。数据库只保存随机令牌的 SHA-256 摘要、父 Token ID、项目及到期时间，后续签发时清理过期记录。
+客户端先调用 MCP `create_upload_token({projectId})`，取得 `uploadToken`、`uploadUrl`、`uploadPath`、`expiresAt`；使用同源的 `uploadUrl` 上传，不在技能中拼固定地址。令牌仅允许该项目上传，可在有效期内复用；最长 24 小时，不晚于原 MCP Token 到期时间。原 Token 撤销、账号停用／改密或项目权限变化立即影响上传。申请无需 requestId，响应丢失可重新申请。数据库只保存随机令牌的 SHA-256 摘要、父 Token ID、项目及到期时间，后续签发时清理过期记录。
 
 客户端再将附件保存为本地文件，使用临时 Token 上传原始二进制；MCP Token 不能直接上传，临时 Token 不能访问 MCP 或管理凭据。远程 MCP 不读取客户端路径。地址：
 
@@ -82,30 +86,26 @@ Windows PowerShell：
 - 上传权限还要求当前项目 issue.view 及 issue.create 或 issue.edit。在读取上传正文前、写事务内和提交前复核临时 Token、原 MCP Token、账号及项目权限；撤销 Token 或项目权限不能利用慢上传绕过。
 - 附件失败时停止发布，不允许静默丢失资料。无需外部图床，不要求模型搬运 base64。
 
-## Agent Skills 公开指南
+## 需求与 Bug 提报技能
 
-`/skills` 和 `/skills/` 是无需登录、无需 JavaScript 的完整服务端 HTML 指南，开发与生产使用同一路由。`/skills/SKILL.md` 提供含 name/description frontmatter 的可安装技能；`Accept: text/markdown` 访问 `/skills` 同样返回 Markdown。`?lang=en` 提供英文内容。页面复用共享设计变量，提供下载与 Agent 安装提示词，MCP 接入页提供打开和复制指南链接。
+唯一发布的技能为 `web-coding-issue-authoring`，资源位于 `resources/skills/web-coding-issue-authoring/`。入口、references、agents 和 scripts 使用同一个版本，`SKILL.md` 的 `metadata.version` 是版本唯一来源。文件变化必须递增版本；发布后重启服务，不能原地改写已发布版本。技能与安装提示只提供中文，不维护英文副本。
 
-内容按当前请求的已验证站点地址生成，完整介绍全部 13 个 MCP 工具的用途、参数、权限、结果和副作用，以及字段默认值与清空规则。发布流程为连接验证 → 项目／版本／流程／成员查询 → 查重 → 整理需求或 Bug 内容 → 临时 Token 与 HTTP 附件上传 → 带 requestId 原子提交 → get_issue 核验和返回链接；分别提供需求和 Bug 的完整示例，以及修订冲突和幂等恢复说明。中英文内容同步；回归对比实际 tools/list 与两种语言的工具／字段文档，并实际提交两类示例，防止字段漂移。指南不包含凭据或账号数据。Agent 需支持技能文件且能访问该地址；回环地址仅限本机 Agent，远程 Agent 使用可达部署地址。安装技能不触发业务发布。
+`/skills` 与 `/skills/` 提供无需登录、无需 JavaScript 的 HTML 指南，页面由同一份入口 Markdown 渲染，引用链接指向同一发布版本的文件。`Accept: text/markdown` 返回入口内容，仅用于阅读，不作为单文件安装包。公开路由为：
 
-## 发布、指派与重试
+- `/skills/web-coding-issue-authoring/manifest.json`：最新清单，`Cache-Control: no-cache`。
+- `/skills/web-coding-issue-authoring/releases/:version/:digest/package.zip`：完整 ZIP，包含顶层技能目录。
+- 同一版本路径下的 `SKILL.md`、`references/*`、`agents/openai.yaml`、`scripts/update-skill.cjs`：发布包白名单内的文件。
 
-写工具必须提供稳定 UUIDv4 requestId；它独立于 JSON-RPC 请求 ID。服务端保存用户、项目、操作、规范化输入摘要与原始成功结果，相同请求返回 reused: true，换参数返回 409。相同用户不能把原标识用于另一个项目或操作。更新重试先检查原成功记录，再检查修订，避免已成功请求因旧 revision 再次报错。
+旧单文件发布器、`/skills/SKILL.md` 及旧技能安装方式已移除，不提供迁移、重定向或名称兼容。未识别的 `/skills/*` 返回 404，不落入 SPA。
 
-事项、正式附件、暂存绑定、关注人、可选负责人及请求结果在同一个 PostgreSQL Serializable 短事务中提交。负责人无效或附件失败时全部回滚，保留有效暂存文件。新建版本也使用同一幂等机制。上传流位于事务外，不在事务中等待网络、Git 或 Agent。
+清单包含 schemaVersion、名称、版本、入口/包地址、包大小和 SHA-256，以及每个文件的 path、size、sha256、url。服务实例读取一次完整资源快照；版本与包哈希共同构成不可变 URL，未知版本或文件返回 404。包内不含部署地址、账号信息或凭据，两个部署发布同一内容时 ZIP 哈希相同。服务端仅发布当前快照，部署切换导致旧快照文件不可用时，客户端保留安装版本并重新读取清单，不拼接不同版本。
 
-人员字段明确使用 reporterId、businessOwnerId、qaOwnerId、acceptanceOwnerId、watcherIds。创建时 reporterId / businessOwnerId 默认当前账号，显式设置本人职责不额外要求分派权限；设置其他人、非空关注人或 developerId 需要 issues.assign scope 和 issue.assign 权限。update_issue 需要 issues.write scope，内容／附件变更要求 issue.edit，职责／关注人变更要求 issues.assign 和 issue.assign；仅修改人员时不要求 issue.edit，与 Web 服务一致。开发负责人使用 developerId，必须为当前有效且具备 session.start 的项目成员。沿用既有指派逻辑创建 planned 开发任务，不准备 Git、不创建 worktree、不启动 Agent。转派需要事项 revision 和开发任务 taskRevision，只允许未启动的任务；合并任务要求到控制台确认整体转派范围。
+首次连接必须提供可达的 MCP 地址或安装清单地址。已连接时使用 `whoami.runtime` 和 `whoami.skills`，上传使用 `create_upload_token.uploadUrl`；事项相对链接以当前 runtime.siteOrigin 解析。公开域名继续遵循 PUBLIC_ORIGIN 与可信本机代理校验，不信任任意 Host 或转发头。
 
-get_request_result 返回原操作的成功快照，get_issue 返回最新状态。找不到请求不表示可以换新标识重发，客户端应使用原参数和原标识重试。
+安装提示要求先无凭据下载清单，再验证并运行清单中的独立更新脚本。脚本仅需 Node.js 22.13+，无额外依赖；自动安装逐个下载固定版本文件，校验大小与 SHA-256、名称/版本及相对引用，再切换完整目录。安装记录 `.installation.json` 由程序生成，含来源、版本和文件哈希，不含凭据。ZIP 供手动下载与查看，单独解压不等于建立更新记录。
 
-## 模块与验证
+每轮使用检查一次；数值比较版本，相同版本不写、远端更旧不降级、同版本内容变化报错。已安装文件的人工修改、增删或来源变化会中止更新并保留内容。更新使用同级锁与临时目录，下载和校验完成后再次检查本地文件，切换失败恢复原目录；程序不覆盖客户端凭据或其他技能。失败时保留原版本，允许查询和草稿，暂缓业务写操作。进程意外终止留下锁/备份时先核实并恢复，不自动删除。更新依赖客户端网络、运行时和写权限，没有后台更新任务。
 
-- http/mcp-api.cjs 和 mcp-tools.cjs：HTTP/Bearer 协议、MCP 注册与参数 schema。
-- application/mcp-token-services.cjs：Token 生命周期；mcp-project-services.cjs：查询、发布与幂等用例，复用现有项目、内容、版本和开发服务；mcp-presenter.cjs：公开结果。
-- storage/mcp-store.cjs：Token 摘要、暂存 BLOB、操作结果与审计；domain/mcp-access.cjs：纯输入和 scope 规则。
-- 迁移 20261013070000_mcp_access 追加三张表；20261015150000_mcp_upload_tokens 追加临时上传令牌表，不改写已有 MCP Token、附件、session/source/worktree。
-- test/integration/mcp.test.cjs 使用独立 PostgreSQL 和官方 MCP 客户端，验证鉴权隔离、上传、发布、指派、幂等与回滚；浏览器用假数据验证 Token 创建、撤销和各宽度的上传说明。
+新版内容门禁为：页面需求必须有已实际读取并绑定的原型；需求必须具备实施条件和客观验收标准；Bug 的 description、reproductionSteps、expectedResult、actualResult 独立完整，截图可选。仅在用户授权范围内提交，先展示可审阅完整内容；已有对同一份完整内容的授权不重复索取。以上门禁由 Agent 执行，不代表 MCP 服务端已增加强制内容校验。
 
-部署先运行 npm run build 与 npm run db:deploy，再重启服务。测试不访问真实项目、不启动真实 Agent、不修改 TAPD。
-
-临时上传令牌变更后，客户端必须先调用 create_upload_token；旧的直接使用 MCP Token 上传方式返回 401。仅更新前端不足以启用此功能，部署需执行新增迁移并重启后端。
+职责：storage/skill-package-store.cjs 读取资源、验证引用并打包；application/skill-package-services.cjs 持有发布快照，skill-package-presenter.cjs 生成公开地址与清单；http/skills-page.cjs 适配公开路由和 HTML。回归覆盖完整下载、引用、不同部署/代理地址、旧路由移除、更新失败恢复与本地修改保护；MCP 测试在隔离 PostgreSQL 验证身份发现和需求/Bug 字段往返。

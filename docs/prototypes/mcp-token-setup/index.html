@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCP Token 创建与 Agent 配置 · 三方案</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="prototype.css">
+  <script defer src="prototype.js"></script>
+</head>
+<body>
+  <header class="review-bar">
+    <div class="review-brand"><span class="review-dot"></span><strong>Token 创建与 Agent 配置</strong><small>交互原型 · 示例凭证</small></div>
+    <nav aria-label="方案选择">
+      <a href="?view=a" data-view="a">A · 完整提示词</a>
+      <a href="?view=b" data-view="b">B · 分步引导</a>
+      <a href="?view=c" data-view="c">C · 完成弹窗</a>
+      <a href="?view=create" data-view="create" class="create-preview">查看创建表单</a>
+    </nav>
+  </header>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="应用导航">
+      <div class="brand"><span class="brand-mark">⌘</span> Web Coding</div>
+      <div class="navigation"><span>▦ <b>工作台</b></span><span>▤ <b>项目</b></span><span>☷ <b>事项</b></span><span>⌘ <b>开发</b></span><span>□ <b>交付</b></span></div>
+      <div class="sidebar-footer"><span class="selected">⚙ <b>个人设置</b></span><div class="user"><i>林</i><div>林一<small>产品与研发</small></div></div></div>
+    </aside>
+    <div class="workspace">
+      <header class="app-bar"><span>个人设置 <i>/</i> MCP 接入</span><span class="app-bar-right">简体中文 <span class="avatar">林</span></span></header>
+      <main id="main"></main>
+    </div>
+  </div>
+  <dialog id="handoff-dialog" aria-labelledby="dialog-title"></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>
