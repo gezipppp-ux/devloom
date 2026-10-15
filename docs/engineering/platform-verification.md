@@ -24,14 +24,16 @@ macOS（Intel 或 Apple Silicon）命令与 Linux 相同，浏览器默认使用
 
 ### Ubuntu 26.04 的浏览器准备
 
-当前锁定的 Playwright 1.59.1 尚未提供 `ubuntu26.04` 下载映射，直接安装会提示 `Playwright does not support chromium on ubuntu26.04-x64`。Ubuntu 26.04 x64 测试节点可显式下载兼容的 Ubuntu 24.04 构建：
+当前锁定的 Playwright 1.61.0 已支持 Ubuntu 26.04 的 Chromium 下载。更新依赖后正常安装浏览器，不再设置 `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE`：
 
 ```sh
-PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64 npx playwright install chromium
-BROWSER_CHANNEL=chromium node test/browser/session.test.cjs && node test/browser/workspaces.test.cjs && node test/browser/dev.test.cjs && node test/browser/accounts.test.cjs && node test/browser/setup.test.cjs && node test/browser/project-collaboration.test.cjs && node test/browser/development-flows.test.cjs && node test/browser/project-editing.test.cjs && node test/browser/visual.test.cjs
+npm ci
+npx playwright install --no-shell chromium
+export BROWSER_CHANNEL=chromium
+node test/browser/session.test.cjs && node test/browser/workspaces.test.cjs && node test/browser/dev.test.cjs && node test/browser/accounts.test.cjs && node test/browser/setup.test.cjs && node test/browser/project-collaboration.test.cjs && node test/browser/development-flows.test.cjs && node test/browser/project-editing.test.cjs && node test/browser/visual.test.cjs
 ```
 
-此环境变量仅用于浏览器准备，不修改系统版本。已具备与锁文件版本一致的 Playwright 浏览器缓存时，可直接执行验证。系统仍需具备 Chromium 运行库；后端与前端构建不依赖服务器上的 Chromium。该兼容方式绑定当前 Playwright 版本，升级后应重新验证发行版支持情况。
+已具备与锁文件版本一致的 Playwright 浏览器缓存时，可直接执行验证。系统仍需具备 Chromium 运行库；后端与前端构建不依赖服务器上的 Chromium。
 
 重点回归包括中文和空格路径、Windows 盘符/UNC/扩展路径、Linux 尾部空格路径、符号链接或 junction、npm Codex 启动器、初始化及 CLI 超时后的子进程停止、并发 JSON 保存、服务关闭和会话切换竞态。显式局域网监听还需通过实际非回环 IP 验证页面、Host/Origin 和令牌校验，以及普通 HTTP 下创建手动需求的请求身份生成。平台专属文件系统/进程测试必须在对应系统运行，给函数传入模拟平台参数不能替代实机结果。
 
@@ -50,7 +52,7 @@ BROWSER_CHANNEL=chromium node test/browser/session.test.cjs && node test/browser
 
 所有节点均须支持创建本系统的符号链接或 junction；测试目录应位于本地可写磁盘。节点不配置业务 Cookie、Codex 凭据或生产数据目录。流水线并行安装锁定依赖和 Playwright Chromium，并执行 Jenkinsfile 中的校验序列、保存截图。节点版本由运维管理，建议至少保留 Node.js 22 LTS 验证；升级 Node 或依赖时同样运行全部平台；macOS 安装阶段会核对实际 Node 平台与架构，标签与运行时不匹配即失败。
 
-Linux CI 优先使用 Playwright 支持的发行版，如 Ubuntu 24.04。若节点为 Ubuntu 26.04 x64，为该 Jenkins 节点配置 `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64`，让安装步骤使用上述已验证的兼容构建；不要将此值设置到 Windows 或 macOS 节点。
+Linux CI 使用 Playwright 支持的发行版，如 Ubuntu 24.04 或 Ubuntu 26.04。Ubuntu 26.04 节点应使用当前锁文件安装浏览器，不再设置旧版 Playwright 的平台覆盖变量。
 
 添加流水线文件不会自动创建 Jenkins 任务。合并前应查看四个节点的实际构建结果；缺少对应标签的节点会使该矩阵项等待，不能将未接入节点或未执行的平台声称为已验证。
 

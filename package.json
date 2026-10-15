@@ -38,7 +38,7 @@
     "marked": "16.4.2",
     "pg": "8.23.1",
     "pinyin-pro": "3.29.4",
-    "playwright": "1.59.1",
+    "playwright": "1.61.0",
     "vue": "^3.5.32",
     "vue-i18n": "^11.4.14",
     "vue-router": "4.6.4",

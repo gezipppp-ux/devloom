@@ -48,13 +48,13 @@ pipeline {
                     sh 'git --version'
                     sh 'npm ci'
                     sh 'npm run db:generate'
-                    sh 'npx playwright install chromium'
+                    sh 'npx playwright install --no-shell chromium'
                   } else {
                     bat 'node --version'
                     bat 'git --version'
                     bat 'npm ci'
                     bat 'npm run db:generate'
-                    bat 'npx playwright install chromium'
+                    bat 'npx playwright install --no-shell chromium'
                   }
                 }
               }

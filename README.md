@@ -428,7 +428,7 @@ node test/browser/visual.test.cjs
 
 测试使用 fake Codex 和临时 Git 仓库，不执行真实需求。测试文件统一命名为 `<kebab-case>.test.cjs`；夹具和共享辅助模块放在 `test/fixtures`、`test/support`，命名为 `<kebab-case>.cjs`。
 
-Windows 浏览器测试默认使用本机 Edge；Linux/macOS 默认使用 Playwright Chromium。Linux 测试环境一般需要先运行 `npx playwright install --with-deps chromium`；Ubuntu 26.04 的兼容下载设置及 CI 节点准备见 [平台验证说明](docs/engineering/platform-verification.md)。这些浏览器依赖用于自动化测试，不是普通 Web 服务启动的前置步骤。截图输出到忽略的 `state/browser/`，视觉索引为 `state/browser/unified/index.html`。
+Windows 浏览器测试默认使用本机 Edge；Linux/macOS 默认使用 Playwright Chromium。Linux 测试环境一般需要先运行 `npx playwright install --with-deps chromium`；Ubuntu 26.04 及 CI 节点准备见 [平台验证说明](docs/engineering/platform-verification.md)。这些浏览器依赖用于自动化测试，不是普通 Web 服务启动的前置步骤。截图输出到忽略的 `state/browser/`，视觉索引为 `state/browser/unified/index.html`。
 
 ## 本轮流程实施
 
