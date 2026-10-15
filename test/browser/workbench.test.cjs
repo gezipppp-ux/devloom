@@ -86,7 +86,7 @@ async function verifyWorkbench(browser) {
         ['administration', '/accounts', '.account-list-row'],
         ['prompts', `/projects/${projectId}?tab=prompts`, '.prompt-placeholders'],
         ['project-settings', `/projects/${projectId}?tab=settings`, '.project-config-actions'],
-        ['personal-git', '/personal?tab=git', '.git-settings-form'],
+        ['personal-git', '/personal?tab=git', '.git-saved-accounts'],
         ['personal-mcp', '/personal?tab=mcp', '.mcp-token'],
         ['system-workflows', '/system?tab=workflows', '.workflow-node'],
         ['system-storage', '/system', '.storage-directory-preview'],

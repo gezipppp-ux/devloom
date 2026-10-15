@@ -1,6 +1,7 @@
 const { spawn } = require("node:child_process");
 const { stopProcessTree } = require("../shared/process-tree.cjs");
 const { cloneProgressParser } = require("./clone-progress.cjs");
+const { gitFailureMessage } = require("./git-failure.cjs");
 
 function runClone(args, env, { signal, onProgress = () => {} } = {}) {
   if (signal?.aborted) return Promise.reject(new Error("克隆已中断。"));
@@ -9,7 +10,7 @@ function runClone(args, env, { signal, onProgress = () => {} } = {}) {
       env: { ...env, LC_ALL: "C", LANG: "C" }, windowsHide: true,
       detached: process.platform !== "win32", stdio: ["ignore", "ignore", "pipe"],
     });
-    let failure, stopping, idle;
+    let failure, stopping, idle, diagnostics = "";
     let progressWrites = Promise.resolve();
     const stop = message => {
       failure ||= new Error(message);
@@ -28,6 +29,7 @@ function runClone(args, env, { signal, onProgress = () => {} } = {}) {
     });
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", chunk => {
+      diagnostics = (diagnostics + chunk).slice(-65536);
       touch();
       try { progress(chunk); }
       catch { stop("无法记录克隆进度，克隆已停止，请检查服务存储。"); }
@@ -38,7 +40,7 @@ function runClone(args, env, { signal, onProgress = () => {} } = {}) {
       signal?.removeEventListener("abort", abort);
       await progressWrites;
       await stopping;
-      if (failure || code !== 0) reject(failure || new Error("Git 克隆失败，请检查网络、远程地址、凭据与磁盘空间后重试。"));
+      if (failure || code !== 0) reject(failure || new Error(gitFailureMessage({ code }, diagnostics, "clone")));
       else resolve("");
     });
     signal?.addEventListener("abort", abort, { once: true });

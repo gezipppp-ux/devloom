@@ -114,6 +114,19 @@
 .neutral-app .workspace .page-layout { padding: 24px; }
 .neutral-app .account-page-view > .page-layout { padding: 0; }
 .neutral-app .account-page-view { display: block; overflow: visible; }
+@media (min-width: 768px) {
+  .neutral-app.personal-settings-app { height: 100dvh; min-height: 0; overflow: hidden; }
+  .personal-settings-app .ui-shell-body { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+  .personal-settings-app .ui-topbar { flex-shrink: 0; }
+  .personal-settings-app .ui-content { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+  .personal-settings-app .account-page-view { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; padding-bottom: 24px; }
+  .personal-settings-app .account-page-view > .project-return-button { flex-shrink: 0; align-self: flex-start; }
+  .personal-settings-app :is(.system-settings-panel, .settings-page) { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .personal-settings-app .settings-page > .ui-page-header { flex-shrink: 0; }
+  .personal-settings-app .ui-settings-layout { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); }
+  .personal-settings-app .ui-settings-menu { max-height: 100%; overflow-y: auto; }
+  .personal-settings-app .ui-settings-content { min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; padding-right: 8px; padding-bottom: 4px; }
+}
 @media (min-width: 1920px) { .neutral-app .workspace { max-width: 1920px; margin-inline: auto; } }
 @media (max-width: 1399px) { .ui-home-layout { grid-template-columns: minmax(0, 1fr) 220px; gap: 36px; } .ui-topbar-actions { gap: 10px; } .ui-global-search kbd { display: none; } }
 @media (max-width: 1199px) and (min-width: 768px) { .ui-sidebar { padding-inline: 12px; } .ui-brand { padding: 0 12px; } .ui-brand strong, .ui-sidebar nav button > span:not(.anticon) { display: none; } .ui-sidebar nav button { justify-content: center; padding-inline: 0; } .ui-global-search > span:not(.anticon) { display: none; } }

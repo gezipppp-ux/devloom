@@ -50,6 +50,7 @@
 
 - `GitAccountServices` 负责草稿校验、SSH 生成、连接检测与保存；`GitAccountStore` 负责加密和所有者隔离；公开字段由 presenter 构造。
 - 账号输入为 `name, authType, host`，与具体项目仓库分离。HTTP 主机使用完整 origin；SSH 使用主机及可选端口。HTTP 使用用户名／密码或令牌，SSH 使用系统生成的 Ed25519 密钥。公开字段不再包含 `remoteUrl`。
+- Git 账号表单提供 GitHub、Gitee、GitLab 官方主机及自定义选项；新建默认 GitHub，常用项切换 HTTP／SSH 时生成对应 HTTPS origin／SSH 主机名。编辑仅识别已有地址，不改写原值；自定义地址及端口保留草稿。官方主机自动绑定对应验证服务，只有自定义主机显示服务类型选择；服务类型仍只用于本次验证，不新增持久化字段。由 SSH 切换到 HTTP 时必须输入新的 HTTP 凭据，不将已有 SSH 账号视为已保存密码。回归见 `git-host-presets.test.cjs` 与浏览器 `git-accounts.test.cjs`。
 - 保存只校验草稿及修订号，不发起网络请求；更新必须提交当前 `revision`。HTTP 编辑省略密码保留原值。连接检测必须选择当前可操作的项目，以该项目真实仓库执行 `git ls-remote`，验证账号归属及主机／协议匹配，网络返回后再次授权；空仓库读取成功不代表可推送。
 - `resolveAccountRemote` 统一解析账号对应的连接地址；主机及认证方式一致时保持原地址。Gitee 官方 `gitee.com` 的默认端口、两段仓库路径支持 HTTPS 与 `git@` SSH 等价地址，按个人账号选择传输方式；不推断企业主机、自定义端口、其他 SSH 用户或任意服务的地址映射，不将 HTTPS 降级为 HTTP。连接检测和克隆使用同一解析结果，项目地址保留原值，开发空间保存实际传输地址；后续同步项目设置不改写已准备空间的传输地址。
 - `POST /api/account/git-keys` 生成所有者隔离的 24 小时加密草稿，仅返回 `id, publicKey, expiresAt`。SSH 保存提交 `keyDraftId`，成功事务消费草稿；生成或检测失败不替换原密钥。私钥、密码从不进入公开响应。
