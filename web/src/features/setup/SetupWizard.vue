@@ -63,7 +63,7 @@ watch(step, async () => { await nextTick(); heading.value?.focus({ preventScroll
           <div class="setup-directory-row"><input id="setup-directory" v-model="directory" required :readonly="completed" :disabled="locked" /><slot name="directory-picker" :path="directory" :select="value => directory = value" :disabled="locked || completed" /></div>
           <p class="field-hint">{{ $t("填写服务器上的绝对路径。保存时创建缺失目录并检查写入权限。") }}</p>
           <div class="setup-path-preview"><small>{{ $t("成员项目仓库") }}</small><code>{{ previewRoot }}{{ separator }}{{ $t("repository-<准备修订号>") }}</code><small>{{ $t("任务 Worktree") }}</small><code>{{ previewRoot }}{{ separator }}worktree{{ separator }}{{ $t("<任务目录>") }}</code></div>
-          <p class="field-hint">{{ $t("使用 Git 仓库名和登录用户名，例如 web-coding / admin。同名仓库的后创建项目自动加短后缀；修改显示名称不搬移目录。") }}</p>
+          <p class="field-hint">{{ $t("使用 Git 仓库名和登录用户名，例如 devloom / admin。同名仓库的后创建项目自动加短后缀；修改显示名称不搬移目录。") }}</p>
         </FormSection>
       </template>
       <template v-else-if="step === 'departments'">

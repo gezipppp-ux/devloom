@@ -2,7 +2,7 @@ export function mcpSetupPrompt({ origin, secret, expiresAt }) {
   const source = new URL("/skills/web-coding-issue-authoring/manifest.json", origin).href;
   const endpoint = new URL("/mcp", origin).href;
   return [
-    "请为当前 Agent 安装 Web Coding 需求与 Bug 提报技能并配置 MCP。", "",
+    "请为当前 Agent 安装 DevLoom 需求与 Bug 提报技能并配置 MCP。", "",
     "技能清单：" + source,
     "MCP 地址：" + endpoint,
     "个人 Token：" + secret,

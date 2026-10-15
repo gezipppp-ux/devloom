@@ -1,4 +1,4 @@
 interface:
-  display_name: "Web Coding B 方案 UI 实施"
+  display_name: "DevLoom B 方案 UI 实施"
   short_description: "从中性协作原型到 Vue 实现，落实大屏移动适配、交互状态和业务边界"
   default_prompt: "使用 $web-coding-ui 按 B 方案完成本次原型或界面实现，并验证响应式及关键操作。"

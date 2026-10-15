@@ -3,7 +3,7 @@ import LocaleSelect from "./LocaleSelect.vue";
 </script>
 <template>
   <main class="authentication-layout">
-    <header class="authentication-brand-bar"><div class="authentication-brand"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="currentColor" /><path d="m8 11 5 5-5 5m9 0h7" fill="none" stroke="var(--surface)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><span>WEB CODING</span></div><LocaleSelect /></header>
+    <header class="authentication-brand-bar"><div class="authentication-brand"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="currentColor" /><path d="m8 11 5 5-5 5m9 0h7" fill="none" stroke="var(--surface)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><span>DevLoom</span></div><LocaleSelect /></header>
     <section class="authentication-card"><slot /></section>
   </main>
 </template>

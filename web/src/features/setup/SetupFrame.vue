@@ -9,7 +9,7 @@ const maximum = computed(() => steps.findIndex(item => item.id === props.current
 </script>
 <template>
   <div class="setup-page">
-    <header class="setup-brand-bar"><div><span class="setup-mark">W</span><strong>Web Coding</strong><span class="muted">{{ $t("首次初始化") }}</span></div><LocaleSelect /><span>{{ username || $t("等待创建管理员") }}</span></header>
+    <header class="setup-brand-bar"><div><span class="setup-mark">D</span><strong>DevLoom</strong><span class="muted">{{ $t("首次初始化") }}</span></div><LocaleSelect /><span>{{ username || $t("等待创建管理员") }}</span></header>
     <main class="page-layout">
       <header class="page-heading setup-heading"><div><div class="eyebrow">WORKSPACE SETUP</div><h1>{{ $t("初始化你的工作台") }}</h1><p>{{ $t("从管理员账号开始，为团队准备好协作环境。") }}</p></div><button v-if="username" type="button" :disabled="busy" @click="$emit('exit')">{{ $t("保存并退出") }}</button></header>
       <div class="setup-layout">

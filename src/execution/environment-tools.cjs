@@ -60,7 +60,7 @@ async function latestTool(id, fetchJson = remoteJson, platform = process.platfor
 }
 
 async function remoteJson(url) {
-  const response = await fetch(url, { signal: AbortSignal.timeout(15000), headers: { "user-agent": "web-coding-environment", accept: "application/json" } });
+  const response = await fetch(url, { signal: AbortSignal.timeout(15000), headers: { "user-agent": "devloom-environment", accept: "application/json" } });
   if (!response.ok) throw new Error(`版本来源暂不可用（HTTP ${response.status}）。`);
   return response.json();
 }

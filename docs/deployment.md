@@ -1,13 +1,28 @@
 # 独立安装与 Windows / Linux / macOS 部署
 
-应用为独立的 `web-coding` 项目。运行代码、前端构建、lint 与测试的依赖都在本项目声明，不需要 Vben、NestJS 或外部 workspace catalog。
+应用为独立的 `devloom` 项目。运行代码、前端构建、lint 与测试的依赖都在本项目声明，不需要 Vben、NestJS 或外部 workspace catalog。
+
+首次安装的完整步骤、初始化向导与配置说明见 [安装与配置](getting-started.md)。
+
+## 项目改名与既有安装
+
+项目展示名称为 **DevLoom**，npm 包名为 `devloom`。现有安装继续使用原来的安装目录、`RUNNER_DATA_DIR`、数据库连接、服务名及成员目录，无需为改名搬动目录或重建数据库。下文 `devloom` 路径与服务名用于新安装示例。
+
+为保持既有安装与客户端兼容，下列技术标识继续沿用：
+
+- 数据库示例和 Compose 中的 `web_coding`、现有数据库卷与工作区默认根目录 `.web-coding-workspaces`。
+- 登录 Cookie、浏览器偏好和跨标签通知键、Git 操作锁及已记录的 Agent 供应商标识。
+- `web-coding-issue-authoring` 技能 ID、下载路径及项目工程 Skill 路径；技能显示名称已更新为 DevLoom。
+- 已配置的 Jenkins `web-coding-*` 节点标签及现有源码远程地址。
+
+新的 MCP 配置示例使用 `devloom` 连接名和 `DEVLOOM_MCP_TOKEN` / `DEVLOOM_UPLOAD_TOKEN` 环境变量；已有客户端可继续使用原连接名和令牌变量，服务器不依赖客户端的变量命名。此次改名不修改远程仓库名称、Token 或已保存的会话、source 和 Worktree 路径。
 
 ## 独立安装
 
 启动需要 Node.js **22.13+**（推荐当前 LTS）、npm、PostgreSQL **17**（当前验证版本）。Prisma 7 只支持 20.19+、22.12+ 和 24.0+，使用 Node 21、23 等非 LTS 主版本时 `npm ci` 会在 Prisma 预安装检查处直接失败，必须改用 22 LTS 或 24 以上版本。Git 与 Codex CLI 可在初始化向导检测和安装，安装器不可用时按提示在服务器处理；实际执行开发前须完成服务账号的 Codex 认证。将应用源码复制到单独目录；不复制 `node_modules`、运行记录和凭据。先设置独立的 `RUNNER_DATA_DIR` 和 `DATABASE_URL`。
 
 ```sh
-cd /opt/requirement-runner
+cd /opt/devloom
 npm ci
 npm run build
 npm run db:deploy
@@ -93,10 +108,10 @@ export TEST_DATABASE_URL='postgresql://web_coding:替换为URL编码密码@127.0
 
 以下 LaunchAgent 示例在服务账号登录后运行，退出登录会停止。将 `runner`、安装位置和 Node 路径替换为实际值；Intel 将 `/opt/homebrew` 换为 `/usr/local`，nvm 则使用当前版本的绝对路径。先在安装目录 `.env` 中配置 `DATABASE_URL` 与固定的绝对 `RUNNER_DATA_DIR`，完成构建和迁移。`.env` 只允许服务账号读取，不提交到仓库。
 
-先创建目录，再将配置保存为 `~/Library/LaunchAgents/com.web-coding.plist`：
+先创建目录，再将配置保存为 `~/Library/LaunchAgents/com.devloom.plist`：
 
 ```sh
-mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs/web-coding"
+mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs/devloom"
 ```
 
 plist 不会展开 `~`、`$HOME` 或 shell 命令：
@@ -106,13 +121,13 @@ plist 不会展开 `~`、`$HOME` 或 shell 命令：
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>com.web-coding</string>
-  <key>WorkingDirectory</key><string>/Users/runner/apps/web-coding</string>
+  <key>Label</key><string>com.devloom</string>
+  <key>WorkingDirectory</key><string>/Users/runner/apps/devloom</string>
   <key>ProgramArguments</key>
   <array>
     <string>/opt/homebrew/opt/node@22/bin/node</string>
-    <string>--env-file=/Users/runner/apps/web-coding/.env</string>
-    <string>/Users/runner/apps/web-coding/src/cli/web.cjs</string>
+    <string>--env-file=/Users/runner/apps/devloom/.env</string>
+    <string>/Users/runner/apps/devloom/src/cli/web.cjs</string>
     <string>--host</string><string>127.0.0.1</string>
     <string>--port</string><string>4317</string>
   </array>
@@ -124,8 +139,8 @@ plist 不会展开 `~`、`$HOME` 或 shell 命令：
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
   <key>ThrottleInterval</key><integer>10</integer>
   <key>ExitTimeOut</key><integer>120</integer>
-  <key>StandardOutPath</key><string>/Users/runner/Library/Logs/web-coding/stdout.log</string>
-  <key>StandardErrorPath</key><string>/Users/runner/Library/Logs/web-coding/stderr.log</string>
+  <key>StandardOutPath</key><string>/Users/runner/Library/Logs/devloom/stdout.log</string>
+  <key>StandardErrorPath</key><string>/Users/runner/Library/Logs/devloom/stderr.log</string>
 </dict>
 </plist>
 ```
@@ -133,10 +148,10 @@ plist 不会展开 `~`、`$HOME` 或 shell 命令：
 在服务账号的终端执行：
 
 ```sh
-plutil -lint "$HOME/Library/LaunchAgents/com.web-coding.plist"
-launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.web-coding.plist"
+plutil -lint "$HOME/Library/LaunchAgents/com.devloom.plist"
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.devloom.plist"
 # 停止服务；更新或修改 plist 后先停止，再重新 bootstrap
-launchctl bootout "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.web-coding.plist"
+launchctl bootout "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.devloom.plist"
 ```
 
 修改运行环境前等待任务空闲。安装目录可以调整，数据库、数据根、业务仓库与已有 worktree 路径保持原位。
@@ -147,8 +162,8 @@ launchctl bootout "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.web-coding.plis
 
 | 内容            | 示例                          |
 | --------------- | ----------------------------- |
-| 应用安装        | `/opt/requirement-runner`     |
-| 运行数据        | `/var/lib/requirement-runner` |
+| 应用安装        | `/opt/devloom`     |
+| 运行数据        | `/var/lib/devloom` |
 | 业务 Git 仓库   | `/srv/repos/product`          |
 | Worktree 根目录 | `/srv/worktrees`              |
 
@@ -185,18 +200,18 @@ Linux/macOS 候选必须具有执行权限；npm 的 `codex.js` 入口通过当�
 
 ```ini
 [Unit]
-Description=Requirement runner Web CLI
+Description=DevLoom development workspace
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=runner
-WorkingDirectory=/opt/requirement-runner
-Environment=RUNNER_DATA_DIR=/var/lib/requirement-runner
-EnvironmentFile=/etc/requirement-runner/environment
+WorkingDirectory=/opt/devloom
+Environment=RUNNER_DATA_DIR=/var/lib/devloom
+EnvironmentFile=/etc/devloom/environment
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
-ExecStart=/usr/bin/node /opt/requirement-runner/src/cli/web.cjs --port 4317
+ExecStart=/usr/bin/node /opt/devloom/src/cli/web.cjs --port 4317
 Restart=on-failure
 TimeoutStopSec=120
 UMask=0077
@@ -205,7 +220,7 @@ UMask=0077
 WantedBy=multi-user.target
 ```
 
-`/etc/requirement-runner/environment` 由运维创建并限制读取权限，包含 `DATABASE_URL=postgresql://...`，可按需要配置外部 `RUNNER_ENCRYPTION_KEY`；不要提交该文件。初始化管理员、部署迁移与服务启动必须使用相同数据库、运行目录和密钥。
+`/etc/devloom/environment` 由运维创建并限制读取权限，包含 `DATABASE_URL=postgresql://...`，可按需要配置外部 `RUNNER_ENCRYPTION_KEY`；不要提交该文件。初始化管理员、部署迁移与服务启动必须使用相同数据库、运行目录和密钥。
 
 CLI 启动默认监听 `0.0.0.0`，上述 npm 命令和 systemd 配置均可通过 `http://<Linux主机IP>:4317` 直接访问，例如 `http://192.168.0.27:4317`。`0.0.0.0` 是监听地址，浏览器应使用主机实际 IP。
 

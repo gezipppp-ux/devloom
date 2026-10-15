@@ -1,11 +1,11 @@
 ---
 name: web-coding-issue-authoring
-description: 帮助产品经理、运营人员和研发通过 Web Coding MCP 整理并创建需求或 Bug，检查页面原型、实施边界、复现资料和验收门禁。用于事项提报、发布前检查和按授权补充已有事项。
+description: 帮助产品经理、运营人员和研发通过 DevLoom MCP 整理并创建需求或 Bug，检查页面原型、实施边界、复现资料和验收门禁。用于事项提报、发布前检查和按授权补充已有事项。
 metadata:
-  version: "1.1.0"
+  version: "1.1.1"
 ---
 
-# Web Coding 需求与 Bug 提报
+# DevLoom 需求与 Bug 提报
 
 把口头想法、运营反馈、技术方案和故障现象整理成研发可以实施、测试可以验证、业务可以验收的事项。适用于产品经理、运营人员和研发；不按岗位降低质量标准，也不要求提报人掌握技术术语。
 
@@ -31,7 +31,7 @@ metadata:
 
 ### 0. 确认连接与技能版本
 
-每轮使用本技能时，按 [安装与更新](references/updating.md) 检查一次。先确定本次使用的 Web Coding MCP 连接，调用 `whoami` 读取 `runtime`、`skills` 和 Token 到期时间；所有站点、更新和上传地址均来自这个连接。未配置 MCP 时使用用户提供的安装清单地址，不猜测服务器地址。
+每轮使用本技能时，按 [安装与更新](references/updating.md) 检查一次。先确定本次使用的 DevLoom MCP 连接，调用 `whoami` 读取 `runtime`、`skills` 和 Token 到期时间；所有站点、更新和上传地址均来自这个连接。未配置 MCP 时使用用户提供的安装清单地址，不猜测服务器地址。
 
 使用 `skills.manifestUrl` 检查并更新完整技能目录，包括 references、agents 和 scripts。校验失败保留当前版本，可继续只读查询和草稿准备，暂缓业务写操作。更新成功后重新读取入口及本次需要的 references。更新技能不等于授权发布事项。
 

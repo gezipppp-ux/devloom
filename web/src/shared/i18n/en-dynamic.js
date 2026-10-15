@@ -2,7 +2,7 @@ export const enDynamic = {
     "\n认证请求头：Authorization: Bearer <TOKEN>": "\nAuthentication header: Authorization: Bearer <TOKEN>",
     " 个指定项目": " selected projects",
     "# PROJECT_ID 从 list_projects 获取；每个文件生成一个 UUIDv4 上传标识。": "# Get PROJECT_ID from list_projects; generate a UUIDv4 upload key for each file.",
-    "# 在本地环境变量中配置 WEB_CODING_TOKEN，勿把真实 Token 写入示例文件。": "# Set WEB_CODING_TOKEN in your local environment. Never put real tokens in example files.",
+    "# 在本地环境变量中配置 DEVLOOM_MCP_TOKEN，勿把真实 Token 写入示例文件。": "# Set DEVLOOM_MCP_TOKEN in your local environment. Never put real tokens in example files.",
     "$uploadId = [guid]::NewGuid().ToString() # 重试同一文件时保留这个值": "$uploadId = [guid]::NewGuid().ToString() # Keep this value when retrying the same file",
     "<仓库名>": "<repository-name>",
     "<关注人用户ID>": "<watcher-user-id>",

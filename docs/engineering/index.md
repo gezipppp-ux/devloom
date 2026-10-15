@@ -1,6 +1,6 @@
-# Web Coding Contracts
+# DevLoom Contracts
 
-Scope: the independent `web-coding` Node.js 22.13+ CommonJS application. Install from its own package-lock.json using npm ci. NestJS and Vben modules are not dependencies. Playwright is used for isolated browser verification.
+Scope: the independent `devloom` Node.js 22.13+ CommonJS application. Install from its own package-lock.json using npm ci. NestJS and Vben modules are not dependencies. Playwright is used for isolated browser verification.
 
 工作区模型以 [workspaces.md](./workspaces.md) 为准；它取代下述历史全局 Web 配置和运行目录约定。
 

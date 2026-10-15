@@ -1,6 +1,6 @@
 ---
 name: neutral-workbench
-description: 依据 Web Coding B 方案设计白色、留白充足的中性协作界面，覆盖 HTML 原型和 Vue 视觉实现，以及 1080P、2K、移动端适配。用于本项目的页面、组件和交互设计。
+description: 依据 DevLoom B 方案设计白色、留白充足的中性协作界面，覆盖 HTML 原型和 Vue 视觉实现，以及 1080P、2K、移动端适配。用于本项目的页面、组件和交互设计。
 ---
 
 # B 方案 · 中性协作界面

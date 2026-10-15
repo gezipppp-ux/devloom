@@ -47,7 +47,7 @@ async function verifyHttp(account, provider, request) {
   const endpoint = provider === "github"
     ? (host === "https://github.com" ? "https://api.github.com/user" : `${host}/api/v3/user`)
     : `${host}${{ gitee: "/api/v5/user", gitlab: "/api/v4/user", gitea: "/api/v1/user" }[provider]}`;
-  const headers = { Accept: "application/json", "User-Agent": "Web-Coding" };
+  const headers = { Accept: "application/json", "User-Agent": "DevLoom" };
   if (provider === "gitlab") headers["PRIVATE-TOKEN"] = account.password;
   else if (provider === "gitea") headers.Authorization = `token ${account.password}`;
   else headers.Authorization = `Bearer ${account.password}`;
@@ -91,7 +91,7 @@ async function detectGitea(host, request, signal) {
     // Probe only the user-supplied origin, without credentials or redirects.
     // Do not infer a service from its port or from links in the response.
     const response = await request(`${host}/`, {
-      headers: { Accept: "text/html", "User-Agent": "Web-Coding" }, redirect: "manual", signal,
+      headers: { Accept: "text/html", "User-Agent": "DevLoom" }, redirect: "manual", signal,
     });
     if (!response.ok || !response.headers.get("content-type")?.includes("text/html")) {
       await response.body?.cancel();

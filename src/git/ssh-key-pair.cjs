@@ -11,7 +11,7 @@ async function generateSshKeyPair() {
       const file = path.join(directory, "identity");
       await execute(
         "ssh-keygen",
-        ["-q", "-t", "ed25519", "-N", "", "-C", "web-coding", "-f", file],
+        ["-q", "-t", "ed25519", "-N", "", "-C", "devloom", "-f", file],
         { windowsHide: true, timeout: 15000 },
       );
       return {

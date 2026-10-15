@@ -1,4 +1,6 @@
 export const enMcp = {
+    "需求与 Bug 提报技能": "Requirements and bug reporting skill",
+    "把指南链接发给 Agent，安装完整技能包，并在使用时检查更新。": "Share the guide with your Agent to install the full skill package and check for updates when using it.",
     "。在正文引用附件，同时把 ID 放入": ". Reference the attachment in the content and include its ID in",
     "支持图片、文本、PDF、Office 等文件；单个最多 10 MiB，每次最多 20 个、合计 20 MiB。暂存附件 24 小时有效，每人暂存最多 100 MiB。文件名需 URL 编码。": "Images, text, PDF, Office and other files are accepted. Up to 10 MiB per file, 20 files and 20 MiB per batch. Staged attachments expire after 24 hours, with a 100 MiB per-user limit. URL-encode filenames.",
     "PNG、JPEG、WebP 直接作为图片输入；其他附件向 Codex 提供本地路径，是否能解析取决于运行环境中的工具。": "PNG, JPEG and WebP are sent as image input. Other attachments are provided to Codex as local paths; parsing depends on the tools available in its environment.",
@@ -48,7 +50,7 @@ export const enMcp = {
     "先用 list_projects 获取项目 ID，再调用 create_upload_token。MCP Token 需拥有 files.upload 权限。": "Get the project ID with list_projects, then call create_upload_token. Your MCP token needs the files.upload scope.",
     "返回 uploadToken、uploadPath 和 expiresAt。临时 Token 仅限指定项目上传，最长有效 24 小时，不晚于 MCP Token 到期；原 Token 撤销后同步失效。": "The response includes uploadToken, uploadPath and expiresAt. The token allows uploads to the selected project for up to 24 hours, never beyond the MCP token's expiry. Revoking the parent token also invalidates it.",
     "2. 使用临时 Token 上传附件": "2. Upload attachments with the temporary token",
-    "附件上传接口只接受临时上传 Token。将 uploadToken 放入 WEB_CODING_UPLOAD_TOKEN，使用 HTTP POST 上传文件原始二进制。": "The attachment endpoint accepts only temporary upload tokens. Set WEB_CODING_UPLOAD_TOKEN to uploadToken and POST the raw file bytes.",
+    "附件上传接口只接受临时上传 Token。将 uploadToken 放入 DEVLOOM_UPLOAD_TOKEN，使用 HTTP POST 上传文件原始二进制。": "The attachment endpoint accepts only temporary upload tokens. Set DEVLOOM_UPLOAD_TOKEN to uploadToken and POST the raw file bytes.",
     "3. 引用附件，发布需求或 Bug": "3. Reference attachments and publish a requirement or bug",
     "补充附件。": "add attachments.",
     "每个文件生成一个 UUIDv4 作为 Idempotency-Key，上传超时后使用相同标识和相同文件重试。发布超时后保留 requestId 和全部原参数，可调用 get_request_result 查询。上传失败或已过期时先处理附件，不要省略后发布。": "Generate a UUIDv4 Idempotency-Key for each file and reuse it with the same file after upload timeouts. After publication timeouts, retain requestId and all original arguments and query get_request_result. Resolve failed or expired attachments before publishing.",

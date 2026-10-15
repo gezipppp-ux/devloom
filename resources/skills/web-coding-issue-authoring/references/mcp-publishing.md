@@ -1,6 +1,6 @@
 # MCP 发布说明
 
-本说明依据 2026-10-15 的 Web Coding MCP 契约与工具 schema 编写。实际工具、权限和约束以当前连接返回结果为准；不为不存在的接口编造参数。
+本说明依据 2026-10-15 的 DevLoom MCP 契约与工具 schema 编写。实际工具、权限和约束以当前连接返回结果为准；不为不存在的接口编造参数。
 
 ## 连接与资料来源
 
@@ -76,7 +76,7 @@ $uploadId = [guid]::NewGuid().ToString()
 $uploadName = [Uri]::EscapeDataString([IO.Path]::GetFileName($prototypePath))
 $uploadUrl = $uploadGrant.uploadUrl + '?name=' + $uploadName
 $uploadHeaders = @{
-  Authorization = "Bearer $env:WEB_CODING_UPLOAD_TOKEN"
+  Authorization = "Bearer $env:DEVLOOM_UPLOAD_TOKEN"
   'Idempotency-Key' = $uploadId
 }
 # prototypePath 为本地实际文件；mimeType 按真实格式填写。
@@ -84,7 +84,7 @@ $uploadResult = Invoke-RestMethod -Method Post -Uri $uploadUrl `
   -Headers $uploadHeaders -ContentType $mimeType -InFile $prototypePath
 ```
 
-`$uploadGrant` 为本次工具返回结果；确认地址仍属于当前 `runtime.siteOrigin`。`$env:WEB_CODING_UPLOAD_TOKEN` 由工具结果注入当前临时进程，不输出其内容。示例中的 `$prototypePath` 只是 HTTP 客户端读取文件的路径，不是 MCP 参数。
+`$uploadGrant` 为本次工具返回结果；确认地址仍属于当前 `runtime.siteOrigin`。`$env:DEVLOOM_UPLOAD_TOKEN` 由工具结果注入当前临时进程，不输出其内容。示例中的 `$prototypePath` 只是 HTTP 客户端读取文件的路径，不是 MCP 参数。
 
 - MIME：PNG `image/png`，JPEG `image/jpeg`，WebP `image/webp`，PDF `application/pdf`，HTML `text/html`，ZIP `application/zip`，TAR `application/x-tar`，TAR.GZ `application/gzip`；未知格式 `application/octet-stream`。
 - 每文件一个稳定 UUIDv4 上传标识；成功保存 `attachmentId`、`markdown` 和 `expiresAt`。Token 可以在有效期内复用，上传标识不能跨文件复用。

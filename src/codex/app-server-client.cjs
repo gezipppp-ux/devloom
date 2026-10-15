@@ -46,14 +46,14 @@ class AppServerClient extends EventEmitter {
     const env = {
       ...childEnvironment(process.env, { stripGit: Boolean(credentials) }),
       ...(credentials?.env || {}),
-      ...(this.supplier?.mode === "api-key" ? { WEB_CODING_AGENT_API_KEY: this.supplier.apiKey } : {}),
+      ...(this.supplier?.mode === "api-key" ? { DEVLOOM_AGENT_API_KEY: this.supplier.apiKey } : {}),
     };
     const overrides = this.supplier?.mode === "api-key" ? {
       model_provider: "web_coding_supplier",
       model: this.supplier.defaultModel,
-      "model_providers.web_coding_supplier.name": "Web Coding",
+      "model_providers.web_coding_supplier.name": "DevLoom",
       "model_providers.web_coding_supplier.base_url": this.supplier.baseUrl,
-      "model_providers.web_coding_supplier.env_key": "WEB_CODING_AGENT_API_KEY",
+      "model_providers.web_coding_supplier.env_key": "DEVLOOM_AGENT_API_KEY",
       "model_providers.web_coding_supplier.wire_api": "responses",
       "model_providers.web_coding_supplier.requires_openai_auth": false,
     } : {};
@@ -116,8 +116,8 @@ class AppServerClient extends EventEmitter {
     });
     await this.request('initialize', {
       clientInfo: {
-        name: 'web_coding',
-        title: 'Web Coding',
+        name: 'devloom',
+        title: 'DevLoom',
         version: '0.1.0',
       },
       // request_user_input is an experimental app-server request, even when

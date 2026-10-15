@@ -27,7 +27,7 @@ function status(tool) {
 </script>
 <template>
   <div>
-    <p class="muted">{{ $t("检查运行 Web Coding 的服务器。已有合格版本保持不变，缺失工具按下方计划依次安装。") }}</p>
+    <p class="muted">{{ $t("检查运行 DevLoom 的服务器。已有合格版本保持不变，缺失工具按下方计划依次安装。") }}</p>
     <p v-if="loading || checking" role="status">{{ checking ? $t("正在查询可安装版本…") : $t("正在检测工具版本和认证状态…") }}</p>
     <FeedbackMessage :message="error" type="error" />
     <p v-if="busy" class="notice" role="status">{{ job?.status === 'running' ? $t("正在安装 {p0} {p1}。", { p0: job.id, p1: job.version }) : $t("正在核对安装计划。") }} {{ $t("已受理的安装离开页面后仍会继续，请保持服务运行。") }}</p>

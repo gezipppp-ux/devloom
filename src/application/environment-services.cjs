@@ -93,7 +93,7 @@ class EnvironmentServices {
           ? input.id === "node" ? "Node.js 已安装并切换，当前服务仍使用旧版本。请空闲时重启服务；跨 Node.js 主版本升级还需重新安装应用依赖。"
             : "Git 已安装并验证版本，请重启服务以刷新 PATH 后重新检测。"
           : operation === "install" ? input.id === "codex" ? "Codex CLI 安装完成，请在服务账号下完成 Codex 登录后重新检测。" : "安装完成，请重新检测环境。"
-            : "更新完成。已有 Codex 连接使用旧进程，建议空闲时重启 Web Coding 服务。" });
+            : "更新完成。已有 Codex 连接使用旧进程，建议空闲时重启 DevLoom 服务。" });
       }).catch(error => Object.assign(job, { status: "failed", message: error.message + " 请重新检测环境；需要时使用服务器终端更新。" }))
         .finally(() => { job.finishedAt = new Date().toISOString(); this.busy = false; });
       return { ...job };

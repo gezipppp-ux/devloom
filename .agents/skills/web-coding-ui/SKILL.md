@@ -1,9 +1,9 @@
 ---
 name: web-coding-ui
-description: 在 Web Coding 按 B 方案编写 HTML 原型或实现 Vue UI，遵守中性导航、响应式布局和业务状态边界；涵盖页面、表单、会话、弹窗及视觉验收。
+description: 在 DevLoom 按 B 方案编写 HTML 原型或实现 Vue UI，遵守中性导航、响应式布局和业务状态边界；涵盖页面、表单、会话、弹窗及视觉验收。
 ---
 
-# Web Coding UI 实施
+# DevLoom UI 实施
 
 设计依据为 [UI 重构 PRD](../../../docs/prd/ui-refactor.md)、[页面映射](../../../docs/prd/ui-refactor-pages.md) 与 [neutral-workbench](../neutral-workbench/SKILL.md)。此 Skill 根据 B 方案重新编写，旧 UI skills 不作为视觉、布局或交互依据。
 

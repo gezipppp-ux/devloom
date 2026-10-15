@@ -38,7 +38,7 @@ test("auto detects self-hosted Gitea before sending credentials to its current-u
       assert.equal(options.redirect, "manual");
       if (calls.length === 1) {
         assert.equal(url, "http://git.example:3000/");
-        assert.deepEqual(options.headers, { Accept: "text/html", "User-Agent": "Web-Coding" });
+        assert.deepEqual(options.headers, { Accept: "text/html", "User-Agent": "DevLoom" });
         return new Response(`<html><head>${meta}</head><body>Custom company name</body></html>`, { headers: { "content-type": "text/html; charset=utf-8" } });
       }
       assert.equal(url, "http://git.example:3000/api/v1/user");

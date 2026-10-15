@@ -1,8 +1,8 @@
 {
-  "name": "web-coding",
+  "name": "devloom",
   "private": true,
   "version": "0.1.0",
-  "description": "Standalone multi-channel requirement runner and Codex Web CLI",
+  "description": "Browser-based requirements, bugs, and agent development workspace",
   "engines": {
     "node": ">=22.13.0"
   },

@@ -296,7 +296,7 @@ async function refreshCurrentSession() {
               {{
                 waitingForInput
                   ? $t("等待你的输入")
-                  : statusLabel(session.status)
+                  : $t(statusLabel(session.status))
               }}</span
             >
             <button v-if="allowed('code.view')" :aria-pressed="Boolean(fileRequest)" @click="fileRequest ? closeFile() : openFile({})"><BranchesOutlined aria-hidden="true" />{{ fileRequest ? $t('返回会话') : $t('代码变更') }}</button>
@@ -456,6 +456,7 @@ async function refreshCurrentSession() {
 .workspace { min-width: 0; display: flex; flex-direction: column; position: relative; }
 .workspace > main { min-width: 0; min-height: 0; flex: 1; container-type: inline-size; }
 .development-navigation { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 28px; padding-right: 140px; border-bottom: 1px solid var(--line); }
+.development-navigation:lang(en) { padding-right: 180px; }
 .development-navigation .ui-back { margin-bottom: 0; }
 .development-navigation button { border: 0; background: transparent; font-size: 12px; }
 .development-connection { margin-left: auto; color: var(--muted); font-size: 12px; }
@@ -475,6 +476,7 @@ async function refreshCurrentSession() {
 .empty-state { background: var(--canvas); }
 @media (max-width: 767px) {
   .development-navigation { padding: 8px 12px; padding-right: 100px; gap: 4px; }
+  .development-navigation:lang(en) { padding-right: 164px; }
   .development-navigation button { min-height: 44px; padding: 6px; }
   .development-history { right: 8px; }
   .development-connection { display: none; }

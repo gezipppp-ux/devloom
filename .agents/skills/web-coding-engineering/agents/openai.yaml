@@ -1,4 +1,4 @@
 interface:
-  display_name: "Web Coding 工程规范"
+  display_name: "DevLoom 工程规范"
   short_description: "按项目契约审查并修复职责分层、目录命名、类归属与持久化边界"
   default_prompt: "使用 $web-coding-engineering 检查并修复本次改动的职责、目录、类名和依赖边界，完成相关回归。"

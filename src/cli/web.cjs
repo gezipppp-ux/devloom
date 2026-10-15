@@ -13,7 +13,7 @@ async function main(argv = process.argv.slice(2)) {
   const application = createWebServer({ host });
   const origin = await application.listen(port);
   process.stdout.write(
-    `Web Coding: ${origin}\n监听地址：${host}:${port}\n保持此进程运行；关闭浏览器不会停止 Codex。\n`,
+    `DevLoom: ${origin}\n监听地址：${host}:${port}\n保持此进程运行；关闭浏览器不会停止 Codex。\n`,
   );
   let closing = false;
   const shutdown = () => {

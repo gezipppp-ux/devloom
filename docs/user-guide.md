@@ -1,6 +1,6 @@
-# Web Coding 使用手册
+# DevLoom 使用手册
 
-安装、环境准备和首次初始化见 [项目 README](../README.md)，常驻服务部署见 [部署说明](deployment.md)。本手册介绍完成初始化后的日常操作。
+安装、环境准备和首次初始化见 [安装与配置](getting-started.md)，常驻服务部署见 [部署说明](deployment.md)。本手册介绍完成初始化后的日常操作。
 
 ## 目录
 

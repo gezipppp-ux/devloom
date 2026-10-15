@@ -6,7 +6,7 @@
 
 复制内容在浏览器内生成，包含当前站点的 Skills 来源、MCP 地址、创建响应中的 secret 与 token.expiresAt（保留 ISO 8601 时区）、安装／更新及连接验证步骤、到期提醒要求。提示词要求 Agent 保存到客户端凭据配置或环境变量，不复述凭据、不写入项目／Skills／日志／提醒。页面不持久化完整凭据或提示词，返回、收起或卸载时清除内存，列表刷新不替换创建结果；语言切换保留同一 Token；技能与配置提示词当前只提供中文，复制失败展开文本供手动复制。通用指南和公开 Skills 不含实际 Token。
 
-提醒由接收提示词的 Agent 执行：每次使用前检查，剩余不足 7 天时提醒，过期停止业务调用；客户端支持且用户请求时在到期前 3 天安排一次，已进入该时间段则当场提醒，不支持调度则明确只能在使用时提醒。连接后以 whoami.token.expiresAt 为准，不把复制或保存配置当作连接验证成功。Web Coding 不新增定时任务或代替 Agent 设置提醒。
+提醒由接收提示词的 Agent 执行：每次使用前检查，剩余不足 7 天时提醒，过期停止业务调用；客户端支持且用户请求时在到期前 3 天安排一次，已进入该时间段则当场提醒，不支持调度则明确只能在使用时提醒。连接后以 whoami.token.expiresAt 为准，不把复制或保存配置当作连接验证成功。DevLoom 不新增定时任务或代替 Agent 设置提醒。
 
 ## 身份与权限
 
@@ -54,11 +54,11 @@ get_issue_workflow 复用 SystemWorkflowServices.readPublished，要求 Token re
     Idempotency-Key: <UUIDv4>
     Content-Type: image/png
 
-curl 示例（将工具返回的 uploadToken 放入临时环境变量 WEB_CODING_UPLOAD_TOKEN）：
+curl 示例（将工具返回的 uploadToken 放入临时环境变量 DEVLOOM_UPLOAD_TOKEN）：
 
     curl --fail-with-body --request POST \
       "https://your-host/api/mcp/projects/<PROJECT_ID>/uploads?name=screenshot.png" \
-      --header "Authorization: Bearer $WEB_CODING_UPLOAD_TOKEN" \
+      --header "Authorization: Bearer $DEVLOOM_UPLOAD_TOKEN" \
       --header "Idempotency-Key: <UPLOAD_UUID>" \
       --header "Content-Type: image/png" \
       --data-binary "@screenshot.png"
@@ -67,7 +67,7 @@ Windows PowerShell：
 
     $uploadId = [guid]::NewGuid().ToString()
     $uploadHeaders = @{
-      Authorization = "Bearer $env:WEB_CODING_UPLOAD_TOKEN"
+      Authorization = "Bearer $env:DEVLOOM_UPLOAD_TOKEN"
       "Idempotency-Key" = $uploadId
     }
     $uploadUrl = "https://your-host/api/mcp/projects/<PROJECT_ID>/uploads?name=screenshot.png"

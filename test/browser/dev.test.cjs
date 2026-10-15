@@ -264,7 +264,7 @@ async function main() {
     assert.ok(storedWorkspaces.workspaces.some((workspace) => workspace.id === created.workspace.id));
     assert.deepEqual(errors, []);
     assert.equal(output.match(/后端代码已修改/g)?.length, 1);
-    assert.equal(output.match(/Web Coding Dev:/g)?.length, 2);
+    assert.equal(output.match(/DevLoom Dev:/g)?.length, 2);
 
     for (const location of [
       `/projects/${workspace.projectId}?tab=issues&issue=issue-1`,

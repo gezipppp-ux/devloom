@@ -5,11 +5,11 @@ const props = defineProps({ origin: { type: String, required: true } });
 defineEmits(["copy"]);
 const language = ref("curl");
 const shell = computed(() => [
-  '# 将 create_upload_token 返回的 uploadToken 放入临时环境变量 WEB_CODING_UPLOAD_TOKEN。',
+  '# 将 create_upload_token 返回的 uploadToken 放入临时环境变量 DEVLOOM_UPLOAD_TOKEN。',
   '# PROJECT_ID 从 list_projects 获取；每个文件生成一个 UUIDv4 上传标识。',
   'curl --fail-with-body --request POST \\',
   '  "' + props.origin + '/api/mcp/projects/<PROJECT_ID>/uploads?name=screenshot.png" \\',
-  '  --header "Authorization: Bearer $WEB_CODING_UPLOAD_TOKEN" \\',
+  '  --header "Authorization: Bearer $DEVLOOM_UPLOAD_TOKEN" \\',
   '  --header "Idempotency-Key: <UPLOAD_UUID>" \\',
   '  --header "Content-Type: image/png" \\',
   '  --data-binary "@screenshot.png"',
@@ -17,7 +17,7 @@ const shell = computed(() => [
 const powershell = computed(() => [
   '$uploadId = [guid]::NewGuid().ToString() # 重试同一文件时保留这个值',
   '$uploadHeaders = @{',
-  '  Authorization = "Bearer $env:WEB_CODING_UPLOAD_TOKEN"',
+  '  Authorization = "Bearer $env:DEVLOOM_UPLOAD_TOKEN"',
   '  "Idempotency-Key" = $uploadId',
   '}',
   '$uploadUrl = "' + props.origin + '/api/mcp/projects/<PROJECT_ID>/uploads?name=screenshot.png"',
@@ -31,7 +31,7 @@ const uploadCommand = computed(() => language.value === "curl" ? shell.value : p
 <template>
   <section class="mcp-upload-help" :aria-label="$t('HTTP 上传说明')">
     <div><h3>{{ $t("1. 通过 MCP 申请临时上传 Token") }}</h3><p class="field-hint">{{ $t("先用 list_projects 获取项目 ID，再调用 create_upload_token。MCP Token 需拥有 files.upload 权限。") }}</p><pre class="mcp-code"><code>{{ JSON.stringify({ projectId: "&lt;PROJECT_ID&gt;" }, null, 2) }}</code></pre><p class="field-hint">{{ $t("返回 uploadToken、uploadPath 和 expiresAt。临时 Token 仅限指定项目上传，最长有效 24 小时，不晚于 MCP Token 到期；原 Token 撤销后同步失效。") }}</p></div>
-    <div><h3>{{ $t("2. 使用临时 Token 上传附件") }}</h3><p class="field-hint">{{ $t("附件上传接口只接受临时上传 Token。将 uploadToken 放入 WEB_CODING_UPLOAD_TOKEN，使用 HTTP POST 上传文件原始二进制。") }}</p></div>
+    <div><h3>{{ $t("2. 使用临时 Token 上传附件") }}</h3><p class="field-hint">{{ $t("附件上传接口只接受临时上传 Token。将 uploadToken 放入 DEVLOOM_UPLOAD_TOKEN，使用 HTTP POST 上传文件原始二进制。") }}</p></div>
     <div class="mcp-row mcp-between"><div class="mcp-segments" role="group" :aria-label="$t('上传命令语言')"><button v-for="name in ['curl', 'PowerShell']" :key="name" type="button" :aria-pressed="language === name" @click="language = name">{{ name }}</button></div><button type="button" class="text-button" :aria-label="$t('复制上传示例')" @click="$emit('copy', uploadCommand)"><CopyOutlined aria-hidden="true" /></button></div>
     <pre class="mcp-code"><code>{{ uploadCommand }}</code></pre>
     <div><h3>{{ $t("3. 引用附件，发布需求或 Bug") }}</h3><p class="field-hint">{{ $t("响应包含") }} <code>attachmentId</code> {{ $t("和") }} <code>markdown</code>{{ $t("。在正文引用附件，同时把 ID 放入") }} <code>attachmentIds</code>{{ $t("。调用") }} <code>create_issue</code> {{ $t("发布，或用") }} <code>update_issue</code> {{ $t("补充附件。") }}</p></div>

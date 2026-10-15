@@ -55,7 +55,7 @@ const commands = [
 ];
 
 function createMcpServer({ context, tokens, services, isBusy, origin }) {
-  const server = new McpServer({ name: "web-coding", version: "1.0.0" }, {
+  const server = new McpServer({ name: "devloom", version: "1.0.0" }, {
     instructions: "先查询项目、版本、成员和 get_issue_workflow 已发布流程，发布前查重。事项支持截止日期 dueDate、标签 tags，版本支持目标日期 targetDate。发布及编辑使用稳定 UUIDv4 requestId，超时查询原请求或原样重试。" +
       "附件上传前调用 create_upload_token({projectId}) 获取最长 24 小时有效的临时上传 Token；MCP Token 不能直接上传。" +
       "使用 create_upload_token 返回的 uploadUrl 添加 name 查询参数，POST 原始二进制；地址须与 whoami.runtime.siteOrigin 同源。" +

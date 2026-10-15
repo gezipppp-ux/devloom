@@ -16,7 +16,7 @@ function registerMcpRoutes(instance, { tokens, services, isBusy }) {
         ? await tokens.authenticateUpload(request.headers.authorization, request.params.projectId)
         : await tokens.authenticate(request.headers.authorization);
     } catch (error) {
-      if (error.statusCode === 401) reply.header("www-authenticate", 'Bearer realm="web-coding-mcp"');
+      if (error.statusCode === 401) reply.header("www-authenticate", 'Bearer realm="devloom-mcp"');
       return reply.code(error.statusCode || 500).send({ error: error.statusCode ? error.message : "认证服务暂时不可用。", code: error.code });
     }
   };

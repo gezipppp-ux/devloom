@@ -10,7 +10,7 @@ test('supplier credentials reach only the dedicated child environment and native
   fs.writeFileSync(script, `require('node:readline').createInterface({input:process.stdin}).on('line', line => {
     const message = JSON.parse(line);
     if (message.id) process.stdout.write(JSON.stringify({ id: message.id, result: {
-      keyPresent: process.env.WEB_CODING_AGENT_API_KEY === 'fixture-private-key', args: process.argv.slice(2),
+      keyPresent: process.env.DEVLOOM_AGENT_API_KEY === 'fixture-private-key', args: process.argv.slice(2),
       home: process.env.CODEX_HOME || null, diagnostic: 'fixture-private-key'
     } })+'\\n');
   });`);
@@ -25,8 +25,8 @@ test('supplier credentials reach only the dedicated child environment and native
   assert.equal(probe.diagnostic, '[redacted]');
   assert.doesNotMatch(JSON.stringify(client.child.spawnargs), /fixture-private-key/);
   assert.ok(probe.args.includes('model_providers.web_coding_supplier.wire_api="responses"'));
-  assert.ok(probe.args.includes('model_providers.web_coding_supplier.env_key="WEB_CODING_AGENT_API_KEY"'));
-  assert.equal(process.env.WEB_CODING_AGENT_API_KEY, undefined);
+  assert.ok(probe.args.includes('model_providers.web_coding_supplier.env_key="DEVLOOM_AGENT_API_KEY"'));
+  assert.equal(process.env.DEVLOOM_AGENT_API_KEY, undefined);
 });
 
 test('explicit shutdown is terminal and cannot launch another transport', async () => {

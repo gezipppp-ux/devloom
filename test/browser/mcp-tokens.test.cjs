@@ -77,7 +77,8 @@ async function verifyMcpTokens(page, output) {
   assert.deepEqual(writes[1].projectIds, [tokenId]);
   await section.getByRole("button", { name: "复制全部，发送给 Agent", exact: true }).click();
   await section.getByRole("button", { name: "已复制，粘贴给 Agent", exact: true }).waitFor();
-  const setupPrompt = await page.evaluate(() => navigator.clipboard.readText());
+  // Windows clipboards may return CRLF; textarea values are normalized to LF.
+  const setupPrompt = (await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, "\n");
   assert.ok(setupPrompt.includes(secret));
   assert.ok(setupPrompt.includes(tokens[0].expiresAt), "Expiry comes from the created token, not the requested duration");
   assert.ok(setupPrompt.includes(new URL("/skills/web-coding-issue-authoring/manifest.json", page.url()).href));
@@ -96,8 +97,8 @@ async function verifyMcpTokens(page, output) {
   assert.match(await help.innerText(), /attachmentIds/);
   assert.match(await help.innerText(), /Idempotency-Key/);
   assert.match(await help.innerText(), /create_upload_token/);
-  assert.match(await help.innerText(), /WEB_CODING_UPLOAD_TOKEN/);
-  assert.doesNotMatch(await help.innerText(), /Bearer \$(?:env:)?WEB_CODING_TOKEN/);
+  assert.match(await help.innerText(), /DEVLOOM_UPLOAD_TOKEN/);
+  assert.doesNotMatch(await help.innerText(), /Bearer \$(?:env:)?DEVLOOM_MCP_TOKEN/);
   assert.equal((await help.innerText()).includes(secret), false);
   await help.getByRole("button", { name: "PowerShell", exact: true }).click();
   assert.match(await help.innerText(), /Invoke-RestMethod/);
