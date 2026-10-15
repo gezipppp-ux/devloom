@@ -95,6 +95,8 @@ Vue 组件使用 PascalCase 文件名；JavaScript 辅助模块使用 kebab-case
 - `features/session/SessionLifecycleControls.vue` 提供会话页面的归档和删除按钮；`SessionLifecycleDialog.vue` 是会话页面和归档列表共用的确认窗口。归档仅隐藏列表项，永久删除可先清理 Worktree，或显式选择强制删除并输入完整本地分支名，一并放弃本地文件和提交。服务端确认清理完成后，由壳层移除当前视图或打开下一条可见会话；在途列表响应不能恢复已移除项。
 - `shared/api/use-model-catalog.js`、`use-permission-modes.js` 分别拥有模型和权限能力加载、重试与卸载保护；`AgentModelControls.vue` 和 `PermissionSelect.vue` 只接收值/选项并发出变更，由创建表单或会话各自决定保存时机。
 
+Git 账号页默认只展示已添加账号；点击添加或编辑后展开带明确标题的表单，列表标记正在编辑的账号。保存成功后清空凭据草稿并返回列表，失败保留输入；取消只清理本地草稿，不发送请求。在途操作禁止取消，验证登录仍不保存账号。表单展开时聚焦名称，收起后返回原触发按钮；语言切换保留同一草稿。实现位于 `GitAccountSettings.vue` 与 `use-git-accounts.js`，交互、凭据及响应式回归由 `test/browser/git-accounts.test.cjs` 覆盖，2026-10-15 在 macOS / Chrome 通过 lint、Node 回归（629 项通过，6 项 Windows 专项跳过）、构建及 Jenkins 浏览器检查；视觉回归生成 352 张截图。
+
 目录和职责调整不改变 API、URL、会话身份或运行数据路径。需求富文本只能经 `features/session/requirement-content.js` 的安全渲染入口处理。
 
 Codex 回复的流式内容和历史消息统一经 `features/session/message-content.js` 解析 Markdown 并过滤 HTML。源码 HTML 按原文显示，Markdown 图片不加载，链接仅允许 HTTP、HTTPS 和 mailto；用户消息与工具输出保留纯文本。代码块和宽表格在自身区域滚动，不扩大对话宽度。

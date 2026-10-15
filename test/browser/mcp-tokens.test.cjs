@@ -1,5 +1,6 @@
 /* global document, navigator, window */
 const assert = require("node:assert/strict");
+const { dismissOperationMessages } = require("../support/operation-feedback.cjs");
 const path = require("node:path");
 const scopes = require("../../shared/mcp-scopes.json");
 
@@ -61,6 +62,7 @@ async function verifyMcpTokens(page, output) {
   await page.getByRole("alert").filter({ hasText: "模拟 Token 创建失败" }).waitFor();
   assert.equal(await section.getByLabel("Token 名称").inputValue(), "工作电脑 CLI");
   assert.equal(tokens.length, 0);
+  await dismissOperationMessages(page);
   fail = false;
   const blocked = new Promise(resolve => { hold = resolve; });
   await section.getByRole("button", { name: "创建 MCP Token", exact: true }).click();

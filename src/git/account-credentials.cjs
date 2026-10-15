@@ -6,6 +6,7 @@ const {
 } = require("./ssh-key-files.cjs");
 const { runClone } = require("./clone-process.cjs");
 const { createGitIdentityConfig } = require("./identity-config.cjs");
+const { gitFailureMessage } = require("./git-failure.cjs");
 
 function execute(args, env, timeout = 60000) {
   return new Promise((resolve, reject) => {
@@ -17,16 +18,12 @@ function execute(args, env, timeout = 60000) {
         windowsHide: true,
         timeout,
         maxBuffer: 8 * 1024 * 1024,
-        env,
+        env: { ...env, LC_ALL: "C", LANG: "C" },
       },
-      (error, stdout) => {
+      (error, stdout, stderr) => {
         if (error)
           reject(
-            new Error(
-              error.killed
-                ? "Git 连接超时，请检查网络后重试。"
-                : "Git 连接失败，请检查远程仓库地址、账号密码或 SSH 公钥授权。",
-            ),
+            new Error(gitFailureMessage(error, stderr)),
           );
         else resolve(stdout.replace(/\r?\n$/, ""));
       },
