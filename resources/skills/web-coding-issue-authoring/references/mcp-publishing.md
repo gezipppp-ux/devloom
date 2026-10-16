@@ -89,15 +89,32 @@ $uploadResult = Invoke-RestMethod -Method Post -Uri $uploadUrl `
 - MIME：PNG `image/png`，JPEG `image/jpeg`，WebP `image/webp`，PDF `application/pdf`，HTML `text/html`，ZIP `application/zip`，TAR `application/x-tar`，TAR.GZ `application/gzip`；未知格式 `application/octet-stream`。
 - 每文件一个稳定 UUIDv4 上传标识；成功保存 `attachmentId`、`markdown` 和 `expiresAt`。Token 可以在有效期内复用，上传标识不能跨文件复用。
 - 单文件最多 10 MiB，本次创建 / 编辑最多 20 个且总计 20 MiB；每人有效暂存最多 100 MiB。暂存文件须在上传后 24 小时内绑定，该时限与 Token 到期独立。
-- 图片用 `![说明](attachment:ID)`，其他文件用 `[说明](attachment:ID)`；优先使用返回的 `markdown`，并将 ID 放入 `attachmentIds`。正文引用与 ID 清单逐一核对。
+- 使用上传结果的 `markdown` 写入正文，并将对应 `attachmentId` 放入 `attachmentIds`；可修改说明文字，不改链接目标和图片/文件语法。图片用 `![说明](attachment:ID)`，其他文件用 `[说明](attachment:ID)`。必须同时检查正式绑定与正文引用，不能二选一。
 - 只能绑定同一上传账号、同一项目的附件；已经绑定别的事项的文件不能直接复用。对另一事项复用同一资料时需重新上传并取得新的附件 ID。
 - 正式附件需要登录与项目权限，不是公开图床。执行时 PNG / JPEG / WebP 可作为图片输入，其他文件通过执行端本地路径读取；上传不证明内容已解析。
+
+### 正文预览与 Agent 文件输入分别检查
+
+创建示意（ID 只表示占位，实际提交必须来自本次上传）：
+
+```json
+{
+  "description": "## 目标原型\n![失败状态及处理操作](attachment:图片附件ID)\n\n[可交互原型包](attachment:文件附件ID)",
+  "attachmentIds": ["图片附件ID", "文件附件ID"]
+}
+```
+
+- MCP 将 `attachment:ID` 替换为正式 `/api/projects/项目ID/files/附件ID` 地址，保留外层 Markdown；它不会替裸路径自动补 `![]()`。提交正文不能写成“原型附件：/api/...”或“原型附件：attachment:ID”，也不能把应展示的引用放进反引号/代码块。普通文件不冒充图片，Markdown 链接可下载并不表示该格式一定支持内嵌预览。
+- 提交前逐个附件检查类型、正文 Markdown 与 `attachmentIds`。更新已有附件引用时，保留已核实的正式 Markdown 地址；若改用 `attachment:ID`，仍需按工具约定携带对应 ID，不能虚构或跨事项复用。
+- 回读时同时核对正式附件记录和正文：图片保留 `!` 前缀及完整 Markdown 图片语法，普通文件保留 Markdown 链接语法；目标地址为本事项实际附件的正式 `/api/projects/.../files/...` 路径，且不再残留 `attachment:`。只看到附件列表、`images` 元数据或 HTTP 成功，不能证明正文可预览。有可用的已登录界面时检查渲染；否则明确只验证了绑定与 Markdown，未做浏览器预览。
+- 前端附件 URL 用于受鉴权展示，不是 Agent 可直接读取的文件路径。开发执行由 DevLoom 将正式附件落到执行端：图片传为图片输入，其他文件通过提示词中的可读取本地路径交给 Agent。不得用提报电脑上的路径、仅聊天中存在的文件或 `/api/...` 裸地址替代正式附件。正文可预览也不证明 Agent 已收到文件。
+- 若任务包含修改 Markdown 解析、附件提取或执行分发，必须使用隔离夹具分别验证图片输入和普通文件本地路径、内容可读及失败不静默丢弃；不能只验证前端。单纯提报不为验证附件而启动真实开发；在尚未执行时说明只完成发布侧检查。
 
 ## 提交、回读和失败恢复
 
 1. 门禁通过且完整内容已获发布授权后，为本次写操作生成并保存 UUIDv4 `requestId` 和全部最终参数；它与上传标识、JSON-RPC ID 分开。不要保存凭据。
 2. 调用 `create_issue`。检查工具的 `isError` 及 `error.status/code/message`，不能把收到 HTTP 响应就当业务成功。
-3. 成功后用 `get_issue` 回读：逐项核对类型、标题、正文、专用字段、验收、日期、版本、人员和附件数量、名称与正文链接。正文附件引用可能被转换为正式站内地址，应按最终 ID 与文件核对。
+3. 成功后用 `get_issue` 回读：逐项核对类型、标题、正文、专用字段、验收、日期、版本、人员和附件数量、名称。按上节检查正式 Markdown 图片/文件引用及其对应附件，不能只比链接目标而漏掉外层语法。
 4. 使用实际站点地址解析返回的 `issue.url` 给用户链接；说明已绑定的原型 / 证据及是否指派。若部分字段不符，报告真实差异并按授权修正，不假装核验通过。
 
 | 情况 | 处理 |
