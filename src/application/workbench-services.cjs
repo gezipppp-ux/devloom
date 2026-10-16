@@ -8,6 +8,8 @@ const { presentWorkActions } = require("./work-action-presenter.cjs");
 const { issueWorkflowNode } = require("../domain/issue-workflows.cjs");
 const { workflowHandler, canProcessWorkflowStep } = require("../domain/workflow-actions.cjs");
 
+const { developmentStatus } = require("../domain/project-development.cjs");
+
 class WorkbenchServices {
   constructor(database, projects, { workspaces } = {}) { this.store = new WorkbenchStore(database); this.actionStore = new WorkActionQueryStore(database); this.projects = projects; this.workspaces = workspaces; this.workflowExecution = new WorkflowExecutionServices(database, projects); }
   async actionSnapshot(actor, input = {}) {
@@ -90,7 +92,8 @@ class WorkbenchServices {
     const page = { ...pageInput(input), scope: choice(input.scope || "all", ["all", "mine"], "范围") };
     if (input.type) page.type = choice(input.type, ISSUE_TYPES, "事项类型");
     if (input.priority) page.priority = choice(input.priority, PRIORITIES, "优先级");
-    if (input.status) page.status = text(input.status, "状态", 100);
+    if (kind === "tasks") page.status = developmentStatus(input.status);
+    else if (input.status) page.status = text(input.status, "状态", 100);
     if (input.tag) page.tag = text(input.tag, "标签", 30);
     page.active = input.active === "true";
     const directory = await this.projects.list(actor);

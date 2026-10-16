@@ -46,9 +46,9 @@ flowchart LR
 
 ### 无需启动 Agent 的交付与版本采用
 
-系统管理接口额外返回可载入的 `recommendedDefinition`。推荐需求/Bug 模板在规划节点支持当前处理人提交人工成果，在待开发节点支持当前开发执行人提交已有成果，均进入指定验证人的验证步骤；保留正常开发路径。退回连线采用 `assignment=submitter`，交给当前有效交付的作者；仅人工流转和 `verification.returned` 可配置此规则。返工节点允许当前处理人无任务重提，也允许显式认领/安排开发。已发布的默认 v1 定义不变，载入模板只替换浏览器草稿，保存、发布均需明确操作。
+系统管理接口额外返回可载入的 `recommendedDefinition`。推荐需求/Bug 模板从待开发节点配置「线下处理」，复用已有成果提交与验证流程；规划节点不配置直接送验出线。运行时只读取事项绑定的流程出线，不按节点 ID、名称、顺序或类别额外限制送验；自定义流程可将同一事件配置到其他合法节点。退回连线采用 `assignment=submitter`，交给当前有效交付的作者；仅人工流转和 `verification.returned` 可配置此规则。返工节点允许当前处理人无任务重提，也允许显式认领/安排开发。已发布的默认 v1 定义不变，载入模板只替换浏览器草稿，保存、发布均需明确操作。
 
-事项 DTO 的 `deliverySubmission` 返回 `allowed/taskId/label`，开发任务 DTO 返回逐项 `scope.submission` 和 `canSubmitDelivery`。入口受流程出线、当前处理人、交付创建及流转权限、归档和任务来源约束。没有开发认领时，合法人工送验不要求会话权限，也不创建开发任务。已有当前认领必须携带其 `taskId`；仅本人、范围匹配、从未启动且没有工作区/run key、启动意图或执行事件的 planned 任务可提交已有成果。真实执行仍须已结束，未知结果不能绕过。审计记录 `submissionSource=manual|existing|agent`，不制造执行开始事实。
+事项 DTO 的 `deliverySubmission` 返回 `allowed/taskId/label/transitionId`，开发任务 DTO 返回逐项 `scope.submission` 和 `canSubmitDelivery`。`label` 直接取当前 `delivery.submitted` 连线的 `name`，不根据 planned、是否有任务或是否运行过 Agent 切换固定名称。入口受流程出线、当前处理人、交付创建及流转权限、归档和任务来源约束。没有开发认领时，合法人工送验不要求会话权限，也不创建开发任务。已有当前认领必须携带其 `taskId`；仅本人、范围匹配、从未启动且没有工作区/run key、启动意图或执行事件的 planned 任务可提交已有成果。真实执行仍须已结束，未知结果不能绕过。审计记录 `submissionSource=manual|existing|agent`，不制造执行开始事实。
 
 发布新流程不自动重绑旧事项。`GET /api/projects/:id/issues/:issueId/workflow-upgrade` 预览，`POST` 同一路径采用最新已发布版本，均要求 `issue.view/issue.assign/issue.transition`。仅当前动作 ready、非验证和非活跃的未结束节点、无交付及执行身份/意图/事件时可采用；关联历史任务仅允许 planned/cancelled/merged 且从未执行。以稳定节点 ID 映射并核对类型、职责、类别、认领和开发属性，复核处理人资格。提交包含 UUIDv4 `requestId`、`issueRevision/actionRevision/targetVersionId/tasks[{id,revision}]` 和必填 `reason`。事务内重新核对全部快照；同请求同内容只返回原结果，修改内容或状态冲突返回 409。
 
@@ -92,3 +92,16 @@ flowchart LR
 `20261014200000_workflow_responsibilities` 引入职责和步骤；`20261015120000_workflow_handoffs` 增加交付动作/幂等标识、明确处理人、持久执行事件并更新默认流程。按用户要求不做历史业务数据转换。迁移遇到已有事项、开发任务、交付或修改过的系统流程时明确失败并回滚，要求以新库部署；不会自动清表，也不会移动或删除 Git、Worktree、session/source 数据。
 
 本次仅在隔离测试数据库验证迁移及行为，不部署到现有业务数据库。验证入口见根 AGENTS 和[联动验收记录](../reviews/workflow-handoffs-2026-10-15.md)。
+
+
+## A 方案与流程按钮契约（2026-10-16）
+
+- 事项详情侧栏集中显示当前操作；同一成果表单在弹窗内使用。流程版本单独展示，仅 `workflow.latestPublishedVersion > workflow.version` 且具备原有权限和状态资格时显示采用入口。最新已发布版本随事项查询关联读取；未发布草稿不计入。
+- 单条、批量指派后保留当前路由、筛选、页码和详情实例，刷新列表及当前事项。查看开发任务是显式导航。
+- 事项、讨论、任务中的送验名称以及成果弹窗标题和提交按钮使用同一配置名称；合并任务存在多个动作名称时先进入通用成果整理，再按所选事项显示实际动作。
+- 开始验证、验证通过和退回的名称来自对应事件连线；`workflowActions[].allowed` 综合所需权限、操作主体、当前验证人及交付轮次。无配置或无权的验证按钮隐藏。返工入口还要求当前事项的送验能力允许。
+- 人工流转按钮采用选中连线名称。任务开始按钮读取当前允许开发范围中的事件名称；多事项存在不同动作时保留通用执行准备入口。工作台和通知通过 `workflowLabel` 展示配置名称，自定义名称不按界面语言翻译。
+- 流程模板打开只读预览和替换范围，确认后只载入浏览器草稿。交接预览读取当前草稿，展示目标、处理人规则和必填资料。保存、发布仍为独立的显式操作；保留画布、属性编辑和全屏功能。
+- 跨项目开发列表与项目任务列表缺省 `status=not_cancelled`，只排除 cancelled；已完成、已合并仍可查询。显式 all 显示全部任务状态，cancelled 仅显示取消。过滤在数据库分页、计数之前执行；本人范围、项目授权和个人会话归档规则保持独立。事项关联历史视图显式传 all。
+
+按钮反查范围与结论见[流程按钮审查](../reviews/workflow-actions-a-2026-10-16.md)。本轮没有新增数据库字段、迁移或修改生产数据。

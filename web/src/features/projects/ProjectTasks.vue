@@ -1,4 +1,5 @@
 <script setup>
+import AppSelect from "../../shared/components/AppSelect.vue";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -36,14 +37,15 @@ const offset = computed(() =>
 const scope = computed(() =>
   props.issueId || route.query.taskScope === "all" ? "all" : "mine",
 );
+const status = computed(() => typeof route.query.taskStatus === "string" ? route.query.taskStatus : props.issueId ? "all" : "not_cancelled");
 const selectedTasks = ref([]),
   merging = ref(false);
 const { data, loading, error, reload } = useResource(() =>
   appApi(
-    `${endpoint}?offset=${offset.value}&scope=${scope.value}${props.issueId ? `&issueId=${props.issueId}` : ""}`,
+    `${endpoint}?offset=${offset.value}&scope=${scope.value}&status=${encodeURIComponent(status.value)}${props.issueId ? `&issueId=${props.issueId}` : ""}`,
   ),
 );
-watch([offset, scope], () => {
+watch([offset, scope, status], () => {
   selectedTasks.value = [];
   merging.value = false;
   void reload();
@@ -153,6 +155,7 @@ function refresh() {
         {{ $t("项目全部任务") }}
       </button>
     </nav>
+    <label class="development-status-filter">{{ $t('任务状态') }}<AppSelect :model-value="status" :aria-label="$t('任务状态')" @update:model-value="value => router.push({ query: { ...route.query, taskStatus: value, taskOffset: undefined } })"><option v-for="[value, label] in [['not_cancelled','未取消'], ['all','全部状态'], ['planned','待开发'], ['started','已启动'], ['unknown','执行结果待确认'], ['completed','已完成'], ['merged','已合并'], ['cancelled','已取消']]" :key="value" :value="value">{{ $t(label) }}</option></AppSelect></label>
     <div v-if="!issueId && !readOnlyReason && selectedTasks.length" class="project-development-action ui-selection-bar">
       <button
         class="primary"
@@ -184,3 +187,7 @@ function refresh() {
     <p class="development-list-note field-hint">{{ $t('认领与合并不会启动执行') }}</p>
   </section>
 </template>
+
+<style scoped>
+.development-status-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0; }
+</style>

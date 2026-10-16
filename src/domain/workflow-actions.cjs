@@ -31,7 +31,7 @@ function developmentAction(task, execution, requests = []) {
   if (requests.length) return { bucket: "todo", label: "处理审批或问题", phase: "等待你处理" };
   if (["running", "preparing", "starting"].includes(execution?.status)) return { bucket: "doing", label: "查看进度", phase: execution.status === "running" ? "执行中" : "准备环境" };
   if (task.issueLinks?.length && task.issueLinks.every(link => link.issue.deliverables?.[0]?.taskId === task.id && (["pending", "returned"].includes(link.issue.deliverables[0].status) || !link.issue.workflowVersion?.definition.nodes.find(node => node.id === link.issue.status)?.allowDevelopment) || ["completed", "cancelled"].includes(link.issue.workflowVersion?.definition.nodes.find(node => node.id === link.issue.status)?.kind))) return null;
-  if (task.status === "planned") return { bucket: "todo", label: "开始开发", phase: "待开发" };
+  if (task.status === "planned") return { trigger: "development.started", bucket: "todo", label: "开始开发", phase: "待开发" };
   if (["completed", "failed", "interrupted", "cancelled"].includes(execution?.status)) return { bucket: "todo", label: "整理成果", phase: "本轮已结束" };
   return { bucket: "todo", label: "核对原执行", phase: "执行结果待确认" };
 }

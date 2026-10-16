@@ -1,7 +1,7 @@
 const { isDeepStrictEqual } = require("node:util");
 const { ProjectDevelopmentStore } = require("../storage/project-development-store.cjs");
 const { AccountStore } = require("../storage/account-store.cjs");
-const { developmentInput, developmentMergeInput, developmentStartInput, manualDevelopmentInput, manualDevelopmentPrompt, developmentEditInput, developmentPrompt } = require("../domain/project-development.cjs");
+const { developmentStatus, developmentInput, developmentMergeInput, developmentStartInput, manualDevelopmentInput, manualDevelopmentPrompt, developmentEditInput, developmentPrompt } = require("../domain/project-development.cjs");
 const { issueDevelopmentAllowed, assertIssueWritable } = require("../domain/issue-workflows.cjs");
 const { pageInput, identifier, object, revision } = require("../domain/project-issues.cjs");
 const { accountError } = require("../domain/account.cjs");
@@ -36,7 +36,7 @@ class ProjectDevelopmentServices {
   async list(projectId, actor, input = {}) {
     await this.authorize(projectId, actor, "issue.view");
     if (input.scope && !["mine", "all"].includes(input.scope)) throw accountError("任务范围无效。", 400);
-    const page = await this.store.list(projectId, { ...pageInput(input), ...(input.scope === "mine" ? { executorId: actor.id } : {}), ...(input.issueId ? { issueId: identifier(input.issueId, "事项") } : {}) });
+    const page = await this.store.list(projectId, { ...pageInput(input), status: developmentStatus(input.status), ...(input.scope === "mine" ? { executorId: actor.id } : {}), ...(input.issueId ? { issueId: identifier(input.issueId, "事项") } : {}) });
     const tasks = await Promise.all(page.tasks.map(task => this.present(task, actor)));
     await this.authorize(projectId, actor, "issue.view");
     return { tasks, nextOffset: page.nextOffset };

@@ -154,10 +154,10 @@ class ProjectDevelopmentStore {
     if (!(await this.database.client.developmentTask.updateMany({ where: { id: task.id, projectId: task.projectId, revision: task.revision }, data: { ...data, revision: { increment: 1 } } })).count) throw conflict();
     return this.task(task.projectId, task.id);
   }
-  async list(projectId, { limit, offset, issueId, executorId }) {
+  async list(projectId, { limit, offset, issueId, executorId, status = "not_cancelled" }) {
     if (issueId && !await this.database.client.projectIssue.findFirst({ where: { projectId, id: issueId }, select: { id: true } }))
       throw accountError("事项不存在或不属于当前项目。", 404);
-    const rows = await this.database.client.developmentTask.findMany({ where: { projectId, ...(executorId ? { executorId } : {}), ...(!issueId ? { status: { not: "merged" } } : {}), ...(issueId ? { issueLinks: { some: { projectId, issueId } } } : {}) }, include: { executor: { select: { id: true, displayName: true } }, release: true }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: offset, take: limit + 1 });
+    const rows = await this.database.client.developmentTask.findMany({ where: { projectId, ...(executorId ? { executorId } : {}), ...(status === "all" ? {} : { status: status === "not_cancelled" ? { not: "cancelled" } : status }), ...(issueId ? { issueLinks: { some: { projectId, issueId } } } : {}) }, include: { executor: { select: { id: true, displayName: true } }, release: true }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: offset, take: limit + 1 });
     return { tasks: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
   }
   async addIssues(task, input, issues, prompt) {

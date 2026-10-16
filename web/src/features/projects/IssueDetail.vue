@@ -40,6 +40,7 @@ const {data, loading, saving, error, notice, reload, save, perform} = useResourc
     }))]
   };
 });
+defineExpose({ reload });
 const publishing = ref(false), nextHandler = ref(""), assigningHandler = ref(false), handlerId = ref("");
 const upgrading = ref(false);
 const baseline = ref(null), latest = ref(null);
@@ -173,12 +174,6 @@ function person(id) {
             <EditOutlined aria-hidden="true"/>
             {{ $t("编辑事项") }}
           </button>
-          <button v-if="can('issue.assign')" class="primary"
-                  :disabled="saving || developmentBusy || editing || Boolean(data.development) || !data.assignmentAllowed"
-                  @click="emit('assign-development', data)">
-            <UserAddOutlined aria-hidden="true"/>
-            {{ $t("指派") }}
-          </button>
         </div>
       </header>
       <p v-if="data.release?.status === 'archived'" class="warning">{{ $t("版本已归档，内容只读。") }}</p>
@@ -257,10 +252,10 @@ function person(id) {
                            :permissions="data.release?.status === 'archived' ? permissions.filter(p => p.endsWith('.view')) : permissions"/>
         </div>
         <aside class="issue-detail-sidebar" :aria-label="$t('事项操作与资料')">
-          <section v-if="!editing" class="issue-panel issue-status" :aria-label="$t('状态流转')">
+          <section v-if="!editing" class="issue-panel issue-status" :aria-label="$t('当前操作')">
             <h3 class="issue-panel-heading">
               <SwapOutlined aria-hidden="true"/>
-              {{ $t("状态流转") }}
+              {{ $t("当前操作") }}
             </h3>
             <p class="issue-current-status"><span class="muted">{{ $t("当前状态") }}</span><span
                 class="issue-status-badge">{{ data.statusName }}</span></p>
@@ -268,6 +263,17 @@ function person(id) {
               · {{
                 $t(data.processing.needsAssignment ? '等待分派处理人' : data.processing.status === 'active' ? '处理中' : '待开始')
               }}</p>
+            <div class="issue-current-actions">
+              <button v-if="can('deliverable.create') && data.deliverySubmission?.allowed" class="primary" :disabled="saving || developmentBusy" @click="publishing = true">{{ data.deliverySubmission.label }}</button>
+          <button v-if="can('issue.assign')"
+                  :disabled="saving || developmentBusy || editing || Boolean(data.development) || !data.assignmentAllowed"
+                  @click="emit('assign-development', data)">
+            <UserAddOutlined aria-hidden="true"/>
+            {{ $t("指派") }}
+          </button>
+              <button v-if="!data.development && can('session.start')" :disabled="saving || developmentBusy || !data.assignmentAllowed" @click="emit('start-development', data)">{{ $t('认领') }}</button>
+              <RouterLink v-if="data.development" :to="{ path: `/projects/${projectId}`, query: { tab: 'tasks', task: data.development.taskId } }">{{ $t('查看开发任务') }}</RouterLink>
+            </div>
             <button v-if="can('issue.assign') && data.processing && data.processing.category !== 'development' && !data.workflowActions?.some(edge => edge.trigger.startsWith('verification.'))" :disabled="saving" @click="assigningHandler = !assigningHandler">{{ $t('重新分派处理人') }}</button>
             <form v-if="assigningHandler" class="project-form" @submit.prevent="assignHandler"><label>{{ $t('当前处理人') }}<AppSelect search-pinyin v-model="handlerId" :aria-label="$t('重新分派处理人')" required :disabled="saving"><option value="" disabled>{{ $t('选择处理人') }}</option><option v-for="person in data.members" :key="person.userId" :value="person.userId">{{ person.displayName }}（{{ person.username }}）</option></AppSelect></label><button :disabled="saving || !handlerId" type="submit">{{ $t('确认分派') }}</button></form>
             <form v-if="transitions.length" class="project-form" @submit.prevent="transition">
@@ -293,15 +299,9 @@ function person(id) {
               <label v-if="nextStatus">{{ $t("原因") }}<textarea v-model="reason" rows="2" :disabled="saving"
                                                                  :required="Boolean(transitions.find(t => t.id === nextStatus)?.requiresReason)"/></label>
               <button class="primary" type="submit" :disabled="saving || !nextStatus">
-                {{ saving ? $t("正在更新…") : $t("更新状态并交接") }}
+                {{ saving ? $t("正在更新…") : selectedTransition?.name || $t("更新状态并交接") }}
               </button>
             </form>
-            <p v-else class="muted">{{ $t("当前没有可用的状态操作。") }}</p>
-            <button
-                v-if="can('deliverable.create') && (data.deliverySubmission?.allowed ?? data.workflowActions?.some(edge => edge.trigger === 'delivery.submitted'))"
-                :disabled="saving" @click="publishing = true">{{ $t(data.deliverySubmission?.label || '提交交付并送验') }}
-            </button>
-            <button v-if="data.workflow && can('issue.assign') && can('issue.transition') && data.processing?.status === 'ready'" :disabled="saving" @click="upgrading = true">{{ $t('采用新流程版本') }}</button>
             <p v-if="data.workflowActions?.some(edge => edge.trigger.startsWith('verification.'))" class="field-hint">
               {{ $t('在交付详情中验证，结论会同步更新事项。') }}</p>
             <RouterLink v-if="data.workflowActions?.some(edge => edge.trigger.startsWith('verification.'))"
@@ -360,18 +360,10 @@ function person(id) {
             <div v-if="data.tags?.length" class="ui-tags"><span v-for="tag in data.tags" :key="tag">{{ tag }}</span>
             </div>
           </section>
-          <section v-if="!editing" class="issue-panel issue-development" :aria-label="$t('关联开发')"><h3
-              class="issue-panel-heading">{{ $t('关联开发') }}</h3>
-            <p class="field-hint">{{
-                data.development ? $t('已加入 {name} 的开发任务。', {name: data.development.executorName}) : $t('尚未安排开发任务。')
-              }}</p>
-            <RouterLink v-if="data.development" class="issue-development-link"
-                        :to="{ path: `/projects/${projectId}`, query: { tab: 'tasks', task: data.development.taskId } }">
-              {{ $t('查看开发任务') }}
-            </RouterLink>
-            <button v-else-if="can('session.start')" :disabled="saving || developmentBusy || !data.assignmentAllowed"
-                    @click="emit('start-development', data)">{{ $t('认领') }}
-            </button>
+          <section v-if="!editing && data.workflow" class="issue-panel issue-workflow" :aria-label="$t('流程版本')">
+            <h3 class="issue-panel-heading">{{ $t('流程版本') }}</h3>
+            <p class="field-hint">v{{ data.workflow.version }}</p>
+            <button v-if="data.workflow.latestPublishedVersion > data.workflow.version && can('issue.assign') && can('issue.transition') && data.processing?.status === 'ready'" :disabled="saving" @click="upgrading = true">{{ $t('采用新流程版本') }} · v{{ data.workflow.latestPublishedVersion }}</button>
           </section>
           <p v-if="!editing" class="issue-sharing-hint field-hint">
             {{ $t('事项与交付在项目内共享。个人会话与代码保留在执行者自己的空间。') }}</p>
@@ -384,3 +376,18 @@ function person(id) {
                      @published="publishing = false; reload(); emit('changed')"/>
   </article>
 </template>
+
+<style scoped>
+.issue-current-actions { display: grid; gap: 10px; margin: 20px 0; }
+.issue-current-actions > button { width: 100%; }
+.issue-current-actions > a { text-align: center; padding: 10px 0; }
+.issue-detail-sidebar > .issue-status { order: -4; border-top: 0; padding-top: 0; }
+.issue-detail-sidebar > .issue-information { order: 0; border-top: 1px solid var(--line); padding-top: 24px; }
+.issue-workflow { border-top: 1px solid var(--line); padding-top: 24px; }
+@media (max-width: 1000px) {
+  .issue-detail-grid:not(.issue-detail-editing) .issue-detail-main,
+  .issue-detail-grid:not(.issue-detail-editing) .issue-detail-sidebar { display: contents; }
+  .issue-detail-sidebar > .issue-status { order: -1; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+  .issue-detail-sidebar > .issue-information, .issue-workflow, .issue-sharing-hint { order: 2; }
+}
+</style>

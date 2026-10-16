@@ -35,12 +35,12 @@ class WorkbenchStore {
       }
     } else if (kind === "tasks") {
       table = client.developmentTask;
-      where = { ...projects, executorId: actorId, status: status || { not: "merged" }, ...(query ? { snapshot: { path: ["title"], string_contains: query } } : {}) };
+      where = { ...projects, executorId: actorId, ...(status === "all" ? {} : { status: !status || status === "not_cancelled" ? { not: "cancelled" } : status }), ...(query ? { snapshot: { path: ["title"], string_contains: query } } : {}) };
       const archives = await client.runDocument.findMany({ where: { name: "session-archive.json", workspace: { ownerUserId: actorId } }, select: { workspaceId: true, runKey: true, data: true } });
       const hidden = archives.filter(row => row.workspaceId && row.runKey && row.data?.archivedAt);
       if (hidden.length) where.OR = [{ workspaceId: null }, { runKey: null }, { NOT: hidden.map(({ workspaceId, runKey }) => ({ workspaceId, runKey })) }];
       include = { release: true };
-      if (active && !status) where.status = { notIn: ["merged", "completed", "cancelled"] };
+      if (active && (!status || status === "not_cancelled")) where.status = { notIn: ["merged", "completed", "cancelled"] };
     } else {
       table = client.projectDeliverable;
       where = { ...projects, ...(status ? { status } : {}), ...(scope === "mine" ? { authorId: actorId } : {}),

@@ -15,6 +15,11 @@ async function verifyProjectTaskMerging({ page, origin, project, database, conte
   const assignment = page.getByRole("dialog", { name: "指派", exact: true });
   await selectOption(assignment.getByLabel("开发负责人", { exact: true }), admin.id);
   await assignment.getByRole("button", { name: "确认指派", exact: true }).click();
+  await assignment.waitFor({ state: 'hidden' });
+  assert.equal(new URL(page.url()).searchParams.get('tab'), 'issues', 'assignment preserves the issue list');
+  assert.equal(new URL(page.url()).searchParams.get('q'), '批量分配', 'assignment preserves filters');
+  await page.getByRole('checkbox', { name: `选择事项 ${issues[0].number}`, exact: true, disabled: true }).waitFor();
+  await page.goto(`${origin}/projects/${project.id}?tab=tasks`);
   await page.getByRole("button", { name: "我的开发任务", exact: true }).click();
   assert.equal(await page.locator('.ui-selection-bar').count(), 0, "merge controls appear only after selection");
   await page.getByRole("checkbox", { name: `选择开发任务 ${issues[0].title}`, exact: true }).check();
@@ -76,8 +81,8 @@ async function verifyProjectTaskMerging({ page, origin, project, database, conte
   await page.getByRole("button", { name: "刷新状态", exact: true }).click();
   assert.equal(await page.getByRole("button", { name: "标记开发任务完成", exact: true }).count(), 0, "unverified scope cannot be marked completed");
   await page.goto(origin + '/projects/' + project.id + '?tab=issues&issue=' + issues[0].id);
-  await page.getByRole("button", { name: "提交交付并送验", exact: true }).click();
-  const publishing = page.getByRole("dialog", { name: "整理成果", exact: true });
+  await page.getByRole("button", { name: "提交验证", exact: true }).click();
+  const publishing = page.getByRole("dialog", { name: "提交验证", exact: true });
   await publishing.getByLabel("交付说明", { exact: true }).fill("合并范围已完成实现，验证搜索结果和移动端布局。");
   await selectOption(publishing.getByLabel("交付验证人", { exact: true }), admin.id);
   await publishing.getByRole("checkbox", { name: issues[1].title, exact: true }).check();
@@ -85,11 +90,11 @@ async function verifyProjectTaskMerging({ page, origin, project, database, conte
   for (const width of [1920, 2560, 1440, 1280, 768, 390, 320]) {
     await page.setViewportSize({ width, height: width < 768 ? 844 : 1080 });
     assert.ok(await publishing.evaluate(element => element.scrollWidth <= element.clientWidth));
-    await publishing.getByRole("button", { name: "提交交付并送验", exact: true }).scrollIntoViewIfNeeded();
+    await publishing.getByRole("button", { name: "提交验证", exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(output, 'workflow-delivery-' + width + '.png') });
   }
   const submitted = page.waitForResponse(response => response.url().endsWith('/deliveries/batch') && response.request().method() === 'POST');
-  await publishing.getByRole("button", { name: "提交交付并送验", exact: true }).click();
+  await publishing.getByRole("button", { name: "提交验证", exact: true }).click();
   const submission = await submitted;
   assert.equal(submission.status(), 201, await submission.text());
   await publishing.waitFor({ state: "hidden" });
@@ -103,7 +108,7 @@ async function verifyProjectTaskMerging({ page, origin, project, database, conte
     await page.getByRole("button", { name: "开始验证", exact: true }).waitFor({ state: "hidden" });
     assert.equal((await content.readIssue(project.id, delivery.issueId, admin)).status, "verifying");
     for (const checkbox of await page.getByRole("checkbox").all()) if (await checkbox.isEnabled()) await checkbox.check();
-    await page.getByRole("button", { name: "通过验收", exact: true }).click();
+    await page.getByRole("button", { name: "验证通过", exact: true }).click();
     await page.getByRole("heading", { name: "验收记录", exact: true }).waitFor();
     assert.equal((await content.readIssue(project.id, delivery.issueId, admin)).status, "implemented");
   }

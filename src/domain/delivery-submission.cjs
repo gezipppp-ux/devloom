@@ -7,7 +7,7 @@ function deliverySubmission(issue, actorId, permissions) {
   const allowed = issue.release?.status !== "archived" && Boolean(edge) && ["issue.view", "deliverable.create", edge?.permission].every(permission => permissions.includes(permission))
     && workflowActorAllowed(issue, edge, actorId, permissions)
     && (!task || permissions.includes("session.view") && task.executorId === actorId && ["planned", "started", "completed"].includes(task.status));
-  return { allowed, taskId: task?.id || null, label: task?.status === "planned" ? "提交已有成果" : task ? "提交交付并送验" : "提交人工成果" };
+  return { allowed, taskId: task?.id || null, label: edge?.name || "", transitionId: edge?.id || null };
 }
 
 module.exports = { deliverySubmission };

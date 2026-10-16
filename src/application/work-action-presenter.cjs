@@ -30,6 +30,8 @@ function presentWorkActions(snapshot, projects, pending = new Map()) {
     const requests = project.permissions.includes("session.approve") ? pending.get(`${task.workspaceId}/${task.runKey}`) || [] : [];
     const state = developmentAction(task, task.execution, requests);
     if (!state) continue;
+    const labels = state.trigger === 'development.started' ? [...new Set((task.issueLinks || []).flatMap(({ issue }) => issue.workflowVersion.definition.transitions.filter(edge => edge.from === issue.status && edge.trigger === 'development.started').map(edge => edge.name)))] : [];
+    if (labels.length === 1) state.workflowLabel = labels[0];
     items.push({ ...base(task, "task"), ...state, title: task.snapshot.title, taskId: task.id, workspaceId: task.workspaceId, runKey: task.runKey,
       blocking: requests.length > 0, notificationKey: requests.map(request => `${request.turnId}:${request.id}`).sort().join("/"), reason: requests.length ? "本轮执行等待你的决定" : "你是此开发任务的执行人", revision: task.revision });
   }
@@ -41,8 +43,10 @@ function presentWorkActions(snapshot, projects, pending = new Map()) {
   for (const delivery of deliveries) {
     const returned = delivery.status === "returned";
     const recovery = delivery.assignmentProblem;
+    const trigger = returned ? 'delivery.submitted' : !delivery.verificationStartedAt ? 'verification.started' : null;
+    const workflowLabel = delivery.issue?.workflowVersion?.definition.transitions.find(edge => edge.from === delivery.issue.status && edge.trigger === trigger)?.name || null;
     if (recovery) { items.push({ ...base(delivery, "delivery"), deliveryId: delivery.id, title: delivery.title, bucket: "todo", phase: "等待分派处理人", label: "重新指定验证人", reason: "交付验证人权限已失效", revision: delivery.revision }); continue; }
-    items.push({ ...base(delivery, "delivery"), deliveryId: delivery.id, issueId: delivery.issueId, title: delivery.title, bucket: returned ? "todo" : "verify", phase: returned ? "交付退回" : delivery.verificationStartedAt ? "验证中" : "待开始验证", label: returned ? "修改并重新提交" : delivery.verificationStartedAt ? "继续验证" : "开始验证", reason: returned ? "你发布的交付被退回，请处理验证意见" : "你是此交付的指定验证人", revision: delivery.revision, priority: delivery.issue?.priority || "normal", dueDate: delivery.issue?.dueDate || null });
+    items.push({ ...base(delivery, "delivery"), deliveryId: delivery.id, issueId: delivery.issueId, title: delivery.title, workflowLabel, bucket: returned ? "todo" : "verify", phase: returned ? "交付退回" : delivery.verificationStartedAt ? "验证中" : "待开始验证", label: returned ? "修改并重新提交" : delivery.verificationStartedAt ? "继续验证" : "开始验证", reason: returned ? "你发布的交付被退回，请处理验证意见" : "你是此交付的指定验证人", revision: delivery.revision, priority: delivery.issue?.priority || "normal", dueDate: delivery.issue?.dueDate || null });
   }
   const priority = { urgent: 0, high: 1, normal: 2, low: 3 };
   items.sort((a, b) => Number(Boolean(b.blocking)) - Number(Boolean(a.blocking)) || (a.dueDate || "9999").localeCompare(b.dueDate || "9999") || priority[a.priority] - priority[b.priority] || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
@@ -51,7 +55,7 @@ function presentWorkActions(snapshot, projects, pending = new Map()) {
 function presentActionAttention(actions) {
   const items = actions.filter(action => ["todo", "verify"].includes(action.bucket)).map(action => ({ id: `${action.kind}:${action.id}:${action.revision || 0}:${action.notificationKey || ""}`,
     kind: action.kind, issueId: action.issueId, taskId: action.taskId, deliveryId: action.deliveryId, workspaceId: action.workspaceId, runKey: action.runKey,
-    label: action.label, title: action.title, projectId: action.projectId, projectName: action.projectName, updatedAt: action.createdAt }));
+    label: action.label, workflowLabel: action.workflowLabel || null, title: action.title, projectId: action.projectId, projectName: action.projectName, updatedAt: action.createdAt }));
   return { items, total: items.length };
 }
 module.exports = { presentWorkActions, presentActionAttention };

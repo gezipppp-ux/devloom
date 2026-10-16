@@ -511,18 +511,18 @@ async function main() {
     async function captureProjects() {
       async function checkIssueCards(width) {
         const content = await page.getByRole('region', { name: /^(需求内容|Bug 信息)$/ }).boundingBox();
-        const status = await page.getByRole('region', { name: '状态流转', exact: true }).boundingBox();
+        const status = await page.getByRole('region', { name: '当前操作', exact: true }).boundingBox();
         const discussion = await page.getByRole('region', { name: '沟通与记录', exact: true }).boundingBox();
         const files = await page.getByRole('region', { name: '参考资料', exact: true }).boundingBox();
         assert.ok(Math.abs(files.x - content.x) < 1 && files.y >= content.y + content.height + 20,
           'references follow the main document');
         assert.ok(Math.abs(discussion.x - content.x) < 1 && discussion.y >= files.y + files.height + 20,
           'discussion follows attachments in the main document');
-        if (width > 768) {
+        if (width > 1000) {
           assert.ok(status.x >= content.x + content.width + 20, `status has a separate sidebar at ${width}`);
         } else {
-          assert.ok(status.y >= discussion.y + discussion.height + 16,
-            `compact layouts place the auxiliary status below the main document at ${width}`);
+          assert.ok(status.y + status.height + 16 <= content.y,
+            `compact layouts place current actions before the main document at ${width}`);
           assert.ok(status.x >= 0 && status.x + status.width <= width,
             'compact status controls stay inside the viewport');
         }
@@ -558,7 +558,7 @@ async function main() {
         await page.getByRole('button', { name: '编辑事项', exact: true }).waitFor();
         assert.equal(await page.locator('.project-tab-bar').count(), 0, 'issue details use the standalone prototype layout');
         await page.getByRole('heading', { name: '目标与背景', exact: true }).waitFor();
-        await page.getByRole('region', { name: '关联开发', exact: true }).waitFor();
+        await page.getByRole('region', { name: '当前操作', exact: true }).waitFor();
         await checkIssueCards(width);
         await capture('12-project-issue-detail-' + width);
         await page.getByRole('button', { name: '编辑事项', exact: true }).click();

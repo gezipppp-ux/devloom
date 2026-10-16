@@ -29,7 +29,7 @@ function location(item) {
         <span class="ui-work-person" :title="`${$t('当前处理人')}：${handlerName}`"><PersonAvatar :name="handlerName" /><span>{{ handlerName || '—' }}</span></span>
         <time v-if="item.dueDate || item.createdAt" class="ui-work-date" :datetime="item.dueDate || item.createdAt" :title="`${$t(item.dueDate ? '截止日期' : '创建时间')}：${formatDate(item.dueDate || item.createdAt)}`">{{ formatDate(item.dueDate || item.createdAt, { year: undefined, month: 'short', day: 'numeric' }) }}</time>
         <span v-else class="ui-work-date">—</span>
-        <span class="ui-row-action work-action-next">{{ $t(item.label) }}</span>
+        <span class="ui-row-action work-action-next">{{ item.workflowLabel || $t(item.label) }}</span>
       </RouterLink>
     </li>
   </ul>

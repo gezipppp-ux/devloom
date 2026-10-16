@@ -23,7 +23,7 @@ const router=createRouter({history:createWebHistory(),routes:[{path:'/deliveries
 const EditorFixture={setup(){const values=ref(['','','']);return()=>h('div', ['描述','验收标准','复现步骤'].map((label,i)=>h(MarkdownEditor,{label,rows:i?4:6,modelValue:values.value[i],'onUpdate:modelValue':value=>values.value[i]=value})))}};
 const kind=new URLSearchParams(location.search).get('fixture'); const component={editor:EditorFixture,discussion:Discussion,settings:Settings,issue:Detail,assets:Assets}[kind];
 const currentProject=ref(${JSON.stringify(project)}), permissions=ref(${JSON.stringify(permissions)});
-createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),kind==='settings'?h('button',{onClick:()=>{currentProject.value={...currentProject.value,name:'父级刷新名称',revision:currentProject.value.revision+1}}},'模拟父级刷新'):null,kind==='discussion'?h('button',{onClick:()=>{permissions.value=permissions.value.includes('collaboration.view')?['issue.view']: ${JSON.stringify(permissions)}}},'切换讨论权限'):null,h(component,{project:currentProject.value,projectId:'p',issueId:'i',endpoint:'/projects/p/issues/i',permissions:permissions.value,canArchive:kind==='settings'})])}).use(router).use(i18n).mount('#app');`;
+createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),kind==='settings'?h('button',{onClick:()=>{currentProject.value={...currentProject.value,name:'父级刷新名称',revision:currentProject.value.revision+1}}},'模拟父级刷新'):null,kind==='discussion'?h('button',{onClick:()=>{permissions.value=permissions.value.includes('collaboration.view')?['issue.view']: ${JSON.stringify(permissions)}}},'切换讨论权限'):null,h(component,{project:currentProject.value,projectId:'p',issueId:'i',endpoint:'/projects/p/issues/i',deliverySubmission:{allowed:true,label:'提交交付并送验'},permissions:permissions.value,canArchive:kind==='settings'})])}).use(router).use(i18n).mount('#app');`;
   const server = await createServer({ configFile: false, root: path.resolve("web"), logLevel: "error", plugins: [vue(), { name: "editing-fixture", resolveId(id) { if (id === "virtual:editing") return "\0editing"; }, load(id) { if (id === "\0editing") return source; }, configureServer(server) { server.middlewares.use(async (req, res, next) => { if (!req.url.startsWith("/fixture")) return next(); res.setHeader("Content-Type", "text/html"); res.end(await server.transformIndexHtml(req.url, '<html><body><main id="app"></main><script type="module" src="/@id/virtual:editing"></script></body></html>')); }); } }], server: { host: "127.0.0.1", port: 0 } });
   let browser;
   try {
@@ -98,8 +98,9 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),kind==='sett
     await selectOption(page.getByLabel("目标状态", { exact: true }), "develop");
     assert.equal(await page.getByLabel("原因", { exact: true }).getAttribute("required"), "");
     await page.getByLabel("原因", { exact: true }).fill("开始实现已确认的需求");
-    await page.getByRole("button", { name: "更新状态并交接", exact: true }).click();
-    await page.getByText("当前没有可用的状态操作。", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "开发中", exact: true }).click();
+    await page.getByRole("combobox", { name: "目标状态", exact: true }).waitFor({ state: "hidden" });
+    assert.equal(await page.getByText("当前没有可用的状态操作。", { exact: true }).count(), 0);
     assert.deepEqual(writes.at(-1).input, { transitionId: "develop", reason: "开始实现已确认的需求", revision: 2 });
     assert.equal(writes.some(write => write.pathname.endsWith("/tasks")), false, "changing status never creates a development task");
     assert.equal(await page.getByLabel("评论内容").inputValue(), "切换编辑时保留讨论草稿");

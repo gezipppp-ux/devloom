@@ -374,7 +374,7 @@ test("assigning separate issues and merging my plans preserves sources and start
   assert.deepEqual(new Set(merged.issueIds), new Set(input.issueIds));
   assert.equal((await services.merge(project.id, actor, merge)).task.id, merged.id);
   await assert.rejects(services.merge(project.id, actor, { ...merge, title: "不同内容" }), { statusCode: 409 });
-  assert.equal((await services.list(project.id, actor, { scope: "mine" })).tasks.length, 1);
+  assert.equal((await services.list(project.id, actor, { scope: "mine", status: "planned" })).tasks.length, 1);
   for (const source of tasks) {
     const historical = (await services.read(project.id, source.id, actor)).task;
     assert.equal(historical.status, "merged");
@@ -440,7 +440,7 @@ test("planning needs no Git, reserves each issue once, supports reassignment and
   assert.equal(await database.client.issueDevelopmentClaim.count(), 0);
   assert.equal(await database.client.taskIssueLink.count({ where: { taskId: planned.id } }), 2);
   await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [first.id] });
-  assert.equal((await services.list(project.id, actor, { issueId: first.id })).tasks.length, 2);
+  assert.equal((await services.list(project.id, actor, { issueId: first.id, status: "all" })).tasks.length, 2);
 });
 
 test("concurrent claims and stale revisions are atomic", async t => {

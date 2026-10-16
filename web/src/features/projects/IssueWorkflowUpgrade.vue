@@ -27,7 +27,7 @@ function submit() {
     <p v-if="loading" role="status">{{ $t('正在核对流程与关联任务…') }}</p>
     <p v-if="data && !data.available" class="warning">{{ data.reason }}</p>
     <form v-if="data?.available" id="issue-workflow-upgrade" class="project-form" @submit.prevent="submit">
-      <p>{{ $t('流程版本') }}：v{{ data.currentVersion }} → v{{ data.targetVersion }}</p>
+      <div class="workflow-version-change"><span>{{ $t('流程版本') }}</span><strong>v{{ data.currentVersion }} <span aria-hidden="true">→</span> v{{ data.targetVersion }}</strong></div>
       <p>{{ $t('当前步骤') }}：{{ data.statusName }} → {{ data.targetStatusName }}</p>
       <p>{{ $t('当前处理人') }}：{{ data.people.find(person => person.id === data.handlerId)?.displayName }}</p>
       <p>{{ $t('保留事项、关联任务和原版本历史。切换流程不会启动开发或提交交付。') }}</p>
@@ -43,5 +43,7 @@ function submit() {
 </template>
 
 <style scoped>
+.workflow-version-change { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; padding: 18px; border-radius: var(--radius-control); background: var(--soft); }
+.workflow-version-change strong { color: var(--highlight); }
 .project-form .ui-check-row { flex-direction: row; }
 </style>

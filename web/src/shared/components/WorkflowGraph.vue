@@ -39,7 +39,7 @@ const focus = computed(() => {
 });
 // Keep related paths above muted crossings without recreating their keyed elements.
 const paintedRoutes = computed(() => focus.value ? routes.value.filter(edge => !focus.value.edges.has(edge.id)).concat(routes.value.filter(edge => focus.value.edges.has(edge.id))) : routes.value);
-defineExpose({ focusCanvas: () => scroll.value?.focus() });
+defineExpose({ fullscreen, focusCanvas: () => scroll.value?.focus() });
 async function fit() {
   fitting.value = true;
   await nextTick();

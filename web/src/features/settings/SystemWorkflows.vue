@@ -12,7 +12,10 @@ import { freeNodePosition, workflowNodes } from "../../shared/components/workflo
 
 const actorLabels = { handler: "当前处理人", developer: "开发负责人", reviewer: "本轮验证人", assigner: "分派协调人" };
 const assignmentLabels = { role: "目标节点职责", selection: "本次选择处理人", executor: "当前开发执行人", reviewer: "本轮验证人", submitter: "本轮交付提交人" };
-const replacing = ref(false);
+const replacing = ref(false), previewing = ref(false);
+const fieldLabels = { description: '描述', acceptanceCriteria: '验收标准', reproductionSteps: '复现步骤', expectedResult: '预期结果', actualResult: '实际结果', releaseId: '目标版本', qaOwnerId: '测试负责人', acceptanceOwnerId: '业务验收人' };
+function preview() { simulationNode.value = selected.value || definition.value.nodes.find(node => node.kind === 'initial')?.id || ''; simulationEvent.value = 'manual'; previewing.value = true; }
+const dirty = computed(() => data.value && JSON.stringify(definition.value) !== JSON.stringify(data.value.workflow.draft));
 function loadRecommended() { definition.value = JSON.parse(JSON.stringify(data.value.recommendedDefinition)); clear(); replacing.value = false; }
 const simulationNode = ref(""), simulationEvent = ref("manual");
 const simulation = computed(() => definition.value.transitions.filter(item => item.from === simulationNode.value && item.trigger === simulationEvent.value));
@@ -24,7 +27,7 @@ function clear() { selected.value = ""; selectedEdge.value = ""; deleting.value 
 function closeEditor() { clear(); graph.value?.focusCanvas(); }
 function cancelDelete() { deleting.value = false; void focusName(); }
 watch(data, value => { if (value) { definition.value = JSON.parse(JSON.stringify(value.workflow.draft)); clear(); } });
-watch(type, () => { data.value = null; definition.value = { nodes: [], transitions: [] }; notice.value = ""; clear(); void reload(); });
+watch(type, () => { replacing.value = false; previewing.value = false; data.value = null; definition.value = { nodes: [], transitions: [] }; notice.value = ""; clear(); void reload(); });
 watch(definition, value => {
   if (data.value && JSON.stringify(value) !== JSON.stringify(data.value.workflow.draft)) notice.value = "";
 }, { deep: true });
@@ -74,13 +77,12 @@ async function persist(publish = false) {
 
 <template>
   <section class="workflow-settings" :aria-label="$t('流程编排')">
-    <header class="ui-settings-heading"><div><h2>{{ $t("流程编排") }}</h2><p>{{ $t("系统统一维护需求和 Bug 两套流程，发布后用于所有项目的新事项。") }}</p></div></header>
-    <div class="workflow-page-toolbar"><div class="workflow-type-tabs" role="group" :aria-label="$t('流程类型')"><button type="button" :aria-pressed="type === 'requirement'" :disabled="saving" @click="type = 'requirement'">{{ $t("需求流程") }}</button><button type="button" :aria-pressed="type === 'bug'" :disabled="saving" @click="type = 'bug'">{{ $t("Bug 流程") }}</button></div><span v-if="data" class="workflow-version">{{ $t("已发布 v") }}{{ data.workflow.publishedVersion }}</span></div>
+    <header class="ui-settings-heading"><div><h2>{{ $t("流程编排") }}</h2><p>{{ $t("系统统一维护需求和 Bug 两套流程，发布后用于所有项目的新事项。") }}</p></div><div v-show="!graph?.fullscreen" class="actions"><button :disabled="!data || loading || saving" @click="persist()">{{ $t('保存流程草稿') }}</button><button class="primary" :disabled="!data || loading || saving" @click="persist(true)">{{ saving ? $t('正在保存…') : $t('校验并发布流程') }}</button></div></header>
+    <div class="workflow-page-toolbar"><div class="workflow-type-tabs" role="group" :aria-label="$t('流程类型')"><button type="button" :aria-pressed="type === 'requirement'" :disabled="saving" @click="type = 'requirement'">{{ $t("需求流程") }}</button><button type="button" :aria-pressed="type === 'bug'" :disabled="saving" @click="type = 'bug'">{{ $t("Bug 流程") }}</button></div><span v-if="data" class="workflow-version">{{ $t("已发布 v") }}{{ data.workflow.publishedVersion }}</span><span v-if="dirty" class="field-hint">{{ $t('草稿未保存') }}</span><div class="actions workflow-tools"><button :disabled="!data?.recommendedDefinition || saving || loading" @click="replacing = true">{{ $t('流程模板') }}</button><button :disabled="!data || saving || loading" @click="preview">{{ $t('交接预览') }}</button></div></div>
     <FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="notice" type="success" />
     <p v-if="loading" role="status">{{ $t("正在读取流程…") }}</p>
     <button v-if="error" :disabled="loading || saving" @click="reload">{{ $t("重新读取流程") }}</button>
     <template v-if="data">
-      <div class="actions"><button type="button" :disabled="saving || loading || !data.recommendedDefinition" @click="replacing = true">{{ $t('载入推荐流程') }}</button><span class="field-hint">{{ $t('支持人工成果和已有成果送验，保存并发布后生效。') }}</span></div>
       <WorkflowGraph :key="type" ref="graph" :definition="definition" :selected="selected" :selected-edge="selectedEdge" :editable="!saving && !loading" @select="selectNode" @select-edge="selectEdge" @move="moveNode" @add="addNode" @connect="addEdge" @clear="clear" @delete="requestDelete">
         <template #inspector>
           <fieldset ref="editor" :disabled="saving || loading" class="canvas-properties" @keydown.esc.stop.prevent="deleting ? cancelDelete() : closeEditor()">
@@ -117,17 +119,44 @@ async function persist(publish = false) {
             <button v-else class="canvas-remove" @click="requestDelete">{{ node ? $t("删除状态") : $t("删除连线") }}</button>
           </fieldset>
         </template>
-        <template #actions="{ fullscreen }"><p v-if="fullscreen && (error || notice)" class="canvas-feedback" :class="{ 'is-error': error }" :role="error ? 'alert' : 'status'">{{ error || notice }}</p><div class="actions"><button :disabled="loading || saving" @click="persist()">{{ $t("保存流程草稿") }}</button><button class="primary" :disabled="loading || saving" @click="persist(true)">{{ saving ? $t("正在保存…") : $t("校验并发布流程") }}</button></div></template>
+        <template #actions="{ fullscreen }"><p v-if="fullscreen && (error || notice)" class="canvas-feedback" :class="{ 'is-error': error }" :role="error ? 'alert' : 'status'">{{ error || notice }}</p><div v-if="fullscreen" class="actions"><button :disabled="loading || saving" @click="persist()">{{ $t("保存流程草稿") }}</button><button class="primary" :disabled="loading || saving" @click="persist(true)">{{ saving ? $t("正在保存…") : $t("校验并发布流程") }}</button></div></template>
       </WorkflowGraph>
-      <details class="workflow-preview"><summary>{{ $t('模拟一次交接') }}</summary><div class="project-form"><label>{{ $t('来源状态') }}<AppSelect v-model="simulationNode"><option v-for="item in definition.nodes" :key="item.id" :value="item.id">{{ item.name }}</option></AppSelect></label><label>{{ $t('触发事件') }}<AppSelect v-model="simulationEvent"><option v-for="(event, id) in workflowEvents" :key="id" :value="id">{{ $t(event.label) }}</option></AppSelect></label><p v-if="!simulation.length">{{ $t('此事件没有配置流转。') }}</p><p v-for="item in simulation" :key="item.id">{{ item.name }} → {{ definition.nodes.find(node => node.id === item.to)?.name }} · {{ $t(assignmentLabels[item.assignment]) }}<span v-if="item.requiresReason"> · {{ $t('必须填写原因') }}</span><span v-if="item.requiredFields?.length"> · {{ $t('流转必填资料') }}：{{ item.requiredFields.join('、') }}</span></p><p class="field-hint">{{ $t('仅预览规则，不执行开发或修改事项；实际提交仍校验资料和人员权限。') }}</p></div></details>
       <p class="field-hint">{{ $t("修改先保留为草稿；发布不会改变已有事项绑定的流程。") }}</p>
     </template>
-    <ModalDialog v-if="replacing" open :title="$t('载入推荐流程')" @close="replacing = false"><p>{{ $t('将替换当前未保存的流程草稿。保存或发布之前，已发布版本和现有事项保持原样。') }}</p><template #footer><button @click="replacing = false">{{ $t('取消') }}</button><button class="primary" @click="loadRecommended">{{ $t('确认载入草稿') }}</button></template></ModalDialog>
+    <ModalDialog v-if="replacing && data?.recommendedDefinition" open wide :title="$t('流程模板')" @close="replacing = false">
+      <div class="workflow-template-summary"><h3>{{ $t('开发与线下处理') }}</h3><p>{{ $t('从待开发提交已有成果，送验、退回与再次提交沿用同一流程。') }}</p></div>
+      <WorkflowGraph :definition="data.recommendedDefinition" />
+      <div class="workflow-template-scope"><h3>{{ $t('替换范围') }}</h3><p>{{ $t('将替换当前未保存的流程草稿。保存或发布之前，已发布版本和现有事项保持原样。') }}</p><p class="field-hint">{{ $t('修改先保留为草稿；发布不会改变已有事项绑定的流程。') }}</p></div>
+      <template #footer><button @click="replacing = false">{{ $t('取消') }}</button><button class="primary" @click="loadRecommended">{{ $t('确认载入草稿') }}</button></template>
+    </ModalDialog>
+    <ModalDialog v-if="previewing" open :title="$t('交接预览')" @close="previewing = false">
+      <div class="project-form workflow-handoff-preview">
+        <p class="field-hint">{{ $t('根据当前草稿预览交接规则。') }}</p>
+        <label>{{ $t('来源状态') }}<AppSelect v-model="simulationNode" :aria-label="$t('来源状态')"><option v-for="item in definition.nodes" :key="item.id" :value="item.id">{{ item.name }}</option></AppSelect></label>
+        <label>{{ $t('触发事件') }}<AppSelect v-model="simulationEvent" :aria-label="$t('触发事件')"><option v-for="(event, id) in workflowEvents" :key="id" :value="id">{{ $t(event.label) }}</option></AppSelect></label>
+        <p v-if="!simulation.length" class="muted">{{ $t('此事件没有配置流转。') }}</p>
+        <section v-for="item in simulation" :key="item.id" class="workflow-handoff-result"><h3>{{ item.name }}</h3><p>{{ definition.nodes.find(node => node.id === item.from)?.name }} → {{ definition.nodes.find(node => node.id === item.to)?.name }}</p>
+          <dl><dt>{{ $t('操作主体') }}</dt><dd>{{ $t(actorLabels[item.actor]) }}</dd><dt>{{ $t('下一处理人规则') }}</dt><dd>{{ $t(assignmentLabels[item.assignment]) }}</dd></dl>
+          <ul v-if="item.requiresReason || item.requiredFields?.length || item.requireDelivery || item.requireAcceptedDelivery"><li v-if="item.requiresReason">{{ $t('必须填写原因') }}</li><li v-for="field in item.requiredFields" :key="field">{{ $t(fieldLabels[field] || field) }}</li><li v-if="item.requireDelivery">{{ $t('必须有有效交付') }}</li><li v-if="item.requireAcceptedDelivery">{{ $t('必须已有通过验收的交付') }}</li></ul>
+        </section>
+        <p class="field-hint">{{ $t('仅预览规则，不执行开发或修改事项；实际提交仍校验资料和人员权限。') }}</p>
+      </div><template #footer><button @click="previewing = false">{{ $t('关闭') }}</button></template>
+    </ModalDialog>
   </section>
 </template>
 
 <style scoped>
 .workflow-settings { min-width: 0; }
+.workflow-settings > header { flex-wrap: wrap; gap: 16px; }
+.workflow-tools { margin-left: auto; }
+.workflow-template-summary, .workflow-template-scope { padding: 8px 0 20px; }
+.workflow-template-summary h3, .workflow-template-scope h3, .workflow-handoff-result h3 { font-size: 16px; margin: 0 0 12px; }
+.workflow-template-scope { margin-top: 20px; padding-bottom: 0; }
+.workflow-handoff-result { border-top: 1px solid var(--line); padding-top: 20px; overflow-wrap: anywhere; }
+.workflow-handoff-result dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 20px; font-size: 13px; }
+.workflow-handoff-result dt { color: var(--muted); }
+.workflow-handoff-result dd { margin: 0; }
+@media (max-width: 767px) { .workflow-tools { margin-left: 0; width: 100%; } }
 .workflow-page-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
 .workflow-type-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--surface); }
 .workflow-type-tabs button { border: 0; background: transparent; color: var(--muted); }

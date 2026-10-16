@@ -5,6 +5,12 @@ const { attachmentPrompt } = require("./attachment-prompts.cjs");
 const { object, text, identifiers, identifier, revision } = require("./project-issues.cjs");
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
+function developmentStatus(input) {
+  if (input === undefined || input === "") return "not_cancelled";
+  if (!["not_cancelled", "all", "planned", "started", "unknown", "merged", "completed", "cancelled"].includes(input)) throw accountError("任务状态无效。", 400);
+  return input;
+}
+
 function developmentInput(input, addition = false) {
   object(input, addition ? ["requestId", "issueIds", "send"] : ["requestId", "issueIds", "executorId"]);
   if (!UUID.test(input.requestId || "")) throw accountError("开发请求标识无效，请重新打开表单。", 400);
@@ -92,4 +98,4 @@ function developmentPrompt(issues, addition = false, templates = getPromptTempla
   return content;
 }
 
-module.exports = { developmentInput, developmentMergeInput, developmentStartInput, manualDevelopmentInput, manualDevelopmentPrompt, developmentEditInput, developmentPrompt };
+module.exports = { developmentStatus, developmentInput, developmentMergeInput, developmentStartInput, manualDevelopmentInput, manualDevelopmentPrompt, developmentEditInput, developmentPrompt };

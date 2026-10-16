@@ -59,6 +59,14 @@ const members = useResource(() =>
   props.canAssign ? appApi(`/projects/${props.projectId}/members`) : null,
 );
 const publishing = ref(false);
+const developmentLabel = computed(() => {
+  const labels = [...new Set((task.value?.scope || []).filter(issue => issue.developmentAllowed).map(issue => issue.developmentAction).filter(Boolean))];
+  return labels.length === 1 ? labels[0] : '';
+});
+const submissionLabel = computed(() => {
+  const labels = [...new Set((task.value?.scope || []).filter(issue => issue.submission?.allowed).map(issue => issue.submission.label).filter(Boolean))];
+  return labels.length === 1 ? labels[0] : '';
+});
 const editing = ref(false),
   adding = ref(false),
   title = ref(""),
@@ -468,7 +476,7 @@ async function submitConfirmation() {
       </section>
       <section v-if="task.canSubmitDelivery" class="development-panel">
         <h3>{{ $t('整理成果') }}</h3><p class="field-hint">{{ $t('填写已完成的工作与核验结果，选择验证人后送验。') }}</p>
-        <button :disabled="busy || editing" @click="publishing = true">{{ $t(task.status === 'planned' ? '提交已有成果' : '提交交付并送验') }}</button>
+        <button :disabled="busy || editing" @click="publishing = true">{{ submissionLabel || $t('整理成果') }}</button>
       </section>
       <section v-if="canStart" class="development-preparation" :aria-label="$t('执行准备')">
         <h3>{{ $t('执行准备') }}</h3>
@@ -486,7 +494,7 @@ async function submitConfirmation() {
           <li>
             <span class="development-step-icon"><PlayCircleOutlined aria-hidden="true" /></span>
             <div><h4>{{ $t('选择分支并开始') }}</h4><p>{{ $t('明确提交后才启动 Agent') }}</p></div>
-            <button ref="startButton" class="primary" :disabled="busy || editing || !spaceReady || !workspaceId" @click="showStart">{{ $t('开始开发') }}</button>
+            <button ref="startButton" class="primary" :disabled="busy || editing || !spaceReady || !workspaceId" @click="showStart">{{ developmentLabel || $t('开始开发') }}</button>
           </li>
         </ol>
         <p v-if="editing" class="field-hint">{{ $t('请先保存或取消编辑，再启动开发。') }}</p>
@@ -603,7 +611,7 @@ async function submitConfirmation() {
             <label class="permission-choice"><input type="checkbox" v-model="startConfirmed" :disabled="busy || editing" />{{ $t('我已确认任务范围、起始分支和执行设置。') }}</label>
             <p class="field-hint">{{ $t('启动时仅发送允许开发的事项，已送验或已结束的范围保留原记录。') }}</p>
           </section>
-          <footer class="development-start-actions"><span class="field-hint">{{ $t('明确提交后才启动 Agent') }}</span><button type="button" :disabled="saving" @click="closeStart">{{ $t('取消') }}</button><button class="primary" :aria-label="$t('启动 Codex 开发')" :disabled="busy || editing || !baseBranch || !workspaceId || !permissionsReady || !startConfirmed">{{ saving ? $t('正在提交…') : $t('开始开发') }}</button></footer>
+          <footer class="development-start-actions"><span class="field-hint">{{ $t('明确提交后才启动 Agent') }}</span><button type="button" :disabled="saving" @click="closeStart">{{ $t('取消') }}</button><button class="primary" :aria-label="$t('启动 Codex 开发')" :disabled="busy || editing || !baseBranch || !workspaceId || !permissionsReady || !startConfirmed">{{ saving ? $t('正在提交…') : developmentLabel || $t('开始开发') }}</button></footer>
         </form>
       </div>
       <PublishDelivery v-if="publishing" :project-id="projectId" :task-id="taskId" @close="publishing = false" @published="publishing = false; reload(); emit('changed')" />

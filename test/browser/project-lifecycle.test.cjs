@@ -105,7 +105,7 @@ async function verifyProjectLifecycle({ page, origin, project, database, output,
   await selectOption(page.getByLabel("目标状态", { exact: true }), { label: "已拒绝 · 取消事项" });
   await page.getByLabel("原因", { exact: true }).fill("本版本取消实现");
   const transition = page.waitForResponse(response => response.url().endsWith(`/issues/${issue.id}/transition`) && response.request().method() === "POST");
-  await page.getByRole("button", { name: "更新状态并交接", exact: true }).click();
+  await page.getByRole("button", { name: "取消事项", exact: true }).click();
   assert.equal((await transition).status(), 200);
   await tab("版本");
   await archiveVersion();

@@ -24,7 +24,18 @@ async function fixture(t, { count = 1, type = "requirement" } = {}) {
   const workbench = new WorkbenchServices(database, projects);
   const issues = [];
   for (let index = 0; index < count; index++) issues.push(await content.createIssue(project.id, users.product, { type, title: "Outcome " + index, description: "Configuration behavior", reproductionSteps: "Open the result", expectedResult: "Expected behavior", actualResult: "Original behavior", acceptanceCriteria: "The result can be verified.", ...(type === "bug" ? { acceptanceOwnerId: users.other.id } : {}) }));
-  const publish = () => installReviewWorkflow(database, recommendedWorkflow(type), type);
+  const publish = (manual = false) => {
+    const definition = recommendedWorkflow(type);
+    if (manual) {
+      // Custom non-code workflow still explicitly enters the ready stage first.
+      Object.assign(definition.nodes.find(node => node.id === 'ready'), { handler: 'businessOwner', allowAssignment: false });
+      definition.transitions.find(edge => edge.from === 'ready' && edge.trigger === 'delivery.submitted').actor = 'handler';
+      const initial = definition.nodes.find(node => node.kind === 'initial');
+      definition.transitions.push({ id: 'prepare_offline', from: initial.id, to: 'ready', name: '安排处理', trigger: 'manual', actor: 'handler', assignment: 'role', permission: 'issue.transition', requiresReason: false });
+    }
+    return installReviewWorkflow(database, definition, type);
+  };
+  const prepare = issue => content.transitionIssue(project.id, issue.id, users.product, { revision: issue.revision, transitionId: 'prepare_offline' });
   const upgrade = async (issue = issues[0]) => {
     const preview = await content.previewWorkflowUpgrade(project.id, issue.id, users.product);
     assert.equal(preview.available, true, preview.reason);
@@ -35,15 +46,18 @@ async function fixture(t, { count = 1, type = "requirement" } = {}) {
   const read = (issue = issues[0], actor = users.product) => content.readIssue(project.id, issue.id, actor);
   const submit = (issue, actor, extra = {}) => content.addDeliverable(project.id, actor, { requestId: randomUUID(), issueId: issue.id, issueRevision: issue.revision, reviewerId: users.qa.id, body: "Completed work and verification evidence", ...extra });
   const review = (delivery, status = "accepted") => content.reviewDeliverable(project.id, delivery.id, users.qa, { revision: delivery.revision, status, checkedItems: status === "accepted" ? delivery.checklist.map((_, i) => i) : [], reviewNote: status === "returned" ? "Add the missing result" : "Verified" });
-  return { database, project, projects, content, development, workbench, issues, publish, upgrade, read, submit, review, ...users };
+  return { database, project, projects, content, development, workbench, issues, publish, prepare, upgrade, read, submit, review, ...users };
 }
 
 test("unstarted existing work upgrades explicitly, submits, and settles without an Agent identity", async t => {
   const f = await fixture(t);
   const { tasks: [task] } = await f.development.create(f.project.id, f.dev, { requestId: randomUUID(), issueIds: [f.issues[0].id] });
   const before = await f.read();
+  assert.equal(before.workflow.latestPublishedVersion, 1);
   const snapshot = (await f.development.store.task(f.project.id, task.id)).snapshot;
   await f.publish();
+  assert.equal((await f.read()).workflow.latestPublishedVersion, 2);
+  assert.equal((await f.content.listIssues(f.project.id, f.product, {})).items[0].workflow.latestPublishedVersion, 2);
   assert.equal((await f.read()).workflow.version, 1, "publication does not silently rebind existing issues");
   const { issue, input } = await f.upgrade();
   assert.equal(issue.status, "ready");
@@ -71,8 +85,8 @@ test("unstarted existing work upgrades explicitly, submits, and settles without 
 });
 
 test("manual outcomes return to their submitter and resubmit without development permissions", async t => {
-  const f = await fixture(t); await f.publish();
-  let { issue } = await f.upgrade();
+  const f = await fixture(t); await f.publish(true);
+  let issue = await f.prepare((await f.upgrade()).issue);
   assert.equal(issue.deliverySubmission.allowed, true);
   let delivery = await f.submit(issue, f.product);
   delivery = await f.review(delivery, "returned");
@@ -102,8 +116,8 @@ test("existing outcomes retain an unstarted task through return and resubmission
 });
 
 test("manual rework can explicitly acquire development and retain the original delivery chain", async t => {
-  const f = await fixture(t); await f.publish();
-  const { issue } = await f.upgrade();
+  const f = await fixture(t); await f.publish(true);
+  const issue = await f.prepare((await f.upgrade()).issue);
   const returned = await f.review(await f.submit(issue, f.product), "returned");
   const { tasks: [task] } = await f.development.create(f.project.id, f.product, { requestId: randomUUID(), issueIds: [issue.id], executorId: f.other.id });
   assert.equal((await f.read()).status, "ready");
@@ -153,7 +167,7 @@ test("workflow adoption checks node compatibility, project permissions, and deli
   incompatible.nodes.find(node => node.id === "planned").category = "work";
   await installReviewWorkflow(f.database, incompatible);
   assert.equal((await f.content.previewWorkflowUpgrade(f.project.id, f.issues[0].id, f.product)).available, false);
-  await f.publish(); const { issue } = await f.upgrade();
+  await f.publish(true); const issue = await f.prepare((await f.upgrade()).issue);
   await f.submit(issue, f.product);
   await f.publish();
   assert.equal((await f.content.previewWorkflowUpgrade(f.project.id, issue.id, f.product)).available, false);
@@ -212,8 +226,8 @@ test("delivery during startup preparation prevents stale dispatch without creati
 });
 
 test("manual Bug results retain business acceptance and return to the delivery author", async t => {
-  const f = await fixture(t, { type: "bug" }); await f.publish();
-  const { issue } = await f.upgrade();
+  const f = await fixture(t, { type: "bug" }); await f.publish(true);
+  const issue = await f.prepare((await f.upgrade()).issue);
   const accepted = await f.review(await f.submit(issue, f.product));
   let current = await f.read();
   assert.equal(current.status, "verified");
@@ -228,4 +242,56 @@ test("manual Bug results retain business acceptance and return to the delivery a
   assert.equal((await f.read()).status, "closed");
   assert.equal(accepted.authorId, f.product.id);
   assert.equal(await f.database.client.developmentTask.count(), 0);
+});
+
+
+test("delivery availability, names and targets follow the bound workflow even with custom node identities", async t => {
+  const f = await fixture(t);
+  await f.publish();
+  let { issue } = await f.upgrade();
+  assert.equal(issue.deliverySubmission.allowed, false, 'recommended template has no submission edge in planning');
+  await assert.rejects(f.submit(issue, f.product), { statusCode: 409 });
+  const definition = recommendedWorkflow('requirement');
+  const delivery = definition.transitions.find(edge => edge.trigger === 'delivery.submitted');
+  definition.transitions.push({ ...delivery, id: 'configured_delivery', from: 'planned', actor: 'handler', name: '配置完成，交给质检' });
+  const renamed = new Map(definition.nodes.filter(node => node.id !== 'planned').map((node, index) => [node.id, 'custom_' + index]));
+  for (const node of definition.nodes) node.id = renamed.get(node.id) || node.id;
+  for (const edge of definition.transitions) { edge.from = renamed.get(edge.from) || edge.from; edge.to = renamed.get(edge.to) || edge.to; }
+  await installReviewWorkflow(f.database, definition);
+  issue = (await f.upgrade()).issue;
+  assert.equal(issue.deliverySubmission.allowed, true, 'a configured event has no hardcoded stage restriction');
+  assert.equal(issue.deliverySubmission.label, '配置完成，交给质检');
+  assert.equal(issue.deliverySubmission.transitionId, 'configured_delivery');
+  const submitted = await f.submit(issue, f.product);
+  assert.equal((await f.read()).status, renamed.get('pending_verification'));
+  await f.review(submitted);
+  assert.equal((await f.read()).status, renamed.get('implemented'));
+  assert.equal(await f.database.client.run.count(), 0);
+});
+
+test("development filters exclude only cancellation by default before pagination and preserve access scope", async t => {
+  const f = await fixture(t);
+  const statuses = ['planned', 'started', 'unknown', 'completed', 'merged', 'cancelled'];
+  for (const executor of [f.dev, f.other]) for (const status of statuses) await f.database.client.developmentTask.create({ data: {
+    projectId: f.project.id, executorId: executor.id, creatorId: f.product.id, requestId: randomUUID(), status, snapshot: { title: status, issues: [], additions: [] },
+  } });
+  const all = await f.workbench.list('tasks', f.dev, { status: 'all' });
+  assert.equal(all.total, 6);
+  const current = await f.workbench.list('tasks', f.dev, { limit: '2' });
+  assert.equal(current.total, 5); assert.equal(current.items.length, 2); assert.equal(current.nextOffset, 2);
+  const rest = await f.workbench.list('tasks', f.dev, { offset: '2', limit: '10' });
+  assert.equal(rest.nextOffset, null);
+  assert.deepEqual([...current.items, ...rest.items].map(task => task.status).sort(), statuses.filter(status => status !== 'cancelled').sort());
+  assert.equal((await f.workbench.list('tasks', f.dev, { status: 'cancelled' })).total, 1);
+  assert.equal((await f.workbench.list('tasks', f.dev, { active: 'true' })).total, 3);
+  for (const [status, count] of [[undefined, 5], ['all', 6], ['cancelled', 1]]) {
+    const mine = await f.development.list(f.project.id, f.dev, { scope: 'mine', status, limit: '2' });
+    const tail = await f.development.list(f.project.id, f.dev, { scope: 'mine', status, offset: '2' });
+    assert.equal(mine.tasks.length + tail.tasks.length, count);
+    assert.equal(mine.nextOffset, count > 2 ? 2 : null);
+    assert.ok([...mine.tasks, ...tail.tasks].every(task => task.executorId === f.dev.id));
+    assert.equal((await f.development.list(f.project.id, f.dev, { scope: 'all', status })).tasks.length, count * 2);
+  }
+  await assert.rejects(f.development.list(f.project.id, f.dev, { status: 'bogus' }), { statusCode: 400 });
+  await assert.rejects(f.workbench.list('tasks', f.dev, { status: 'bogus' }), { statusCode: 400 });
 });
