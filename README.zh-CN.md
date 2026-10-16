@@ -67,6 +67,14 @@ DevLoom 是一个面向团队的 Web 开发工作台。产品和测试人员整�
   <sub>入群二维码会定期更新，如已失效，请重新打开本页面获取最新二维码。</sub>
 </div>
 
+## 友情链接
+
+<div align="center">
+  <a href="https://linux.do/"><strong>🌿 Linux.do</strong></a>
+  <br />
+  技术交流与分享社区。
+</div>
+
 ## 开始使用
 
 服务端需要 Node.js 22.13+（LTS）、PostgreSQL、Git 和已接入的 Agent 运行环境；团队成员通过浏览器访问。

@@ -67,6 +67,14 @@ The screenshots below show the current English interface with demo data.
   <sub>Invitation QR codes are refreshed periodically. If it has expired, revisit this section for the latest code.</sub>
 </div>
 
+## Friends
+
+<div align="center">
+  <a href="https://linux.do/"><strong>🌿 Linux.do</strong></a>
+  <br />
+  A community for technology discussion and sharing.
+</div>
+
 ## Getting started
 
 The server needs Node.js 22.13+ (LTS), PostgreSQL, Git, and the runtime for an integrated Agent. Team members access the workspace through a browser.
