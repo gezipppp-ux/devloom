@@ -115,6 +115,7 @@ class ProjectDevelopmentServices {
         this.assertRevision(task, entry.revision);
         if (task.executorId !== actor.id) throw accountError("只能合并自己的开发任务。", 403);
         if (task.status !== "planned" || task.runKey) throw accountError("只能合并尚未启动的待开发任务。", 409);
+        if (task.issueLinks.some(link => link.issue.deliverables?.length)) throw accountError("已有交付记录的任务不能合并，请保留原交付来源。", 409);
         tasks.push(task);
       }
       if (tasks.some(task => task.releaseId !== tasks[0].releaseId)) throw accountError("只能合并同一发布版本的开发任务。", 409);
@@ -134,6 +135,7 @@ class ProjectDevelopmentServices {
       await this.authorize(projectId, actor, current.executorId === actor.id ? "session.start" : "issue.assign");
       this.assertRevision(current, request.revision);
       if (current.status !== "planned") throw accountError("仅未启动的开发任务可编辑或重新指派。", 409);
+      if (current.issueLinks.some(link => link.issue.deliverables?.[0]?.status === "pending")) throw accountError("关联事项正在验证，请先完成本轮验证再修改任务范围或执行人。", 409);
       if (request.executorId && request.executorId !== current.executorId) {
         await this.authorize(projectId, actor, "issue.assign");
         await this.authorizePlan(projectId, actor, request.executorId);
@@ -163,7 +165,10 @@ class ProjectDevelopmentServices {
       this.assertRevision(current, request.revision);
       if (current.status !== "planned") throw accountError("仅待开发任务可以启动。", 409);
       const space = await this.store.space(projectId, actor.id);
-      const issues = await this.store.issues(projectId, current.snapshot.issues.map(issue => issue.id));
+      const allIssues = await this.store.issues(projectId, current.snapshot.issues.map(issue => issue.id));
+      this.assertIssues(allIssues, current.releaseId);
+      const issues = allIssues.filter(issueDevelopmentAllowed);
+      if (!issues.length) throw accountError("关联事项当前流程节点不允许开发，请先完成业务流转。", 409);
       this.assertIssues(issues, current.releaseId, true);
       const prompt = developmentPrompt(issues, false, await this.projects.effectivePrompts(projectId, actor), {
         title: current.snapshot.title, content: request.supplementaryPrompt,
@@ -197,7 +202,10 @@ class ProjectDevelopmentServices {
       this.assertRevision(current, request.revision);
       if (current.status !== "planned") throw accountError("仅待开发任务可以启动。", 409);
       const space = await this.store.space(projectId, actor.id);
-      const issues = await this.store.issues(projectId, current.snapshot.issues.map(issue => issue.id));
+      const allIssues = await this.store.issues(projectId, current.snapshot.issues.map(issue => issue.id));
+      this.assertIssues(allIssues, current.releaseId);
+      const issues = allIssues.filter(issueDevelopmentAllowed);
+      if (!issues.length) throw accountError("关联事项当前流程节点不允许开发，请先完成业务流转。", 409);
       this.assertIssues(issues, current.releaseId, true);
       if (!isDeepStrictEqual(space, prepared.space) || !isDeepStrictEqual(issues, prepared.issues))
         throw accountError("开发空间或事项资料已变化，请刷新后重新开始开发。", 409);

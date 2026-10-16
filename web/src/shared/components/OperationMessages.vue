@@ -23,7 +23,7 @@ watch([messageRevision, () => operationMessages.value.length, target], async () 
   if (!alive) return;
   // Removing the focused oldest card at the queue limit does not dispatch blur.
   focused.value = Boolean(host.value?.contains(document.activeElement));
-  if (!host.value?.showPopover) return;
+  if (!host.value?.isConnected || !host.value.showPopover) return;
   // Keep feedback in the active modal's subtree so its controls are not inert.
   // A manual popover then brings it above the dialog without moving focus.
   const opened = host.value.matches(":popover-open");

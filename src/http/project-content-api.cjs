@@ -2,7 +2,7 @@ const { json } = require("./messages.cjs");
 
 async function serveProjectContent(request, response, url, { services, actor, input }) {
   const reviewers = /^\/api\/projects\/([^/]+)\/reviewers$/.exec(url.pathname);
-  if (reviewers && request.method === "GET") { json(response, 200, await services.reviewers(reviewers[1], actor)); return true; }
+  if (reviewers && request.method === "GET") { json(response, 200, await services.reviewers(reviewers[1], actor, Object.fromEntries(url.searchParams))); return true; }
   const batch = /^\/api\/projects\/([^/]+)\/deliveries\/batch$/.exec(url.pathname);
   if (batch && request.method === "POST") { json(response, 201, await services.addDeliverables(batch[1], actor, input)); return true; }
   const collection = /^\/api\/projects\/([^/]+)\/deliveries$/.exec(url.pathname);
@@ -43,6 +43,8 @@ async function serveProjectContent(request, response, url, { services, actor, in
       { name: query.name, mimeType: request.headers["content-type"], data: input }));
   }
   if (resource === "issues" && id) {
+    if (action === "workflow-upgrade" && request.method === "GET") return send(200, await services.previewWorkflowUpgrade(projectId, id, actor));
+    if (action === "workflow-upgrade" && request.method === "POST") return send(200, await services.upgradeIssueWorkflow(projectId, id, actor, input));
     if (request.method === "POST" && action === "step/assign") return send(200, await services.reassignIssueStep(projectId, id, actor, input));
     if (request.method === "GET" && ["comments", "deliverables", "history"].includes(action)) return send(200, await services.children(projectId, id, actor, action, query));
     if (request.method === "POST" && action === "comments") return send(201, await services.addComment(projectId, id, actor, input));

@@ -18,7 +18,7 @@ function hashCreationRequest(data, attachments) {
 }
 const fileMetadata = { id: true, projectId: true, issueId: true, assetId: true, authorId: true, name: true, mimeType: true, size: true, sha256: true, createdAt: true };
 
-const issueRelations = { actions: { where: { status: { in: ["ready", "active"] } } }, source: true, release: true, workflowVersion: true, developmentClaim: { select: { task: { select: { id: true, executorId: true, executor: { select: { displayName: true } } } } } } };
+const issueRelations = { actions: { where: { status: { in: ["ready", "active"] } } }, deliverables: { orderBy: { createdAt: "desc" }, take: 1, select: { authorId: true } }, source: true, release: true, workflowVersion: true, developmentClaim: { select: { task: { select: { id: true, status: true, executorId: true, executor: { select: { displayName: true } } } } } } };
 
 class ProjectContentStore {
   constructor(database) { this.database = database; }
@@ -102,14 +102,23 @@ class ProjectContentStore {
   }
   async deliveryTask(projectId, issueId, authorId, data) {
     if (data.taskId) {
-      const task = await this.database.client.developmentTask.findFirst({ where: { projectId, id: data.taskId, executorId: authorId }, include: { release: true, issueLinks: true } });
+      const task = await this.database.client.developmentTask.findFirst({ where: { projectId, id: data.taskId, executorId: authorId }, include: { release: true, issueLinks: true, workflowEvents: true } });
       const eligible = ["started", "completed", ...(data.supersedesId ? ["cancelled"] : [])];
-      if (!task || !task.runKey || !eligible.includes(task.status)) throw accountError("只能发布本人已启动的开发任务成果。", 400);
+      const unstarted = issueId && task?.status === "planned" && !task.runKey && !task.workspaceId && !task.snapshot.startRequest && !task.snapshot.workflowIntent && !task.workflowEvents.length;
+      if (!task || !unstarted && (!task.runKey || !eligible.includes(task.status))) throw accountError("只能发布本人当前待开发任务或已结束执行的成果。", 400);
       if (task.release?.status === "archived") throw accountError("已归档版本不能发布交付。", 409);
       if (issueId ? !task.issueLinks.some(link => link.issueId === issueId) : task.snapshot.kind !== "manual") throw accountError("交付来源与开发任务范围不一致。", 400);
       return task;
     }
     return null;
+  }
+  async workflowSwitchState(projectId, issueId) {
+    const deliveries = await this.database.client.projectDeliverable.count({ where: { projectId, issueId } });
+    const tasks = await this.database.client.developmentTask.findMany({ where: { projectId, issueLinks: { some: { issueId } } }, include: { workflowEvents: true } });
+    return { deliveries, tasks };
+  }
+  async workflowSwitchRequest(projectId, issueId, actorId, requestId) {
+    return this.database.client.issueHistory.findFirst({ where: { projectId, issueId, actorId, action: "workflow.upgraded", data: { path: ["requestId"], equals: requestId } } });
   }
   async deliverable(projectId, issueId, authorId, data) {
     if (issueId) assertIssueWritable(await this.issue(projectId, issueId));

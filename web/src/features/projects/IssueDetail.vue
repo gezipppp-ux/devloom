@@ -1,5 +1,6 @@
 <script setup>
 import PublishDelivery from "./PublishDelivery.vue";
+import IssueWorkflowUpgrade from "./IssueWorkflowUpgrade.vue";
 import AppSelect from "../../shared/components/AppSelect.vue";
 import {formatDate, translate} from "../../shared/i18n/index.js";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
@@ -40,6 +41,7 @@ const {data, loading, saving, error, notice, reload, save, perform} = useResourc
   };
 });
 const publishing = ref(false), nextHandler = ref(""), assigningHandler = ref(false), handlerId = ref("");
+const upgrading = ref(false);
 const baseline = ref(null), latest = ref(null);
 const editing = ref(false), form = reactive({}), nextStatus = ref(""), reason = ref("");
 const draftVersion = ref(0), filesVersion = ref(0);
@@ -250,6 +252,7 @@ function person(id) {
                         :can-edit="can('issue.edit') && !editing" :title="editing ? '附件' : '参考资料'"
                         @uploaded="reload"/>
           <IssueDiscussion @changed="reload(); emit('changed')" prototype-layout class="issue-panel issue-discussion" :endpoint="endpoint"
+                           :delivery-submission="data.deliverySubmission"
                            :status-names="Object.fromEntries((data.workflow?.definition.nodes || []).map(node => [node.id, node.name]))"
                            :permissions="data.release?.status === 'archived' ? permissions.filter(p => p.endsWith('.view')) : permissions"/>
         </div>
@@ -295,9 +298,10 @@ function person(id) {
             </form>
             <p v-else class="muted">{{ $t("当前没有可用的状态操作。") }}</p>
             <button
-                v-if="can('deliverable.create') && data.workflowActions?.some(edge => edge.trigger === 'delivery.submitted')"
-                :disabled="saving" @click="publishing = true">{{ $t('提交交付并送验') }}
+                v-if="can('deliverable.create') && (data.deliverySubmission?.allowed ?? data.workflowActions?.some(edge => edge.trigger === 'delivery.submitted'))"
+                :disabled="saving" @click="publishing = true">{{ $t(data.deliverySubmission?.label || '提交交付并送验') }}
             </button>
+            <button v-if="data.workflow && can('issue.assign') && can('issue.transition') && data.processing?.status === 'ready'" :disabled="saving" @click="upgrading = true">{{ $t('采用新流程版本') }}</button>
             <p v-if="data.workflowActions?.some(edge => edge.trigger.startsWith('verification.'))" class="field-hint">
               {{ $t('在交付详情中验证，结论会同步更新事项。') }}</p>
             <RouterLink v-if="data.workflowActions?.some(edge => edge.trigger.startsWith('verification.'))"
@@ -374,6 +378,7 @@ function person(id) {
         </aside>
       </div>
     </template>
+    <IssueWorkflowUpgrade v-if="upgrading" :project-id="projectId" :issue-id="issueId" @close="upgrading = false" @upgraded="upgrading = false; reload(); emit('changed')" />
     <PublishDelivery v-if="publishing && data" :project-id="projectId" :issue-id="issueId"
                      :task-id="data.development?.taskId" @close="publishing = false"
                      @published="publishing = false; reload(); emit('changed')"/>

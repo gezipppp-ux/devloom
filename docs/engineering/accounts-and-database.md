@@ -135,7 +135,7 @@ npm start -- --host 127.0.0.1 --port 4317
 - 交付发布保存标题、说明、提交引用、指定验证人和当时的验收清单；不共享私人会话。`GET /api/projects/:id/deliveries/:deliveryId` 读取授权详情，`POST .../review` 接受修订号、核对项和通过／退回结论，仅指定且有权限的验证人可提交。通过须完整核对，退回必填原因，仅待验证交付可操作。验证开始、重新分派与退回重提遵循[流程动作契约](./workflow-actions.md)。验收记录及可选的显式事项流转在同一事务完成；独立验收不隐式修改事项或执行 Agent。归档只读、撤权和并发修改由服务端再次验证。
 
 - 发布版本使用项目权限 `release.manage`，部门限定上限，项目分配授权。需求／Bug 流程是系统设置，仅当前有效系统管理员可以修改和发布；删除项目权限 `workflow.manage`，不允许项目覆盖系统流程。
-- 事项绑定项目 `releaseId` 和不可变的系统 `workflowVersionId`，状态为该版本节点 ID。流程草稿保存与发布使用 revision；发布校验唯一初始节点、节点可达且均能到达终态、权限白名单，完成／取消节点禁止开发。所有项目的新事项使用该类型当前系统发布版本，在途事项不切换。
+- 事项绑定项目 `releaseId` 和不可变的系统流程版本，状态为该版本节点 ID。流程草稿保存与发布使用 revision；发布校验唯一初始节点、节点可达且均能到达终态、权限白名单，完成／取消节点禁止开发。所有项目的新事项使用该类型当前系统发布版本，发布不自动切换旧事项。未处理、无交付和执行历史的事项可经过预览和修订校验，显式采用新发布版本；旧步骤和原流程版本保留，详见[流程动作契约](./workflow-actions.md)。
 - `/api/system/workflows/:type` 和 `/:type/publish` 由 `SystemWorkflowServices` 复核管理员身份；`GET /api/projects/:id/issue-workflows/:type` 按 `issue.view` 仅返回已发布版本，不公开草稿。旧 `/api/projects/:id/workflows` 管理接口删除，不保留路由别名。系统流程表和版本表不含 projectId。
 - 发布版本归档要求所有事项结束、无未结束开发任务，且没有待验证或退回后尚未重提的交付。归档后事项编辑、流转、评论、交付、附件及资产关联变更均被后端拒绝；读取和幂等只读复用不改历史。
 - `POST /api/projects/:id/tasks` 为每条事项分别认领／指派待开发任务；按 `issue.assign` 指派有效且有 `session.start` 权限的执行人，无需 Git。批量分配可跨版本，合并任务仅关联同一发布版本的事项。数据库 `issue_development_claims` 的唯一约束和串行化事务防止重复认领。
@@ -191,5 +191,5 @@ Jenkinsfile 运行 eslint、Node 测试、`npm run build` 和浏览器脚本。�
 - 事项创建／编辑不直接接受 developerId；开发负责人由任务认领、指派、转派和释放维护。提报人、业务负责人、QA、业务验收人及 watcherIds 按流程动作契约独立维护。事项 DTO 的 development 只含当前任务 ID、开发负责人 ID 和显示名称。
 - 事项列表同时返回本页负责人对应的 people，姓名按 developerId 展示；development 只表示活跃开发任务。完成任务后仍展示保留的负责人，并注明无进行中的开发任务，不能将其误标为待认领。
 - GET /api/projects/:id/tasks 支持 scope=mine|all，mine 在服务端按当前账号过滤并分页；普通列表隐藏已合并源任务，事项关联历史和源任务详情仍可读取。
-- POST /api/projects/:id/tasks/merge 接受 requestId、title、tasks: [{ id, revision }]。仅合并本人、同项目、同版本、planned 且无运行记录的任务，最多 20 个任务／20 条事项。事务检查当前权限、来源修订和归档状态，创建新任务并转移唯一活跃认领；source.snapshot.mergedIntoTaskId 与 target.snapshot.mergedFromTaskIds 保存双向追踪，status=merged 为终态。重复请求只返回原结果，参数不同返回 409。
+- POST /api/projects/:id/tasks/merge 接受 requestId、title、tasks: [{ id, revision }]。仅合并本人、同项目、同版本、planned 且无运行和交付记录的任务，最多 20 个任务／20 条事项。事务检查当前权限、来源修订和归档状态，创建新任务并转移唯一活跃认领；source.snapshot.mergedIntoTaskId 与 target.snapshot.mergedFromTaskIds 保存双向追踪，status=merged 为终态。重复请求只返回原结果，参数不同返回 409。
 - PostgreSQL COMMIT 阶段的 DriverAdapterError/TransactionWriteConflict 与查询阶段 P2034 统一为存储冲突，不自动重试业务操作，避免重复派发执行。

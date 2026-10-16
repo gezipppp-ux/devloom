@@ -14,13 +14,15 @@ class ProjectWorkflowServices {
     await this.projects.authorize(issue.projectId, actor, edge.trigger === "development.assigned" ? (context.executorId === actor.id ? "session.start" : "issue.assign") : edge.permission);
     assertTransitionFields(issue, edge);
     if (edge.requiresReason && !context.reason?.trim()) throw accountError("本次流转必须填写原因。", 400);
-    const delivery = context.delivery || (edge.requireDelivery || edge.requireAcceptedDelivery ? await this.store.latestDelivery(issue.projectId, issue.id) : null);
+    const delivery = context.delivery || (edge.requireDelivery || edge.requireAcceptedDelivery || edge.assignment === "submitter" ? await this.store.latestDelivery(issue.projectId, issue.id) : null);
     if (edge.requireDelivery && (!delivery || delivery.status === "returned" && edge.trigger !== "verification.returned")) throw accountError("需要本次有效交付才能流转。", 409);
+    if (edge.assignment === "submitter" && !delivery) throw accountError("缺少本轮交付，无法确定提交人。", 409);
     if (edge.requireAcceptedDelivery && delivery?.status !== "accepted") throw accountError("需要先通过最新交付的验收。", 409);
     if (edge.trigger === "manual" && (await this.store.latestDelivery(issue.projectId, issue.id))?.status === "pending") throw accountError("请先在交付详情完成本轮验证，再进行人工流转。", 409);
     const next = issue.workflowVersion.definition.nodes.find(node => node.id === edge.to);
     const handlerId = edge.assignment === "selection" ? context.handlerId || workflowHandler(issue, next)
-      : edge.assignment === "reviewer" ? context.reviewerId
+      : edge.assignment === "submitter" ? delivery.authorId
+        : edge.assignment === "reviewer" ? context.reviewerId
         : edge.assignment === "executor" ? context.executorId || issue.developerId : workflowHandler(issue, next);
     if (context.handlerId && edge.assignment !== "selection") throw accountError("此流转不允许手动选择处理人。", 400);
     if (!["completed", "cancelled"].includes(next.kind)) {
@@ -37,6 +39,7 @@ class ProjectWorkflowServices {
     return this.store.updateIssue(issue.projectId, issue.id, actor.id, issue.revision, { status: edge.to }, "transition", {
       ...assignment, reason: context.reason || "", trigger: edge.trigger, transitionId: edge.id,
       ...(context.delivery ? { deliveryId: context.delivery.id } : {}), ...(context.turnId ? { turnId: context.turnId } : {}),
+      ...(context.submissionSource ? { submissionSource: context.submissionSource } : {}),
     });
   }
   async event(issue, actor, trigger, context = {}) {

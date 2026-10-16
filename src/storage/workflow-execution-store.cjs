@@ -38,10 +38,12 @@ class WorkflowExecutionStore {
   result(id, status, error = null) { return this.database.client.workflowExecutionEvent.updateMany({ where: { id, status: { not: "applied" } }, data: { status, error } }); }
   async settle(taskId) {
     const task = await this.database.client.developmentTask.findUnique({ where: { id: taskId }, include: { issueLinks: { include: { issue: { include: { workflowVersion: true } } } }, deliverables: { where: { status: { in: ["pending", "returned"] }, next: { is: null } } } } });
-    if (!task || task.status !== "started" || task.snapshot.kind === "manual" || !task.issueLinks.length || task.deliverables.length) return;
+    if (!task || !["planned", "started"].includes(task.status) || task.snapshot.kind === "manual" || !task.issueLinks.length || task.deliverables.length) return;
     if (task.issueLinks.some(({ issue }) => !["completed", "cancelled"].includes(issue.workflowVersion.definition.nodes.find(node => node.id === issue.status)?.kind))) return;
-    const execution = await this.development.execution(task);
-    if (!["completed", "failed", "interrupted", "cancelled"].includes(execution?.status)) return;
+    if (task.runKey || task.status === "started") {
+      const execution = await this.development.execution(task);
+      if (!["completed", "failed", "interrupted", "cancelled"].includes(execution?.status)) return;
+    } else if (task.snapshot.startRequest || task.snapshot.workflowIntent || await this.database.client.workflowExecutionEvent.count({ where: { taskId } })) return;
     await this.development.finish(task, "completed", task.executorId);
   }
   async taskIds(issueId) {

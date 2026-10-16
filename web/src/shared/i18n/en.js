@@ -7,8 +7,10 @@ import {enFeedback} from "./en-feedback.js";
 import {enWorkbench} from "./en-workbench.js";
 import {enNavigation} from "./en-navigation.js";
 import {enMcp} from "./en-mcp.js";
+import { enDeliveryWorkflow } from "./en-delivery-workflow.js";
 
 export const en = {
+  ...enDeliveryWorkflow,
   ...enMcp,
   ...enNavigation,
   "重新分派处理人": "Reassign handler", "选择处理人": "Select a handler", "确认分派": "Confirm assignment",

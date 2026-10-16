@@ -8,6 +8,7 @@ const { dismissOperationMessages } = require("../support/operation-feedback.cjs"
 const { pasteImage, markdownValue, visual, verifyVisualWriting, captureEditor } = require("../support/issue-markdown.cjs");
 
 async function main() {
+  await require("./delivery-without-agent.test.cjs").deliveryWithoutAgentChecks();
   await require("./person-select.test.cjs").personSelectChecks();
   await require("./operation-feedback.test.cjs").operationFeedbackChecks();
   const { createServer } = await import("vite"), { default: vue } = await import("@vitejs/plugin-vue");

@@ -26,9 +26,10 @@ function workflowDefinition(input, { publish = false } = {}) {
     if (edge.requiredFields !== undefined && (!Array.isArray(edge.requiredFields) || edge.requiredFields.some(field => !requiredFieldNames.includes(field)) || new Set(edge.requiredFields).size !== edge.requiredFields.length)) invalid("必填字段无效。");
     if (edge.requireAcceptedDelivery !== undefined && typeof edge.requireAcceptedDelivery !== "boolean") invalid("交付门禁无效。");
     const trigger = edge.trigger ?? "manual", actor = edge.actor ?? "handler", assignment = edge.assignment ?? "role";
-    if (!Object.hasOwn(workflowEvents, trigger) || !workflowEvents[trigger].actors.includes(actor) || !["role", "selection", "executor", "reviewer"].includes(assignment)) invalid("流转触发事件、操作主体或交接规则无效。");
+    if (!Object.hasOwn(workflowEvents, trigger) || !workflowEvents[trigger].actors.includes(actor) || !["role", "selection", "executor", "reviewer", "submitter"].includes(assignment)) invalid("流转触发事件、操作主体或交接规则无效。");
     if (edge.requireDelivery !== undefined && typeof edge.requireDelivery !== "boolean") invalid("交付证据门禁无效。");
     if (assignment === "reviewer" && !["delivery.submitted", "verification.started"].includes(trigger)) invalid("仅送验或开始验证可以采用本轮验证人。");
+    if (assignment === "submitter" && !["verification.returned", "manual"].includes(trigger)) invalid("仅退回或人工交接可以采用本轮交付提交人。");
     if (trigger === "verification.accepted" && nodes.find(node => node.id === edge.to)?.kind === "cancelled") invalid("验证通过不能进入取消节点。");
     if (trigger === "verification.returned" && ["completed", "cancelled"].includes(nodes.find(node => node.id === edge.to)?.kind)) invalid("退回修改不能进入结束节点。");
     edgeIds.add(edge.id);

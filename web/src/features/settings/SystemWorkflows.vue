@@ -6,11 +6,14 @@ import { createRequestId } from "../../shared/api/request-id.js";
 import { appApi } from "../../shared/api/api.js";
 import { useResource } from "../../shared/api/use-resource.js";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
+import ModalDialog from "../../shared/components/ModalDialog.vue";
 import WorkflowGraph from "../../shared/components/WorkflowGraph.vue";
 import { freeNodePosition, workflowNodes } from "../../shared/components/workflow-routing.js";
 
 const actorLabels = { handler: "当前处理人", developer: "开发负责人", reviewer: "本轮验证人", assigner: "分派协调人" };
-const assignmentLabels = { role: "目标节点职责", selection: "本次选择处理人", executor: "当前开发执行人", reviewer: "本轮验证人" };
+const assignmentLabels = { role: "目标节点职责", selection: "本次选择处理人", executor: "当前开发执行人", reviewer: "本轮验证人", submitter: "本轮交付提交人" };
+const replacing = ref(false);
+function loadRecommended() { definition.value = JSON.parse(JSON.stringify(data.value.recommendedDefinition)); clear(); replacing.value = false; }
 const simulationNode = ref(""), simulationEvent = ref("manual");
 const simulation = computed(() => definition.value.transitions.filter(item => item.from === simulationNode.value && item.trigger === simulationEvent.value));
 const type = ref("requirement"), definition = ref({ nodes: [], transitions: [] });
@@ -77,6 +80,7 @@ async function persist(publish = false) {
     <p v-if="loading" role="status">{{ $t("正在读取流程…") }}</p>
     <button v-if="error" :disabled="loading || saving" @click="reload">{{ $t("重新读取流程") }}</button>
     <template v-if="data">
+      <div class="actions"><button type="button" :disabled="saving || loading || !data.recommendedDefinition" @click="replacing = true">{{ $t('载入推荐流程') }}</button><span class="field-hint">{{ $t('支持人工成果和已有成果送验，保存并发布后生效。') }}</span></div>
       <WorkflowGraph :key="type" ref="graph" :definition="definition" :selected="selected" :selected-edge="selectedEdge" :editable="!saving && !loading" @select="selectNode" @select-edge="selectEdge" @move="moveNode" @add="addNode" @connect="addEdge" @clear="clear" @delete="requestDelete">
         <template #inspector>
           <fieldset ref="editor" :disabled="saving || loading" class="canvas-properties" @keydown.esc.stop.prevent="deleting ? cancelDelete() : closeEditor()">
@@ -99,7 +103,7 @@ async function persist(publish = false) {
               <label>{{ $t("目标状态") }}<AppSelect native-events v-model="edge.to" :aria-label="$t('目标状态')"><option v-for="item in definition.nodes" :key="item.id" :value="item.id" :disabled="item.id === edge.from">{{ item.name }}</option></AppSelect></label>
               <label>{{ $t('触发事件') }}<AppSelect native-events v-model="edge.trigger" :aria-label="$t('触发事件')" @change="changeTrigger"><option v-for="(event, id) in workflowEvents" :key="id" :value="id">{{ $t(event.label) }}</option></AppSelect></label>
               <label>{{ $t('操作主体') }}<AppSelect v-model="edge.actor" :aria-label="$t('操作主体')"><option v-for="actor in workflowEvents[edge.trigger]?.actors || []" :key="actor" :value="actor">{{ $t(actorLabels[actor]) }}</option></AppSelect></label>
-              <label>{{ $t('下一处理人规则') }}<AppSelect v-model="edge.assignment" :aria-label="$t('下一处理人规则')"><option v-for="(label, id) in assignmentLabels" :key="id" :value="id" :disabled="id === 'reviewer' && !['delivery.submitted', 'verification.started'].includes(edge.trigger)">{{ $t(label) }}</option></AppSelect></label>
+              <label>{{ $t('下一处理人规则') }}<AppSelect v-model="edge.assignment" :aria-label="$t('下一处理人规则')"><option v-for="(label, id) in assignmentLabels" :key="id" :value="id" :disabled="id === 'reviewer' && !['delivery.submitted', 'verification.started'].includes(edge.trigger) || id === 'submitter' && !['verification.returned', 'manual'].includes(edge.trigger)">{{ $t(label) }}</option></AppSelect></label>
               <label class="permission-choice"><input v-model="edge.requireDelivery" type="checkbox" />{{ $t('必须有有效交付') }}</label>
               <label>{{ $t("所需权限") }}<AppSelect native-events v-model="edge.permission" :aria-label="$t('所需权限')"><option value="issue.transition">{{ $t("事项流转") }}</option><option value="issue.accept">{{ $t("事项验收") }}</option></AppSelect></label>
               <label>{{ $t('流转必填资料') }}<AppSelect native-events multiple :aria-label="$t('流转必填资料')" @change="edge.requiredFields = [...$event.target.selectedOptions].map(option => option.value)"><option v-for="[value, label] in [['description','描述'], ['acceptanceCriteria','验收标准'], ['reproductionSteps','复现步骤'], ['expectedResult','预期结果'], ['actualResult','实际结果'], ['releaseId','目标版本'], ['qaOwnerId','测试负责人'], ['acceptanceOwnerId','业务验收人']]" :key="value" :value="value" :selected="edge.requiredFields?.includes(value)">{{ $t(label) }}</option></AppSelect></label>
@@ -118,6 +122,7 @@ async function persist(publish = false) {
       <details class="workflow-preview"><summary>{{ $t('模拟一次交接') }}</summary><div class="project-form"><label>{{ $t('来源状态') }}<AppSelect v-model="simulationNode"><option v-for="item in definition.nodes" :key="item.id" :value="item.id">{{ item.name }}</option></AppSelect></label><label>{{ $t('触发事件') }}<AppSelect v-model="simulationEvent"><option v-for="(event, id) in workflowEvents" :key="id" :value="id">{{ $t(event.label) }}</option></AppSelect></label><p v-if="!simulation.length">{{ $t('此事件没有配置流转。') }}</p><p v-for="item in simulation" :key="item.id">{{ item.name }} → {{ definition.nodes.find(node => node.id === item.to)?.name }} · {{ $t(assignmentLabels[item.assignment]) }}<span v-if="item.requiresReason"> · {{ $t('必须填写原因') }}</span><span v-if="item.requiredFields?.length"> · {{ $t('流转必填资料') }}：{{ item.requiredFields.join('、') }}</span></p><p class="field-hint">{{ $t('仅预览规则，不执行开发或修改事项；实际提交仍校验资料和人员权限。') }}</p></div></details>
       <p class="field-hint">{{ $t("修改先保留为草稿；发布不会改变已有事项绑定的流程。") }}</p>
     </template>
+    <ModalDialog v-if="replacing" open :title="$t('载入推荐流程')" @close="replacing = false"><p>{{ $t('将替换当前未保存的流程草稿。保存或发布之前，已发布版本和现有事项保持原样。') }}</p><template #footer><button @click="replacing = false">{{ $t('取消') }}</button><button class="primary" @click="loadRecommended">{{ $t('确认载入草稿') }}</button></template></ModalDialog>
   </section>
 </template>
 

@@ -14,6 +14,7 @@ import PersonAvatar from "../../shared/components/PersonAvatar.vue";
 import StatusBadge from "../../shared/components/StatusBadge.vue";
 import { accountSession } from "../../shared/api/account-session.js";
 import RemoteBranchSelect from "./RemoteBranchSelect.vue";
+import PublishDelivery from "./PublishDelivery.vue";
 import DevelopmentTaskConfirmation from "./DevelopmentTaskConfirmation.vue";
 import { useDevelopmentTask } from "./use-development-task.js";
 import {
@@ -57,6 +58,7 @@ const {
 const members = useResource(() =>
   props.canAssign ? appApi(`/projects/${props.projectId}/members`) : null,
 );
+const publishing = ref(false);
 const editing = ref(false),
   adding = ref(false),
   title = ref(""),
@@ -464,6 +466,10 @@ async function submitConfirmation() {
           </p>
         </section>
       </section>
+      <section v-if="task.canSubmitDelivery" class="development-panel">
+        <h3>{{ $t('整理成果') }}</h3><p class="field-hint">{{ $t('填写已完成的工作与核验结果，选择验证人后送验。') }}</p>
+        <button :disabled="busy || editing" @click="publishing = true">{{ $t(task.status === 'planned' ? '提交已有成果' : '提交交付并送验') }}</button>
+      </section>
       <section v-if="canStart" class="development-preparation" :aria-label="$t('执行准备')">
         <h3>{{ $t('执行准备') }}</h3>
         <ol class="development-preparation-list">
@@ -595,11 +601,12 @@ async function submitConfirmation() {
           </section>
           <section class="development-start-confirmation">
             <label class="permission-choice"><input type="checkbox" v-model="startConfirmed" :disabled="busy || editing" />{{ $t('我已确认任务范围、起始分支和执行设置。') }}</label>
-            <p class="field-hint">{{ $t('启动时获取最新代码并创建独立开发目录；所有关联事项需处于允许开发的流程节点。') }}</p>
+            <p class="field-hint">{{ $t('启动时仅发送允许开发的事项，已送验或已结束的范围保留原记录。') }}</p>
           </section>
           <footer class="development-start-actions"><span class="field-hint">{{ $t('明确提交后才启动 Agent') }}</span><button type="button" :disabled="saving" @click="closeStart">{{ $t('取消') }}</button><button class="primary" :aria-label="$t('启动 Codex 开发')" :disabled="busy || editing || !baseBranch || !workspaceId || !permissionsReady || !startConfirmed">{{ saving ? $t('正在提交…') : $t('开始开发') }}</button></footer>
         </form>
       </div>
+      <PublishDelivery v-if="publishing" :project-id="projectId" :task-id="taskId" @close="publishing = false" @published="publishing = false; reload(); emit('changed')" />
       <DevelopmentTaskConfirmation
         v-if="confirmation"
         :action="confirmation.action"

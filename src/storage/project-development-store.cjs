@@ -60,7 +60,7 @@ class ProjectDevelopmentStore {
     }
   }
   async task(projectId, id) {
-    const task = await this.database.client.developmentTask.findFirst({ where: { projectId, id }, include: { executor: { select: { id: true, displayName: true } }, release: true, workflowEvents: { where: { status: "blocked" } }, issueLinks: { include: { issue: { include: { workflowVersion: true, deliverables: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1 } } } } } } });
+    const task = await this.database.client.developmentTask.findFirst({ where: { projectId, id }, include: { executor: { select: { id: true, displayName: true } }, release: true, workflowEvents: { where: { status: "blocked" } }, issueLinks: { include: { issue: { include: { workflowVersion: true, actions: { where: { status: { in: ["ready", "active"] } } }, deliverables: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1 } } } } } } });
     if (!task) throw missing();
     return task;
   }
@@ -131,7 +131,7 @@ class ProjectDevelopmentStore {
   async acceptStart(task, space, request, issues, prompt, selection) {
     for (const issue of issues) await this.database.client.taskIssueLink.update({ where: { taskId_issueId: { taskId: task.id, issueId: issue.id } }, data: { snapshot: issue } });
     return this.update(task, { spaceId: space.id, workspaceId: space.workspaceId, runKey: runKey({ channel: "manual", scope: "local", id: task.id }), status: "unknown",
-      snapshot: json({ ...task.snapshot, issues, prompt, selection, supplementaryPrompt: request.supplementaryPrompt || "", baseBranch: request.baseBranch, startRequest: request }) });
+      snapshot: json({ ...task.snapshot, issues: task.snapshot.issues.map(previous => issues.find(issue => issue.id === previous.id) || previous), prompt, selection, supplementaryPrompt: request.supplementaryPrompt || "", baseBranch: request.baseBranch, startRequest: request }) });
   }
   async acceptManual(projectId, actorId, space, request, prompt, selection) {
     const id = randomUUID();

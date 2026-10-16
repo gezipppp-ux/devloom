@@ -11,6 +11,7 @@ const { canProcessWorkflowStep } = require("../domain/workflow-actions.cjs");
 const { ProjectWorkflowServices } = require("./project-workflow-services.cjs");
 const { currentHandler, workflowEventEdge } = require("../domain/workflow-handoffs.cjs");
 const { ProjectDevelopmentStore } = require("../storage/project-development-store.cjs");
+const { IssueWorkflowVersionServices } = require("./issue-workflow-version-services.cjs");
 const { presentIssueImages, presentIssue, presentAsset, presentProjectFile, presentPage, presentDeliverable } = require("./project-content-presenter.cjs");
 
 class ProjectContentServices {
@@ -20,6 +21,7 @@ class ProjectContentServices {
     this.workflow = new ProjectWorkflowServices(database, projects);
     this.development = new ProjectDevelopmentStore(database);
     this.executionWorkflow = new WorkflowExecutionStore(database);
+    this.workflowVersions = new IssueWorkflowVersionServices(database, projects);
   }
   async authorized(projectId, actor, permissions) {
     let context;
@@ -53,11 +55,21 @@ class ProjectContentServices {
       return { ...presentPage(result, row => presentIssue(row, actor.id, permissions)), people: await this.store.people(result.items.flatMap(issue => [issue.developerId, ...responsibilityFields.map(field => issue[field])])) };
     });
   }
-  async reviewers(projectId, actor) {
+  previewWorkflowUpgrade(projectId, issueId, actor) { return this.workflowVersions.preview(projectId, issueId, actor); }
+  upgradeIssueWorkflow(projectId, issueId, actor, input) { return this.workflowVersions.upgrade(projectId, issueId, actor, input); }
+  async reviewers(projectId, actor, input = {}) {
     return this.read(projectId, actor, ["collaboration.view"], async () => {
+      const issue = input.issueId ? await this.store.issue(projectId, identifier(input.issueId, "事项")) : null;
+      if (issue) await this.projects.authorize(projectId, actor, "issue.view");
+      const edge = issue?.workflowVersion.definition.transitions.find(edge => edge.from === issue.status && edge.trigger === "delivery.submitted");
+      const next = issue?.workflowVersion.definition.nodes.find(node => node.id === edge?.to);
       const items = [];
       for (const candidate of await this.store.memberCandidates(projectId)) {
-        try { await this.projects.authorize(projectId, candidate, "deliverable.review"); items.push(candidate); }
+        try {
+          const context = await this.projects.authorize(projectId, candidate, "deliverable.review");
+          if (issue && (!next || !canProcessWorkflowStep(issue, next, context.permissions))) continue;
+          items.push(candidate);
+        }
         catch (error) { if (![401, 403, 404, 409].includes(error.statusCode)) throw error; }
       }
       return { items };
@@ -67,7 +79,7 @@ class ProjectContentServices {
     return this.read(projectId, actor, ["issue.view"], async () => {
       const issue = await this.store.issue(projectId, id);
       const { permissions } = await this.projects.authorize(projectId, actor, "issue.view");
-      return { ...presentIssue(issue, actor.id, permissions), images: presentIssueImages(await this.store.issuePreviewFiles(projectId, id), issue.source), people: await this.store.people([issue.createdById, issue.updatedById, issue.developerId, ...responsibilityFields.map(field => issue[field]), currentHandler(issue), ...issue.watcherIds]) };
+      return { ...presentIssue(issue, actor.id, permissions), images: presentIssueImages(await this.store.issuePreviewFiles(projectId, id), issue.source), people: await this.store.people([issue.createdById, issue.updatedById, issue.developerId, issue.deliverables?.[0]?.authorId, ...responsibilityFields.map(field => issue[field]), currentHandler(issue), ...issue.watcherIds]) };
     });
   }
   async createIssue(projectId, actor, input) {
@@ -162,21 +174,23 @@ class ProjectContentServices {
         return presentDeliverable(existing);
       }
       if (requestId) data.requestId = requestId;
+      const issue = issueId ? await this.store.issue(projectId, issueId) : null;
+      if (issue?.developmentClaim && data.taskId !== issue.developmentClaim.task.id) throw accountError("送验必须关联当前开发任务。", 409);
       const task = await this.store.deliveryTask(projectId, issueId, actor.id, { ...data, supersedesId: input.supersedesId });
       if (input.supersedesId) {
         const previous = await this.store.readDeliverable(projectId, identifier(input.supersedesId, "退回交付"));
         revision(input.previousRevision);
-        if (previous.authorId !== actor.id) throw accountError("只有原发布人能重新提交交付。", 403);
+        const manualHandoff = !previous.taskId && issue?.actions[0]?.explicitHandler && currentHandler(issue) === actor.id;
+        if (previous.authorId !== actor.id && !manualHandoff) throw accountError("只有原发布人或明确接手人工返工的处理人能重新提交交付。", 403);
         if (previous.status !== "returned" || previous.next || previous.revision !== input.previousRevision) throw accountError("此交付不可重新提交，请刷新。", 409);
         if (previous.issueId !== issueId) throw accountError("重新提交不能改变交付事项。", 400);
         if (previous.taskId !== data.taskId) {
           const priorTask = previous.taskId ? await this.development.task(projectId, previous.taskId) : null;
           const claim = issueId ? (await this.store.issue(projectId, issueId)).developmentClaim : null;
-          if (!priorTask || !["cancelled", "completed"].includes(priorTask.status) || claim?.task.id !== task?.id) throw accountError("请先明确认领新的返工任务，再关联原退回交付。", 409);
+          if (previous.taskId && (!priorTask || !["cancelled", "completed"].includes(priorTask.status)) || !task || claim?.task.id !== task.id) throw accountError("请先明确认领新的返工任务，再关联原退回交付。", 409);
         }
         data.supersedesId = previous.id;
       }
-      const issue = issueId ? await this.store.issue(projectId, issueId) : null;
       if (issue && input.issueRevision !== undefined && issue.revision !== revision(input.issueRevision)) throw accountError("事项已变化，请刷新后重新提交。", 409);
       data.reviewerId = identifier(input.reviewerId || issue?.qaOwnerId || issue?.acceptanceOwnerId, "交付验证人");
       await this.store.members(projectId, [data.reviewerId]);
@@ -190,13 +204,13 @@ class ProjectContentServices {
         if (previous?.status === "returned" && data.supersedesId !== previous.id) throw accountError("请沿原退回交付重新提交。", 409);
         if (submission.actor === "developer" && (!data.taskId || issue.developmentClaim?.task.id !== data.taskId || issue.developmentClaim.task.executorId !== actor.id)) throw accountError("送验必须关联本人当前开发任务。", 409);
       }
-      if (task && task.status !== "completed") {
+      if (task && task.status !== "completed" && (task.status !== "planned" || task.runKey)) {
         const execution = await this.development.execution(task);
         if (!["completed", "failed", "interrupted", "cancelled"].includes(execution?.status)) throw accountError("执行仍在进行或结果未知，请先核对开发结果。", 409);
       }
       const delivery = await this.store.deliverable(projectId, issueId, actor.id, { ...data, title, checklist: deliveryChecklist(issue) });
       if (issue) {
-        const next = await this.workflow.event(issue, actor, "delivery.submitted", { delivery, reviewerId: data.reviewerId, executorId: task?.executorId });
+        const next = await this.workflow.event(issue, actor, "delivery.submitted", { delivery, reviewerId: data.reviewerId, executorId: task?.executorId, submissionSource: task ? task.runKey ? "agent" : "existing" : "manual" });
         await this.store.bindDeliveryAction(delivery.id, next.actions[0]?.id || null);
       }
       return presentDeliverable(await this.store.readDeliverable(projectId, delivery.id));
@@ -207,7 +221,7 @@ class ProjectContentServices {
       const delivery = await this.store.readDeliverable(projectId, id);
       const issue = delivery.issueId ? await this.store.issue(projectId, delivery.issueId) : null;
       const context = await this.projects.authorize(projectId, actor, "collaboration.view");
-      return { delivery: presentDeliverable(delivery), issue: issue ? presentIssue(issue, actor.id, context.permissions) : null, canReview: delivery.reviewerId === actor.id, canResubmit: delivery.authorId === actor.id && delivery.status === "returned" && !delivery.next, permissions: context.project.status === "archived" ? context.permissions.filter(p => p.endsWith(".view")) : context.permissions, people: await this.store.people([delivery.authorId, delivery.reviewerId, delivery.reviewedById]) };
+      return { delivery: presentDeliverable(delivery), issue: issue ? presentIssue(issue, actor.id, context.permissions) : null, canReview: delivery.reviewerId === actor.id, canResubmit: (delivery.authorId === actor.id || !delivery.taskId && issue?.actions[0]?.explicitHandler && currentHandler(issue) === actor.id) && delivery.status === "returned" && !delivery.next, permissions: context.project.status === "archived" ? context.permissions.filter(p => p.endsWith(".view")) : context.permissions, people: await this.store.people([delivery.authorId, delivery.reviewerId, delivery.reviewedById]) };
     });
   }
   async beginDelivery(projectId, id, actor, input) {

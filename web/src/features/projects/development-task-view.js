@@ -42,6 +42,7 @@ export function developmentTaskView(
       title: "开发任务已取消",
       description: "已释放关联事项的认领并清空开发负责人，任务历史仍保留。",
     };
+  if (task.deliveryPhase === "等待验证") return { step: 4, title: "等待验证", description: "交付已送验，请等待指定验证人处理。" };
   if (task.status === "planned") {
     if (!task.canStart)
       return {

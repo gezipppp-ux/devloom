@@ -133,7 +133,9 @@ ProjectPermissionEditor 在部门模式显示功能上限，在成员模式显�
 
 全局开发列表复用项目内的 `MergeDevelopmentDialog`，仍只允许同项目、同版本、未启动的本人任务合并，最多 20 条事项；合并栏仅在选择后出现。`workbench-presenter` 复用开发任务 presenter 返回关联范围、修订号和真实权限，不从前端状态推断合并及会话访问资格。“项目全部任务”使用顶部所选项目直接进入既有项目列表；“独立开发”“查看已归档会话”先选择获授权项目，有就绪空间时通过 `view=manual|history` 打开既有表单或归档弹窗，尚未就绪时进入代码与环境准备页。入口和环境准备均不自动执行 Agent，归档会话保持本人空间隔离。
 
-2026-10-14 职责与工作台实施：`WorkbenchHome` / `WorkActionQueue` / `WorkActionList` 展示 `/workbench/actions` 的个人动作；资源列表继续用于浏览。`IssueFields` 明确职责与关注关系，`IssueDetail` 显示当前处理人并开始步骤；`SystemWorkflows` 编辑节点职责/类别和连线资料/交付门禁。交付发布选择验证人，`DeliveryDetail` 提供开始验证、转派和保留原记录的重新提交。通知直接使用相同个人动作快照；语言与账号切换继续保留既有请求代际规则。详细业务契约见[流程动作](../../docs/engineering/workflow-actions.md)。
+2026-10-14 职责与工作台实施：`WorkbenchHome` / `WorkActionQueue` / `WorkActionList` 展示 `/workbench/actions` 的个人动作；资源列表继续用于浏览。`IssueFields` 明确职责与关注关系，`IssueDetail` 显示当前处理人；`SystemWorkflows` 编辑节点职责/类别和连线资料/交付门禁。交付发布选择验证人，`DeliveryDetail` 提供开始验证、转派和保留原记录的重新提交。通知直接使用相同个人动作快照；语言与账号切换继续保留既有请求代际规则。详细业务契约见[流程动作](../../docs/engineering/workflow-actions.md)。
+
+2026-10-16 无 Agent 送验：`IssueDetail` 使用服务端 `deliverySubmission` 显示人工/已有成果入口，`DevelopmentTaskDetail` 可在未准备开发空间时送验；`PublishDelivery` 仅允许选择可送验范围并按事项读取合格验证人，保留失败草稿和重试请求身份。`IssueWorkflowUpgrade` 展示版本、节点和处理人，填写原因并确认后采用新版本，重新预览清除确认。`SystemWorkflows` 载入推荐流程仅替换本地草稿，保存和发布保持显式。界面不模拟执行事实，任务和会话身份不变；无合法流程出线时不提供送验入口。
 
 MCP 接入支持图片及普通附件，PNG/JPEG/WebP 按实际签名识别为图片输入，其他文件在开发时以本地路径交给 Agent 读取。`McpUploadHelp` 展示申请临时上传 Token、上传与发布三步；`McpTokenSettings` 提供公开 `/skills` 指南与复制链接。该页面由后端直接输出完整 HTML，避免未登录跳转或依赖 Vue 执行而阻止 Agent 读取；不进入受保护 Vue 路由。
 
