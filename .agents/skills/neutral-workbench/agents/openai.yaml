@@ -1,4 +1,4 @@
 interface:
   display_name: "B 方案 · 中性协作视觉"
   short_description: "白色留白与克制紫色点缀的统一协作界面，适配 1080P、2K 和移动端"
-  default_prompt: "使用 $neutral-workbench 按 B 方案设计当前界面，并验证桌面大屏与移动端的布局。"
+  default_prompt: "使用 $neutral-workbench 按已确认布局和 B 方案视觉基线设计当前界面，检查桌面与移动端实际截图中的主次、密度和一致性。"
