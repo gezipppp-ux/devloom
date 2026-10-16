@@ -116,7 +116,7 @@ class CodexAgent extends EventEmitter {
   async createSession({ cwd, selection }) {
     const result = await this.#client.request("thread/start", {
       cwd, ...threadPermissionParams(selection.permissionMode), ephemeral: false, model: selection.model,
-      ...await this.#supplierParams(cwd, selection),
+      ...await this.#sessionParams(cwd, selection),
     });
     return { sessionId: result.thread.id };
   }
@@ -133,8 +133,14 @@ class CodexAgent extends EventEmitter {
     await this.#client.request("thread/resume", {
       threadId: sessionId, cwd, ...threadPermissionParams(selection.permissionMode), excludeTurns: true,
       ...(selection.model ? { model: selection.model } : {}),
-      ...await this.#supplierParams(cwd, selection),
+      ...await this.#sessionParams(cwd, selection),
     });
+  }
+
+  async #sessionParams(cwd, selection) {
+    const params = await this.#supplierParams(cwd, selection);
+    const identity = await this.#client.gitIdentityConfig?.(cwd);
+    return identity ? { ...params, config: { ...params.config, ...identity } } : params;
   }
 
   async #supplierParams(cwd, selection) {

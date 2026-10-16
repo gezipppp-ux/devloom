@@ -171,6 +171,38 @@ test('shutdown cleans credentials that finish loading after a connection closes'
   assert.equal(disposed, true);
 });
 
+test('thread identity configuration preserves shell filters and settings without copying Git authentication', async () => {
+  for (const policy of [
+    { inherit: 'none', set: { CUSTOM: 'preserved' }, include_only: ['CUSTOM'], exclude: ['GIT_*'] },
+    { inherit: 'core', set: { CUSTOM: 'preserved' }, filters: { CUSTOM: 'include', 'GIT_*': 'exclude' } },
+    { inherit: 'all', set: { CUSTOM: 'preserved' }, filters: { '*TOKEN*': 'exclude' } },
+  ]) {
+    const env = { GIT_AUTHOR_NAME: 'Chosen', GIT_AUTHOR_EMAIL: 'chosen@example.invalid', GIT_COMMITTER_NAME: 'Chosen', GIT_COMMITTER_EMAIL: 'chosen@example.invalid', GIT_CONFIG_VALUE_0: 'Authorization: secret', GIT_SSH_COMMAND: 'private-key-path' };
+    const client = new AppServerClient({}, { gitCredentialProvider: async () => ({ env }) });
+    client.request = async (method, params) => {
+      assert.equal(method, 'config/read');
+      assert.deepEqual(params, { cwd: '/task', includeLayers: false });
+      return { config: { shell_environment_policy: policy } };
+    };
+    const config = await client.gitIdentityConfig('/task');
+    assert.equal(config.shell_environment_policy.inherit, policy.inherit);
+    assert.equal(config.shell_environment_policy.set.CUSTOM, 'preserved');
+    assert.equal(config.shell_environment_policy.set.GIT_AUTHOR_NAME, 'Chosen');
+    assert.equal(config.shell_environment_policy.set.GIT_COMMITTER_EMAIL, 'chosen@example.invalid');
+    if (policy.include_only) assert.ok(config.shell_environment_policy.include_only.includes('GIT_AUTHOR_NAME'));
+    if (policy.filters?.CUSTOM) assert.equal(config.shell_environment_policy.filters.GIT_AUTHOR_NAME, 'include');
+    if (!policy.include_only && !policy.filters?.CUSTOM) assert.deepEqual(config.shell_environment_policy.filters, policy.filters);
+    assert.doesNotMatch(JSON.stringify(config), /Authorization|secret|private-key-path|GIT_CONFIG_VALUE/);
+    assert.equal(policy.set.GIT_AUTHOR_NAME, undefined);
+    env.GIT_AUTHOR_NAME = undefined;
+    env.GIT_AUTHOR_EMAIL = undefined;
+    env.GIT_COMMITTER_NAME = undefined;
+    env.GIT_COMMITTER_EMAIL = undefined;
+    assert.deepEqual((await client.gitIdentityConfig('/task')).shell_environment_policy, policy);
+    await client.close();
+  }
+});
+
 test('reconnect and idle revision changes reload credentials and dispose only stopped children', async t => {
   const directory = temporary(t), script = path.join(directory, 'credential-version.cjs');
   fs.writeFileSync(script, `require('node:readline').createInterface({input:process.stdin}).on('line', line => {
