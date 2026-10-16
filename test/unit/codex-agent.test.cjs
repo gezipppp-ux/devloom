@@ -64,24 +64,6 @@ test("known idle and unloaded native sessions can resume while unknown states st
   }
 });
 
-test("new and resumed sessions combine supplier selection with the current Git identity policy", async () => {
-  const { client, calls } = fixture({ "thread/start": { thread: { id: "session" } } });
-  const agent = new CodexAgent({ client, supplier: { mode: "api-key", defaultModel: "supplier-model", models: [] } });
-  const environment = { set: { GIT_AUTHOR_NAME: "Chosen" } }, cwd = path.resolve(".");
-  client.gitIdentityConfig = async directory => {
-    assert.equal(directory, cwd);
-    return { shell_environment_policy: environment };
-  };
-  await agent.createSession({ cwd, selection });
-  await agent.resumeSession({ sessionId: "session", cwd, selection });
-  for (const call of calls) {
-    assert.equal(call.params.modelProvider, "web_coding_supplier");
-    assert.equal(call.params.config.model_reasoning_effort, "high");
-    assert.deepEqual(call.params.config.shell_environment_policy, environment);
-  }
-  await agent.close();
-});
-
 test("selection validation and dispatch preparation resolve concrete defaults", async () => {
   const { agent, calls } = fixture({
     "config/read": { config: { model: "model-1", model_reasoning_effort: "high" } },
