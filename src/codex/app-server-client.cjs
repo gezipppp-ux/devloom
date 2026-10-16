@@ -144,6 +144,32 @@ class AppServerClient extends EventEmitter {
     return credentials;
   }
 
+  async gitIdentityConfig(cwd) {
+    if (!this.gitCredentialProvider) return undefined;
+    const credentials = await this.getGitCredentials();
+    const result = await this.request('config/read', { cwd, includeLayers: false });
+    if (!result?.config || typeof result.config !== 'object' || Array.isArray(result.config))
+      throw new Error('无法读取 Codex 命令环境配置。');
+    // config/read exposes unset fields as null. Session flags convert JSON
+    // null to a TOML string, which is invalid for arrays, booleans and enums.
+    const policy = Object.fromEntries(Object.entries(result.config.shell_environment_policy || {})
+      .filter(([, value]) => value !== null && value !== undefined));
+    // Process inheritance alone is insufficient when Codex filters shell env.
+    // Only public commit identity may enter persisted thread configuration.
+    const names = ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL'];
+    const identity = Object.fromEntries(names.filter(name => typeof credentials.env[name] === 'string')
+      .map(name => [name, credentials.env[name]]));
+    const environment = { ...policy, set: { ...policy.set, ...identity } };
+    const filters = policy.filters;
+    if (filters && Object.values(filters).includes('include')) {
+      environment.filters = { ...filters, ...Object.fromEntries(Object.keys(identity).map(name => [name, 'include'])) };
+    } else if (policy.include_only?.length) {
+      environment.include_only = [...new Set([...policy.include_only, ...Object.keys(identity)])];
+    }
+    // Rebuild even after clearing the author, so resumed threads lose old values.
+    return { shell_environment_policy: environment };
+  }
+
   redact(value) {
     const key = this.supplier?.apiKey;
     if (!key) return value;
