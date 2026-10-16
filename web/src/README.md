@@ -6,6 +6,8 @@
 
 `main.js` 是唯一入口，负责挂载 Vue、注册表单组件，并从共享样式读取主题变量。
 
+开发页的 `WorkQueue` 支持勾选与当前页全选；待开发任务继续合并，拥有会话归档权限的本人任务可通过 `ArchiveDevelopmentDialog` 批量归档。确认窗口固定所选任务与各自工作区，逐条呈现失败并仅重试未成功项，离开页面后停止后续提交。归档成功刷新本人队列及计数，保留项目任务历史与业务状态；「查看已归档会话」沿用项目选择和原恢复入口。
+
 所有下拉选择使用 `shared/components/AppSelect.vue`，统一弹层、选中标记、禁用状态、键盘操作和深浅色；顶栏通过 `ToolbarSelect` 提供紧凑与图标样式。组件支持 `v-model`／`value`、`options` 分组、搜索、清空、多选和 `footer` 刷新区域；旧表单可保留 `<option>` 内容并用 `native-events` 接收 `{ target: { value, selectedOptions } }`。`required` 与禁用 fieldset 保留表单校验，弹窗或管理浮层中的选项挂在当前 dialog／popover 内以保持可交互。业务查询与提交仍由各功能组件负责，页面不直接使用原生 select 或组件库 Select。
 
 人员选择统一启用 `AppSelect` 的 `search-pinyin`，在当前已授权候选项内按显示名称、用户名、中文、全拼和拼音首字母过滤，不区分大小写；多选搜索保留已选人员，清空搜索恢复候选列表。包括事项责任人／关注人、当前／下一处理人、开发指派／转派、项目负责人／成员、资产负责人及交付验证人。候选资格和提交仍由功能及服务端校验，搜索不查询额外账号或改变人员 ID。
@@ -24,7 +26,7 @@
 
 跨项目的工作台、搜索与事项／本人开发／交付队列由 `features/projects/` 组合；`PageHeader`、`FilterBar`、`EmptyState`、`PagePagination`、`StatusBadge`、`ModalDialog` 为共享呈现组件。分页、权限及提交由所属业务组件和 API 负责。项目内需求／Bug 分类保留完整批量分配和版本筛选，主「事项」提供统一跨项目查询。
 
-事项创建、独立开发和历史会话入口共用 `ProjectPickerDialog` 的精简项目列表；App 拥有按操作筛选项目和路由协调，取消与重开使旧空间查询失效。`GlobalSearch` 使用输入框与紧凑结果行，`use-global-search.js` 拥有最近项目读取、200ms 防抖、部分失败和卸载／查询代际隔离，沿用真实聚合接口与 `workLocation` 深链。`ModalDialog` 的 header 插槽承载专用头部，原生模态负责焦点限制，关闭或卸载恢复触发点焦点。交互约定见[项目选择与快捷搜索](../../docs/prd/quick-entry.md)。
+事项创建、独立开发和查看已归档会话入口共用 `ProjectPickerDialog` 的精简项目列表；App 拥有按操作筛选项目和路由协调，取消与重开使旧空间查询失效。`GlobalSearch` 使用输入框与紧凑结果行，`use-global-search.js` 拥有最近项目读取、200ms 防抖、部分失败和卸载／查询代际隔离，沿用真实聚合接口与 `workLocation` 深链。`ModalDialog` 的 header 插槽承载专用头部，原生模态负责焦点限制，关闭或卸载恢复触发点焦点。交互约定见[项目选择与快捷搜索](../../docs/prd/quick-entry.md)。
 
 原型对齐后的项目目录使用 `ProjectCard`，项目概览由 `ProjectDashboard` 组合真实事项／交付计数、当前版本和项目资产；请求失败显示错误与重试，不把未知计数显示为零。`WorkItemTable` 复用事项和开发队列的桌面表格／移动条目；`WorkItemList` 呈现交付等完整工作列表。项目详情的主导航为概览、版本、资产、成员、设置、提示词，其余协作入口在展开菜单中保留原深链。
 
@@ -129,7 +131,7 @@ ProjectPermissionEditor 在部门模式显示功能上限，在成员模式显�
 
 开发任务的 `taskStart=1` 查询参数定位独立的开始确认视图，返回详情及语言切换保留同一组件的分支、执行偏好和补充说明草稿。确认勾选随范围修订、分支及执行设置变化失效；只有明确确认并提交后才调用原有启动请求。`use-development-task` 的请求标识与未知结果查询生命周期不因确认视图切换而重建，校验失败保留草稿，已受理或未知结果不能盲目重启。
 
-全局开发列表复用项目内的 `MergeDevelopmentDialog`，仍只允许同项目、同版本、未启动的本人任务合并，最多 20 条事项；合并栏仅在选择后出现。`workbench-presenter` 复用开发任务 presenter 返回关联范围、修订号和真实权限，不从前端状态推断合并及会话访问资格。“项目全部任务”使用顶部所选项目直接进入既有项目列表；“独立开发”“历史会话”先选择获授权项目，有就绪空间时通过 `view=manual|history` 打开既有表单或归档弹窗，尚未就绪时进入代码与环境准备页。入口和环境准备均不自动执行 Agent，归档会话保持本人空间隔离。
+全局开发列表复用项目内的 `MergeDevelopmentDialog`，仍只允许同项目、同版本、未启动的本人任务合并，最多 20 条事项；合并栏仅在选择后出现。`workbench-presenter` 复用开发任务 presenter 返回关联范围、修订号和真实权限，不从前端状态推断合并及会话访问资格。“项目全部任务”使用顶部所选项目直接进入既有项目列表；“独立开发”“查看已归档会话”先选择获授权项目，有就绪空间时通过 `view=manual|history` 打开既有表单或归档弹窗，尚未就绪时进入代码与环境准备页。入口和环境准备均不自动执行 Agent，归档会话保持本人空间隔离。
 
 2026-10-14 职责与工作台实施：`WorkbenchHome` / `WorkActionQueue` / `WorkActionList` 展示 `/workbench/actions` 的个人动作；资源列表继续用于浏览。`IssueFields` 明确职责与关注关系，`IssueDetail` 显示当前处理人并开始步骤；`SystemWorkflows` 编辑节点职责/类别和连线资料/交付门禁。交付发布选择验证人，`DeliveryDetail` 提供开始验证、转派和保留原记录的重新提交。通知直接使用相同个人动作快照；语言与账号切换继续保留既有请求代际规则。详细业务契约见[流程动作](../../docs/engineering/workflow-actions.md)。
 

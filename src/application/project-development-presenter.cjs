@@ -12,6 +12,7 @@ function presentDevelopment(task, actorId, execution = null, { detail = false, p
   return { id: task.id, projectId: task.projectId, executorId: task.executorId, title: snapshot.title, kind: snapshot.kind || "issues", scope, deliveryPhase, workflowErrors: (task.workflowEvents || []).map(event => ({ id: event.id, error: event.error })),
     mergedIntoTaskId: snapshot.mergedIntoTaskId || null, mergedFromTaskIds: snapshot.mergedFromTaskIds || [],
     canMerge: writable && own && permissions.includes("session.start") && task.status === "planned",
+    canArchive: writable && privateSession && permissions.includes("session.continue") && Boolean(task.workspaceId && task.runKey),
     executor: task.executor || null, releaseId: task.releaseId, release: task.release ? { id: task.release.id, name: task.release.name, status: task.release.status } : null,
     workspaceId: privateSession ? task.workspaceId : null, runKey: privateSession ? task.runKey : null, status: task.status, error: privateSession ? task.error : null, revision: task.revision,
     canStart: writable && own && permissions.includes("session.start") && task.status === "planned", canEdit: canManage && task.status === "planned", canComplete: canManage && open && idle && task.status !== "planned" && (snapshot.kind === "manual" || scope.length > 0 && scope.every(issue => issue.complete)), canCancel: canManage && open && idle && !scope.some(issue => issue.delivery?.status === "pending"),

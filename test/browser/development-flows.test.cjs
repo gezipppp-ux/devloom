@@ -82,8 +82,8 @@ async function main() {
     await page.getByRole('button', { name: '项目全部任务', exact: true }).waitFor();
     assert.equal(await page.getByRole('dialog').count(), 0, 'the top-navigation project does not require another chooser');
     await page.goto(origin + '/development');
-    await page.getByRole('button', { name: '历史会话', exact: true }).click();
-    let chooser = page.getByRole('dialog', { name: '选择要查看历史会话的项目', exact: true });
+    await page.getByRole('button', { name: '查看已归档会话', exact: true }).click();
+    let chooser = page.getByRole('dialog', { name: '选择要查看已归档会话的项目', exact: true });
     await chooser.getByRole('button').filter({ hasText: projectName }).click();
     const archived = page.getByRole('dialog', { name: '已归档会话', exact: true });
     await archived.getByText('暂无已归档会话。', { exact: true }).waitFor();
@@ -216,6 +216,7 @@ async function main() {
     await require("./independent-delivery.test.cjs").verifyIndependentDelivery({ page, origin, projectId: fixture.projectId, output });
     await verifyWorkflowCanvas({ page, origin, output });
     await verifyDevelopmentTaskDetail({ browser, output });
+    await require("./development-archive.test.cjs").verifyDevelopmentArchive({ page, origin, projectId: fixture.projectId, output });
     assert.deepEqual(errors,[]);
     process.stdout.write('Development flow regression passed.\n');
   } finally {await browser.close();}

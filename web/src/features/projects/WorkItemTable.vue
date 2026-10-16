@@ -11,14 +11,22 @@ const props = defineProps({ items: { type: Array, default: () => [] }, people: {
 const names = computed(() => Object.fromEntries(props.people.map(person => [person.id, person.displayName])));
 const person = item => names.value[item.developerId || item.executorId] || item.executor?.displayName || (item.developerId || item.executorId ? translate("历史成员") : "");
 const personLabel = item => person(item) || translate(item.unassignedLabel || "待分派");
+const selectableItems = computed(() => props.items.filter(item => !item.selectionDisabled));
+const allSelected = computed(() => selectableItems.value.length > 0 && selectableItems.value.every(item => props.selected.includes(item.id)));
+const someSelected = computed(() => selectableItems.value.some(item => props.selected.includes(item.id)));
+function selectPage(checked) {
+  const ids = selectableItems.value.map(item => item.id);
+  emit("update:selected", checked ? [...new Set([...props.selected, ...ids])] : props.selected.filter(id => !ids.includes(id)));
+}
 function select(item, checked) {
   emit("update:selected", checked ? [...new Set([...props.selected, item.id])] : props.selected.filter(id => id !== item.id));
 }
 </script>
 <template>
+  <label v-if="selectable" class="ui-mobile-select-page"><input type="checkbox" :checked="allSelected" :indeterminate="someSelected && !allSelected" :disabled="disabled || !selectableItems.length" :aria-label="$t(kind === 'tasks' ? '选择当前页全部任务' : '选择当前页全部事项')" @change="selectPage($event.target.checked)" />{{ $t(kind === 'tasks' ? '选择当前页全部任务' : '选择当前页全部事项') }}</label>
   <div class="ui-table-wrap"><table class="ui-data-table" :class="{ 'ui-selectable-table': selectable, 'development-data-table': kind === 'tasks' }">
     <thead><tr>
-      <th v-if="selectable" class="ui-table-check"><span class="sr-only">{{ $t('操作') }}</span></th>
+      <th v-if="selectable" class="ui-table-check"><input type="checkbox" :checked="allSelected" :indeterminate="someSelected && !allSelected" :disabled="disabled || !selectableItems.length" :aria-label="$t(kind === 'tasks' ? '选择当前页全部任务' : '选择当前页全部事项')" @change="selectPage($event.target.checked)" /></th>
       <th class="ui-table-title-column">{{ kind === 'tasks' ? $t('开发任务') : $t('事项') }}</th><th v-if="personal">{{ $t('来源') }}</th><th v-if="personal">{{ $t('最后更新') }}</th><th>{{ kind === 'tasks' ? $t('任务状态') : $t('状态') }}</th>
       <th v-if="kind === 'issues'">{{ $t('优先级') }}</th><th v-if="kind === 'tasks' && !personal">{{ $t('版本') }}</th><th v-if="!personal">{{ kind === 'tasks' ? $t('执行者') : $t('开发负责人') }}</th><th v-if="kind !== 'tasks'">{{ $t('版本') }}</th><th><span class="sr-only">{{ $t('操作') }}</span></th>
     </tr></thead>
@@ -40,3 +48,11 @@ function select(item, checked) {
     </tr></tbody>
   </table></div>
 </template>
+
+<style scoped>
+.ui-mobile-select-page { display: none; }
+@media (max-width: 767px) {
+  .ui-mobile-select-page { display: flex; align-items: center; gap: 10px; min-height: 44px; margin-block: 8px; }
+  .ui-mobile-select-page input { width: 20px; height: 20px; accent-color: var(--highlight); }
+}
+</style>
