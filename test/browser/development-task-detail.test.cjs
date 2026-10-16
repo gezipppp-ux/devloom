@@ -1,4 +1,4 @@
-const { selectOption, selectValue } = require("../support/select.cjs");
+const { selectOption, selectValue, selectPreference } = require("../support/select.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -7,7 +7,7 @@ const { projectVisual } = require("../fixtures/project-visual.cjs");
 const { selectRemoteBranch } = require("../support/remote-branch-select.cjs");
 
 async function verifyDevelopmentTaskDetail({ browser, output }) {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const context = await browser.newContext({ locale: "zh-CN", viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
   const fixture = projectVisual("fixture-workspace");
   const origin = "http://127.0.0.1:49021", base = `/projects/${fixture.projectId}`;
@@ -210,10 +210,10 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     assert.equal(await button('启动 Codex 开发').isDisabled(), true, 'explicit scope confirmation is required');
     await page.getByRole('checkbox', { name: '我已确认任务范围、起始分支和执行设置。', exact: true }).check();
     await capture('start-confirmation');
-    await selectOption(page.getByRole('combobox', { name: '界面语言', exact: true }), 'en');
+    await selectPreference(page, "locale", 'en');
     assert.equal(await page.locator('.development-start-settings textarea').inputValue(), supplement, 'language changes preserve the start draft');
     await capture('start-confirmation-en');
-    await selectOption(page.getByRole('combobox', { name: 'Interface language', exact: true }), 'zh-CN');
+    await selectPreference(page, "locale", 'zh-CN');
     await button("启动 Codex 开发").click();
     await button("进入 Codex 会话").waitFor();
     assert.equal(await button("标记开发任务完成").count(), 0);

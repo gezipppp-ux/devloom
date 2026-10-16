@@ -8,18 +8,20 @@ const { chromium } = require("playwright");
 const { temporary } = require("../support/helpers.cjs");
 const { initializeTestDatabase } = require("../support/database.cjs");
 const { createWebServer } = require("../../src/http/server.cjs");
+const { selectOption } = require("../support/select.cjs");
+const { titleIs } = require("./page-titles.test.cjs");
 
 const output = path.resolve("state/browser/setup");
 const images = [];
-async function fixture(t, { missing = false } = {}) {
+async function fixture(t, { missing = false, locale = "zh-CN" } = {}) {
   const directory = temporary(t), database = await initializeTestDatabase(t, directory, { withSetup: true });
   let installed = !missing, busy = false, job = null, batch = null, installs = 0;
   const environment = {
     read: async () => ({ busy, job, batch, checks: [{ name: "操作系统", status: "pass" }, { name: "数据目录可写", status: "pass" }], tools: ["git", "codex", "node", "npm"].map(id => ({
       id, name: { git: "Git", codex: "Codex CLI", node: "Node.js", npm: "npm" }[id], version: installed || !["git", "codex"].includes(id) ? "99.0.0" : null,
       missing: !installed && ["git", "codex"].includes(id), binaryReady: installed || !["git", "codex"].includes(id),
-      status: id === "codex" ? "warning" : installed || id !== "git" ? "pass" : "fail", authentication: id === "codex" ? false : null,
-      installAvailable: true, installVersion: "99.0.0", installSource: "模拟安装源", detail: "测试环境探针，不执行真实安装。",
+      status: installed || !["git", "codex"].includes(id) ? "pass" : "fail",
+      installAvailable: true, installVersion: "99.0.0", installSource: "Fixture registry", detail: installed ? "满足基础要求" : "尚未安装",
     })) }),
     status: () => ({ busy, job, batch }), close: async () => {},
     installMissing: async (input, authorize) => {
@@ -34,7 +36,7 @@ async function fixture(t, { missing = false } = {}) {
   const app = createWebServer({ database, dataDirectory: directory, environment });
   const origin = await app.listen(0);
   const browser = await chromium.launch({ ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : process.platform === "win32" ? { channel: "msedge" } : {}), headless: true });
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const context = await browser.newContext({ locale, viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage(), errors = [];
   page.on("pageerror", error => errors.push(error.message));
   // Initialization must also work on LAN HTTP where randomUUID is unavailable.
@@ -44,18 +46,33 @@ async function fixture(t, { missing = false } = {}) {
   return { page, context, database, origin, directory, installs: () => installs };
 }
 async function capture(page, name) {
-  for (const [width, height] of [[1920, 1080], [2560, 1440], [1440, 900], [1280, 720], [768, 1024], [390, 844], [320, 740]]) {
+  const fields = page.locator('input:not([type="checkbox"]):not([role="combobox"]), textarea');
+  const draft = await fields.evaluateAll(elements => elements.map(element => element.value));
+  for (const locale of ["zh-CN", "en"]) {
+    await selectOption(page.locator(".ui-locale"), locale);
+    // Every initialization action and step label must translate; saved names
+    // and paths are user content and stay unchanged.
+    if (locale === "en") {
+      const labels = await page.locator(".setup-actions, .setup-steps, .setup-step-heading, .setup-tool-status, .setup-permissions").allTextContents();
+      assert.equal(/[\u3400-\u9fff]/u.test(labels.join(" ")), false, `${name}: untranslated setup controls`);
+    }
+    assert.deepEqual(await fields.evaluateAll(elements => elements.map(element => element.value)), draft, "language changes preserve initialization drafts");
+    for (const [width, height] of [[1920, 1080], [2560, 1440], [1440, 900], [1280, 720], [768, 1024], [390, 844], [320, 740]]) {
     await page.setViewportSize({ width, height });
-    await page.screenshot({ path: path.join(output, `${name}-${width}.png`), fullPage: true });
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false, `${name} overflows at ${width}`);
-    images.push(`${name}-${width}.png`);
+    const filename = `${name}-${locale}-${width}.png`;
+    await page.screenshot({ path: path.join(output, filename), fullPage: true });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false, `${name}/${locale} overflows at ${width}`);
+    images.push(filename);
+    }
   }
+  await selectOption(page.locator(".ui-locale"), "zh-CN");
   await page.setViewportSize({ width: 1440, height: 1000 });
 }
 async function bootstrap(f) {
   const { page } = f;
   await page.goto(`${f.origin}/setup`);
   await page.getByLabel("设置密码", { exact: true }).waitFor();
+  await titleIs(page, "管理员账号 · 初始化 · DevLoom");
   assert.equal(await page.locator('input:not([role="combobox"])').count(), 4);
   await capture(page, "administrator");
   await page.getByLabel("设置密码", { exact: true }).fill("fixture-password");
@@ -64,7 +81,7 @@ async function bootstrap(f) {
   await page.getByRole("heading", { name: "运行环境", exact: true }).waitFor();
 }
 async function readyDirectory(f) {
-  await f.page.getByRole("button", { name: "稍后登录，继续配置", exact: true }).click();
+  await f.page.getByRole("button", { name: "继续配置", exact: true }).click();
   await f.page.getByLabel("成员目录基础路径", { exact: true }).fill(path.join(f.directory, "members"));
   await f.page.getByRole("button", { name: "保存并继续", exact: true }).click();
   await f.page.getByRole("button", { name: "创建默认部门并继续", exact: true }).waitFor();
@@ -76,10 +93,11 @@ test("initialization UI creates admin, installs missing tools, resumes drafts an
   await capture(page, "environment-missing");
   assert.equal(await page.getByRole("button", { name: "继续配置", exact: true }).isDisabled(), true);
   await page.getByRole("button", { name: "安装缺失工具", exact: true }).click();
-  await page.getByText("已安装，待认证", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "继续配置", exact: true, disabled: false }).waitFor();
+  assert.equal(await page.getByText(/Codex 认证|待认证|codex login/).count(), 0);
   assert.equal(f.installs(), 1);
   await capture(page, "environment-ready");
-  await page.getByRole("button", { name: "稍后登录，继续配置", exact: true }).click();
+  await page.getByRole("button", { name: "继续配置", exact: true }).click();
   await page.getByLabel("成员目录基础路径", { exact: true }).fill(path.join(f.directory, "members"));
   const preview = await page.locator(".setup-path-preview").textContent();
   assert.ok(preview.includes(["projects", "<仓库名>", "members", "<用户名>"].join(path.sep)));
@@ -143,4 +161,19 @@ test("initialization UI can skip optional accounts and project and revisit compl
   assert.equal(await f.database.client.project.count(), 0);
   await page.goto(f.origin + "/setup");
   await page.waitForURL(f.origin + "/");
+});
+
+test("fresh English browsers can initialize without any Codex login prompt or login flag", async t => {
+  const { page, origin } = await fixture(t, { locale: "en-US" });
+  await page.goto(origin + "/setup");
+  await titleIs(page, "Administrator account · Setup · DevLoom");
+  await page.getByLabel("Set password", { exact: true }).fill("fixture-password");
+  await page.getByLabel("Confirm password", { exact: true }).fill("fixture-password");
+  await page.getByRole("button", { name: "Create administrator and continue", exact: true }).click();
+  await titleIs(page, "Runtime environment · Setup · DevLoom");
+  assert.equal(await page.getByText(/codex login|authentication|待认证/i).count(), 0);
+  const request = page.waitForRequest(request => new URL(request.url()).pathname === "/api/system/setup/environment" && request.method() === "POST");
+  await page.getByRole("button", { name: "Continue setup", exact: true }).click();
+  assert.deepEqual((await request).postDataJSON().value, {});
+  await page.locator("#setup-directory").waitFor();
 });

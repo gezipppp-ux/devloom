@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 async function verifyAccountProfileRaces(browser, origin) {
-  const context = await browser.newContext();
+  const context = await browser.newContext({ locale: "zh-CN" });
   const page = await context.newPage();
   const gates = new Map(), requests = [], errors = [];
   let actor = { id: "alice", username: "alice", displayName: "Alice", role: "member", status: "active" };

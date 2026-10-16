@@ -1,7 +1,8 @@
 <script setup>
 import AppSelect from "../../shared/components/AppSelect.vue";
 /* global window */
-import { formatDate } from "../../shared/i18n/index.js";
+import { formatDate, translate } from "../../shared/i18n/index.js";
+import { usePageTitle } from "../../shared/components/page-title.js";
 import { computed, nextTick, reactive, ref, watch, onMounted, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ArrowLeftOutlined, ReloadOutlined, CheckOutlined, BranchesOutlined, PlayCircleOutlined, FileTextOutlined } from "@antdv-next/icons";
@@ -55,6 +56,7 @@ const {
   append,
   send,
 } = useDevelopmentTask(props.projectId, props.taskId, () => emit("changed"));
+usePageTitle(() => [error.value ? "" : task.value?.title, translate("开发任务")]);
 const members = useResource(() =>
   props.canAssign ? appApi(`/projects/${props.projectId}/members`) : null,
 );

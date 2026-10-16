@@ -1,25 +1,30 @@
 <script setup>
-import { onUnmounted, reactive, ref } from "vue";
+import { computed, onUnmounted, reactive, ref } from "vue";
+import { translate } from "../../shared/i18n/index.js";
 import { useRouter } from "vue-router";
 import { createInitialAccount, revalidateAccountSession } from "../../shared/api/account-session.js";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import FormSection from "../../shared/components/FormSection.vue";
 
 const router = useRouter();
-const form = reactive({ username: "admin", displayName: "管理员", password: "", confirm: "" });
+const form = reactive({ username: "admin", displayName: translate("管理员"), password: "", confirm: "" });
 const busy = ref(false), error = ref("");
+const creationFailed = ref(false);
+const errorMessage = computed(() => creationFailed.value ? translate("{message} 若账号已创建，请使用该账号登录继续。", { message: translate(error.value) }) : error.value);
 let disposed = false;
 async function submit() {
   if (busy.value) return;
+  creationFailed.value = false;
   if (form.password !== form.confirm) { error.value = "两次输入的密码不一致。"; return; }
   busy.value = true; error.value = "";
   try {
     await createInitialAccount({ username: form.username, displayName: form.displayName, password: form.password });
   } catch (failure) {
-    if (!disposed) error.value = `${failure.message} 若账号已创建，请使用该账号登录继续。`;
+    if (!disposed) { error.value = failure.message; creationFailed.value = true; }
   } finally { form.password = ""; form.confirm = ""; if (!disposed) busy.value = false; }
 }
 async function login() {
+  creationFailed.value = false;
   try { await revalidateAccountSession(); if (!disposed) await router.replace({ name: "login" }); }
   catch (failure) { if (!disposed) error.value = failure.message; }
 }
@@ -37,7 +42,7 @@ onUnmounted(() => { disposed = true; form.password = ""; form.confirm = ""; });
           <div><label for="setup-admin-confirm">{{ $t("确认密码") }}</label><input id="setup-admin-confirm" v-model="form.confirm" type="password" autocomplete="new-password" required minlength="6" maxlength="256" :disabled="busy" /></div>
         </div>
       </FormSection>
-      <FeedbackMessage :message="error" type="error" />
+      <FeedbackMessage :message="errorMessage" type="error" />
       <div class="actions"><button type="button" :disabled="busy" @click="login">{{ $t("已有账号，登录继续") }}</button><button class="primary" :disabled="busy" type="submit">{{ busy ? $t("正在创建管理员…") : $t("创建管理员并继续") }}</button></div>
     </form>
   </div>

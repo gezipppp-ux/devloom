@@ -27,20 +27,20 @@
 | npm | 随 Node.js 安装，并能访问 npm registry | 按锁文件安装依赖 |
 | PostgreSQL | **17**（当前验证版本），独立数据库及账号 | 业务数据、会话、日志和附件持久化 |
 | Git | 已安装且可从服务进程的 `PATH` 找到，支持 `git worktree` | 克隆仓库、创建任务分支及工作目录 |
-| Codex CLI | 已安装，并在运行服务的同一操作系统账号下完成认证 | 通过 `codex app-server --stdio` 执行任务 |
+| Codex CLI | 已安装且服务进程可执行 | 通过 `codex app-server --stdio` 执行任务 |
 | OpenSSH | 使用 SSH Git 账号时需要 `ssh` 和 `ssh-keygen` | 生成密钥与访问 SSH 仓库 |
 | 浏览器 | 现代桌面或移动浏览器 | 登录与使用 Web 工作台 |
 | 网络 | 可访问 npm、业务 Git 服务、Codex 服务 | 安装、克隆与执行 |
 
 目标项目需要的 Java、Python、pnpm、编译器等工具，也要在服务端另外安装。DevLoom 只提供任务工作台，不会自动安装所有业务项目的运行环境。磁盘需要容纳依赖、数据库、项目仓库和多个任务 worktree，具体容量取决于仓库规模。
 
-首次启动前需准备 Node.js、npm 和 PostgreSQL。初始化向导会检测 Git / Codex，并在安装器可用时按展示的确切版本安装缺失工具；Codex 登录可稍后完成，实际开始开发前仍需认证。
+首次启动前需准备 Node.js、npm 和 PostgreSQL。初始化向导会检测 Git / Codex，并在安装器可用时按展示的确切版本安装缺失工具；检测到可用的 Codex CLI 即满足该工具的环境检查，不查询登录状态。
 
 ### 检查运行环境
 
 管理员可在「系统设置 → Agent 供应商」选择 Codex API Key 直连配置或“服务器现有配置”。API Key 模式要求供应商提供原生 Responses 接口；支持手填／获取模型及手动生成检测，检测可能产生少量费用。切换不打断当前轮次，失败不自动回退；配置和升级说明见 [Agent 供应商](engineering/agent-suppliers.md)。Codex CLI 仍需安装；只有使用服务器现有认证时才需要在服务账号下完成对应登录。
 
-管理员登录后可打开「系统设置 → 环境检测」（`/system?tab=environment`，旧地址 `/environment` 自动跳转），检测服务端 Codex CLI、npm、Git、Node.js 的版本、Codex 登录状态和目录写权限。点击「检查最新版本」查询官方来源；Node.js 以最新 LTS 为更新目标，网络异常会显示检查失败。
+管理员登录后可打开「系统设置 → 环境检测」（`/system?tab=environment`，旧地址 `/environment` 自动跳转），检测服务端 Codex CLI、npm、Git、Node.js 的版本和目录写权限。点击「检查最新版本」查询官方来源；Node.js 以最新 LTS 为更新目标，网络异常会显示检查失败。
 
 标准 npm 全局安装的 Codex CLI、npm 可在页面确认后更新到展示的确切版本；执行中或等待审批的任务、克隆会阻止更新，更新期间暂不接受新的写入操作。关闭页面不会取消安装，返回页面可继续查看进度。安装使用当前服务账号权限，不自动提权；失败后请检查网络、目录权限和 Node.js 兼容性。Windows 的 Node.js 支持 nvm 1/2 或已识别的 winget 安装，Git 支持已识别的 winget 安装，均使用同一更新按钮。macOS（Intel 或 Apple Silicon）支持确认归属的 npm 全局 Codex 安装／更新及 npm 更新；Homebrew 管理的 Codex、Git 与 Node.js 使用原安装工具维护。Codex 自动查找覆盖 Apple Silicon 的 `/opt/homebrew/bin` 与 Intel 的 `/usr/local/bin`；npm 也会检查当前 Node 的安装目录。双架构安装与 launchd 配置见 [macOS 部署](deployment.md#macos)。Node.js 完成后显示「已安装，待重启生效」；重启服务后才使用新运行时，跨主版本升级还需重新安装应用依赖。其他平台或无法确认归属的安装禁用按钮并说明原因，不展示更新指引。已有会话不会自动执行。
 
@@ -200,6 +200,10 @@ npm start -- --host 127.0.0.1 --port 4317
 
 ### 正式运行
 
+`start`、`dev` 和 `dev:watch` 的端口优先级为：`--port` 参数 → `PORT` 环境变量 → 默认值（正式服务 `4317`，开发服务 `5173`）。可在安装目录的 `.env` 中加入 `PORT=8080`，随后直接执行对应 npm 命令；终端或服务管理器已有的 `PORT` 优先于 `.env`。修改后需重启整个启动命令，包括 `dev:watch`。
+
+`PORT` 未设置或为空时使用默认端口；非整数或越界值会报错。开发模式允许 `0` 自动分配端口，以启动输出为准；指定端口被占用时会报错，不自动切换。
+
 ```sh
 # 本机访问
 npm start -- --host 127.0.0.1 --port 4317
@@ -243,6 +247,7 @@ npm run dev:watch -- --host 127.0.0.1 --port 5173
 | `DATABASE_URL` | 必填，无数据库回退 | 指定独立 PostgreSQL 连接，可用 `?schema=...` 选择独占 schema |
 | `TEST_DATABASE_URL` | 仅测试使用 | 指向专用测试数据库，测试创建并清理随机 schema |
 | `RUNNER_DATA_DIR` | 使用应用安装目录作为数据根 | 建议首次部署时设置为独立绝对路径，并保持固定 |
+| `PORT` | 正式服务 `4317`，开发服务 `5173` | 自定义启动端口；`--port` 参数优先，未设置或空值使用默认值 |
 | `CODEX_BIN` | 自动从服务进程 `PATH` 及常见安装位置查找 Codex | 服务找不到 Codex 或安装位置特殊时指定入口路径 |
 | `PUBLIC_ORIGIN` | 按直接连接的本机 IP、端口校验访问来源 | HTTPS 反代部署时设置，如 `https://coding.example.com`，不得包含路径或凭据 |
 | `RUNNER_ENCRYPTION_KEY` | 自动生成并读取 `secrets/database.key` | 需要外部托管凭据主密钥时设置，格式为 64 位十六进制；已有数据须保持原密钥 |

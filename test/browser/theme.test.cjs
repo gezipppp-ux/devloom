@@ -1,10 +1,11 @@
-const { selectOption, selectValue } = require("../support/select.cjs");
+const { openAccountMenu } = require("../support/browser-navigation.cjs");
+const { selectValue, selectPreference } = require("../support/select.cjs");
 /* global document, window, Storage */
 const assert = require("node:assert/strict");
 const path = require("node:path");
 
 async function verifyTheme(page, origin, output) {
-  const selector = page.getByRole("combobox", { name: "外观主题", exact: true });
+  const selector = page.locator(".ui-theme-select [role=combobox]");
   const expectTheme = async (target, theme) => {
     await target.waitForFunction(value => document.documentElement.dataset.theme === value, theme);
     assert.equal(await target.evaluate(() => window.getComputedStyle(document.documentElement).colorScheme), theme);
@@ -12,19 +13,20 @@ async function verifyTheme(page, origin, output) {
   await page.emulateMedia({ colorScheme: "light" });
   assert.equal(await selectValue(selector), "system");
   await expectTheme(page, "light");
-  assert.equal(await page.locator(".ui-avatar").evaluate(el => el.previousElementSibling.classList.contains("ui-theme-select")), true);
+  assert.equal(await page.locator(".ui-topbar .ui-theme-select").count(), 0);
+  assert.equal(await page.locator(".ui-account-menu .ui-theme-select").count(), 1);
   await page.emulateMedia({ colorScheme: "dark" });
   await expectTheme(page, "dark");
-  await selectOption(selector, "light");
+  await selectPreference(page, "theme", "light");
   await expectTheme(page, "light");
   await page.emulateMedia({ colorScheme: "light" });
   await page.emulateMedia({ colorScheme: "dark" });
   await expectTheme(page, "light");
-  await selectOption(selector, "dark");
+  await selectPreference(page, "theme", "dark");
   await page.emulateMedia({ colorScheme: "light" });
   await expectTheme(page, "dark");
   await page.reload();
-  await selector.waitFor();
+  await selector.waitFor({ state: "attached" });
   assert.equal(await selectValue(selector), "dark");
   await expectTheme(page, "dark");
 
@@ -32,7 +34,7 @@ async function verifyTheme(page, origin, output) {
   try {
     await sibling.goto(origin);
     await expectTheme(sibling, "dark");
-    await selectOption(selector, "light");
+    await selectPreference(page, "theme", "light");
     await expectTheme(sibling, "light");
     await sibling.evaluate(() => window.localStorage.removeItem("web-coding.theme"));
     await expectTheme(page, "light");
@@ -46,17 +48,19 @@ async function verifyTheme(page, origin, output) {
   const draft = page.getByLabel("显示名称", { exact: true });
   await draft.fill("未保存的外观测试草稿");
   const formNode = await draft.elementHandle();
-  await selectOption(selector, "light");
-  await selectOption(selector, "dark");
+  await selectPreference(page, "theme", "light");
+  await selectPreference(page, "theme", "dark");
   assert.equal(await draft.inputValue(), "未保存的外观测试草稿");
   assert.equal(await formNode.evaluate(el => el.isConnected), true);
   await formNode.dispose();
 
   for (const locale of ["zh-CN", "en"]) {
-    await selectOption(page.locator(".ui-locale"), locale);
+    await selectPreference(page, "locale", locale);
     for (const [width, height] of [[2560, 1440], [1920, 1080], [1440, 900], [1280, 720], [768, 1024], [390, 844], [320, 740]]) {
+      if (await page.locator(".ui-account-menu").isVisible()) await page.keyboard.press("Escape");
       await page.setViewportSize({ width, height });
       const control = page.locator('.ui-theme-select [role="combobox"]');
+      await openAccountMenu(page);
       await page.locator(".ui-theme-select").scrollIntoViewIfNeeded();
       await control.focus();
       assert.equal(await control.evaluate(el => el === document.activeElement), true);
@@ -66,10 +70,12 @@ async function verifyTheme(page, origin, output) {
       const projectBounds = await page.locator(".ui-project-select").boundingBox();
       if (width <= 600) assert.ok(projectBounds.width >= 100, `project context remains readable alongside the theme control at ${locale} ${width}`);
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `theme header does not overflow at ${locale} ${width}`);
-      await page.screenshot({ path: path.join(output, `theme-dark-${locale}-${width}.png`), fullPage: true });
+      await page.screenshot({ path: path.join(output, `theme-dark-${locale}-${width}.png`) });
       for (const appearance of ["light", "dark"]) {
-        await selectOption(control, appearance);
+        await selectPreference(page, "theme", appearance);
         for (const name of ["project", "locale", "theme"]) {
+          if (name === "project") { if (await page.locator(".ui-account-menu").isVisible()) await page.keyboard.press("Escape"); }
+          else await openAccountMenu(page);
           const root = page.locator(name === "locale" ? ".ui-locale" : `.ui-${name}-select`);
           const input = root.getByRole("combobox");
           const before = await selectValue(root);
@@ -103,7 +109,8 @@ async function verifyTheme(page, origin, output) {
     }
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await selectOption(page.locator(".ui-locale"), "zh-CN");
+  await selectPreference(page, "locale", "zh-CN");
+  await openAccountMenu(page);
   await selector.focus();
   await selector.press("ArrowDown");
   await selector.press("ArrowDown");
@@ -113,7 +120,7 @@ async function verifyTheme(page, origin, output) {
 
   await page.evaluate(() => window.localStorage.setItem("web-coding.theme", "invalid"));
   await page.reload();
-  await selector.waitFor();
+  await selector.waitFor({ state: "attached" });
   assert.equal(await selectValue(selector), "system");
   await expectTheme(page, "dark");
 
@@ -126,7 +133,7 @@ async function verifyTheme(page, origin, output) {
     });
     await restricted.goto(origin);
     await expectTheme(restricted, "dark");
-    await selectOption(restricted.getByRole("combobox", { name: "外观主题", exact: true }), "light");
+    await selectPreference(restricted, "theme", "light");
     await expectTheme(restricted, "light");
   } finally { await restricted.close(); }
 
@@ -135,11 +142,11 @@ async function verifyTheme(page, origin, output) {
     Storage.prototype.getItem = () => { throw new Error("storage unavailable"); };
     Storage.prototype.setItem = () => { throw new Error("storage unavailable"); };
   });
-  await selectOption(selector, "light");
+  await selectPreference(page, "theme", "light");
   await expectTheme(page, "light");
   await page.reload();
-  await selector.waitFor();
-  await selectOption(selector, "system");
+  await selector.waitFor({ state: "attached" });
+  await selectPreference(page, "theme", "system");
   await page.emulateMedia({ colorScheme: "light" });
   await expectTheme(page, "light");
   await page.goto(origin);

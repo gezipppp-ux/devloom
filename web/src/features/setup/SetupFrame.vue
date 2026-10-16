@@ -1,11 +1,14 @@
 <script setup>
 import LocaleSelect from "../../shared/components/LocaleSelect.vue";
+import { usePageTitle } from "../../shared/components/page-title.js";
+import { translate } from "../../shared/i18n/index.js";
 import { computed } from "vue";
 import { CheckOutlined, SaveOutlined } from "@antdv-next/icons";
 import steps from "../../../../shared/setup-steps.json";
 const props = defineProps({ step: { type: String, required: true }, currentStep: { type: String, default: "admin" }, completed: { type: Object, default: () => ({}) }, busy: Boolean, username: { type: String, default: "" } });
 defineEmits(["navigate", "exit"]);
 const maximum = computed(() => steps.findIndex(item => item.id === props.currentStep));
+usePageTitle(() => [translate(steps.find(item => item.id === props.step)?.title), translate("初始化")]);
 </script>
 <template>
   <div class="setup-page">

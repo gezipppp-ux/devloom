@@ -32,10 +32,7 @@ function setupStepInput(step, input) {
     return { revision: input.revision, requestId: input.requestId, skip: true };
   }
   const value = input.value || {};
-  if (step === "environment") {
-    object(value, ["deferCodexLogin"]);
-    if (typeof value.deferCodexLogin !== "boolean") throw accountError("请选择是否稍后完成 Codex 登录。");
-  } else if (step === "directory") {
+  if (step === "directory") {
     object(value, ["memberStorageRoot"]);
     if (typeof value.memberStorageRoot !== "string" || value.memberStorageRoot.length > 4096) throw accountError("成员目录无效。");
   } else if (step === "accounts") {
@@ -63,12 +60,11 @@ function assertSetupStep(row, step, revision) {
   const index = steps.findIndex(item => item.id === step);
   if (steps.slice(0, index).some(item => !row.steps[item.id])) throw accountError("请先完成前面的初始化步骤。", 409);
 }
-function environmentReadiness(report, deferCodexLogin) {
+function environmentReadiness(report) {
   if (!report || report.busy || report.job?.status === "restart-required") return false;
   for (const id of ["git", "codex", "node", "npm"]) {
     const tool = report.tools?.find(item => item.id === id);
     if (!tool || tool.pendingRestart || !(tool.binaryReady ?? tool.status === "pass")) return false;
-    if (id === "codex" && tool.status !== "pass" && !(deferCodexLogin && tool.authentication === false)) return false;
   }
   return !report.checks?.some(check => check.name !== "成员目录可写" && check.status !== "pass");
 }

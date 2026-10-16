@@ -2,7 +2,7 @@
 /* global document */
 import { computed, ref, onMounted, onUnmounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { UserOutlined, LogoutOutlined, CodeOutlined, FolderOutlined, SettingOutlined, ArrowLeftOutlined, MenuOutlined, SearchOutlined } from "@antdv-next/icons";
+import { CodeOutlined, FolderOutlined, SettingOutlined, ArrowLeftOutlined, MenuOutlined, SearchOutlined } from "@antdv-next/icons";
 import { useWorkspaceSelection } from "./use-workspace-selection.js";
 import { useDesktopNotifications } from "../features/accounts/use-desktop-notifications.js";
 import { useAttentionNotifications } from "../features/accounts/use-attention-notifications.js";
@@ -25,8 +25,7 @@ import ProjectPickerDialog from "../features/projects/ProjectPickerDialog.vue";
 import { issueCreateLocation } from "../features/projects/work-navigation.js";
 import FeedbackMessage from "../shared/components/FeedbackMessage.vue";
 import ModalDialog from "../shared/components/ModalDialog.vue";
-import LocaleSelect from "../shared/components/LocaleSelect.vue";
-import ThemeSelect from "../shared/components/ThemeSelect.vue";
+import AccountMenu from "../features/accounts/AccountMenu.vue";
 import ToolbarSelect from "../shared/components/ToolbarSelect.vue";
 import "../shared/styles/projects.css";
 import "../shared/styles/workbench.css";
@@ -39,6 +38,7 @@ const projects = computed(() => directory.data.value?.projects || []);
 const desktopNotifications = useDesktopNotifications();
 const attention = useAttentionNotifications(desktopNotifications.notifyAttention);
 const admin = computed(() => accountSession.user?.role === "admin");
+const logoutBusy = ref(false);
 const logoutError = ref(""), menuOpen = ref(false), searchOpen = ref(false), createOpen = ref(false), createTarget = ref("issues");
 const createBusy = ref(false), createError = ref(""), createSelected = ref("");
 let createAttempt = 0;
@@ -86,7 +86,7 @@ async function chooseCreate(id) {
   createOpen.value = false;
   void router.push(["issues", "bugs"].includes(target) ? issueCreateLocation(id, target, location) : { name: "project", params: { projectId: id }, query: { tab: target } });
 }
-async function logout() { try { await logoutAccount(); } catch (failure) { logoutError.value = failure.message; } }
+async function logout() { if (logoutBusy.value) return; logoutBusy.value = true; logoutError.value = ""; try { await logoutAccount(); } catch (failure) { logoutError.value = failure.message; } finally { logoutBusy.value = false; } }
 function shortcut(event) { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); searchOpen.value = !searchOpen.value; } }
 onMounted(() => document.addEventListener("keydown", shortcut)); onUnmounted(() => { createAttempt++; document.removeEventListener("keydown", shortcut); });
 watch(() => route.fullPath, () => { menuOpen.value = false; if (createOpen.value) closeCreate(); });
@@ -94,8 +94,8 @@ watch(() => route.fullPath, () => { menuOpen.value = false; if (createOpen.value
 <template>
   <div class="authenticated-app neutral-app" :class="{ 'workspace-app': inWorkspace, 'personal-settings-app': route.name === 'personal' }">
     <a class="ui-skip" href="#workbench-content">{{ $t("跳到主要内容") }}</a>
-    <aside class="ui-sidebar"><RouterLink class="ui-brand" to="/"><CodeOutlined aria-hidden="true" /><strong>DevLoom</strong></RouterLink><nav class="ui-primary-nav" :aria-label="$t('主导航')"><NavigationLinks :active="active" @navigate="page" /></nav><nav class="ui-account-nav" :aria-label="$t('账号导航')"><button :class="{ active: route.name === 'personal' }" :title="$t('个人设置')" @click="page('personal')"><UserOutlined aria-hidden="true" /><span>{{ $t("个人设置") }}</span></button><button v-if="admin" :class="{ active: ['system', 'accounts', 'departments'].includes(route.name) }" :title="$t('管理中心')" @click="page('accounts')"><SettingOutlined aria-hidden="true" /><span>{{ $t('管理中心') }}</span></button><button :title="$t('退出登录')" @click="logout"><LogoutOutlined aria-hidden="true" /><span>{{ $t("退出登录") }}</span></button></nav></aside>
-    <div class="ui-shell-body"><header class="ui-topbar"><button class="ui-mobile-menu" :aria-label="$t('打开导航')" :aria-expanded="menuOpen" @click="menuOpen = true"><MenuOutlined aria-hidden="true" /></button><div class="ui-context"><FolderOutlined aria-hidden="true" /><ToolbarSelect class="ui-project-select" :label="$t('当前项目')" :model-value="contextId" :options="[{ value: '', label: $t('全部项目') }, ...projects.map(project => ({ value: project.id, label: project.name }))]" @update:model-value="contextChange" /><span class="ui-context-divider">/</span><span class="ui-breadcrumb">{{ $t(breadcrumb) }}</span></div><div class="ui-topbar-actions"><button class="ui-global-search" :aria-label="$t('全局搜索')" @click="searchOpen = true"><SearchOutlined aria-hidden="true" /><span>{{ $t("搜索项目、事项或页面") }}</span><kbd>Ctrl K</kbd></button><AttentionNotifications :attention="attention" compact /><LocaleSelect /><ThemeSelect /><button class="ui-avatar" :title="accountSession.user?.displayName" :aria-label="$t('账号与个人设置')" @click="page('personal')">{{ accountSession.user?.displayName?.slice(0, 1) }}</button></div></header>
+    <aside class="ui-sidebar"><RouterLink class="ui-brand" to="/"><CodeOutlined aria-hidden="true" /><strong>DevLoom</strong></RouterLink><nav class="ui-primary-nav" :aria-label="$t('主导航')"><NavigationLinks :active="active" @navigate="page" /></nav><nav v-if="admin" class="ui-account-nav" :aria-label="$t('账号导航')"><button :class="{ active: ['system', 'accounts', 'departments'].includes(route.name) }" :title="$t('管理中心')" @click="page('accounts')"><SettingOutlined aria-hidden="true" /><span>{{ $t('管理中心') }}</span></button></nav></aside>
+    <div class="ui-shell-body"><header class="ui-topbar"><button class="ui-mobile-menu" :aria-label="$t('打开导航')" :aria-expanded="menuOpen" @click="menuOpen = true"><MenuOutlined aria-hidden="true" /></button><div class="ui-context"><FolderOutlined aria-hidden="true" /><ToolbarSelect class="ui-project-select" :label="$t('当前项目')" :model-value="contextId" :options="[{ value: '', label: $t('全部项目') }, ...projects.map(project => ({ value: project.id, label: project.name }))]" @update:model-value="contextChange" /><span class="ui-context-divider">/</span><span class="ui-breadcrumb">{{ $t(breadcrumb) }}</span></div><div class="ui-topbar-actions"><button class="ui-global-search" :aria-label="$t('全局搜索')" @click="searchOpen = true"><SearchOutlined aria-hidden="true" /><span>{{ $t("搜索项目、事项或页面") }}</span><kbd>Ctrl K</kbd></button><AttentionNotifications :attention="attention" compact /><AccountMenu :user="accountSession.user" :busy="logoutBusy" :context-key="route.fullPath" @personal="page('personal')" @logout="logout" /></div></header>
       <FeedbackMessage :message="logoutError || directory.error.value || error" type="error" />
       <button v-if="error && !ready" @click="reloadWorkspace">{{ $t('重新加载') }}</button>
       <div id="workbench-content" class="ui-content" tabindex="-1">
@@ -109,7 +109,7 @@ watch(() => route.fullPath, () => { menuOpen.value = false; if (createOpen.value
       </div>
     </div>
     <nav class="ui-bottom-nav" :aria-label="$t('移动端导航')"><NavigationLinks compact :active="active" @navigate="page" /></nav>
-    <ModalDialog :open="menuOpen" :title="$t('导航')" @close="menuOpen = false"><nav class="ui-drawer-nav" :aria-label="$t('移动主导航')"><NavigationLinks :active="active" @navigate="page" /><button @click="page('personal')">{{ $t("个人设置") }}</button><button v-if="admin" @click="page('accounts')">{{ $t("管理中心") }}</button><button @click="logout">{{ $t("退出登录") }}</button></nav></ModalDialog>
+    <ModalDialog :open="menuOpen" :title="$t('导航')" @close="menuOpen = false"><nav class="ui-drawer-nav" :aria-label="$t('移动主导航')"><button class="ui-drawer-search" @click="menuOpen = false; searchOpen = true"><SearchOutlined aria-hidden="true" />{{ $t('全局搜索') }}</button><NavigationLinks :active="active" @navigate="page" /><button v-if="admin" @click="page('accounts')">{{ $t("管理中心") }}</button></nav></ModalDialog>
     <GlobalSearch v-if="searchOpen" :projects="projects" @close="searchOpen = false" />
     <ProjectPickerDialog v-if="createOpen" :title="createTitles[createTarget] || '选择开发项目'" :purpose="createPurposes[createTarget] || '开发'" :projects="createProjects" :busy="createBusy" :selected-id="createSelected" :error="createError" @choose="chooseCreate" @close="closeCreate" />
   </div>

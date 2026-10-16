@@ -37,7 +37,7 @@ createApp({render:()=>h('main',[h(OperationMessages),h(FeedbackMessage,{message:
   try {
     await server.listen();
     browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : process.platform === "win32" ? { channel: "msedge" } : {}) });
-    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    const page = await browser.newPage({ locale: "zh-CN", viewport: { width: 1440, height: 1000 } });
     await page.emulateMedia({ reducedMotion: "reduce" });
     const errors = [];
     page.on("pageerror", error => errors.push(error.message));
@@ -152,7 +152,7 @@ createApp({render:()=>h('main',[h(OperationMessages),h(FeedbackMessage,{message:
     await page.locator("#resource").waitFor({ state: "detached" });
     await cards.filter({ hasText: "卸载后仍已保存" }).waitFor();
     assert.deepEqual(errors, []);
-    const touch = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+    const touch = await browser.newPage({ locale: "zh-CN", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
     await touch.goto(`http://127.0.0.1:${server.httpServer.address().port}/feedback`);
     await touch.locator('#field').waitFor();
     await touch.evaluate(() => { window.feedback.show('第一条提示', 'error'); window.feedback.show('第二条提示', 'warning'); });

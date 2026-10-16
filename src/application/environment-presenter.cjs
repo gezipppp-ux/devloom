@@ -4,11 +4,10 @@ function presentEnvironmentTool(tool, installed, latest, plan) {
   return {
     ...tool,
     version: installed?.version || null,
-    authentication: installed?.authentication ?? null,
-    binaryReady: Boolean(installed?.version && !installed?.error && !installed?.missing && (installed?.versionSatisfies ?? installed?.satisfies)),
+    binaryReady: Boolean(installed?.version && !installed?.error && !installed?.missing && installed?.satisfies),
     missing: Boolean(installed?.missing),
     status: installed?.missing ? "fail" : installed?.error ? "unknown" : installed?.satisfies ? "pass" : "fail",
-    detail: installed?.error || (installed?.authentication === false ? "无法确认 Codex 已登录，请在服务账号下运行 codex login status 检查。" : installed?.satisfies ? "满足基础要求" : "版本未满足最低要求"),
+    detail: installed?.error || (installed?.satisfies ? "满足基础要求" : "版本未满足最低要求"),
     latest: latest?.version || null,
     latestStatus: latest?.error ? "error" : !latest ? "unchecked" : installed?.missing ? "installable" : !installed?.version ? "unknown" : compareVersions(latest.version, installed.version) > 0 ? "available" : "current",
     latestError: latest?.error || "",

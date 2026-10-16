@@ -148,6 +148,7 @@ app 中的 `use-workspace-selection` 管理工作区与 URL，`use-workspace-con
 ## 兼容与验证
 
 - 对外 npm 命令为 `init:admin`、`dev`、`dev:watch`、`build` 和 `start`，实际文件入口由 package.json 维护。systemd 的源码入口使用 `src/cli/web.cjs`，`src/http/server.cjs` 仅导出服务工厂。
+- Web 与开发入口通过 `cli/arguments.cjs` 统一解析端口：`--port` → `PORT` → 模式默认值（正式 `4317`、开发 `5173`）。空环境值使用默认值，非法值报错；开发保留 `0` 自动分配能力。npm 命令读取可选 `.env`，已有进程环境优先；`dev:watch` 子进程继承配置，修改 `.env` 后需重启监视进程。
 - 安装根由 `src/config/runtime.cjs` 定位；静态资源始终来自安装根 `web/dist`。`RUNNER_DATA_DIR` 只选择数据根。
 - `http/page-routes.cjs` 统一开发和生产服务的页面入口匹配，与 Vue Router 的页面路径保持一致。直接访问或刷新项目详情、工作队列等页面均返回 `index.html`，保留查询参数中的对象身份；`/404` 及浏览器导航到未知页面时以 HTTP 404 返回应用入口，显示公共错误页并保留原地址。API、MCP、Vite 源码和缺失静态资源不回退为应用 HTML，未构建时仍返回原构建错误。
 - 开发入口 `src/cli/dev.cjs` 可以向 HTTP 工厂注入非 API 页面处理器，以同端口 Vite 中间件替代静态页面；正式入口仍固定使用 `web/dist`。仅开发页面增加 HMR 所需的同源 WebSocket 和 blob worker CSP，HTTP 与 WebSocket 均校验 Host/Origin，Vite 源码访问只允许 `web/`、`shared/` 和依赖目录。

@@ -1,3 +1,4 @@
+const { accountAction } = require("../support/browser-navigation.cjs");
 /* global document, innerWidth */
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -10,7 +11,7 @@ async function verifyEnvironment(page, output) {
     ready: !missingTools.size, runningNode: "v22.13.0", checkedAt: "2026-10-10T03:00:00Z", busy: job?.status === "running", job,
     checks: [{ name: "操作系统", status: "pass", detail: "win32 / x64" }, { name: "数据目录可写", status: "pass", detail: "数据库与上传目录" }],
     tools: ["codex", "npm", "git", "node"].map(id => ({ id, name: { codex: "Codex CLI", npm: "npm", git: "Git", node: "Node.js" }[id],
-      requirement: id === "node" ? "22.13.0+；最新 LTS" : id === "codex" ? "已安装并完成登录" : id === "git" ? "支持 git worktree（2.5.0+）" : "可用的 npm 包管理器", version: missingTools.has(id) ? null : job?.status === "completed" && id === "codex" ? "2.0.0" : "1.0.0", status: missingTools.has(id) ? "fail" : "pass", detail: missingTools.has(id) ? "服务进程未找到该工具" : "满足基础要求",
+      requirement: id === "node" ? "22.13.0+；最新 LTS" : id === "codex" ? "已安装 Codex CLI" : id === "git" ? "支持 git worktree（2.5.0+）" : "可用的 npm 包管理器", version: missingTools.has(id) ? null : job?.status === "completed" && id === "codex" ? "2.0.0" : "1.0.0", status: missingTools.has(id) ? "fail" : "pass", detail: missingTools.has(id) ? "服务进程未找到该工具" : "满足基础要求",
       missing: missingTools.has(id), installAvailable: missingTools.has(id) && id !== "npm", installVersion: id === "git" ? "1.5.0" : checked ? "2.0.0" : null, installSource: id === "git" ? "Linux APT 软件源" : "npm 官方 registry",
       latest: checked ? "2.0.0" : null, latestStatus: !checked ? "unchecked" : id === "npm" ? "error" : missingTools.has(id) ? "installable" : job?.status === "completed" && id === "codex" ? "current" : "available",
       latestError: id === "npm" && checked ? "模拟 registry 暂时无法访问，请稍后重试。" : "", source: checked ? "官方来源" : "",
@@ -32,7 +33,7 @@ async function verifyEnvironment(page, output) {
         return route.fulfill({ json: job, status: 202 });
       }
       polls++;
-      job = { ...job, status: failInstall ? "failed" : job.id === "node" ? "restart-required" : "completed", message: failInstall ? "模拟安装权限不足，请检查服务账号权限。" : job.operation === "install" && job.id === "codex" ? "安装完成，请在服务账号下完成 Codex 登录。" : "更新完成，建议空闲时重启服务。" };
+      job = { ...job, status: failInstall ? "failed" : job.id === "node" ? "restart-required" : "completed", message: failInstall ? "模拟安装权限不足，请检查服务账号权限。" : job.operation === "install" ? "安装完成，请重新检测环境。" : "更新完成，建议空闲时重启服务。" };
       if (job.status === "completed") missingTools.delete(job.id);
       return route.fulfill({ json: { job, busy: false } });
     }
@@ -107,7 +108,8 @@ async function verifyEnvironment(page, output) {
   await installCodex.click();
   await page.getByRole("button", { name: "确认安装", exact: true }).click();
   await page.getByRole("status").filter({ hasText: "Codex CLI → 2.0.0 · 安装成功" }).waitFor();
-  await page.getByText(/请在服务账号下完成 Codex 登录/).waitFor();
+  assert.match(await page.getByRole("status").filter({ hasText: "Codex CLI → 2.0.0 · 安装成功" }).innerText(), /安装完成，请重新检测环境。/);
+  assert.equal(await page.getByText(/Codex\s*(?:登录|认证)|(?:登录|认证)\s*Codex|codex login/i).count(), 0);
   await installCodex.waitFor({ state: "hidden" });
   failInstall = true;
   await page.getByRole("button", { name: "自动安装 Git", exact: true }).click();
@@ -125,7 +127,7 @@ async function verifyEnvironment(page, output) {
   assert.equal(new URL(page.url()).pathname, "/system");
   assert.equal(new URL(page.url()).searchParams.get("tab"), "environment");
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.getByRole("button", { name: "个人设置", exact: true }).click();
+  await accountAction(page, "个人中心");
 }
 
 module.exports = { verifyEnvironment };

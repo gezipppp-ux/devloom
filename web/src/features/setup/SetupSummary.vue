@@ -6,7 +6,7 @@ defineProps({ state: { type: Object, required: true } });
   <FormSection :title="$t('初始化结果')">
     <dl class="setup-summary">
       <div><dt>{{ $t("管理员") }}</dt><dd>{{ state.administrator?.displayName || '—' }}<small>{{ state.administrator?.username }}</small></dd></div>
-      <div><dt>{{ $t("运行环境") }}</dt><dd>{{ state.steps.environment ? $t("基础工具检测通过") : $t("未记录") }}<small v-if="state.steps.environment?.data?.deferCodexLogin">{{ $t("配置时选择稍后完成 Codex 登录；开发前请重新检测。") }}</small></dd></div>
+      <div><dt>{{ $t("运行环境") }}</dt><dd>{{ state.steps.environment ? $t("基础工具检测通过") : $t("未记录") }}</dd></div>
       <div><dt>{{ $t("成员目录") }}</dt><dd><code>{{ state.memberStorageRoot }}</code></dd></div>
       <div><dt>{{ $t("默认部门") }}</dt><dd>{{ state.departments.map(item => item.name).join('、') || $t("未记录") }}</dd></div>
       <div><dt>{{ $t("测试账号") }}</dt><dd>{{ state.accounts.map(item => item.displayName).join('、') || $t("已跳过") }}</dd></div>

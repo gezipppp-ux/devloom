@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 
 async function verifyMarkdownLoading({ browser, origin }) {
   for (const failure of [false, true]) {
-    const context = await browser.newContext();
+    const context = await browser.newContext({ locale: "zh-CN" });
     const page = await context.newPage();
     let release;
     const gate = new Promise(resolve => { release = resolve; });

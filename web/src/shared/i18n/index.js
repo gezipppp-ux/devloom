@@ -1,4 +1,5 @@
-/* global localStorage, document */
+/* global localStorage, document, navigator, window */
+import { readonly, ref } from "vue";
 import {createI18n} from "vue-i18n";
 import {en} from "./en.js";
 
@@ -7,18 +8,31 @@ const key = "web-coding.locale";
 // placeholders in our UI messages are interpolated; user content is never compiled.
 const messages = values => Object.fromEntries(Object.entries(values).map(([key, value]) => [key, context => value.replace(/(?<![{$])\{([a-zA-Z]\w*)\}(?!})/g, (match, name) => String(context.named(name) ?? match))]));
 
+function normalizePreference(value) {
+    return ["zh-CN", "en"].includes(value) ? value : "auto";
+}
+
 function savedLocale() {
     try {
-        return localStorage.getItem(key) === "en" ? "en" : "zh-CN";
+        return normalizePreference(localStorage.getItem(key));
     } catch {
-        return "zh-CN";
+        return "auto";
     }
 }
+
+function browserLocale() {
+    const language = typeof navigator === "undefined" ? "en" : navigator.languages?.[0] || navigator.language || "en";
+    return /^zh(?:[-_]|$)/i.test(language) ? "zh-CN" : "en";
+}
+
+const preference = ref(savedLocale());
+export const localePreference = readonly(preference);
+const resolvedLocale = () => preference.value === "auto" ? browserLocale() : preference.value;
 
 export const i18n = createI18n({
     legacy: false,
     globalInjection: true,
-    locale: savedLocale(),
+    locale: resolvedLocale(),
     fallbackLocale: "zh-CN",
     missingWarn: false,
     fallbackWarn: false,
@@ -31,13 +45,36 @@ export function translate(value, params) {
 }
 
 export function setLocale(value) {
-    if (!["zh-CN", "en"].includes(value)) return;
-    i18n.global.locale.value = value;
-    document.documentElement.lang = value;
+    if (!["auto", "zh-CN", "en"].includes(value)) return;
+    preference.value = value;
+    applyLocale();
     try {
         localStorage.setItem(key, value);
     } catch { /* Device preference is optional. */
     }
+}
+
+function applyLocale() {
+    const locale = resolvedLocale();
+    i18n.global.locale.value = locale;
+    document.documentElement.lang = locale;
+}
+
+export function initializeLocale() {
+    setLocale(preference.value);
+    const languageChanged = () => { if (preference.value === "auto") applyLocale(); };
+    const storageChanged = event => {
+        if (event.key !== key && event.key !== null) return;
+        try { if (event.storageArea !== localStorage) return; } catch { return; }
+        preference.value = normalizePreference(event.newValue);
+        applyLocale();
+    };
+    window.addEventListener("languagechange", languageChanged);
+    window.addEventListener("storage", storageChanged);
+    return () => {
+        window.removeEventListener("languagechange", languageChanged);
+        window.removeEventListener("storage", storageChanged);
+    };
 }
 
 export function formatDate(value, options = {}) {

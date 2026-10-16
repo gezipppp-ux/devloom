@@ -8,6 +8,8 @@ import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import ModalDialog from "../../shared/components/ModalDialog.vue";
 import releaseNameRules from "../../../../shared/project-release-name.json";
 import ProjectReleaseDetail from "./ProjectReleaseDetail.vue";
+import { usePageTitle } from "../../shared/components/page-title.js";
+import { translate } from "../../shared/i18n/index.js";
 import ReleaseSummary from "./ReleaseSummary.vue";
 const props = defineProps({ projectId: { type: String, required: true }, projectName: String, canManage: Boolean, headerAction: Boolean });
 const route = useRoute(), router = useRouter();
@@ -22,6 +24,7 @@ const { data, loading, saving, error, notice, reload, save } = useResource(() =>
 const nameTouched = ref(false);
 const releases = computed(() => data.value?.items || []);
 const selectedRelease = computed(() => releases.value.find(release => release.id === route.query.release));
+usePageTitle(() => scopeOpen.value ? [error.value ? "" : selectedRelease.value?.name, translate("版本")] : null);
 const controlsLocked = computed(() => loading.value || saving.value || editing.value);
 defineExpose({ create: event => edit({}, event), creationDisabled: controlsLocked });
 const namePattern = new RegExp(`^(?:${releaseNameRules.pattern})$`);

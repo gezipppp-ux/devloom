@@ -5,7 +5,7 @@ const fs = require("node:fs/promises");
 const { unzipSync } = require("fflate");
 
 async function verifySkills(browser, origin, output) {
-  const context = await browser.newContext({ javaScriptEnabled: false, acceptDownloads: true });
+  const context = await browser.newContext({ locale: "zh-CN", javaScriptEnabled: false, acceptDownloads: true });
   try {
     const page = await context.newPage();
     assert.equal((await page.goto(origin + "/skills")).status(), 200);

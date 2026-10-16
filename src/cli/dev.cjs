@@ -1,5 +1,5 @@
 const path = require("node:path");
-const { argument } = require("./arguments.cjs");
+const { argument, portArgument } = require("./arguments.cjs");
 const { root } = require("../config/runtime.cjs");
 const { createWebServer } = require("../http/server.cjs");
 const { requestOrigin } = require("../http/origin.cjs");
@@ -8,9 +8,7 @@ const { pageStatus } = require("../http/page-routes.cjs");
 async function main(argv = process.argv.slice(2)) {
   if (argument("--config", null, argv))
     throw new Error("开发服务使用工作区配置，不支持 --config。");
-  const port = Number(argument("--port", "5173", argv));
-  if (!Number.isInteger(port) || port < 0 || port > 65535)
-    throw new Error("端口需为 0–65535（0 表示自动分配）。");
+  const port = portArgument(argv, { defaultPort: 5173, allowAuto: true });
   const host = argument("--host", "0.0.0.0", argv);
   let vite;
   let closePromise;

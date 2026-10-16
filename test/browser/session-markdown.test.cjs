@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { messageMarkdown } = require('../fixtures/message-markdown.cjs');
 
 async function verifySessionMarkdown(browser, origin, client, key, errors) {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const page = await browser.newPage({ locale: "zh-CN", viewport: { width: 1440, height: 1000 } });
   const remoteRequests = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.route('https://blocked.invalid/**', (route) => {

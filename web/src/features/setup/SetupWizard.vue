@@ -12,7 +12,7 @@ import { translate } from "../../shared/i18n/index.js";
 
 const emit = defineEmits(["exit", "complete"]);
 const { state, loading, saving, error, step, directory, accounts, project, load, submit, navigate, saveDraft } = useSetup();
-const heading = ref(), environment = ref({ ready: false, needsLogin: false, busy: false });
+const heading = ref(), environment = ref({ ready: false, busy: false });
 const locked = computed(() => loading.value || saving.value);
 const completed = computed(() => state.value?.steps[step.value]?.status === "completed");
 const selectedStep = computed(() => steps.find(item => item.id === step.value));
@@ -24,7 +24,7 @@ const separator = computed(() => state.value?.platform === "win32" ? "\\" : "/")
 const nextLabel = computed(() => {
   if (step.value === "complete") return state.value?.project ? "完成并进入项目" : "完成并进入全部项目";
   if (completed.value && step.value !== "environment") return "继续配置";
-  return { admin: "继续配置", environment: environment.value.needsLogin ? "稍后登录，继续配置" : "继续配置", directory: "保存并继续", departments: "创建默认部门并继续", accounts: "创建所选账号并继续", project: "创建项目并继续" }[step.value];
+  return { admin: "继续配置", environment: "继续配置", directory: "保存并继续", departments: "创建默认部门并继续", accounts: "创建所选账号并继续", project: "创建项目并继续" }[step.value];
 });
 const cannotContinue = computed(() => locked.value || step.value === "environment" && (!environment.value.ready || environment.value.busy) || step.value === "accounts" && !completed.value && !accounts.some(account => account.selected));
 function updateEnvironment(value) { environment.value = value; }
@@ -37,7 +37,7 @@ async function next() {
     return;
   }
   const value = {
-    environment: { deferCodexLogin: environment.value.needsLogin }, directory: { memberStorageRoot: directory.value },
+    directory: { memberStorageRoot: directory.value },
     accounts: { accounts: accounts.filter(account => account.selected).map(({ kind, username, displayName, password }) => ({ kind, username, displayName, password })) },
     project: { ...project, memberIds: [...project.memberIds] },
   }[step.value] || {};
@@ -68,7 +68,7 @@ watch(step, async () => { await nextTick(); heading.value?.focus({ preventScroll
       </template>
       <template v-else-if="step === 'departments'">
         <p class="notice">{{ $t("系统自动创建产品部门和研发部门，并应用对应功能上限。加入项目后，成员才能访问该项目内容。") }}</p>
-        <div class="setup-departments"><FormSection v-for="template in state.templates" :key="template.kind" :title="template.name" :description="template.kind === 'product' ? $t('维护需求，组织协作与业务验收。') : $t('准备开发空间，通过 Agent 处理任务。')"><template #action><TeamOutlined aria-hidden="true" v-if="template.kind === 'product'" /><CodeOutlined aria-hidden="true" v-else /></template><p>{{ template.permissions.length }} {{ $t("项默认权限") }}</p><ul class="setup-permissions"><li v-for="id in template.permissions" :key="id"><CheckOutlined aria-hidden="true" /><span>{{ $t(permissionLabel(id)) }}</span></li></ul><p class="field-hint">{{ $t("不包含系统管理、项目管理和敏感资产权限。") }}</p></FormSection></div>
+        <div class="setup-departments"><FormSection v-for="template in state.templates" :key="template.kind" :title="$t(template.name)" :description="template.kind === 'product' ? $t('维护需求，组织协作与业务验收。') : $t('准备开发空间，通过 Agent 处理任务。')"><template #action><TeamOutlined aria-hidden="true" v-if="template.kind === 'product'" /><CodeOutlined aria-hidden="true" v-else /></template><p>{{ template.permissions.length }} {{ $t("项默认权限") }}</p><ul class="setup-permissions"><li v-for="id in template.permissions" :key="id"><CheckOutlined aria-hidden="true" /><span>{{ $t(permissionLabel(id)) }}</span></li></ul><p class="field-hint">{{ $t("不包含系统管理、项目管理和敏感资产权限。") }}</p></FormSection></div>
         <p v-if="completed" class="notice">{{ $t("默认部门已经创建，后续可在部门管理中调整。") }}</p>
       </template>
       <template v-else-if="step === 'accounts'">
@@ -82,7 +82,7 @@ watch(step, async () => { await nextTick(); heading.value?.focus({ preventScroll
         <template v-else><FormSection :title="$t('第一个项目')" :description="$t('创建项目不会克隆仓库或启动开发任务。')"><div class="setup-field"><label for="setup-project-name">{{ $t("项目名称") }}</label><input id="setup-project-name" v-model="project.name" required maxlength="80" :disabled="locked" /></div><div class="setup-field"><label for="setup-project-remote">{{ $t("Git 仓库地址") }}</label><input id="setup-project-remote" v-model="project.remoteUrl" required :disabled="locked" placeholder="https://git.example.com/team/project.git" /><p class="field-hint">{{ $t("支持 HTTP(S) 或 SSH 地址，不填写密码或令牌。") }}</p></div><div class="setup-field"><label for="setup-project-description">{{ $t("项目说明（可选）") }}</label><textarea id="setup-project-description" v-model="project.description" maxlength="8000" :disabled="locked" /></div><p class="field-hint">{{ $t("负责人：") }}{{ accountSession.user?.displayName }}{{ $t("。开发成员之后再绑定个人 Git 账号并准备空间。") }}</p></FormSection><FormSection :title="$t('加入项目的测试成员')"><label v-for="account in state.accounts" :key="account.id" class="setup-member"><span class="setup-check"><input v-model="project.memberIds" type="checkbox" :value="account.id" :disabled="locked" />{{ account.displayName }}</span><span class="field-hint">{{ account.kind === 'product' ? $t("产品协作 · 12 项权限") : $t("研发执行 · 13 项权限") }}</span></label><p v-if="!state.accounts.length" class="muted">{{ $t("已跳过测试账号。之后可在项目成员页添加正式成员。") }}</p></FormSection></template>
       </template>
       <template v-else-if="step === 'complete'"><p class="notice">{{ $t("核对已保存的结果。完成时会再次检查环境、目录和已创建资料。") }}</p><SetupSummary :state="state" /></template>
-      <div class="setup-actions"><button type="button" :disabled="locked || step === 'admin' || environment.busy && step === 'environment'" @click="back">{{ $t("上一步") }}</button><div><button v-if="selectedStep.optional && !completed" type="button" :disabled="locked" @click="submit(step, undefined, true)">{{ step === 'accounts' ? $t("跳过测试账号") : $t("跳过项目创建") }}</button><button class="primary" type="submit" :disabled="cannotContinue">{{ saving ? $t("正在保存…") : nextLabel }}<ArrowRightOutlined aria-hidden="true" /></button></div></div>
+      <div class="setup-actions"><button type="button" :disabled="locked || step === 'admin' || environment.busy && step === 'environment'" @click="back">{{ $t("上一步") }}</button><div><button v-if="selectedStep.optional && !completed" type="button" :disabled="locked" @click="submit(step, undefined, true)">{{ step === 'accounts' ? $t("跳过测试账号") : $t("跳过项目创建") }}</button><button class="primary" type="submit" :disabled="cannotContinue">{{ saving ? $t("正在保存…") : $t(nextLabel) }}<ArrowRightOutlined aria-hidden="true" /></button></div></div>
     </form>
   </SetupFrame>
 </template>

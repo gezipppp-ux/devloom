@@ -10,6 +10,8 @@ import {
   watch,
 } from "vue";
 import { statusLabel } from "../shared/api/api.js";
+import { usePageTitle } from "../shared/components/page-title.js";
+import { translate } from "../shared/i18n/index.js";
 import FeedbackMessage from "../shared/components/FeedbackMessage.vue";
 import { useWorkspaceConsole } from "./use-workspace-console.js";
 import ModalDialog from "../shared/components/ModalDialog.vue";
@@ -140,6 +142,13 @@ const {
     !repositoryOpen.value &&
     document.visibilityState === "visible",
   onUnreadResult: (result) => props.notifyUnreadResult(result),
+});
+usePageTitle(() => {
+  if (creating.value) return [translate("独立开发")];
+  if (settingsOpen.value && !props.projectId) return [translate(props.workspaceName ? "工作区设置" : "执行设置")];
+  if (repositoryOpen.value) return [translate("代码仓库")];
+  const title = session.value?.key === active.value && !error.value ? session.value?.title : "";
+  return [title, translate("开发")];
 });
 const imageDraft = useSessionImages({ active, canSend });
 const archivedSessions = ref();

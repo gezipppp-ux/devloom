@@ -2,6 +2,7 @@
 import { DesktopOutlined, MoonOutlined, SunOutlined } from "@antdv-next/icons";
 import { themePreference, setThemePreference } from "../styles/theme.js";
 import ToolbarSelect from "./ToolbarSelect.vue";
+defineProps({ iconOnly: { type: Boolean, default: true } });
 
 const options = [
   { value: "system", label: "跟随系统", icon: DesktopOutlined },
@@ -16,7 +17,7 @@ const options = [
     :label="$t('外观主题')"
     :model-value="themePreference"
     :options="options.map((option) => ({ ...option, label: $t(option.label) }))"
-    icon-only
+    :icon-only="iconOnly"
     align-end
     @update:model-value="setThemePreference"
   />

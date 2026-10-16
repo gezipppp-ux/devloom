@@ -1,3 +1,4 @@
+const { accountAction } = require("../support/browser-navigation.cjs");
 const { selectOption, selectValue } = require("../support/select.cjs");
 const { openSessionList } = require("../support/browser-navigation.cjs");
 /* global document, window */
@@ -17,6 +18,8 @@ const { verifyEnvironment } = require("./environment.test.cjs");
 const { verifyMcpTokens } = require("./mcp-tokens.test.cjs");
 const { verifyAgentSuppliers } = require("./agent-suppliers.test.cjs");
 const { verifyTheme } = require("./theme.test.cjs");
+const { verifyPageTitles, verifyAutomaticLocale } = require("./page-titles.test.cjs");
+const { verifyAccountMenu } = require("./account-menu.test.cjs");
 
 async function main() {
   const staticRoot = path.resolve("web/dist");
@@ -42,7 +45,7 @@ async function main() {
   let browser;
   try {
     browser = await chromium.launch({ ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : process.platform === "win32" ? { channel: "msedge" } : {}), headless: true });
-    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const context = await browser.newContext({ locale: "zh-CN", viewport: { width: 1440, height: 1000 } });
     await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin });
     await context.route("**/api/**", async (route) => {
       const request = route.request(), url = new URL(request.url());
@@ -116,11 +119,12 @@ async function main() {
     await page.getByRole("button", { name: "登录", exact: true }).click();
     await page.getByRole("heading", { name: "工作台", exact: true }).waitFor();
     assert.equal(await page.locator(".operation-message").count(), 0, "sign-in clears messages from the previous account generation");
+    await verifyAccountMenu(page, output, users[0]);
     await verifyTheme(page, origin, output);
     await openWorkspace(page, users[0]);
     await page.getByText("admin 的私有回复", { exact: true }).waitFor();
     await page.route("**/api/account/execution-options", route => route.fulfill({ status: 503, json: { error: "模拟权限暂不可用" } }), { times: 1 });
-    await page.getByRole("button", { name: "个人设置", exact: true }).click();
+    await accountAction(page, "个人中心");
     await page.getByRole("heading", { name: "个人设置", exact: true }).waitFor();
     await page.getByRole("alert").filter({ hasText: "模拟权限暂不可用" }).waitFor();
     assert.equal(await page.getByRole("button", { name: "保存个人设置" }).isDisabled(), true);
@@ -262,7 +266,7 @@ async function main() {
     const peer = await context.newPage();
     await peer.goto(`${origin}/?workspace=${workspaceFor(users[0]).id}`);
     await peer.getByText("admin 的私有回复", { exact: true }).waitFor();
-    await page.getByRole("button", { name: "退出登录", exact: true }).click();
+    await accountAction(page, "退出登录");
     await peer.getByRole("heading", { name: "登录工作台" }).waitFor();
     await page.getByLabel("账号", { exact: true }).fill("member");
     await page.getByLabel("密码", { exact: true }).fill("fixture-password-123");
@@ -299,6 +303,8 @@ async function main() {
     await verifyAccountPreferenceRaces(browser, origin);
     await verifyAccountProfileRaces(browser, origin);
     await verifyAttentionNotifications(browser, origin);
+    await verifyPageTitles(browser, origin);
+    await verifyAutomaticLocale(browser, origin);
     assert.deepEqual(errors, []);
     process.stdout.write("Account browser checks passed: login, password, settings, administration, private state, late responses and cross-tab logout.\n");
   } finally { await browser?.close(); await new Promise((resolve) => server.close(resolve)); }

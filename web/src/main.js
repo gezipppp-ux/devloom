@@ -6,12 +6,13 @@ import zhCN from "antdv-next/locale/zh_CN";
 import "./shared/styles/style.css";
 import App from "./app/App.vue";
 import { router } from "./app/router.js";
-import { i18n, setLocale } from "./shared/i18n/index.js";
+import { i18n, initializeLocale } from "./shared/i18n/index.js";
 import { initializeTheme, resolvedTheme } from "./shared/styles/theme.js";
 
 const disposeTheme = initializeTheme();
-if (import.meta.hot) import.meta.hot.dispose(disposeTheme);
-setLocale(i18n.global.locale.value);
+const disposeLocale = initializeLocale();
+const disposePreferences = () => { disposeTheme(); disposeLocale(); };
+if (import.meta.hot) import.meta.hot.dispose(disposePreferences);
 const theme = computed(() => {
   const algorithm = resolvedTheme.value === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm;
   const tokens = getComputedStyle(document.documentElement);
@@ -44,7 +45,7 @@ const theme = computed(() => {
 
 createApp({
   setup() {
-    onUnmounted(disposeTheme);
+    onUnmounted(disposePreferences);
     return () => h(ConfigProvider, { theme: theme.value, locale: i18n.global.locale.value === "en" ? enUS : zhCN }, { default: () => h(App) });
   },
 })

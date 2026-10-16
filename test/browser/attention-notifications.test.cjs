@@ -1,10 +1,11 @@
+const { accountAction } = require("../support/browser-navigation.cjs");
 /* global window */
 const assert = require("node:assert/strict");
 const { projectVisual } = require("../fixtures/project-visual.cjs");
 const { agentDescriptor } = require("../fixtures/agent-descriptor.cjs");
 
 async function verifyAttentionNotifications(browser, origin) {
-  const context = await browser.newContext();
+  const context = await browser.newContext({ locale: "zh-CN" });
   const workspace = { id: "11111111-1111-4111-8111-111111111111", name: "通知测试空间" };
   const project = projectVisual(workspace.id), errors = [];
   const user = { id: "visual-admin", username: "visual-admin", displayName: "演示管理员", role: "admin", status: "active", mustChangePassword: false };
@@ -56,7 +57,7 @@ async function verifyAttentionNotifications(browser, origin) {
     await dialog.getByText("模拟读取失败", { exact: true }).waitFor({ state: "hidden" });
     assert.equal(await page.evaluate(() => window.attentionFixture.notifications.length), 1, "retrying an unchanged list must not repeat the reminder");
     await dialog.getByRole("button", { name: "关闭弹窗", exact: true }).click();
-    await page.locator(".ui-account-nav").getByRole("button", { name: "个人设置", exact: true }).click();
+    await accountAction(page, "个人中心");
     await page.getByRole("switch", { name: "需要我处理时提醒", exact: true, checked: true }).click();
     await page.getByRole("switch", { name: "需要我处理时提醒", exact: true, checked: false }).waitFor();
     items = [...items, { id: "muted-delivery", kind: "delivery", deliveryId: "delivery-1", projectId: project.projectId, projectName: "客户管理系统", title: "静音期间新增交付" }];

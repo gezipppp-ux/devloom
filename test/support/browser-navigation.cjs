@@ -1,4 +1,4 @@
-/* global window, PopStateEvent */
+/* global document, window, PopStateEvent */
 // Exercise the same history navigation used by project development-space links.
 async function navigateWorkspace(page, workspace) {
   await page.evaluate(id => {
@@ -44,4 +44,18 @@ async function openIssueCreate(page, type = '需求') {
   await page.getByRole('button', { name: '新建事项', exact: true }).click();
   await page.getByRole('menuitem', { name: type === 'Bug' ? '新建 Bug' : '新建需求', exact: true }).click();
 }
-module.exports = { navigateWorkspace, openProjectTab, openSessionList, openSessionContext, openIssueCreate };
+async function openAccountMenu(page) {
+  await page.bringToFront();
+  const panel = page.locator('.ui-account-menu');
+  if (!await panel.count()) return;
+  // The responsive dialog closes when crossing the mobile breakpoint. Wait for
+  // that state update before opening it, including after a test resizes a page.
+  await page.waitForFunction(() => document.querySelector('.ui-account-menu').classList.contains('account-sheet') === (window.innerWidth < 768));
+  if (!await panel.isVisible()) await page.locator('.ui-avatar').click();
+  await panel.waitFor({ state: 'visible' });
+}
+async function accountAction(page, name) {
+  await openAccountMenu(page);
+  await page.locator('.ui-account-menu').getByRole('button', { name, exact: true }).click();
+}
+module.exports = { navigateWorkspace, openProjectTab, openSessionList, openSessionContext, openIssueCreate, openAccountMenu, accountAction };

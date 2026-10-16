@@ -1,3 +1,4 @@
+const { accountAction } = require("../support/browser-navigation.cjs");
 const { openSessionList } = require("../support/browser-navigation.cjs");
 /* global window */
 const assert = require("node:assert/strict");
@@ -5,7 +6,7 @@ const { agentDescriptor } = require("../fixtures/agent-descriptor.cjs");
 const { navigateWorkspace } = require("../support/browser-navigation.cjs");
 
 async function verifyAccountPreferenceRaces(browser, origin) {
-  const context = await browser.newContext();
+  const context = await browser.newContext({ locale: "zh-CN" });
   const users = ["alice", "bob"].map((id) => ({ id, username: id, displayName: id, role: "member", status: "active", mustChangePassword: false }));
   const settings = new Map(users.map((user) => [user.id, { model: null, reasoningEffort: null, permissionMode: "ask", notificationsEnabled: false }]));
   const workspaces = ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"].map((id, index) => ({ id, name: `项目 ${index ? "B" : "A"}` }));
@@ -145,16 +146,16 @@ async function verifyAccountPreferenceRaces(browser, origin) {
     assert.equal(await page.locator(".unread-result").count(), 0);
 
     const oldRead = await queueTwoReads();
-    await page.getByRole("button", { name: "退出登录", exact: true }).click();
+    await accountAction(page, "退出登录");
     await login("bob");
     const writesBefore = requests.filter((entry) => entry.endpoint === "/api/account/preferences" && entry.body).length;
     await oldRead.release();
     assert.equal(requests.filter((entry) => entry.endpoint === "/api/account/preferences" && entry.body).length, writesBefore, "an old account's queued preference write must not be sent after login changes");
 
-    await page.getByRole("button", { name: "个人设置", exact: true }).click();
+    await accountAction(page, "个人中心");
     await page.getByRole("switch", { name: "需要我处理时提醒", exact: true, checked: false }).click();
     await page.waitForFunction(() => window.preferenceFixture.permissionRequested);
-    await page.getByRole("button", { name: "退出登录", exact: true }).click();
+    await accountAction(page, "退出登录");
     await login("alice");
     const settingWritesBefore = requests.filter((entry) => entry.endpoint === "/api/account/settings" && entry.body).length;
     const browserWritesBefore = await page.evaluate(() => window.preferenceFixture.requests.filter((entry) => entry.url === "/api/account/settings" && entry.body).length);

@@ -23,12 +23,13 @@ test("setup drafts allow unfinished fields but reject passwords and credential-b
     assert.throws(() => setupStepInput(step, { revision: 1, requestId: randomUUID(), skip: true }));
 });
 
-test("Codex auth deferral never bypasses missing binaries, failed checks, installation or restart", () => {
-  const report = { tools: ["node", "npm", "git", "codex"].map(id => ({ id, binaryReady: true, status: id === "codex" ? "warning" : "pass", authentication: id === "codex" ? false : null })), checks: [{ name: "数据目录可写", status: "pass" }] };
-  assert.equal(environmentReadiness(report, false), false);
-  assert.equal(environmentReadiness(report, true), true);
-  assert.equal(environmentReadiness({ ...report, busy: true }, true), false);
-  assert.equal(environmentReadiness({ ...report, job: { status: "restart-required" } }, true), false);
-  assert.equal(environmentReadiness({ ...report, tools: report.tools.slice(1) }, true), false);
-  assert.equal(environmentReadiness({ ...report, checks: [{ name: "数据目录可写", status: "fail" }] }, true), false);
+test("installed tools permit setup without Codex login data; missing tools and failed checks still block", () => {
+  const report = { tools: ["node", "npm", "git", "codex"].map(id => ({ id, binaryReady: true, status: "pass" })), checks: [{ name: "数据目录可写", status: "pass" }] };
+  assert.deepEqual(setupStepInput("environment", { revision: 1, requestId: randomUUID(), value: {} }).value, {});
+  assert.equal(environmentReadiness(report), true);
+  assert.equal(environmentReadiness({ ...report, busy: true }), false);
+  assert.equal(environmentReadiness({ ...report, job: { status: "restart-required" } }), false);
+  assert.equal(environmentReadiness({ ...report, tools: report.tools.slice(0, -1) }), false);
+  assert.equal(environmentReadiness({ ...report, tools: report.tools.map(tool => tool.id === "codex" ? { ...tool, binaryReady: false } : tool) }), false);
+  assert.equal(environmentReadiness({ ...report, checks: [{ name: "数据目录可写", status: "fail" }] }), false);
 });

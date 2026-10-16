@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const fs = require("node:fs");
 const { chromium } = require("playwright");
-const { selectOption } = require("../support/select.cjs");
+const { selectOption, selectPreference } = require("../support/select.cjs");
 const { dismissOperationMessages } = require("../support/operation-feedback.cjs");
 const { defaultWorkflow } = require("../../src/domain/issue-workflows.cjs");
 const { recommendedWorkflow } = require("../../src/domain/recommended-workflow.cjs");
@@ -29,7 +29,7 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,
   try {
     await server.listen();
     browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : process.platform === "win32" ? { channel: "msedge" } : {}) });
-    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } }), errors = [], writes = [], reads = [], assigned = new Set();
+    const page = await browser.newPage({ locale: "zh-CN", viewport: { width: 1440, height: 900 } }), errors = [], writes = [], reads = [], assigned = new Set();
     page.on("pageerror", error => { errors.push(error.message); console.error(error.message); });
     const output = path.resolve("state/browser/delivery-without-agent"); fs.mkdirSync(output, { recursive: true });
     const origin = `http://127.0.0.1:${server.httpServer.address().port}`, definition = recommendedWorkflow("requirement");
@@ -122,7 +122,7 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,
     }
     await page.getByRole("button", { name: "变更历史", exact: true }).click();
     await page.getByText("流程版本：v1 → v2", { exact: true }).waitFor();
-    await selectOption(page.getByLabel("界面语言", { exact: true }), "en");
+    await selectPreference(page, "locale", "en");
     actionLabel = '配置完成，提交复核';
     await open("task");
     await page.getByRole("heading", { name: actionLabel, exact: true }).first().waitFor();
@@ -130,7 +130,7 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,
     await page.screenshot({ path: path.join(output, "delivery-en-320.png") });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth));
     await open("workflow");
-    await selectOption(page.getByLabel("Interface language", { exact: true }), "zh-CN");
+    await selectPreference(page, "locale", "zh-CN");
     await page.getByRole('button', { name: '流程模板', exact: true }).waitFor();
     await capture('workflow-page');
     const before = writes.length;

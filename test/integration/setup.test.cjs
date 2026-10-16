@@ -26,7 +26,7 @@ async function fixture(t) {
     return { result: await setup.submit(actor, name, input), input };
   }
   async function prerequisites(actor) {
-    await step(actor, "environment", { deferCodexLogin: false });
+    await step(actor, "environment", {});
     await step(actor, "directory", { memberStorageRoot: path.join(directory, "members") });
     await step(actor, "departments");
   }
@@ -148,7 +148,7 @@ test("admin CLI creation enters setup but configured installs never reopen", asy
 
 test("setup rejects invalid directories, concurrent duplicate steps, revoked admins and member writes", async t => {
   const f = await fixture(t), actor = await f.bootstrap();
-  await f.step(actor, "environment", { deferCodexLogin: false });
+  await f.step(actor, "environment", {});
   await assert.rejects(f.step(actor, "directory", { memberStorageRoot: "relative-path" }));
   assert.equal((await f.setup.read(actor)).currentStep, "directory");
   await f.step(actor, "directory", { memberStorageRoot: path.join(f.directory, "members") });

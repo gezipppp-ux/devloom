@@ -1,4 +1,4 @@
-const { selectOption } = require("../support/select.cjs");
+const { selectOption, selectPreference } = require("../support/select.cjs");
 const { openSessionContext } = require("../support/browser-navigation.cjs");
 const { openProjectTab } = require("../support/browser-navigation.cjs");
 /* global document, window */
@@ -185,7 +185,7 @@ async function main() {
     });
     await require("./not-found.test.cjs").verifyNotFound(browser);
     await require("./skills.test.cjs").verifySkills(browser, origin, output);
-    const page = await browser.newPage({
+    const page = await browser.newPage({ locale: "zh-CN",
       viewport: { width: 1440, height: 1200 },
     });
     page.on("pageerror", (error) => errors.push(error.message));
@@ -683,12 +683,12 @@ async function main() {
     await captureProjects();
     await page.setViewportSize({ width: 1920, height: 1080 });
     await load();
-    await selectOption(page.getByRole('combobox', { name: '外观主题', exact: true }), 'dark');
+    await selectPreference(page, "theme", 'dark');
     await capture('21-dark-session');
     await captureMarkdown('dark');
     await captureFiles('dark');
     await captureSystemSettings('dark');
-    await selectOption(page.getByRole('combobox', { name: '外观主题', exact: true }), 'light');
+    await selectPreference(page, "theme", 'light');
     await page.setViewportSize({ width: 1440, height: 1200 });
     await load();
     await capture("05-session-desktop");

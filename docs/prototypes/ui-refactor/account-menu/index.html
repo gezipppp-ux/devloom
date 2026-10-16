@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>DevLoom · 头像菜单三方案</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23292a33'/%3E%3Cpath d='m12 9-7 7 7 7m8-14 7 7-7 7' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="../../../../.agents/skills/neutral-workbench/assets/tokens.css">
+  <link rel="stylesheet" href="prototype.css">
+  <script defer src="prototype.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">跳到主要内容</a>
+  <section class="review" aria-label="方案评审">
+    <div class="review-top">
+      <div class="review-title"><span class="review-mark">UI / 03</span><strong>头像与账号操作</strong><span class="prototype-label">交互原型</span></div>
+      <div class="proposals" role="group" aria-label="切换设计方案">
+        <button data-scheme="a">A · 简洁菜单 <span>推荐</span></button>
+        <button data-scheme="b">B · 账号卡片</button>
+        <button data-scheme="c">C · 个人面板</button>
+      </div>
+      <div class="review-tools"><button id="long-name" aria-pressed="false">长账号</button><button id="review-locale">EN</button><button id="preview-open">展开头像</button></div>
+    </div>
+    <p id="proposal-description"></p>
+  </section>
+  <div id="app"></div>
+  <div id="account-menu" hidden></div>
+  <dialog id="account-dialog" aria-labelledby="account-title"></dialog>
+  <dialog id="preview-dialog" aria-labelledby="preview-title"></dialog>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

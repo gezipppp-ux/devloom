@@ -30,7 +30,7 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),kind==='sett
     await server.listen(); const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
     browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : process.platform === "win32" ? { channel: "msedge" } : {}) });
     await require("./markdown-loading.test.cjs").verifyMarkdownLoading({ browser, origin });
-    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }); const errors = [], writes = [];
+    const page = await browser.newPage({ locale: "zh-CN", viewport: { width: 1440, height: 1000 } }); const errors = [], writes = [];
     page.on("pageerror", error => { errors.push(error.message); console.error(error.message); });
 
     let releaseComment, pendingComment;

@@ -2,7 +2,8 @@
 import PublishDelivery from "./PublishDelivery.vue";
 import { useRouter } from "vue-router";
 import AppSelect from "../../shared/components/AppSelect.vue";
-import { formatDate } from "../../shared/i18n/index.js";
+import { formatDate, translate } from "../../shared/i18n/index.js";
+import { usePageTitle } from "../../shared/components/page-title.js";
 import { computed, ref, watch } from "vue";
 import { appApi } from "../../shared/api/api.js";
 import { useResource } from "../../shared/api/use-resource.js";
@@ -14,6 +15,7 @@ const props = defineProps({ projectId: { type: String, required: true }, deliver
 const emit = defineEmits(["back"]);
 const endpoint = `/projects/${props.projectId}/deliveries/${props.deliveryId}`;
 const { data, loading, saving, error, reload, save } = useResource(() => appApi(endpoint));
+usePageTitle(() => [error.value ? "" : data.value?.delivery.title, translate("交付")]);
 const router = useRouter(), resubmitting = ref(false);
 const reviewers = useResource(() => appApi(`/projects/${props.projectId}/reviewers`));
 const reviewerId = ref("");

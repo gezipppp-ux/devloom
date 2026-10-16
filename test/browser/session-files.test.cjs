@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 async function verifySessionFiles(browser, origin, key, errors, output) {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const page = await browser.newPage({ locale: "zh-CN", viewport: { width: 1440, height: 1000 } });
   page.on("pageerror", error => errors.push(error.message));
   const before = "const value = 1;\n", current = "const value = 2;\nexport { value };\n";
   const files = [{ path: "src/seed.ts", status: "M" }, { path: "migration.sql", status: "A" }, { path: "removed.ts", status: "D" }];

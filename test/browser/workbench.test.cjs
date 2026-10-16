@@ -1,4 +1,4 @@
-const { selectOption } = require("../support/select.cjs");
+const { selectOption, selectPreference } = require("../support/select.cjs");
 /* global document, window */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -6,7 +6,7 @@ const path = require('node:path');
 const { projectVisual } = require('../fixtures/project-visual.cjs');
 
 async function verifyWorkbench(browser) {
-  const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  const context = await browser.newContext({ locale: "zh-CN", viewport: { width: 1920, height: 1080 } });
   const page = await context.newPage();
   const fixture = projectVisual('neutral-workspace'), projectId = fixture.projectId;
   const origin = 'http://127.0.0.1:49025', base = `/api/projects/${projectId}`;
@@ -77,7 +77,7 @@ async function verifyWorkbench(browser) {
     await page.locator('.work-action').first().waitFor();
     assert.equal(await page.locator('.work-action').count(), 1, 'home and full queue keep the same action scope');
     for(const locale of ['zh-CN','en']) {
-      await selectOption(page.locator('.ui-locale'), locale);
+      await selectPreference(page, "locale", locale);
       for(const [name, location, ready] of [
         ['home', '/', '.work-action'], ['action-queue', '/work?bucket=verify', '.work-action'], ['projects', '/projects', '.project-card'],
         ['overview', `/projects/${projectId}`, '.project-overview-grid'],
@@ -99,9 +99,9 @@ async function verifyWorkbench(browser) {
           assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),`${locale} ${name} overflow at ${width}`);
           await page.screenshot({path:path.join(output,`${name}-${locale}-${width}.png`),fullPage:true});
           if (locale === 'zh-CN' && [1920, 390].includes(width)) {
-            await selectOption(page.getByRole('combobox', { name: '外观主题', exact: true }), 'dark');
+            await selectPreference(page, "theme", 'dark');
             await page.screenshot({path:path.join(output,`${name}-dark-${width}.png`),fullPage:true});
-            await selectOption(page.getByRole('combobox', { name: '外观主题', exact: true }), 'light');
+            await selectPreference(page, "theme", 'light');
           }
           if (name === 'administration') {
             const management = page.locator('.ui-account-manage').last();

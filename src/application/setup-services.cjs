@@ -64,8 +64,7 @@ class SetupServices {
       })));
     }
     if (step === "environment" || step === "complete") {
-      const defer = step === "environment" ? value.value.deferCodexLogin : initial.steps.environment?.data?.deferCodexLogin;
-      if (!environmentReadiness(await this.environment.read(), defer)) throw accountError("运行环境尚未就绪，请重新检测；安装失败或待重启时不能继续。", 409, "SETUP_ENVIRONMENT_REQUIRED");
+      if (!environmentReadiness(await this.environment.read())) throw accountError("运行环境尚未就绪，请重新检测；安装失败或待重启时不能继续。", 409, "SETUP_ENVIRONMENT_REQUIRED");
     }
     if (step === "complete") {
       const settings = await readSystemSettings(this.directory);
@@ -88,7 +87,6 @@ class SetupServices {
     return this.read(actor);
   }
   async applyStep(actor, step, value, row, prepared) {
-    if (step === "environment") return { deferCodexLogin: value.deferCodexLogin };
     if (step === "directory") {
       const saved = await savePreparedSystemSettings(prepared, this.directory);
       return { memberStorageRoot: saved.memberStorageRoot };

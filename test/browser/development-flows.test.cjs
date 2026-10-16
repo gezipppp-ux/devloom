@@ -23,7 +23,7 @@ async function main() {
   let runs = [], taskStatus = 'running';
   const browser = await chromium.launch({ ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : process.platform === 'win32' ? { channel: 'msedge' } : {}), headless: true });
   try {
-    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, hasTouch: true });
+    const page = await browser.newPage({ locale: "zh-CN", viewport: { width: 1440, height: 1000 }, hasTouch: true });
     await page.addInitScript(() => {
       window.EventSource = class {
         constructor() { this.timer = setTimeout(() => this.onopen?.({}), 0); }

@@ -145,7 +145,7 @@ function resolveCodex(config = {}, options = {}) {
   result = search('codex', fallback);
   if (result) return result;
   throw Object.assign(new Error(
-    '未找到 Codex CLI。请为运行服务的用户安装并登录 Codex，将其目录加入服务 PATH，或设置 CODEX_BIN / codex.command 为可执行文件绝对路径。systemd / launchd 不会自动读取终端的 nvm 或 Homebrew 初始化配置；修改后请重启服务。',
+    '未找到 Codex CLI。请为运行服务的用户安装 Codex，将其目录加入服务 PATH，或设置 CODEX_BIN / codex.command 为可执行文件绝对路径。systemd / launchd 不会自动读取终端的 nvm 或 Homebrew 初始化配置；修改后请重启服务。',
   ), { code: 'TOOL_NOT_FOUND' });
 }
 

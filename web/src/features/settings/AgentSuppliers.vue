@@ -27,7 +27,6 @@ const actionLabel = pending => pending.action === 'activate' ? '设为默认' : 
         <div class="supplier-card-footer"><span class="supplier-tag supplier-auth-type">{{ row.builtin ? $t("服务器配置") : 'API Key' }}</span>
           <button :class="{ primary: row.id !== currentId }" :disabled="busy || loading || !row.enabled || row.id === currentId" @click="confirm(row, 'activate')">{{ row.id === currentId ? $t("正在使用") : $t("设为默认") }}</button>
           <div v-if="!row.builtin" class="supplier-card-actions"><button :disabled="busy" @click="edit(row)">{{ $t("编辑 / 检测") }}</button><button :disabled="busy" @click="duplicate(row)">{{ $t("复制") }}</button><button :disabled="busy || row.id === currentId" @click="confirm(row, 'toggle')">{{ row.enabled ? $t("停用") : $t("启用") }}</button><button class="danger" :disabled="busy || row.id === currentId" @click="confirm(row, 'delete')">{{ $t("删除") }}</button></div>
-          <p v-else class="field-hint">{{ $t("在环境检测中查看服务器认证状态。") }}</p>
         </div>
       </article>
     </div>

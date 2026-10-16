@@ -12,15 +12,16 @@ test("tool process arguments remain literal and failures hide raw diagnostics", 
   await assert.rejects(runTool(process.execPath, ["-e", "setInterval(()=>{},1000)"], { timeout: 100 }), /超时/);
 });
 
-test("Codex probes use the configured launcher and treat failed login status as a failed requirement", async () => {
+test("Codex detection only checks its version through the configured launcher", async () => {
   const calls = [];
   const result = await inspectTool("codex", {
     codex: () => ({ command: "fixture-node", args: ["fixture-codex.js"] }),
     run: async (command, args) => { calls.push([command, args]); if (args.includes("login")) throw new Error("not authenticated"); return "codex-cli 0.99.0"; },
   });
   assert.equal(result.version, "0.99.0");
-  assert.equal(result.satisfies, false);
-  assert.deepEqual(calls[1], ["fixture-node", ["fixture-codex.js", "login", "status"]]);
+  assert.equal(result.satisfies, true);
+  assert.equal(Object.hasOwn(result, "authentication"), false);
+  assert.deepEqual(calls, [["fixture-node", ["fixture-codex.js", "--version"]]]);
   await assert.rejects(inspectTool("git", { executable: () => null }), /未找到/);
 });
 

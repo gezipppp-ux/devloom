@@ -25,7 +25,7 @@
   const defaults = () => ({
     step: 0, maxStep: 0, done: {}, paused: false, finished: false, scenario: "missing",
     admin: null, adminDraft: { username: "admin", displayName: "管理员" },
-    env: { git: false, codex: false, auth: false, deferred: false, issue: "", busy: "" },
+    env: { git: false, codex: false, issue: "", busy: "" },
     directory: "D:\\wt", directorySaved: false, directoryDenied: false, departments: false,
     accounts: [], accountDrafts: [
       { selected: true, username: "test-product", displayName: "测试#产品", department: "产品部门", kind: "product" },
@@ -77,8 +77,7 @@
     else if (env.issue === "unavailable") status = notice("此服务器暂不支持自动安装 Git", "没有可用的安装器或服务账号权限不足。请在服务器安装后重新检测。", "warning");
     else if (env.issue === "unknown") status = notice("Codex CLI 检测异常", "无法启动配置的 Codex。请检查安装位置或 CODEX_BIN 配置，再重新检测。", "error");
     else if (env.issue === "interrupted") status = notice("上次安装结果需要重新检测", "页面已刷新，演示进度不自动重放。正式版本会读取运行中的安装状态或重新检测。");
-    else if (ready && env.auth) status = notice("运行环境已就绪", "工具与 Codex 登录检测通过，可以继续配置成员目录。", "success");
-    else if (ready) status = notice("工具已就绪，Codex 尚未登录", "你可以完成认证后重新检测，也可以先继续团队配置。", "warning");
+    else if (ready) status = notice("运行环境已就绪", "所需工具已检测到，可以继续配置成员目录。", "success");
     else status = notice("检测到缺失工具", "安装计划已列在下方。点击一次“安装缺失工具”，依次完成 Git 和 Codex CLI 安装。", "warning");
     function tool(name, installed, kind, target, source) {
       let text = installed ? "已安装" : "待安装", type = installed ? "success" : "warning";
@@ -89,8 +88,7 @@
     }
     return top("检查运行环境", "检查的是运行 DevLoom 的服务器。") + status +
       `<div class="card"><div class="card-heading"><h3>开发所需工具</h3>${badge("Windows · 示例")}</div>${tool("Git", env.git, "git", "2.51.0.windows.1", "winget / Git.Git")}${tool("Codex CLI", env.codex, "codex", "0.114.0", "npm / @openai/codex")}<div class="prerequisites"><span>${icon("check")}Node.js 22.13.0</span><span>${icon("check")}npm 可用</span><span>${icon("check")}PostgreSQL 已连接</span></div><p class="hint">版本均为演示数据；实施时实时检测并核对安装目标。</p><div class="inline-actions">${!ready && !["restart", "unavailable", "unknown"].includes(env.issue) ? `<button class="primary" data-action="install" ${env.busy ? "disabled" : ""}>${icon("box")}${env.issue === "failed" ? "重试缺失工具" : "安装缺失工具"}</button>` : ""}<button data-action="recheck" ${env.busy ? "disabled" : ""}>${icon("refresh")}重新检测</button></div></div>` +
-      (ready && !env.auth ? `<div class="card"><div class="card-heading"><h3>Codex 认证</h3>${badge("待处理", "warning")}</div><p class="muted">在实际运行服务的账号下完成 Codex 登录，再返回检测。也可稍后处理，开始开发前会再次检查。</p><div class="path-preview"><code>codex login</code></div><div class="inline-actions"><button data-action="auth-check">已完成登录，重新检测</button></div><p class="hint">此按钮在原型中模拟认证成功。</p></div>` : "") +
-      footer(ready && !env.auth ? "稍后登录，继续配置" : "继续配置", { disabled: !ready, caption: "已有合格版本保持不变。安装失败或待重启时，请处理后继续。" });
+      footer("继续配置", { disabled: !ready, caption: "已有合格版本保持不变。安装失败或待重启时，请处理后继续。" });
   }
   function directoryStep() {
     return top("选择成员目录", "项目仓库和任务目录统一保存在这里。") +
@@ -138,8 +136,7 @@
     const ready = canFinish();
     return top(ready ? "配置已准备好" : "还有配置需要处理", "核对初始化结果，完成后进入工作台。") +
       (!ready ? notice("请先完成必填步骤", "运行环境或基础配置尚未通过，请返回对应步骤处理。", "warning") : "") +
-      `<div class="card"><div class="finish-symbol">${icon(ready ? "check" : "info")}</div><h2>${ready ? "你的工作台已准备就绪" : "初始化结果"}</h2><p class="muted">${ready ? "基础配置已保存，团队可以开始使用。" : "必填步骤通过后才能完成初始化。"}</p><dl class="summary-list"><div><dt>管理员</dt><dd>${escape(state.admin.displayName)}<small>登录名 ${escape(state.admin.username)}</small></dd></div><div><dt>运行环境</dt><dd>${state.env.git && state.env.codex && !state.env.issue ? "Git / Codex CLI 已安装" : "尚需处理"}<small>${state.env.auth ? "Codex 认证已通过" : "Codex 认证稍后完成"}</small></dd></div><div><dt>成员目录</dt><dd><code>${escape(state.directory)}</code></dd></div><div><dt>默认部门</dt><dd>产品部门 · 研发部门<small>已应用对应权限模板</small></dd></div><div><dt>测试账号</dt><dd>${state.accounts.length ? state.accounts.map(account => escape(account.displayName)).join("、") : "已跳过"}<small>${state.accounts.length ? "已分配部门；项目权限按选中成员授予" : "可在账号管理中添加正式成员"}</small></dd></div><div><dt>第一个项目</dt><dd>${state.project ? escape(state.project.name) : "已跳过"}<small>${state.project ? `已加入 ${state.project.members.length} 个测试成员` : "之后创建项目，并添加需要参与的成员"}</small></dd></div></dl></div>` +
-      (!state.env.auth ? notice("开发前还有一项待办", "在服务器的服务账号下完成 Codex 登录，再从系统设置重新检测。项目协作可以先使用。", "warning") : "") +
+      `<div class="card"><div class="finish-symbol">${icon(ready ? "check" : "info")}</div><h2>${ready ? "你的工作台已准备就绪" : "初始化结果"}</h2><p class="muted">${ready ? "基础配置已保存，团队可以开始使用。" : "必填步骤通过后才能完成初始化。"}</p><dl class="summary-list"><div><dt>管理员</dt><dd>${escape(state.admin.displayName)}<small>登录名 ${escape(state.admin.username)}</small></dd></div><div><dt>运行环境</dt><dd>${state.env.git && state.env.codex && !state.env.issue ? "Git / Codex CLI 已安装" : "尚需处理"}</dd></div><div><dt>成员目录</dt><dd><code>${escape(state.directory)}</code></dd></div><div><dt>默认部门</dt><dd>产品部门 · 研发部门<small>已应用对应权限模板</small></dd></div><div><dt>测试账号</dt><dd>${state.accounts.length ? state.accounts.map(account => escape(account.displayName)).join("、") : "已跳过"}<small>${state.accounts.length ? "已分配部门；项目权限按选中成员授予" : "可在账号管理中添加正式成员"}</small></dd></div><div><dt>第一个项目</dt><dd>${state.project ? escape(state.project.name) : "已跳过"}<small>${state.project ? `已加入 ${state.project.members.length} 个测试成员` : "之后创建项目，并添加需要参与的成员"}</small></dd></div></dl></div>` +
       footer(state.project ? "完成并进入项目" : "完成并进入全部项目", { action: "finish", disabled: !ready, caption: "完成后不再自动显示初始化向导。" });
   }
   function canFinish() { return Boolean(state.admin && state.env.git && state.env.codex && !state.env.issue && !state.env.busy && state.directorySaved && state.departments); }
@@ -186,7 +183,6 @@
     }
     if (state.step === 1) {
       if (!state.env.git || !state.env.codex || state.env.issue) return;
-      state.env.deferred = !state.env.auth;
     }
     if (state.step === 2 && !state.directorySaved) {
       if (!/^(?:[A-Za-z]:\\|\/)/.test(state.directory.trim())) return invalid({ directory: "请填写服务器上的绝对路径，例如 D:\\wt 或 /srv/wt。" });
@@ -240,7 +236,7 @@
       state.env[tool] = true;
     }
     state.env.busy = ""; state.env.issue = ""; persist(); render();
-    message("工具安装完成（演示），可登录 Codex 或稍后处理");
+    message("工具安装完成（演示），可以继续配置");
   }
   function recheck() {
     if (state.env.busy) return;
@@ -286,7 +282,6 @@
       case "skip": secrets = {}; advance("skipped"); break;
       case "install": void install(); break;
       case "recheck": recheck(); break;
-      case "auth-check": state.env.auth = true; state.env.deferred = false; persist(); render(); message("Codex 认证检测通过（演示）"); break;
       case "choose-directory": document.getElementById("directory-dialog").showModal(); break;
       case "pause": state.paused = true; secrets = {}; persist(); render(); break;
       case "resume": state.paused = false; persist(); render(true); break;
@@ -300,9 +295,8 @@
     operation++;
     const scenario = event.target.value;
     state.scenario = scenario;
-    state.env = { git: false, codex: false, auth: false, deferred: false, issue: "", busy: "" };
-    if (scenario === "ready") Object.assign(state.env, { git: true, codex: true, auth: true });
-    if (scenario === "auth") Object.assign(state.env, { git: true, codex: true });
+    state.env = { git: false, codex: false, issue: "", busy: "" };
+    if (scenario === "ready") Object.assign(state.env, { git: true, codex: true });
     if (scenario === "failed") Object.assign(state.env, { git: true, issue: "failed" });
     if (scenario === "restart") Object.assign(state.env, { codex: true, issue: "restart" });
     if (scenario === "unavailable") Object.assign(state.env, { codex: true, issue: "unavailable" });

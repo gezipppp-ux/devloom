@@ -125,7 +125,7 @@ test("Node installation is recorded as pending restart without pretending the li
 test("first installation distinguishes missing tools from broken probes, reauthorizes, and reprobes", async t => {
   let installed = false, authorized = 0;
   const service = await fixture(t, {
-    inspect: async id => { if (id === "codex" && !installed) throw Object.assign(new Error("missing"), { code: "TOOL_NOT_FOUND" }); return { version: "2.0.0", satisfies: id !== "codex", authentication: id === "codex" ? false : null }; },
+    inspect: async id => { if (id === "codex" && !installed) throw Object.assign(new Error("missing"), { code: "TOOL_NOT_FOUND" }); return { version: "2.0.0", satisfies: true }; },
     plan: async (_id, inspected) => ({ available: true, operation: inspected.missing ? "install" : "update" }),
     install: async () => { installed = true; },
   });
@@ -141,9 +141,9 @@ test("first installation distinguishes missing tools from broken probes, reautho
   assert.equal(authorized, 1);
   assert.equal(service.job.operation, "install");
   assert.equal(service.job.status, "completed");
-  assert.match(service.job.message, /登录/);
+  assert.doesNotMatch(service.job.message, /登录|认证/);
   const report = await service.read();
-  assert.equal(report.ready, false);
+  assert.equal(report.ready, true);
   assert.equal(report.tools.find(tool => tool.id === "codex").installAvailable, false);
   await assert.rejects(service.start(input, () => {}), /已检测到/);
   const broken = await fixture(t, { inspect: async () => { throw new Error("broken probe"); }, install: async () => assert.fail("must not install") });

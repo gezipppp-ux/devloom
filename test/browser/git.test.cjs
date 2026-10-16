@@ -37,7 +37,7 @@ async function verifyGit(browser, { origin, output, errors, directory, workspace
   const remoteHead = git(peer, "rev-parse", "HEAD");
   const workspace = (await workspaces.save({ name: "Git 操作回归" }));
   (await seedWorkspaceProject(workspaces.configFile(workspace.id), repository, "git-browser"));
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
+  const page = await browser.newPage({ locale: "zh-CN", viewport: { width: 1440, height: 1100 } });
   page.on("pageerror", (error) => errors.push(error.message));
   const api = `${origin}/api/workspaces/${workspace.id}`;
   const gitPanel = page.locator(".session-git");

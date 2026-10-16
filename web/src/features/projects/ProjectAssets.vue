@@ -1,6 +1,7 @@
 <script setup>
 import AppSelect from "../../shared/components/AppSelect.vue";
 import { translate } from "../../shared/i18n/index.js";
+import { usePageTitle } from "../../shared/components/page-title.js";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, reactive, ref, useId, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
@@ -31,6 +32,7 @@ const { data: selected, loading: detailLoading, error: detailError, reload: load
   })) : [];
   return { ...asset, issues };
 }, { immediate: false });
+usePageTitle(() => route.query.asset ? [detailError.value || selected.value?.id !== route.query.asset ? "" : selected.value?.title, translate("项目资产")] : null);
 const historyOffset = ref(0), historyOpen = ref(false);
 const { data: history, loading: historyLoading, error: historyError, reload: loadHistory } = useResource(() => selected.value ? appApi(`${endpoint}/${selected.value.id}/history?offset=${historyOffset.value}`) : null, { immediate: false });
 let retainedAssetId;

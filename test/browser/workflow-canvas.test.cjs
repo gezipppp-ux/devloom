@@ -1,4 +1,4 @@
-const { selectOption } = require("../support/select.cjs");
+const { selectOption, selectPreference } = require("../support/select.cjs");
 /* global document, window */
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -18,10 +18,9 @@ async function verifyWorkflowFocus({ page, graph, output }) {
   assert.equal(await opacity(incoming), 1);
   assert.equal(await opacity(unrelated), .18, 'an edge between two neighbors is not directly related to the selection');
   assert.equal(await opacity(completed), .18);
-  const theme = page.getByRole('combobox', { name: '外观主题', exact: true });
   const fills = [];
   for (const value of ['light', 'dark']) {
-    await selectOption(theme, value);
+    await selectPreference(page, "theme", value);
     await page.waitForFunction(expected => document.documentElement.dataset.theme === expected, value);
     const colors = await incoming.locator('.edge-line').evaluate(path => {
       const style = window.getComputedStyle(path), canvas = path.closest('.workflow-canvas'), mask = canvas.querySelector('.workflow-focus-mask');
@@ -56,7 +55,7 @@ async function verifyWorkflowFocus({ page, graph, output }) {
   await port.press('Escape');
   await graph.locator('.workflow-focus-mask').waitFor({ state: 'hidden' });
   assert.equal(await graph.locator('.is-muted').count(), 0, 'clearing restores the complete graph');
-  await selectOption(theme, 'light');
+  await selectPreference(page, "theme", 'light');
 }
 
 async function verifyWorkflowCanvas({ page, origin, output }) {

@@ -96,7 +96,7 @@ async function verifyLateImageUpload(page, { pattern, leave, reopen }) {
 
 async function verifySessionImages(browser, origin, manager, client, key, errors, output) {
   if (manager.sessions.get(key)?.turnId) await manager.interrupt(key);
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const context = await browser.newContext({ locale: "zh-CN", viewport: { width: 1440, height: 1000 } });
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
   const page = await context.newPage();
   page.on('pageerror', (error) => errors.push(error.message));

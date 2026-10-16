@@ -1,4 +1,5 @@
-const { selectOption } = require("../support/select.cjs");
+const { accountAction } = require("../support/browser-navigation.cjs");
+const { selectOption, selectPreference } = require("../support/select.cjs");
 const { dismissOperationMessages } = require("../support/operation-feedback.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
@@ -164,7 +165,7 @@ async function verifyGitAccounts(page, output) {
   assert.equal(writes.at(-1).remoteUrl, undefined);
   await section.getByRole("button", { name: "编辑 Git 账号：已修改 HTTP Git", exact: true }).click();
   await captureForms("git-accounts-http");
-  await selectOption(page.locator(".ui-locale"), "en");
+  await selectPreference(page, "locale", "en");
   await section.getByRole("heading", { name: "Edit account · 已修改 HTTP Git", exact: true }).waitFor();
   assert.equal(await section.getByLabel("Account name", { exact: true }).inputValue(), "已修改 HTTP Git", "language switching preserves the editor");
   for (const [width, height] of [[1440, 900], [320, 740]]) {
@@ -172,7 +173,7 @@ async function verifyGitAccounts(page, output) {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
     await page.screenshot({ path: path.join(output, `git-accounts-edit-en-${width}.png`), fullPage: true });
   }
-  await selectOption(page.locator(".ui-locale"), "zh-CN");
+  await selectPreference(page, "locale", "zh-CN");
   await page.setViewportSize({ width: 1440, height: 1000 });
   const beforeCancel = writes.length;
   await section.getByLabel("账号名称", { exact: true }).fill("不会保存的修改");
@@ -226,7 +227,7 @@ async function verifyGitAccounts(page, output) {
   gate();
   await completed;
   assert.equal(await page.locator('.operation-message[data-type="success"]').filter({ hasText: "Git 主机登录验证成功" }).count(), 0, "late verification must not notify after leaving personal settings");
-  await page.getByRole("button", { name: "个人设置", exact: true }).click();
+  await accountAction(page, "个人中心");
   await page.getByRole("navigation", { name: "个人设置", exact: true }).getByRole("button", { name: "Git 账号", exact: true }).click();
   await section.getByRole("button", { name: "编辑 Git 账号：开发 SSH Git", exact: true }).waitFor();
   process.stdout.write("Git account browser passed: host login, unsaved HTTP/SSH credentials, verification failures, revisions, explicit authors, generated public keys, confirmation and responsive forms.\n");

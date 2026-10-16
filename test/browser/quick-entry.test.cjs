@@ -3,11 +3,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { projectVisual } = require('../fixtures/project-visual.cjs');
-const { selectOption } = require('../support/select.cjs');
+const { selectPreference } = require("../support/select.cjs");
 const { openIssueCreate } = require('../support/browser-navigation.cjs');
 
 async function verifyQuickEntry(browser) {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const context = await browser.newContext({ locale: "zh-CN", viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   const fixture = projectVisual('quick-entry-workspace'), projectId = fixture.projectId;
   const origin = 'http://127.0.0.1:49028', base = `/api/projects/${projectId}`;
@@ -54,7 +54,11 @@ async function verifyQuickEntry(browser) {
   });
   const chooser = () => page.locator('.project-picker-dialog[open]');
   const search = () => page.locator('.quick-search-dialog[open]');
-  async function openSearch() { await page.locator('.ui-global-search').click(); await search().getByRole('searchbox').waitFor(); }
+  async function openSearch() {
+    if (await page.locator('.ui-global-search').isVisible()) await page.locator('.ui-global-search').click();
+    else { await page.locator('.ui-mobile-menu').click(); await page.locator('.ui-drawer-search').click(); }
+    await search().getByRole('searchbox').waitFor();
+  }
   async function close() { await page.keyboard.press('Escape'); await page.locator('dialog[open]').waitFor({ state: 'hidden' }); }
   async function waitHeld(queue, count) {
     const deadline = Date.now() + 5000;
@@ -160,7 +164,7 @@ async function verifyQuickEntry(browser) {
     await close();
 
     for (const locale of ['zh-CN', 'en']) {
-      await selectOption(page.locator('.ui-locale'), locale);
+      await selectPreference(page, "locale", locale);
       for (const [width, height] of [[2560,1440],[1920,1080],[1440,900],[1280,720],[768,1024],[390,844],[320,740]]) {
         await page.setViewportSize({width,height});
         await page.goto(origin);
@@ -176,11 +180,11 @@ async function verifyQuickEntry(browser) {
         await search().getByText('客户搜索体验交付', { exact: true }).waitFor();
         await capture(`search-results-${locale}-${width}`, search());
         if (locale === 'zh-CN' && [1920,390].includes(width)) {
-          await close(); await selectOption(page.getByRole('combobox', { name: '外观主题', exact: true }), 'dark');
+          await close(); await selectPreference(page, "theme", 'dark');
           await openSearch(); await search().getByRole('searchbox').fill('搜索');
           await search().getByText('客户搜索体验交付', { exact: true }).waitFor();
           await capture(`search-dark-${width}`, search());
-          await close(); await selectOption(page.getByRole('combobox', { name: '外观主题', exact: true }), 'light');
+          await close(); await selectPreference(page, "theme", 'light');
         } else await close();
       }
     }

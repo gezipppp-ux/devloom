@@ -71,7 +71,7 @@ async function main() {
           : {}),
       headless: true,
     });
-    const page = await browser.newPage({
+    const page = await browser.newPage({ locale: "zh-CN",
       viewport: { width: 1440, height: 1100 },
     });
     const errors = [];
@@ -128,7 +128,7 @@ async function main() {
     });
     await navigateWorkspace(page, b);
     await page.getByRole("heading", { name: "项目 B · 工作区设置" }).waitFor();
-    const defaultPage = await browser.newPage();
+    const defaultPage = await browser.newPage({ locale: "zh-CN" });
     defaultPage.on("pageerror", (error) => errors.push(error.message));
     let documentRequests = 0;
     defaultPage.on("request", (request) => {

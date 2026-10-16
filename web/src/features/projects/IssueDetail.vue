@@ -4,6 +4,7 @@ import IssueWorkflowUpgrade from "./IssueWorkflowUpgrade.vue";
 import AppSelect from "../../shared/components/AppSelect.vue";
 import {formatDate, translate} from "../../shared/i18n/index.js";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
+import {usePageTitle} from "../../shared/components/page-title.js";
 import {computed, reactive, ref} from "vue";
 import {RouterLink} from "vue-router";
 import {EditOutlined, FileTextOutlined, SwapOutlined, UserAddOutlined, ArrowLeftOutlined} from "@antdv-next/icons";
@@ -41,6 +42,7 @@ const {data, loading, saving, error, notice, reload, save, perform} = useResourc
   };
 });
 defineExpose({ reload });
+usePageTitle(() => [error.value ? "" : data.value?.title, translate("事项")]);
 const publishing = ref(false), nextHandler = ref(""), assigningHandler = ref(false), handlerId = ref("");
 const upgrading = ref(false);
 const baseline = ref(null), latest = ref(null);

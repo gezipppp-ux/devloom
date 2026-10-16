@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 async function verifySystemSettings(browser, { origin, output, errors, directory, repository, workspace }) {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
+  const page = await browser.newPage({ locale: "zh-CN", viewport: { width: 1440, height: 1100 } });
   page.on("pageerror", (error) => errors.push(error.message));
   const base = path.join(directory, "system worktrees");
   const selected = path.join(base, "selected");

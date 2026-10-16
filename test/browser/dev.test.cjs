@@ -152,13 +152,14 @@ async function main() {
     const origin = `http://${address}:${port}`;
     child = fork(
       path.join(directory, "src", "cli", "dev-watch.cjs"),
-      ["--port", String(port)],
+      [],
       {
         cwd: directory,
         windowsHide: true,
         env: {
           ...process.env,
           DATABASE_URL: database.url,
+          PORT: String(port),
           RUNNER_DATA_DIR: path.join(directory, "data"),
           NODE_OPTIONS: `--require ${JSON.stringify(path.join(directory, "preload.cjs"))}`,
         },
@@ -187,7 +188,7 @@ async function main() {
           : {}),
       headless: true,
     });
-    const page = await browser.newPage();
+    const page = await browser.newPage({ locale: "zh-CN" });
     const preAuth = await (await page.request.get(`${origin}/api/auth/session`)).json();
     const login = await page.request.post(`${origin}/api/auth/login`, {
       headers: { origin, "x-csrf-token": preAuth.token },

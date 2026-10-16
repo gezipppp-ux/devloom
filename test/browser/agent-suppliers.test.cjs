@@ -1,3 +1,4 @@
+const { accountAction } = require("../support/browser-navigation.cjs");
 const { selectOption, selectValue } = require("../support/select.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
@@ -229,7 +230,7 @@ async function verifyAgentSuppliers(page, output) {
   await page.getByRole("dialog").getByRole("button", { name: "删除供应商", exact: true }).click();
   await card.waitFor({ state: "hidden" });
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.getByRole("button", { name: "个人设置", exact: true }).click();
+  await accountAction(page, "个人中心");
   process.stdout.write("Supplier model browser checks passed: grouped sorting, search, preserved selections, native metadata, manual overrides, retries and late catalog responses.\n");
 }
 module.exports = { verifyAgentSuppliers };

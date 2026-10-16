@@ -34,5 +34,4 @@
 @media (min-width: 1920px) { :root { --page-width: calc(1600px + 2 * var(--page-gutter)); } }
 @media (max-width: 1199px) and (min-width: 768px) { :root { --shell-sidebar: 76px; } }
 @media (max-width: 767px) { :root { --page-gutter: 20px; --page-padding-top: 24px; --page-padding-bottom: 40px; --control-height: 44px; --shell-header: 60px; } }
-@media (max-width: 600px) { :root { --shell-header: 112px; } }
 @media (max-width: 360px) { :root { --page-gutter: 16px; } }

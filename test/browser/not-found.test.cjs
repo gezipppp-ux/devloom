@@ -4,12 +4,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("playwright");
 const { createWebServer } = require("../../src/http/server.cjs");
-const { selectOption } = require("../support/select.cjs");
+const { selectPreference } = require("../support/select.cjs");
 
 async function verifyNotFound(browser) {
   const application = createWebServer({ testIdentity: true, workspaces: { close: async () => {} } });
   const origin = await application.listen(0);
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "light" });
+  const context = await browser.newContext({ locale: "zh-CN", viewport: { width: 1440, height: 900 }, colorScheme: "light" });
   const page = await context.newPage();
   const errors = [], apiRequests = [];
   page.on("pageerror", error => errors.push(error.message));
@@ -32,7 +32,7 @@ async function verifyNotFound(browser) {
     await title.waitFor();
 
     for (const locale of ["zh-CN", "en"]) {
-      await selectOption(page.locator(".ui-locale"), locale);
+      await selectPreference(page, "locale", locale);
       await page.getByRole("heading", { name: locale === "en" ? "This page took a wrong turn" : "这个页面走丢了", exact: true }).waitFor();
       assert.equal(page.url(), missing, "language switching preserves the missing address");
       for (const [width, height] of [[2560, 1440], [1920, 1080], [1440, 900], [1280, 720], [768, 1024], [390, 844], [320, 740]]) {

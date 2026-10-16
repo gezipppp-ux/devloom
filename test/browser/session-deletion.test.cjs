@@ -29,7 +29,7 @@ async function verifySessionDeletion(browser, origin, manager, directory, errors
     worktree: { repository, path: tree, branch },
   }));
   if (archived) await manager.archive(key);
-  const page = await browser.newPage();
+  const page = await browser.newPage({ locale: "zh-CN" });
   page.on("pageerror", (error) => errors.push(error.message));
   let releaseSnapshot, releaseDeletion;
   try {

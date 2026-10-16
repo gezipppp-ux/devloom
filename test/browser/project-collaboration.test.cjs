@@ -1,3 +1,4 @@
+const { accountAction } = require("../support/browser-navigation.cjs");
 const { selectOption } = require("../support/select.cjs");
 const { openProjectTab } = require("../support/browser-navigation.cjs");
 /* global document, window, PopStateEvent */
@@ -58,7 +59,7 @@ async function main() {
   let browser;
   try {
     browser = await chromium.launch({ ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : process.platform === "win32" ? { channel: "msedge" } : {}), headless: true });
-    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const context = await browser.newContext({ locale: "zh-CN", viewport: { width: 1440, height: 1000 } });
     const page = await context.newPage();
     await page.addInitScript(() => {
       // Ordinary HTTP LAN origins expose getRandomValues but not randomUUID.
@@ -254,7 +255,7 @@ async function main() {
       await page.screenshot({ path: path.join(output, `product-assets-${width}.png`), fullPage: true });
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.getByRole("button", { name: "退出登录", exact: true }).click();
+    await accountAction(page, "退出登录");
     await login("admin");
     await verifyProjectReleases({ page, origin, projectId: project.id, output });
     await verifyAdministratorProjectAccess({ page, origin, projects, accounts, admin, department, remoteUrl: remote.remoteUrl, output });
@@ -461,7 +462,7 @@ async function main() {
     await page.unroute(tasksUrl);
     await require("./project-task-merging.test.cjs").verifyProjectTaskMerging({ page, origin, project, database, content, admin, output, clients });
     await require("./project-lifecycle.test.cjs").verifyProjectLifecycle({ page, origin, project, database, output, projects, admin });
-    await page.getByRole("button", { name: "退出登录", exact: true }).click();
+    await accountAction(page, "退出登录");
     await page.getByLabel("账号", { exact: true }).waitFor();
     const codeRequestStart = requests.length;
     await login("codeonly");

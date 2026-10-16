@@ -1,4 +1,4 @@
-const { argument } = require("./arguments.cjs");
+const { argument, portArgument } = require("./arguments.cjs");
 const { createWebServer } = require("../http/server.cjs");
 
 async function main(argv = process.argv.slice(2)) {
@@ -6,9 +6,7 @@ async function main(argv = process.argv.slice(2)) {
     throw new Error(
       "Web 配置已按工作区管理，请在页面创建并配置工作区；--config 仅用于 CLI 命令。",
     );
-  const port = Number(argument("--port", null, argv) || 4317);
-  if (!Number.isInteger(port) || port < 1 || port > 65535)
-    throw new Error("端口需为 1–65535。");
+  const port = portArgument(argv, { defaultPort: 4317 });
   const host = argument("--host", "0.0.0.0", argv);
   const application = createWebServer({ host });
   const origin = await application.listen(port);

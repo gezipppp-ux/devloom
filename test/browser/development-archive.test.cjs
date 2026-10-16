@@ -1,7 +1,7 @@
 /* global document, window */
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { selectOption } = require("../support/select.cjs");
+const { selectPreference } = require("../support/select.cjs");
 
 async function verifyDevelopmentArchive({ page, origin, projectId, output }) {
   const tasks = [
@@ -49,7 +49,7 @@ async function verifyDevelopmentArchive({ page, origin, projectId, output }) {
     await trigger.click();
     for (const locale of ["zh-CN", "en"]) {
       // Language changes retain the confirmation and selected identities.
-      if (locale === "en") { await page.keyboard.press("Escape"); await selectOption(page.locator(".ui-locale"), locale); await page.getByRole("button", { name: "Archive selected sessions", exact: true }).click(); }
+      if (locale === "en") { await page.keyboard.press("Escape"); await selectPreference(page, "locale", locale); await page.getByRole("button", { name: "Archive selected sessions", exact: true }).click(); }
       const confirmation = page.getByRole("dialog", { name: locale === "en" ? "Archive selected sessions" : "归档所选会话", exact: true });
       for (const [width, height] of [[1920,1080],[2560,1440],[1440,900],[1280,720],[768,1024],[390,844],[320,740]]) {
         await page.setViewportSize({ width, height });
@@ -60,7 +60,7 @@ async function verifyDevelopmentArchive({ page, origin, projectId, output }) {
       }
     }
     await page.keyboard.press("Escape");
-    await selectOption(page.locator(".ui-locale"), "zh-CN");
+    await selectPreference(page, "locale", "zh-CN");
     await page.setViewportSize({ width: 1440, height: 900 });
     await trigger.click();
     await dialog.getByRole("button", { name: "确认归档", exact: true }).click();

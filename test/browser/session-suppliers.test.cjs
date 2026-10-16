@@ -9,7 +9,7 @@ async function verifySessionSuppliers(browser, origin, manager, client, key, err
   const first = { id: "A", name: "供应商 A", runtimeRevision: 1 }, second = { id: "B", name: "供应商 B", runtimeRevision: 1 };
   let next = first, modelsRead = 0;
   const models = await manager.agent.listModels();
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const page = await browser.newPage({ locale: "zh-CN", viewport: { width: 1440, height: 1000 } });
   page.on("pageerror", error => errors.push(error.message));
   await page.route("**/api/models", route => {
     modelsRead++;

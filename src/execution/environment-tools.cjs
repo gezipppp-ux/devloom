@@ -6,7 +6,7 @@ const { toolVersion, compareVersions } = require("../domain/tool-version.cjs");
 const { systemUpdatePlan, installSystemTool } = require("./system-tool-updates.cjs");
 
 const TOOLS = [
-  { id: "codex", name: "Codex CLI", requirement: "已安装并完成登录", url: "https://developers.openai.com/codex/cli/" },
+  { id: "codex", name: "Codex CLI", requirement: "已安装 Codex CLI", url: "https://developers.openai.com/codex/cli/" },
   { id: "npm", name: "npm", requirement: "可用的 npm 包管理器", url: "https://docs.npmjs.com/downloading-and-installing-node-js-and-npm" },
   { id: "git", name: "Git", requirement: "支持 git worktree（2.5.0+）", url: "https://git-scm.com/downloads" },
   { id: "node", name: "Node.js", requirement: "22.13.0+；更新目标为最新 LTS", url: "https://nodejs.org/en/download" },
@@ -25,12 +25,7 @@ async function inspectTool(id, { run = runTool, codex = () => getAgentProvider("
   // Node requirements apply to the running server, even after an on-disk upgrade.
   const satisfies = id === "node" ? compareVersions(toolVersion(process.version), "22.13.0") >= 0
     : id === "git" ? compareVersions(version, "2.5.0") >= 0 : true;
-  let authentication = null;
-  if (id === "codex") {
-    try { await run(launch.command, [...launch.args, "login", "status"]); authentication = true; }
-    catch { authentication = false; }
-  }
-  return { version, versionSatisfies: satisfies, satisfies: satisfies && authentication !== false, authentication, launch };
+  return { version, satisfies, launch };
 }
 
 async function latestTool(id, fetchJson = remoteJson, platform = process.platform) {
@@ -75,7 +70,7 @@ async function updatePlan(id, inspected, { npm = npmCommand, run = runTool, same
       if (!path.isAbsolute(globalRoot)) throw new Error("无效的全局目录");
       const entry = path.join(globalRoot, "@openai/codex/bin/codex.js");
       if (same(entry, entry)) return { available: false, reason: "npm 全局目录已有 Codex，请先修复服务 PATH 或现有安装后重新检测。" };
-      return { available: true, operation: "install", method: "npm", command: launch.command, args: launch.args, description: "使用当前服务账号通过 npm 全局安装 Codex CLI；安装后需在服务账号下完成登录。" };
+      return { available: true, operation: "install", method: "npm", command: launch.command, args: launch.args, description: "使用当前服务账号通过 npm 全局安装 Codex CLI。" };
     } catch { return { available: false, reason: "自动安装 Codex CLI 需要可用的 npm，请先安装或修复 npm 后重新检测。" }; }
   }
   if (id === "codex" || id === "npm") {

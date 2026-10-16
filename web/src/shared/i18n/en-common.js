@@ -13,7 +13,6 @@ export const enCommon = {
     "API 基础地址": "API base URL",
     "Agent 供应商": "Agent providers",
     "Bug 流程": "Bug workflow",
-    "Codex 认证": "Codex authentication",
     "Git 主机": "Git host",
     "Git 仓库：": "Git repository: ",
     "Git 状态暂不可用": "Git status is unavailable",

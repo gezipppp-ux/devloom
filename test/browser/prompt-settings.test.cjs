@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 async function verifyPromptSettings(browser, { origin, output, errors, workspaceA, workspaceB }) {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
+  const page = await browser.newPage({ locale: "zh-CN", viewport: { width: 1440, height: 1100 } });
   page.on("pageerror", (error) => errors.push(error.message));
   const endpoint = `${origin}/api/workspaces/${workspaceA.id}/settings/prompts`;
   const pattern = `**/api/workspaces/${workspaceA.id}/settings/prompts`;

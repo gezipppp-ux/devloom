@@ -15,8 +15,8 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
     agent: { provider: "codex" },
     session_id: "archive-fixture", execution: { status: "completed" },
   }));
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-  const peer = await browser.newPage();
+  const page = await browser.newPage({ locale: "zh-CN", viewport: { width: 1440, height: 1000 } });
+  const peer = await browser.newPage({ locale: "zh-CN" });
   for (const tab of [page, peer]) tab.on("pageerror", (e) => errors.push(e.message));
   const trigger = page.getByRole("button", { name: "已归档会话", exact: true });
   const dialog = page.getByRole("dialog", { name: "已归档会话", exact: true });
@@ -42,6 +42,7 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
     await openSessionList(page);
     await page.locator(".session-link").filter({ hasText: original }).click();
     await page.getByRole("heading", { name: original, exact: true }).waitFor();
+    await page.waitForFunction(title => document.title === title, original + " · 开发 · DevLoom");
     assert.ok((await page.locator(".session-heading").boundingBox()).width > 300);
     await page.getByRole("button", { name: "修改会话标题", exact: true }).click();
     const input = page.getByLabel("会话标题", { exact: true });
@@ -78,6 +79,7 @@ async function verifySessionArchiveTitle(browser, origin, manager, errors, outpu
     assert.equal(await input.inputValue(), title);
     await input.press("Enter");
     await page.getByRole("heading", { name: title, exact: true }).waitFor();
+    await page.waitForFunction(title => document.title === title, title + " · 开发 · DevLoom");
     for (const width of [1440, 768, 390, 320]) {
       await page.setViewportSize({ width, height: 1000 });
       await page.locator(".session-heading").scrollIntoViewIfNeeded();

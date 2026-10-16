@@ -1,5 +1,7 @@
 <script setup>
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
+import { usePageTitle } from "../../shared/components/page-title.js";
+import { translate } from "../../shared/i18n/index.js";
 import { computed, ref, watch, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { appApi } from "../../shared/api/api.js";
@@ -57,6 +59,12 @@ const issueCreateOpen = computed(() => ['issues', 'bugs'].includes(currentTab.va
 const releaseDetailOpen = computed(() => currentTab.value === 'releases' && typeof route.query.release === 'string' && Boolean(route.query.release));
 const taskDetailOpen = computed(() => currentTab.value === 'tasks' && typeof route.query.task === 'string' && Boolean(route.query.task));
 const standaloneDetail = computed(() => issueCreateOpen.value || issueDetailOpen.value || releaseDetailOpen.value || taskDetailOpen.value);
+usePageTitle(() => {
+  if (!data.value || error.value) return [translate("项目概览")];
+  const name = data.value.project.name;
+  if (issueCreateOpen.value) return [translate(currentTab.value === "bugs" ? "新建 Bug" : "新建需求"), name];
+  return currentTab.value === "overview" ? [name] : [name, translate(tabs.value.find(tab => tab.id === currentTab.value)?.label)];
+});
 const pageCopy = computed(() => ({
   releases: { title: '版本', description: '用清晰的范围，推动每一次交付。' },
   assets: { title: '项目资产', description: '把重要的文档、链接和上下文放在一起。' },

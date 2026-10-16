@@ -22,7 +22,7 @@ async function personSelectChecks() {
   try {
     await server.listen();
     browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : process.platform === "win32" ? { channel: "msedge" } : {}) });
-    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } }), errors = [], writes = [];
+    const page = await browser.newPage({ locale: "zh-CN", viewport: { width: 1440, height: 900 } }), errors = [], writes = [];
     page.on("pageerror", error => { errors.push(error.message); console.error(error.message); });
     await page.route("**/api/**", async route => {
       const pathname = new URL(route.request().url()).pathname;

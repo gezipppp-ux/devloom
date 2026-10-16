@@ -2,13 +2,14 @@ import { onMounted, onUnmounted, reactive, ref } from "vue";
 import { appApi } from "../../shared/api/api.js";
 import { createRequestId } from "../../shared/api/request-id.js";
 import steps from "../../../../shared/setup-steps.json";
+import { translate } from "../../shared/i18n/index.js";
 
 export function useSetup() {
   const state = ref(null), loading = ref(false), saving = ref(false), error = ref(""), step = ref("environment");
   const directory = ref("");
   const accounts = reactive([
-    { kind: "product", username: "test-product", displayName: "测试#产品", selected: true, password: "" },
-    { kind: "developer", username: "test-dev", displayName: "测试#研发", selected: true, password: "" },
+    { kind: "product", username: "test-product", displayName: translate("测试#产品"), selected: true, password: "" },
+    { kind: "developer", username: "test-dev", displayName: translate("测试#研发"), selected: true, password: "" },
   ]);
   const project = reactive({ name: "", description: "", remoteUrl: "", memberIds: [] });
   let disposed = false, generation = 0, initialized = false;

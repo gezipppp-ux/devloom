@@ -75,7 +75,7 @@ async function verifyLanManualCreation(browser, directory, errors) {
   const application = createWebServer({ host: '0.0.0.0', manager, configFile, testIdentity: true });
   await application.listen(0);
   const origin = `http://${address}:${application.server.address().port}`;
-  const page = await browser.newPage();
+  const page = await browser.newPage({ locale: "zh-CN" });
   page.on('pageerror', (error) => errors.push(error.message));
   try {
     await page.goto(origin);
@@ -121,7 +121,7 @@ async function verifyPermissionDiscoveryFailures(browser, origin, client, errors
   const callsBefore = client.calls.length;
   const writes = [];
   for (const surface of ['session', 'create']) {
-    const page = await browser.newPage();
+    const page = await browser.newPage({ locale: "zh-CN" });
     let responseMode = 'missing';
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('request', (request) => {
@@ -198,7 +198,7 @@ async function verifySteeringPermissionDiscoveryFailures(browser, origin, manage
   await manager.events.drain();
   const activeTurn = manager.sessions.get(key).turnId;
   assert.ok(activeTurn);
-  const page = await browser.newPage();
+  const page = await browser.newPage({ locale: "zh-CN" });
   let loading = false, pendingRoute, captured;
   const requested = new Promise(resolve => { captured = resolve; });
   const before = client.calls.length;
@@ -237,7 +237,7 @@ async function verifySteeringPermissionDiscoveryFailures(browser, origin, manage
 }
 
 async function verifyAgentRequests(browser, origin, key, errors) {
-  const page = await browser.newPage();
+  const page = await browser.newPage({ locale: "zh-CN" });
   const writes = [];
   let mode = 'unsupported';
   page.on('pageerror', (error) => errors.push(error.message));
@@ -293,8 +293,8 @@ async function verifyAgentRequests(browser, origin, key, errors) {
 
 async function verifyExecutionSettings(browser, origin, manager, client, key, errors) {
   if (manager.sessions.get(key)?.turnId) await manager.interrupt(key);
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-  const peer = await browser.newPage();
+  const page = await browser.newPage({ locale: "zh-CN", viewport: { width: 1440, height: 1000 } });
+  const peer = await browser.newPage({ locale: "zh-CN" });
   for (const entry of [page, peer]) entry.on('pageerror', (error) => errors.push(error.message));
   const endpoint = `/api/runs/${key}/execution-settings`;
   async function save(action) {
@@ -368,7 +368,7 @@ async function verifyExecutionSettings(browser, origin, manager, client, key, er
 }
 
 async function verifyInitialListRefresh(browser, origin, manager, key, errors) {
-  const page = await browser.newPage();
+  const page = await browser.newPage({ locale: "zh-CN" });
   page.on('pageerror', (error) => errors.push(error.message));
   const previousTitle = (await manager.list()).find(run => run.key === key).title;
   const title = "列表请求期间更新的标题";
@@ -412,7 +412,7 @@ async function verifyInitialListRefresh(browser, origin, manager, key, errors) {
 }
 
 async function verifyUnreadResults(browser, origin, manager, key, errors) {
-  const page = await browser.newPage();
+  const page = await browser.newPage({ locale: "zh-CN" });
   page.on('pageerror', (error) => errors.push(error.message));
   await page.context().grantPermissions(['notifications'], { origin });
   try {
@@ -444,7 +444,7 @@ async function verifyUnreadResults(browser, origin, manager, key, errors) {
 }
 
 async function verifyActionSelection(browser, origin, key, errors) {
-  const page = await browser.newPage();
+  const page = await browser.newPage({ locale: "zh-CN" });
   page.on('pageerror', (error) => errors.push(error.message));
   await page.addInitScript(() => {
     const originalFetch = window.fetch;
@@ -516,7 +516,7 @@ async function verifyActionSelection(browser, origin, key, errors) {
 }
 
 async function verifyRefreshConsistency(browser, origin, manager, client, key, errors) {
-  const page = await browser.newPage();
+  const page = await browser.newPage({ locale: "zh-CN" });
   page.on('pageerror', (error) => errors.push(error.message));
   // A marker is set after fetch/JSON continuations and Vue's update microtasks,
   // so assertions cannot pass before a released response has been processed.
@@ -793,7 +793,7 @@ async function main() {
           : {}),
       headless: true,
     });
-    const browserContext = await browser.newContext({
+    const browserContext = await browser.newContext({ locale: "zh-CN",
       viewport: { width: 1440, height: 1000 },
     });
     const page = await browserContext.newPage();

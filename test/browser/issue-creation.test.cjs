@@ -1,6 +1,6 @@
 /* global document */
 const assert = require("node:assert/strict");
-const { selectOption, selectValue } = require("../support/select.cjs");
+const { selectOption, selectValue, selectPreference } = require("../support/select.cjs");
 const { openIssueCreate } = require("../support/browser-navigation.cjs");
 const { setMarkdown, markdownValue, pasteImage } = require("../support/issue-markdown.cjs");
 
@@ -48,10 +48,10 @@ async function verifyIssueCreation({ page, origin, projects }) {
   assert.equal(await selectValue(page.getByLabel("业务负责人", { exact: true })), "member-1");
   assert.deepEqual(await selectValue(page.getByLabel("关注人", { exact: true })), ["member-2"]);
   assert.equal(await page.locator(".markdown-attachments li").count(), 1);
-  await selectOption(page.getByLabel("界面语言", { exact: true }), "en");
+  await selectPreference(page, "locale", "en");
   await page.getByRole("heading", { name: "Owners & watchers", exact: true }).waitFor();
   await page.getByRole("heading", { name: "Date & tags", exact: true }).waitFor();
-  await selectOption(page.getByLabel("Interface language", { exact: true }), "zh-CN");
+  await selectPreference(page, "locale", "zh-CN");
   assert.equal(await page.getByLabel("标题", { exact: true }).inputValue(), "保留类型切换草稿");
 
   const endpoint = `${origin}/api/projects/${projects.projectId}/issues`;

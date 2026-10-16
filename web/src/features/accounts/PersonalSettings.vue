@@ -1,5 +1,7 @@
 <script setup>
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
+import { usePageTitle } from "../../shared/components/page-title.js";
+import { translate } from "../../shared/i18n/index.js";
 import { computed, reactive, ref } from "vue";
 import { UserOutlined, ReloadOutlined, BranchesOutlined, ApiOutlined, LockOutlined } from "@antdv-next/icons";
 import { accountSession, saveAccountSettings } from "../../shared/api/account-session.js";
@@ -18,6 +20,7 @@ import SettingsLayout from "../../shared/components/SettingsLayout.vue";
 const route = useRoute(), router = useRouter();
 const items = [{ id: "profile", label: "资料与偏好", icon: UserOutlined }, { id: "git", label: "Git 账号", icon: BranchesOutlined }, { id: "mcp", label: "MCP 接入", icon: ApiOutlined }, { id: "security", label: "账号安全", icon: LockOutlined }];
 const currentTab = computed(() => items.some(item => item.id === route.query.tab) ? route.query.tab : "profile");
+usePageTitle(() => [translate(items.find(item => item.id === currentTab.value).label), translate("个人设置")]);
 function select(tab) { void router.push({ query: { ...route.query, tab: tab === "profile" ? undefined : tab } }); }
 defineProps({ notifications: { type: Object, required: true } });
 const form = reactive({ model: accountSession.settings.model || "", reasoningEffort: accountSession.settings.reasoningEffort || "", permissionMode: accountSession.settings.permissionMode || "ask" });

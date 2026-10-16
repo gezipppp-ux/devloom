@@ -1,4 +1,4 @@
-const { selectOption } = require("../support/select.cjs");
+const { selectOption, selectPreference } = require("../support/select.cjs");
 /* global document, window */
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -28,9 +28,9 @@ async function verifyIndependentDelivery({ page, origin, projectId, output }) {
     await page.getByLabel("验证结果", { exact: true }).fill("构建已通过；线上耗时待验证。");
     await page.getByLabel("提交标识（可选）", { exact: true }).fill("abc123");
     await selectOption(page.getByRole("combobox", { name: "交付验证人", exact: true }), "member-2");
-    await selectOption(page.locator(".ui-locale"), "en");
+    await selectPreference(page, "locale", "en");
     assert.equal(await page.getByLabel("Delivery title", { exact: true }).inputValue(), "启动速度优化成果");
-    await selectOption(page.locator(".ui-locale"), "zh-CN");
+    await selectPreference(page, "locale", "zh-CN");
     for (const [width, height] of [[1920,1080],[2560,1440],[1440,900],[1280,720],[768,1024],[390,844],[320,740]]) {
       await page.setViewportSize({ width, height });
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `delivery overflow at ${width}`);

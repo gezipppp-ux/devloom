@@ -29,6 +29,8 @@ npm run db:deploy
 npm start -- --port 4317
 ```
 
+端口也可由环境变量 `PORT` 或安装目录的 `.env`（例如 `PORT=8080`）配置，优先级为 `--port` → `PORT` → 默认值。未配置或空值时，正式服务使用 `4317`，开发服务使用 `5173`；非法值或端口占用会报错。npm 命令自动读取 `.env`；直接运行 Node 的服务配置需要自行注入环境变量或添加 `--env-file-if-exists=/安装目录/.env`。
+
 如果本机 npm registry 配置异常，安装时可显式指定 `--registry https://registry.npmjs.org`。依赖由本项目的 `package-lock.json` 锁定，使用 `npm ci` 安装。
 
 Windows 也支持上述 npm 命令。生产部署先构建一次，再运行 `npm start`。

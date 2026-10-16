@@ -7,7 +7,7 @@ const longRequirement = Array.from({ length: 160 }, (_, index) =>
 ).join('\n');
 
 async function verifySessionScroll(browser, origin, manager, key, errors, output) {
-  const page = await browser.newPage({ viewport: { width: 1920, height: 911 } });
+  const page = await browser.newPage({ locale: "zh-CN", viewport: { width: 1920, height: 911 } });
   page.on('pageerror', (error) => errors.push(error.message));
   const items = [
     { id: 'scroll-user', type: 'userMessage', text: longRequirement },

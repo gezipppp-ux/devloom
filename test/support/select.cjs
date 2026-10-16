@@ -1,3 +1,4 @@
+const { openAccountMenu } = require('./browser-navigation.cjs');
 async function selectRoot(control) {
   return (await control.evaluate((el) => el.classList.contains("app-select")))
     ? control
@@ -57,4 +58,12 @@ async function selectOption(control, choice) {
   if (multiple) await trigger.press("Escape");
   await popup.waitFor({ state: "hidden" });
 }
-module.exports = { selectOption, selectValue, selectOptions };
+async function selectPreference(page, name, choice) {
+  await openAccountMenu(page);
+  await selectOption(page.locator(name === 'locale' ? '.ui-locale' : '.ui-theme-select'), choice);
+  if (await page.locator('.ui-account-menu').isVisible()) {
+    await page.keyboard.press('Escape');
+    await page.locator('.ui-account-menu').waitFor({ state: 'hidden' });
+  }
+}
+module.exports = { selectOption, selectValue, selectOptions, selectPreference };
