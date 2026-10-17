@@ -2,22 +2,24 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
-const { execFileSync } = require("node:child_process");
+const { runWorktreeGit } = require("./worktree-command.cjs");
 const { StringDecoder } = require("node:string_decoder");
 const { worktreePathIssue } = require("../domain/worktree-path-budget.cjs");
 
-function* treeEntries(descriptor) {
+async function* treeEntryBatches(descriptor, signal) {
   const buffer = Buffer.alloc(64 * 1024);
   const decoder = new StringDecoder("utf8");
   let pending = "";
   let position = 0;
-  let bytes;
-  while ((bytes = fs.readSync(descriptor, buffer, 0, buffer.length, position))) {
+  for (;;) {
+    const { bytesRead: bytes } = await descriptor.read(buffer, 0, buffer.length, position);
+    if (!bytes) break;
+    if (signal?.aborted) throw new Error("任务准备已停止。");
     position += bytes;
     pending += decoder.write(buffer.subarray(0, bytes));
     const records = pending.split("\0");
     pending = records.pop();
-    for (const record of records) {
+    yield records.map((record) => {
       // Only the first TAB separates metadata; tabs/newlines inside a Git
       // pathname must survive unchanged. A gitlink checks out as a directory.
       const separator = record.indexOf("\t");
@@ -26,36 +28,37 @@ function* treeEntries(descriptor) {
       );
       if (separator < 0 || !metadata)
         throw new Error("Git 返回的仓库文件信息无效，无法校验 Worktree 路径长度。");
-      yield {
+      return {
         path: record.slice(separator + 1),
         kind: metadata[2] === "blob" ? "file" : "directory",
       };
-    }
+    });
   }
   pending += decoder.end();
   if (pending) throw new Error("Git 返回的仓库文件列表不完整，无法校验 Worktree 路径长度。");
 }
 
-function assertWorktreeCheckoutPaths(plan) {
+async function assertWorktreeCheckoutPaths(plan, { signal, timeout } = {}) {
   if (process.platform !== "win32") return;
   const file = path.join(os.tmpdir(), `codex-worktree-paths-${randomUUID()}`);
-  const descriptor = fs.openSync(file, "wx+", 0o600);
-  let issue;
+  const descriptor = await fs.promises.open(file, "wx+", 0o600);
+  let issue = worktreePathIssue(plan.path, []);
   try {
     // Send stdout straight to disk: large repositories must not hit execFile's
     // maxBuffer, and NUL-delimited paths preserve Unicode, spaces and newlines.
-    execFileSync("git", [
-      "-C", plan.repository,
+    await runWorktreeGit(plan.repository, [
       "ls-tree", "-rz", "--full-tree", plan.base_commit,
     ], {
-      windowsHide: true,
-      stdio: ["ignore", descriptor, "pipe"],
-      timeout: 60000,
+      stdout: descriptor.fd, signal, timeout,
     });
-    issue = worktreePathIssue(plan.path, treeEntries(descriptor));
+    for await (const entries of treeEntryBatches(descriptor, signal)) {
+      const candidate = worktreePathIssue(plan.path, entries);
+      if (candidate && (!issue || candidate.maximumRootLength < issue.maximumRootLength))
+        issue = candidate;
+    }
   } finally {
-    fs.closeSync(descriptor);
-    fs.unlinkSync(file);
+    await descriptor.close();
+    await fs.promises.unlink(file);
   }
   if (!issue) return;
   const advice = issue.maximumRootLength >= 3

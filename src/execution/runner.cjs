@@ -147,7 +147,9 @@ async function runExecution(
       }
       await dependencies.authorize?.();
       if (dependencies.signal?.aborted) throw new Error("任务准备已停止。");
-      await services.createWorktree(worktree);
+      await services.createWorktree(worktree, { signal: dependencies.signal, authorize: dependencies.authorize });
+      await dependencies.authorize?.();
+      if (dependencies.signal?.aborted) throw new Error("任务准备已停止。");
       return worktree;
     });
     if (config.execution.initCommands.length) {

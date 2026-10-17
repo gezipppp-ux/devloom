@@ -151,7 +151,7 @@ test('concurrent cleanup of expired uploads does not reject an unrelated new upl
   assert.deepEqual((await uploads.read(next.id)).bytes, png);
 });
 
-test('manual names preserve English, transliterate Chinese, isolate duplicates and keep custom names inside configured root', (t) => {
+test('manual names preserve English, transliterate Chinese, isolate duplicates and keep custom names inside configured root', async (t) => {
   const { directory } = fixture(t);
   const repo = path.join(directory, 'repo');
   repository(repo);
@@ -198,7 +198,7 @@ test('manual names preserve English, transliterate Chinese, isolate duplicates a
   assert.equal(path.dirname(custom.path), path.dirname(plan.path));
   assert.equal(custom.branch, plan.branch);
   fs.mkdirSync(custom.path, { recursive: true });
-  assert.throws(() => createWorktree(custom), /already exists/);
+  await assert.rejects(createWorktree(custom), /already exists/);
   assert.throws(() =>
     worktreePlan(repo, item, 'main', { ...options, name: '../../escape' }),
   );

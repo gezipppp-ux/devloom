@@ -20,6 +20,8 @@ Projects and issues do not store default or suggested development branches. Plan
 
 Every new run persists preparing intent, then holds the shared Git operation lock across origin fetch, SHA resolution, plan persistence and worktree creation. The Git module verifies the saved remote URL, uses the member account, fetches the explicit refs/heads branch, and returns `{remote,branch,commit,fetchedAt}`. The worktree planner receives that fixed SHA; worktree.base_commit and worktree.baseline record the same commit. No pull or source checkout mutation is performed. Failure, cancellation, missing branches or revoked authorization cannot reuse cached refs. Failed preparation remains readable with no invented worktree path; repeated requests never replay the operation.
 
+Worktree creation and Windows path preflight run asynchronous Git processes; large tree listings are read in bounded asynchronous batches. Each Git command retains a 60-second timeout. Cancellation or timeout stops the process tree (including checkout filters/hooks) and waits for Git to close before releasing the repository lock. Authorization is rechecked before creation and after it completes, before initialization or Agent startup. Failed/interrupted creation preserves its recorded plan and any remaining files/refs for inspection; it never deletes or automatically retries them.
+
 Continuation and additional issue batches retain the original baseline and session. Project task DTOs expose the selected task baseBranch, fetched baseCommit and fetchedAt without exposing another member's personal session details. No old baseRef fallback is provided; recorded worktree paths and identities stay intact.
 
 ## API and navigation

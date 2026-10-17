@@ -362,8 +362,8 @@ test('full pipeline uses one real Git worktree, image attachment and simulated C
     'same-task',
   );
   const { createWorktree } = require('../../src/git/worktrees.cjs');
-  assert.throws(
-    () => createWorktree({ ...state.worktree, path: otherPath }),
+  await assert.rejects(
+    createWorktree({ ...state.worktree, path: otherPath }),
     /任务分支已存在/,
   );
   assert.equal(fs.existsSync(otherPath), false);
@@ -394,4 +394,47 @@ test('execution awaits asynchronous channel validation and worktree creation bef
     assert.equal((await execution).execution.status, 'completed');
     assert.deepEqual(calls, ['validated', 'worktree', 'session']);
   } finally { releaseValidation(); releaseWorktree(); }
+});
+
+test('cancellation or revoked authorization during checkout prevents initialization and Agent startup', async (t) => {
+  for (const mode of ['cancel', 'revoke', 'failure']) {
+    const { calls, input, dependencies } = setup(t);
+    const controller = new AbortController();
+    const entered = Promise.withResolvers();
+    const finish = Promise.withResolvers();
+    let allowed = true;
+    input.config.execution = { initCommands: ['fixture init'] };
+    dependencies.signal = controller.signal;
+    dependencies.authorize = async () => { if (!allowed) throw new Error('revoked'); };
+    dependencies.initializeWorktree = async () => calls.push('initialize');
+    dependencies.createWorktree = async (_plan, options) => {
+      assert.equal(options.signal, controller.signal);
+      assert.equal(options.authorize, dependencies.authorize);
+      entered.resolve();
+      await finish.promise;
+      if (mode === 'failure') throw new Error('checkout failed');
+    };
+    const execution = runRequirement(input, dependencies);
+    const rejected = assert.rejects(execution, /已停止|revoked|checkout failed/);
+    try {
+      await entered.promise;
+      assert.equal(fs.existsSync(path.join(input.directory, 'web-coding-operation.lock')), true);
+      const preparing = JSON.parse(fs.readFileSync(path.join(input.directory, 'run.json')));
+      assert.equal(preparing.execution.status, 'preparing');
+      assert.ok(preparing.worktree.baseline.commit);
+      if (mode === 'cancel') controller.abort();
+      if (mode === 'revoke') allowed = false;
+      finish.resolve();
+      await rejected;
+      const state = JSON.parse(fs.readFileSync(path.join(input.directory, 'run.json')));
+      assert.equal(state.execution.status, 'failed');
+      assert.equal(state.session_id, null);
+      assert.equal(state.transition.status, 'not_started');
+      assert.deepEqual(state.worktree, preparing.worktree);
+      assert.deepEqual(calls, []);
+      assert.equal(fs.existsSync(path.join(input.directory, 'web-coding-operation.lock')), false);
+      assert.equal(fs.existsSync(path.join(input.directory, '.lock')), false);
+      assert.equal((await runRequirement(input, dependencies)).reused, true);
+    } finally { finish.resolve(); await rejected; }
+  }
 });

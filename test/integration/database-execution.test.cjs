@@ -182,7 +182,7 @@ test("username worktree roots apply to new tasks while legacy UUID paths retain 
     source,
     name: "legacy",
   });
-  createWorktree(legacy);
+  await createWorktree(legacy);
   fs.writeFileSync(path.join(legacy.path, "keep.txt"), "original task content");
   const legacyState = {
     version: 3,

@@ -176,7 +176,7 @@ test('repository settings and continuation preserve Unicode, spaces and filesyst
   assert.equal(settings.worktreeRoot, fs.realpathSync(root));
   const config = (await executionConfig({ agent: { provider: "codex" } }, configFile));
   assert.equal(repositoryFor(config, configFile, '1'), fs.realpathSync(repo));
-  const plan = createWorktree(worktreePlan(settings.repository, { workspace_id: '1', id: '9' }, 'HEAD', { root, source: { channel: 'tracker', scope: '1', id: '9' } }));
+  const plan = await createWorktree(worktreePlan(settings.repository, { workspace_id: '1', id: '9' }, 'HEAD', { root, source: { channel: 'tracker', scope: '1', id: '9' } }));
   assert.equal(worktreeReason({ worktree: plan }), null);
   if (process.platform === 'win32')
     assert.equal(worktreeReason({ worktree: { ...plan, path: path.toNamespacedPath(plan.path) } }), null);
