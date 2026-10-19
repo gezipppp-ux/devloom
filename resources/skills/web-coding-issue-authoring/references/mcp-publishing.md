@@ -1,6 +1,6 @@
 # MCP 发布说明
 
-本说明依据 2026-10-15 的 DevLoom MCP 契约与工具 schema 编写。实际工具、权限和约束以当前连接返回结果为准；不为不存在的接口编造参数。
+本说明依据 2026-10-19 的 DevLoom MCP 契约与工具 schema 编写。实际工具、权限和约束以当前连接返回结果为准；不为不存在的接口编造参数。
 
 ## 连接与资料来源
 
@@ -11,7 +11,7 @@
 - 真实 Token 只留在客户端凭据配置或必要的临时进程变量中，不能写入 skill、事项、URL、日志或聊天输出。
 - 每次使用检查 `whoami.token.expiresAt`，剩余不足 7 天时提醒更新；已过期停止业务调用。用户要求且客户端支持时，在到期前 3 天安排一次提醒，已进入该时间段则当场提醒。提醒只包含站点、到期时间和设置入口，不含 Token；不支持调度时如实说明。
 
-所有工具需要 `read`；创建需 `issues.write` 及项目 `issue.create`；上传凭据需 `files.upload` 及项目 `issue.view`、`issue.create` 或 `issue.edit`；指派需 `issues.assign` 及项目 `issue.assign`。有效权限是 Token 与当前账号项目权限的交集，不由“产品 / 运营 / 研发”称谓决定。
+所有工具需要 `read`；创建需 `issues.write` 及项目 `issue.create`；删除需独立 `issues.delete` 及项目 `issue.view`、`issue.delete`；上传凭据需 `files.upload` 及项目 `issue.view`、`issue.create` 或 `issue.edit`；指派需 `issues.assign` 及项目 `issue.assign`。有效权限是 Token 与当前账号项目权限的交集，不由“产品 / 运营 / 研发”称谓决定。旧 Token 不会自动获得删除 scope，默认创建选项也不勾选删除；需要时由用户在个人设置 → MCP 接入重新创建并勾选「删除需求与 Bug」。
 
 ## 先查询后发布
 
@@ -135,3 +135,16 @@ $uploadResult = Invoke-RestMethod -Method Post -Uri $uploadUrl `
 更新中省略字段表示保留；`tags`、`watcherIds` 是整组替换，先合并原有内容；`attachmentIds` 是追加，空数组不能删除附件。`releaseId`、`qaOwnerId`、`acceptanceOwnerId` 可用 null 清空，`dueDate` 可用 null 或空字符串清空，不能顺手重置用户未要求变更的字段。
 
 修订冲突时先确认原操作没有成功，再重新读取、比较并合并用户授权的变更；不得覆盖他人的修改。合并产生了新的实质决策时展示差异待确认，随后用新的 requestId 提交新操作。转派用 `assign_issue`，已有任务还需其 `taskRevision`；只允许尚未启动的独立事项任务转派，合并任务按控制台限制处理。
+
+## 删除无效事项
+
+删除只适用于用户明确授权清理的需求/Bug。不能把“检查重复”“整理需求”“补充信息”或本技能的质量门禁当作删除授权。已有明确目标和删除指令时直接执行，不重复确认；目标不明确时先用 `search_issues` 与 `get_issue` 找到候选，展示项目、事项编号、标题和删除影响后澄清。批量请求逐一核对授权对象，不把相似匹配自动纳入范围。
+
+1. 确认当前 Token 包含 `issues.delete`，且账号有项目的 `issue.view`、`issue.delete`。工具列表缺少 `delete_issue` 时核对服务版本和 Token scope，不能用编辑、归档或其他账号绕过。
+2. 调用 `get_issue({projectId,issueId})`，核对项目、编号、标题和最新 `issue.revision`；查看 `issue.deletion.allowed/reason`。任何历史开发任务关联（含取消、完成、合并）或交付记录都会阻止删除，项目或版本归档时只读；不先删除关联或恢复归档以强行清理。
+3. 明确删除后事项、讨论和附件不再可访问，页面与 MCP 均不提供恢复操作。为已获授权的目标生成稳定 UUIDv4 `requestId`，保存 `{projectId,issueId,requestId,revision}`，调用 `delete_issue`。没有 `force` 参数；一次只处理一个事项。
+4. 成功返回 `{id,deleted:true,reused:false}`，原样重试返回 `reused:true`。结果只含删除回执，不含已删除正文或可用详情链接。向用户报告实际已删除的项目、编号和标题；不能把 `get_issue` 的 404 单独作为删除成功证据。
+5. 超时先用原 requestId 调用 `get_request_result`，成功回执含 `operation:"delete_issue"`、`id`、`deleted:true`。未找到时仅沿用原参数和 requestId 重试，仍不确定则保留参数并报告待核实。不要更换 requestId 重删，也不要创建一个替代事项。
+6. 409 修订冲突时重新读取并比较变化；仅在目标、删除影响和用户授权仍适用时，用新修订号和新 requestId 提交新的操作。关联、归档或权限门禁按实际错误说明，不能绕过。新请求遇到 404 不表示本次操作已成功，先查询已知的原删除请求；无成功回执则如实报告不存在或不可访问。
+
+删除回执的重试和查询仍校验当前删除 scope、项目范围及权限。被删除事项原先的创建/编辑/指派请求不会回放其正文或将其恢复。删除不会启动 Agent，也不会删除已有任务、会话或工作树。

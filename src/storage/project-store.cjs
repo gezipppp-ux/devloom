@@ -20,7 +20,7 @@ class ProjectStore {
       create: { userId, projectId }, update: { lastVisitedAt: new Date() } });
   }
   async departments() { return this.database.client.department.findMany({ orderBy: { name: "asc" } }); }
-  summaryInclude() { return { _count: { select: { spaces: true, issues: true, members: { where: { status: "active", user: { status: "active" } } } } }, owner: { select: { id: true, displayName: true } }, members: { where: { status: "active", user: { status: "active" } }, take: 3, orderBy: { createdAt: "asc" }, select: { user: { select: { id: true, displayName: true } } } } }; }
+  summaryInclude() { return { _count: { select: { spaces: true, issues: { where: { deletedAt: null } }, members: { where: { status: "active", user: { status: "active" } } } } }, owner: { select: { id: true, displayName: true } }, members: { where: { status: "active", user: { status: "active" } }, take: 3, orderBy: { createdAt: "asc" }, select: { user: { select: { id: true, displayName: true } } } } }; }
   async project(id, { summary = false } = {}) { return this.database.client.project.findUnique({ where: { id }, include: summary ? this.summaryInclude() : { _count: { select: { spaces: true } } } }); }
   async membership(projectId, userId) { return this.database.client.projectMember.findUnique({ where: { projectId_userId: { projectId, userId } } }); }
   async members(projectId) { return this.database.client.projectMember.findMany({ where: { projectId }, include: { user: { include: { department: true } } }, orderBy: { createdAt: "asc" } }); }

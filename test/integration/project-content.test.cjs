@@ -6,6 +6,11 @@ const { initializeTestDatabase } = require("../support/database.cjs");
 const { ProjectServices } = require("../../src/application/project-services.cjs");
 const { ProjectContentServices } = require("../../src/application/project-content-services.cjs");
 const { projectPermissionCatalog } = require("../../src/domain/project-permissions.cjs");
+const { randomUUID } = require("node:crypto");
+const { ProjectDevelopmentServices } = require("../../src/application/project-development-services.cjs");
+const { ProjectLifecycleStore } = require("../../src/storage/project-lifecycle-store.cjs");
+const { WorkbenchStore } = require("../../src/storage/workbench-store.cjs");
+const { WorkActionQueryStore } = require("../../src/storage/work-action-query-store.cjs");
 
 async function fixture(t) {
   const database = await initializeTestDatabase(t, temporary(t));
@@ -21,6 +26,105 @@ async function fixture(t) {
   const setPermissions = value => database.client.projectMember.update({ where: { projectId_userId: { projectId: project.id, userId: actor.id } }, data: { permissions: value } });
   return { database, permissions, actor, outsider, project, other, projects, services, setPermissions };
 }
+
+test("deleting unlinked requirements and bugs hides all public content and preserves identities and audit", async t => {
+  const { database, actor, project, services, projects } = await fixture(t);
+  const lifecycle = new ProjectLifecycleStore(database), workbench = new WorkbenchStore(database);
+  const release = await database.client.projectRelease.create({ data: { projectId: project.id, name: "v-delete" } });
+  for (const type of ["requirement", "bug"]) {
+    const input = { requestId: randomUUID(), type, title: `无效${type}`, releaseId: release.id };
+    const issue = await services.createIssue(project.id, actor, input);
+    assert.equal(issue.deletion.allowed, true);
+    const file = await services.uploadFile(project.id, "issues", issue.id, actor, { name: "notes.txt", mimeType: "text/plain", data: Buffer.from("context") });
+    await services.addComment(project.id, issue.id, actor, { body: "信息不明确" });
+    const source = await database.client.issueSource.create({ data: { projectId: project.id, issueId: issue.id, channel: "manual", scope: "test", type, externalId: issue.id, snapshot: { title: issue.title } } });
+    const asset = await services.saveAsset(project.id, null, actor, { type: "note", title: "共享参考", issueIds: [issue.id] });
+    assert.deepEqual(await services.deleteIssue(project.id, issue.id, actor, { revision: issue.revision }), { id: issue.id, deleted: true });
+    for (const operation of [
+      () => services.readIssue(project.id, issue.id, actor),
+      () => services.children(project.id, issue.id, actor, "history", {}),
+      () => services.children(project.id, issue.id, actor, "comments", {}),
+      () => services.listFiles(project.id, "issues", issue.id, actor, {}),
+      () => services.downloadFile(project.id, file.id, actor),
+      () => services.updateIssue(project.id, issue.id, actor, { revision: issue.revision, title: "复活" }),
+      () => services.addComment(project.id, issue.id, actor, { body: "迟到回复" }),
+      () => new ProjectDevelopmentServices(database, projects).create(project.id, actor, { requestId: randomUUID(), issueIds: [issue.id] }),
+    ]) await assert.rejects(operation, { statusCode: 404 });
+    await assert.rejects(services.createIssue(project.id, actor, input), /已删除/);
+    assert.deepEqual((await services.listIssues(project.id, actor, { includeArchived: "true" })).items, []);
+    assert.equal((await workbench.list("issues", [project.id], actor.id, { limit: 30, offset: 0 })).total, 0);
+    assert.deepEqual((await workbench.activity(project.id, { deliveries: true })).items, []);
+    assert.equal((await projects.list(actor)).projects.find(row => row.id === project.id).issueCount, 0);
+    assert.equal((await lifecycle.releases(project.id, true))[0].progress.total, 0);
+    assert.deepEqual((await new WorkActionQueryStore(database).snapshot([project.id], actor.id)).actions, []);
+    assert.deepEqual((await services.readAsset(project.id, asset.id, actor)).issueIds, []);
+    await services.saveAsset(project.id, asset.id, actor, { revision: asset.revision, title: "仍可编辑资产", issueIds: [] });
+    const stored = await database.client.projectIssue.findUnique({ where: { id: issue.id } });
+    assert.ok(stored.deletedAt);
+    assert.equal(stored.number, issue.number);
+    assert.equal(stored.revision, issue.revision + 1);
+    assert.deepEqual(await database.client.issueSource.findUnique({ where: { issueId: issue.id } }), source);
+    assert.ok(await database.client.projectFile.findUnique({ where: { id: file.id } }));
+    assert.equal(await database.client.issueComment.count({ where: { issueId: issue.id } }), 1);
+    const history = await database.client.issueHistory.findFirst({ where: { issueId: issue.id, action: "deleted" } });
+    assert.equal(history.actorId, actor.id);
+    assert.ok(await database.client.auditEvent.findFirst({ where: { actorUserId: actor.id, event: "issue.deleted", details: { path: ["resourceId"], equals: issue.id } } }));
+  }
+  await lifecycle.transaction(() => lifecycle.archiveRelease(project.id, release.id, release.revision, true));
+  assert.equal((await services.createIssue(project.id, actor, { type: "requirement", title: "下一条" })).number, 3);
+});
+
+test("issue deletion checks independent permissions, project scope, archive and the confirmed revision", async t => {
+  const { database, actor, outsider, project, other, services, permissions, setPermissions } = await fixture(t);
+  const issue = await services.createIssue(project.id, actor, { type: "bug", title: "删除权限测试" });
+  await assert.rejects(services.deleteIssue(project.id, issue.id, outsider, { revision: 1 }), { statusCode: 404 });
+  await assert.rejects(services.deleteIssue(other.id, issue.id, actor, { revision: 1 }), { statusCode: 404 });
+  await setPermissions(permissions.filter(p => p !== "issue.delete"));
+  assert.equal((await services.readIssue(project.id, issue.id, actor)).deletion.allowed, false);
+  await assert.rejects(services.deleteIssue(project.id, issue.id, actor, { revision: 1 }), { statusCode: 403 });
+  await setPermissions(permissions);
+  await assert.rejects(services.deleteIssue(project.id, issue.id, actor, {}), { statusCode: 400 });
+  await services.updateIssue(project.id, issue.id, actor, { revision: 1, title: "他人已修改" });
+  await assert.rejects(services.deleteIssue(project.id, issue.id, actor, { revision: 1 }), { statusCode: 409 });
+  const release = await database.client.projectRelease.create({ data: { projectId: project.id, name: "archived", status: "archived" } });
+  await database.client.projectIssue.update({ where: { id: issue.id }, data: { releaseId: release.id } });
+  await assert.rejects(services.deleteIssue(project.id, issue.id, actor, { revision: 2 }), /归档/);
+  await database.client.projectIssue.update({ where: { id: issue.id }, data: { releaseId: null } });
+  await database.client.project.update({ where: { id: project.id }, data: { status: "archived" } });
+  await assert.rejects(services.deleteIssue(project.id, issue.id, actor, { revision: 2 }), /归档/);
+  assert.equal((await database.client.projectIssue.findUnique({ where: { id: issue.id } })).deletedAt, null);
+  assert.equal(await database.client.auditEvent.count({ where: { event: "issue.deleted" } }), 0);
+});
+
+test("all development and delivery history blocks issue deletion, including cancelled and accepted records", async t => {
+  const { database, actor, project, services, projects } = await fixture(t);
+  const development = new ProjectDevelopmentServices(database, projects);
+  const issue = await services.createIssue(project.id, actor, { type: "requirement", title: "已安排开发" });
+  const { tasks: [task] } = await development.create(project.id, actor, { requestId: randomUUID(), issueIds: [issue.id] });
+  for (const status of ["planned", "cancelled", "completed", "merged"]) {
+    await database.client.developmentTask.update({ where: { id: task.id }, data: { status } });
+    if (status !== "planned") await database.client.issueDevelopmentClaim.deleteMany({ where: { issueId: issue.id } });
+    const current = await services.readIssue(project.id, issue.id, actor);
+    assert.equal(current.deletion.allowed, false);
+    await assert.rejects(services.deleteIssue(project.id, issue.id, actor, { revision: current.revision }), /关联开发任务或交付/);
+  }
+  const delivered = await services.createIssue(project.id, actor, { type: "bug", title: "人工交付历史" });
+  await database.client.projectDeliverable.create({ data: { projectId: project.id, issueId: delivered.id, authorId: actor.id, reviewerId: actor.id, body: "成果", status: "accepted" } });
+  await assert.rejects(services.deleteIssue(project.id, delivered.id, actor, { revision: 1 }), /关联开发任务或交付/);
+  assert.equal(await database.client.projectIssue.count({ where: { deletedAt: { not: null } } }), 0);
+});
+
+test("concurrent assignment and deletion cannot leave a task linked to a deleted issue", async t => {
+  const { database, actor, project, services, projects } = await fixture(t);
+  const issue = await services.createIssue(project.id, actor, { type: "requirement", title: "并发操作" });
+  const results = await Promise.allSettled([
+    services.deleteIssue(project.id, issue.id, actor, { revision: 1 }),
+    new ProjectDevelopmentServices(database, projects).create(project.id, actor, { requestId: randomUUID(), issueIds: [issue.id] }),
+  ]);
+  assert.equal(results.filter(result => result.status === "fulfilled").length, 1);
+  assert.ok([404, 409].includes(results.find(result => result.status === "rejected").reason.statusCode));
+  assert.equal(await database.client.taskIssueLink.count({ where: { issue: { deletedAt: { not: null } } } }), 0);
+});
 
 test("historical source snapshots and images survive local requirement and bug edits without source access", async t => {
   const { png } = require("../support/helpers.cjs");

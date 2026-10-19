@@ -475,6 +475,7 @@ model DevelopmentSpace {
 }
 
 model ProjectIssue {
+  deletedAt          DateTime? @map("deleted_at") @db.Timestamptz(3)
   releaseId          String? @map("release_id")
   workflowVersionId  String @map("workflow_version_id")
   release            ProjectRelease? @relation(fields: [projectId, releaseId], references: [projectId, id], onDelete: Restrict)

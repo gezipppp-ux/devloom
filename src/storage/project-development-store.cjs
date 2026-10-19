@@ -26,7 +26,7 @@ class ProjectDevelopmentStore {
     return space;
   }
   async issues(projectId, ids) {
-    const rows = await this.database.client.projectIssue.findMany({ where: { projectId, id: { in: ids } }, include: {
+    const rows = await this.database.client.projectIssue.findMany({ where: { projectId, deletedAt: null, id: { in: ids } }, include: {
       release: true, workflowVersion: true, actions: { where: { status: { in: ["ready", "active"] } } },
       source: { select: { channel: true, scope: true, type: true, externalId: true, url: true } },
       files: { select: { id: true, name: true, mimeType: true, size: true, sha256: true } },
@@ -155,7 +155,7 @@ class ProjectDevelopmentStore {
     return this.task(task.projectId, task.id);
   }
   async list(projectId, { limit, offset, issueId, executorId, status = "not_cancelled" }) {
-    if (issueId && !await this.database.client.projectIssue.findFirst({ where: { projectId, id: issueId }, select: { id: true } }))
+    if (issueId && !await this.database.client.projectIssue.findFirst({ where: { projectId, id: issueId, deletedAt: null }, select: { id: true } }))
       throw accountError("事项不存在或不属于当前项目。", 404);
     const rows = await this.database.client.developmentTask.findMany({ where: { projectId, ...(executorId ? { executorId } : {}), ...(status === "all" ? {} : { status: status === "not_cancelled" ? { not: "cancelled" } : status }), ...(issueId ? { issueLinks: { some: { projectId, issueId } } } : {}) }, include: { executor: { select: { id: true, displayName: true } }, release: true }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: offset, take: limit + 1 });
     return { tasks: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };

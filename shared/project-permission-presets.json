@@ -8,6 +8,7 @@
       "issue.view",
       "issue.create",
       "issue.edit",
+      "issue.delete",
       "issue.assign",
       "issue.transition",
       "issue.accept",

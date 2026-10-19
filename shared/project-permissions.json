@@ -7,6 +7,7 @@
   { "id": "issue.view", "label": "查看需求与 Bug", "group": "需求与 Bug", "requires": ["project.view"] },
   { "id": "issue.create", "label": "创建需求与 Bug", "group": "需求与 Bug", "requires": ["issue.view"] },
   { "id": "issue.edit", "label": "编辑需求与 Bug", "group": "需求与 Bug", "requires": ["issue.view"] },
+  { "id": "issue.delete", "label": "删除需求与 Bug", "group": "需求与 Bug", "requires": ["issue.view"] },
   { "id": "issue.assign", "label": "分派需求与 Bug", "group": "需求与 Bug", "requires": ["issue.view"] },
   { "id": "issue.transition", "label": "变更事项状态", "group": "需求与 Bug", "requires": ["issue.view"] },
   { "id": "issue.accept", "label": "验收需求与验证 Bug", "group": "需求与 Bug", "requires": ["issue.view"] },

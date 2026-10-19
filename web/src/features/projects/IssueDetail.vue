@@ -1,6 +1,7 @@
 <script setup>
 import PublishDelivery from "./PublishDelivery.vue";
 import IssueWorkflowUpgrade from "./IssueWorkflowUpgrade.vue";
+import IssueDeleteAction from "./IssueDeleteAction.vue";
 import AppSelect from "../../shared/components/AppSelect.vue";
 import {formatDate, translate} from "../../shared/i18n/index.js";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
@@ -27,7 +28,7 @@ const props = defineProps({
   permissions: {type: Array, required: true},
   developmentBusy: Boolean
 });
-const emit = defineEmits(["back", "changed", "start-development", "assign-development"]);
+const emit = defineEmits(["back", "changed", "deleted", "start-development", "assign-development"]);
 const endpoint = `/projects/${props.projectId}/issues/${props.issueId}`;
 const {data, loading, saving, error, notice, reload, save, perform} = useResource(async () => {
   const [issue, members] = await Promise.all([appApi(endpoint), appApi(`/projects/${props.projectId}/members`)]);
@@ -176,6 +177,7 @@ function person(id) {
             <EditOutlined aria-hidden="true"/>
             {{ $t("编辑事项") }}
           </button>
+          <IssueDeleteAction v-if="!editing && can('issue.delete')" :project-id="projectId" :issue="data" :disabled="saving || developmentBusy" @deleted="emit('deleted', $event)" @refresh="reload" />
         </div>
       </header>
       <p v-if="data.release?.status === 'archived'" class="warning">{{ $t("版本已归档，内容只读。") }}</p>

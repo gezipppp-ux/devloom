@@ -2,7 +2,8 @@ const { selectPreference } = require("../support/select.cjs");
 const assert = require('node:assert/strict');
 
 async function verifyRelativeTime(page, origin, projectId) {
-  await page.clock.install({ time: new Date('2026-10-14T08:05:00Z') });
+  // pauseAt must be ahead of installation; the clock advances between awaits.
+  await page.clock.install({ time: new Date('2026-10-14T08:00:00Z') });
   await page.clock.pauseAt(new Date('2026-10-14T08:05:00Z'));
   await page.goto(origin + '/projects');
   const cardTime = page.locator('.project-card-meta time').first();

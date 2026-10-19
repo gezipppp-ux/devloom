@@ -8,7 +8,7 @@ class WorkActionQueryStore {
       const client = this.database.client;
       const scope = { projectId: { in: projectIds } };
       const release = { OR: [{ releaseId: null }, { release: { status: "active" } }] };
-      const actions = await client.workAction.findMany({ where: { ...scope, OR: [{ handlerId: actorId }, { issue: { businessOwnerId: actorId } }], status: { in: ["ready", "active"] }, issue: release }, include: { issue: { include: { workflowVersion: true, developmentClaim: { include: { task: { select: { executorId: true } } } } } } } });
+      const actions = await client.workAction.findMany({ where: { ...scope, OR: [{ handlerId: actorId }, { issue: { businessOwnerId: actorId } }], status: { in: ["ready", "active"] }, issue: { ...release, deletedAt: null } }, include: { issue: { include: { workflowVersion: true, developmentClaim: { include: { task: { select: { executorId: true } } } } } } } });
       const tasks = await client.developmentTask.findMany({ where: { ...scope, status: { notIn: ["completed", "cancelled", "merged"] }, AND: [release, { OR: [
         { executorId: actorId }, { issueLinks: { some: { issue: { ...release, businessOwnerId: actorId } } } },
         { creatorId: actorId, snapshot: { path: ["kind"], equals: "manual" } },

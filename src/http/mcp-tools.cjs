@@ -45,6 +45,9 @@ const commands = [
   ["update_issue", "编辑事项及补充 HTTP 上传的附件。携带 get_issue 返回的 revision，冲突后重新读取。", {
     ...fields, projectId: id, issueId: id, requestId, revision: z.number().int().min(1),
   }, "updateIssue", "issues.write"],
+  ["delete_issue", "删除已获用户明确授权且未关联任何开发任务或交付记录的需求/Bug。先 get_issue 核对对象、deletion 和 revision；归档事项只读。删除后仅返回回执，不提供恢复。超时用原 requestId 和参数重试或 get_request_result 查询。", {
+    projectId: id, issueId: id, requestId, revision: z.number().int().min(1),
+  }, "deleteIssue", "issues.delete"],
   ["assign_issue", "指派或转派一名开发负责人，可设置多名关注人；已有任务须携带 taskRevision，仅未启动的独立事项任务可转派。", {
     projectId: id, issueId: id, requestId, revision: z.number().int().min(1), developerId: id,
     watcherIds: z.array(id).max(50).optional(), taskRevision: z.number().int().min(1).optional(),
@@ -56,7 +59,8 @@ const commands = [
 
 function createMcpServer({ context, tokens, services, isBusy, origin }) {
   const server = new McpServer({ name: "devloom", version: "1.0.0" }, {
-    instructions: "先查询项目、版本、成员和 get_issue_workflow 已发布流程，发布前查重。事项支持截止日期 dueDate、标签 tags，版本支持目标日期 targetDate。发布及编辑使用稳定 UUIDv4 requestId，超时查询原请求或原样重试。" +
+    instructions: "先查询项目、版本、成员和 get_issue_workflow 已发布流程，发布前查重。事项支持截止日期 dueDate、标签 tags，版本支持目标日期 targetDate。发布、编辑及删除使用稳定 UUIDv4 requestId，超时查询原请求或原样重试。" +
+      "delete_issue 需要独立 issues.delete scope 和项目 issue.delete 权限；先 get_issue 核对目标和 revision，仅按用户明确授权删除。已关联开发任务或交付的事项不能删除，归档事项只读。" +
       "附件上传前调用 create_upload_token({projectId}) 获取最长 24 小时有效的临时上传 Token；MCP Token 不能直接上传。" +
       "使用 create_upload_token 返回的 uploadUrl 添加 name 查询参数，POST 原始二进制；地址须与 whoami.runtime.siteOrigin 同源。" +
       "请求头 Authorization: Bearer <uploadToken>、Idempotency-Key: <UUIDv4>、Content-Type 为文件实际 MIME 类型，未知用 application/octet-stream。" +

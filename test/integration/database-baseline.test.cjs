@@ -96,7 +96,7 @@ test("fresh baseline matches Prisma, preserves database constraints and publishe
   await fixture.deploy();
   await fixture.deploy();
   const database = await fixture.open();
-  assert.deepEqual(readPostgresMigrations().map(row => row.name), ["20261012200000_baseline", "20261013070000_mcp_access", "20261013110000_agent_suppliers", "20261013150000_initialization_guide", "20261013180000_project_directory_names", "20261013210000_neutral_workbench", "20261014120000_project_overview", "20261014150000_administrator_permissions", "20261014160000_remove_setup_credentials", "20261014170000_project_deliveries", "20261014200000_workflow_responsibilities", "20261015120000_workflow_handoffs", "20261015150000_mcp_upload_tokens"]);
+  assert.deepEqual(readPostgresMigrations().map(row => row.name), ["20261012200000_baseline", "20261013070000_mcp_access", "20261013110000_agent_suppliers", "20261013150000_initialization_guide", "20261013180000_project_directory_names", "20261013210000_neutral_workbench", "20261014120000_project_overview", "20261014150000_administrator_permissions", "20261014160000_remove_setup_credentials", "20261014170000_project_deliveries", "20261014200000_workflow_responsibilities", "20261015120000_workflow_handoffs", "20261015150000_mcp_upload_tokens", "20261019120000_issue_deletion"]);
   const workflows = await database.client.systemWorkflow.findMany({ include: { versions: true }, orderBy: { type: "asc" } });
   assert.deepEqual(workflows.map(row => row.type), ["bug", "requirement"]);
   for (const row of workflows) {
@@ -119,6 +119,25 @@ test("fresh baseline matches Prisma, preserves database constraints and publishe
     "--to-schema", "prisma/schema.prisma", "--exit-code"], {
     cwd: root, env: { ...process.env, DATABASE_URL: fixture.url }, windowsHide: true, timeout: 60000,
   });
+});
+
+test("issue deletion migration preserves existing issues and only adds an empty deletion marker", async t => {
+  const { admin, schema } = await postgresFixture(t);
+  await admin.query(`SET search_path TO "${schema}"`);
+  await admin.query('CREATE TABLE "_prisma_migrations" (migration_name TEXT, finished_at TIMESTAMPTZ, rolled_back_at TIMESTAMPTZ)');
+  for (const row of readPostgresMigrations()) {
+    if (row.name === "20261019120000_issue_deletion") break;
+    await admin.query(fs.readFileSync(path.join(root, "prisma/migrations", row.name, "migration.sql"), "utf8"));
+  }
+  await admin.query(`INSERT INTO users (id, username, display_name, password_hash, updated_at) VALUES ('owner', 'owner', 'Owner', 'unused', CURRENT_TIMESTAMP);
+    INSERT INTO projects (id, name, directory_name, directory_key, owner_user_id, remote_url, updated_at) VALUES ('project', 'Project', 'project', 'project', 'owner', 'https://example.test/repo.git', CURRENT_TIMESTAMP);
+    INSERT INTO project_issues (id, project_id, number, type, title, status, workflow_version_id, reporter_id, business_owner_id, created_by_id, updated_by_id, updated_at)
+      SELECT 'issue', 'project', 1, 'requirement', 'Retained issue', v.definition->'nodes'->0->>'id', v.id, 'owner', 'owner', 'owner', 'owner', CURRENT_TIMESTAMP FROM system_workflow_versions v JOIN system_workflows w ON w.id = v.workflow_id WHERE w.type = 'requirement' LIMIT 1`);
+  const before = (await admin.query('SELECT * FROM project_issues')).rows[0];
+  const workflows = (await admin.query('SELECT * FROM system_workflows ORDER BY type')).rows;
+  await admin.query(fs.readFileSync(path.join(root, "prisma/migrations/20261019120000_issue_deletion/migration.sql"), "utf8"));
+  assert.deepEqual((await admin.query('SELECT * FROM project_issues')).rows[0], { ...before, deleted_at: null });
+  assert.deepEqual((await admin.query('SELECT * FROM system_workflows ORDER BY type')).rows, workflows);
 });
 
 test("previous database histories reject startup and deployment without changing business data", async t => {

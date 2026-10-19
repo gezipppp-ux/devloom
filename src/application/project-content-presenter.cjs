@@ -1,4 +1,5 @@
 const { workflowActorAllowed } = require("../domain/workflow-handoffs.cjs");
+const { issueDeletionReason } = require("../domain/issue-deletion.cjs");
 const { issueWorkflowNode, issueDevelopmentAllowed } = require("../domain/issue-workflows.cjs");
 const { workflowHandler } = require("../domain/workflow-actions.cjs");
 const { deliverySubmission } = require("../domain/delivery-submission.cjs");
@@ -7,7 +8,9 @@ function dates(row) {
   return { ...row, ...(row.createdAt ? { createdAt: row.createdAt.toISOString() } : {}), ...(row.updatedAt ? { updatedAt: row.updatedAt.toISOString() } : {}) };
 }
 function presentIssue(row, actorId, permissions = []) {
-  const { source, release, workflowVersion, developmentClaim, actions = [], deliverables = [], ...issue } = row;
+  const { source, release, workflowVersion, developmentClaim, actions = [], deliverables = [], _count, deletedAt, ...issue } = row;
+  const deletionReason = issueDeletionReason({ release, developmentClaim, _count });
+  issue.deletion = { allowed: permissions.includes("issue.delete") && !deletionReason && !deletedAt, reason: deletionReason };
   const action = actions[0];
   issue.deliverySubmission = deliverySubmission(row, actorId, permissions);
   const needsAssignment = !workflowHandler(row, issueWorkflowNode(row));

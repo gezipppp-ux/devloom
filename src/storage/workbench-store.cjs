@@ -6,7 +6,7 @@ class WorkbenchStore {
   }
   async activity(projectId, { deliveries }) {
     const client = this.database.client;
-    const history = await client.issueHistory.findMany({ where: { projectId, action: { in: ["created", "updated", "transition", ...(deliveries ? ["delivery.reviewed"] : [])] } },
+    const history = await client.issueHistory.findMany({ where: { projectId, issue: { deletedAt: null }, action: { in: ["created", "updated", "transition", ...(deliveries ? ["delivery.reviewed"] : [])] } },
       include: { issue: { select: { id: true, title: true, type: true, number: true } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 10 });
     const published = deliveries ? await client.projectDeliverable.findMany({ where: { projectId }, select: { id: true, issueId: true, authorId: true, title: true, createdAt: true,
       issue: { select: { id: true, title: true, type: true, number: true } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 10 }) : [];
@@ -23,7 +23,7 @@ class WorkbenchStore {
     let table, where, include;
     if (kind === "issues") {
       table = client.projectIssue;
-      where = { ...projects, ...(type ? { type } : {}), ...(priority ? { priority } : {}), ...(status ? { status } : {}), ...(tag ? { tags: { has: tag } } : {}),
+      where = { ...projects, deletedAt: null, ...(type ? { type } : {}), ...(priority ? { priority } : {}), ...(status ? { status } : {}), ...(tag ? { tags: { has: tag } } : {}),
         AND: [
           ...(scope === "mine" ? [{ OR: ["developerId", "reporterId", "businessOwnerId", "qaOwnerId", "acceptanceOwnerId", "createdById"].map(field => ({ [field]: actorId })).concat({ watcherIds: { has: actorId } }) }] : []),
           ...(query ? [{ OR: [{ title: { contains: query, mode: "insensitive" } }, { description: { contains: query, mode: "insensitive" } }, { tags: { has: query } }] }] : []),

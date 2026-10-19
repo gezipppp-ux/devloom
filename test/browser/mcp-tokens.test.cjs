@@ -54,13 +54,16 @@ async function verifyMcpTokens(page, output) {
   await section.getByLabel("Token 名称").fill("工作电脑 CLI");
   assert.equal(await section.getByRole("button", { name: "创建 MCP Token", exact: true }).isDisabled(), true);
   await section.getByRole("checkbox", { name: "测试项目", exact: true }).check();
+  assert.equal(await section.getByRole("checkbox", { name: "删除需求与 Bug", exact: true }).isChecked(), false);
   assert.equal(await section.getByText("需要为需求添加附件？", { exact: true }).count(), 0);
   assert.equal(await section.getByRole("region", { name: "HTTP 上传说明" }).count(), 0);
   await section.getByRole("button", { name: "创建 MCP Token", exact: true }).click();
   await page.getByRole("alert").filter({ hasText: "模拟 Token 创建失败" }).waitFor();
   assert.equal(await section.getByLabel("Token 名称").inputValue(), "工作电脑 CLI");
   assert.equal(tokens.length, 0);
+  assert.equal(writes[0].scopes.includes("issues.delete"), false, "Deletion requires explicit opt-in");
   await dismissOperationMessages(page);
+  await section.getByRole("checkbox", { name: "删除需求与 Bug", exact: true }).check();
   fail = false;
   const blocked = new Promise(resolve => { hold = resolve; });
   await section.getByRole("button", { name: "创建 MCP Token", exact: true }).click();
@@ -73,6 +76,7 @@ async function verifyMcpTokens(page, output) {
   assert.equal(await section.getByLabel("新建 Token", { exact: true }).inputValue(), secret);
   assert.equal(writes.length, 2);
   assert.equal(writes[1].scopes.includes("files.upload"), true);
+  assert.equal(writes[1].scopes.includes("issues.delete"), true);
   assert.equal(writes[1].allProjects, false);
   assert.deepEqual(writes[1].projectIds, [tokenId]);
   await section.getByRole("button", { name: "复制全部，发送给 Agent", exact: true }).click();

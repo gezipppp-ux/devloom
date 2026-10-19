@@ -64,6 +64,136 @@ async function error(client, name, input, status) {
   return result;
 }
 
+test("MCP cannot read, edit, assign or replay publication of a deleted issue", async t => {
+  const f = await fixture(t), client = await f.connect();
+  const input = { projectId: f.project.id, requestId: randomUUID(), type: "requirement", title: "不明确的 MCP 需求", description: "待重新整理", acceptanceCriteria: "补充后重新提报" };
+  const created = await call(client, "create_issue", input);
+  const { ProjectContentServices } = require("../../src/application/project-content-services.cjs");
+  await new ProjectContentServices(f.database, f.projects).deleteIssue(f.project.id, created.issue.id, f.admin, { revision: created.issue.revision });
+  await error(client, "get_issue", { projectId: f.project.id, issueId: created.issue.id }, 404);
+  await error(client, "create_issue", input, 404);
+  await error(client, "get_request_result", { projectId: f.project.id, requestId: input.requestId }, 404);
+  await error(client, "update_issue", { projectId: f.project.id, issueId: created.issue.id, requestId: randomUUID(), revision: created.issue.revision, title: "不得复活" }, 404);
+  await error(client, "assign_issue", { projectId: f.project.id, issueId: created.issue.id, requestId: randomUUID(), revision: created.issue.revision, developerId: f.members[0].id }, 404);
+  assert.equal((await call(client, "search_issues", { projectId: f.project.id })).items.length, 0);
+  assert.equal(await f.database.client.developmentTask.count(), 0);
+});
+
+test("MCP deletion returns only an idempotent receipt and preserves deleted content privately", async t => {
+  const f = await fixture(t), client = await f.connect(), projectId = f.project.id;
+  const tool = (await client.listTools()).tools.find(tool => tool.name === "delete_issue");
+  assert.deepEqual(Object.keys(tool.inputSchema.properties).sort(), ["issueId", "projectId", "requestId", "revision"]);
+  assert.deepEqual(tool.inputSchema.required.slice().sort(), ["issueId", "projectId", "requestId", "revision"]);
+  assert.equal(tool.annotations.destructiveHint, true);
+  assert.equal(tool.annotations.idempotentHint, true);
+  assert.equal(tool.annotations.readOnlyHint, false);
+  for (const type of ["requirement", "bug"]) {
+    const creation = { projectId, requestId: randomUUID(), type, title: "待清理的 " + type, description: "保留但不再公开的正文" };
+    const { issue } = await call(client, "create_issue", creation);
+    const input = { projectId, issueId: issue.id, revision: issue.revision, requestId: randomUUID() };
+    for (const invalid of [{ revision: 0 }, { revision: undefined }, { force: true }, { issueIds: [issue.id] }])
+      await error(client, "delete_issue", { ...input, ...invalid });
+    const deleted = { id: issue.id, deleted: true };
+    assert.deepEqual(await call(client, "delete_issue", input), { ...deleted, reused: false });
+    assert.deepEqual(await call(client, "delete_issue", input), { ...deleted, reused: true });
+    assert.deepEqual(await call(client, "get_request_result", { projectId, requestId: input.requestId }), { operation: "delete_issue", ...deleted, reused: true });
+    await error(client, "delete_issue", { ...input, revision: input.revision + 1 }, 409);
+    await error(client, "delete_issue", { ...input, requestId: randomUUID() }, 404);
+    await error(client, "get_issue", { projectId, issueId: issue.id }, 404);
+    await error(client, "create_issue", creation, 404);
+    await error(client, "get_request_result", { projectId, requestId: creation.requestId }, 404);
+    const stored = await f.database.client.projectIssue.findUnique({ where: { id: issue.id } });
+    assert.ok(stored.deletedAt);
+    assert.equal(stored.description, creation.description);
+    assert.equal(stored.revision, issue.revision + 1);
+    assert.equal(await f.database.client.issueHistory.count({ where: { issueId: issue.id, action: "deleted" } }), 1);
+    assert.equal(await f.database.client.auditEvent.count({ where: { event: "mcp.delete_issue", details: { path: ["requestId"], equals: input.requestId } } }), 1);
+    assert.deepEqual((await f.database.client.mcpOperation.findUnique({ where: { userId_requestId: { userId: f.admin.id, requestId: input.requestId } } })).result, deleted);
+  }
+  assert.deepEqual((await call(client, "search_issues", { projectId })).items, []);
+});
+
+test("MCP deletion requires an explicit token scope and current project permission, including receipts", async t => {
+  const f = await fixture(t), client = await f.connect(), projectId = f.project.id;
+  const legacy = await f.tokens.create(f.admin, { name: "既有编辑授权", scopes: scopes.filter(scope => scope !== "issues.delete"), allProjects: true, projectIds: [], expiresInDays: 7 });
+  const legacyClient = await f.connect(legacy.secret);
+  assert.equal((await legacyClient.listTools()).tools.some(tool => tool.name === "delete_issue"), false);
+  const { issue } = await call(client, "create_issue", { projectId, requestId: randomUUID(), type: "bug", title: "独立删除授权" });
+  const input = { projectId, issueId: issue.id, requestId: randomUUID(), revision: issue.revision };
+  await error(legacyClient, "delete_issue", input);
+  const other = (await f.projects.create(f.admin, { name: "删除范围之外", remoteUrl: "https://example.invalid/other.git" })).project;
+  await error(client, "delete_issue", { ...input, projectId: other.id }, 403);
+  const credential = await f.tokens.create(f.members[0], { name: "仅删除", scopes: ["read", "issues.delete"], allProjects: false, projectIds: [projectId], expiresInDays: 7 });
+  const deleter = await f.connect(credential.secret);
+  const membership = { projectId_userId: { projectId, userId: f.members[0].id } };
+  const full = (await f.database.client.projectMember.findUnique({ where: membership })).permissions;
+  await f.database.client.projectMember.update({ where: membership, data: { permissions: full.filter(permission => permission !== "issue.delete") } });
+  await error(deleter, "delete_issue", input, 403);
+  await f.database.client.projectMember.update({ where: membership, data: { permissions: full } });
+  assert.equal((await call(deleter, "delete_issue", input)).deleted, true, "deletion does not require editing scope");
+  await error(client, "get_request_result", { projectId, requestId: input.requestId }, 404, "receipt belongs to its author");
+  await f.database.client.projectMember.update({ where: membership, data: { permissions: full.filter(permission => permission !== "issue.delete") } });
+  await error(deleter, "delete_issue", input, 403);
+  await error(deleter, "get_request_result", { projectId, requestId: input.requestId }, 403);
+  await f.database.client.projectMember.update({ where: membership, data: { permissions: full } });
+  const readerToken = await f.tokens.create(f.members[0], { name: "仅读取", scopes: ["read"], allProjects: true, projectIds: [], expiresInDays: 7 });
+  await error(await f.connect(readerToken.secret), "get_request_result", { projectId, requestId: input.requestId }, 403);
+});
+
+test("MCP deletion rejects stale revisions, archives and every development or delivery association", async t => {
+  const f = await fixture(t), client = await f.connect(), projectId = f.project.id;
+  const create = async input => (await call(client, "create_issue", { projectId, requestId: randomUUID(), type: "requirement", title: "删除门禁", ...input })).issue;
+  const inputFor = issue => ({ projectId, issueId: issue.id, revision: issue.revision, requestId: randomUUID() });
+  const stale = await create();
+  await call(client, "update_issue", { ...inputFor(stale), title: "已更新" });
+  await error(client, "delete_issue", inputFor(stale), 409);
+  const linked = await create({ developerId: f.members[0].id });
+  const detail = await call(client, "get_issue", { projectId, issueId: linked.id });
+  for (const status of ["planned", "cancelled", "completed", "merged"]) {
+    await f.database.client.developmentTask.update({ where: { id: detail.developmentTask.id }, data: { status } });
+    if (status !== "planned") await f.database.client.issueDevelopmentClaim.deleteMany({ where: { issueId: linked.id } });
+    await error(client, "delete_issue", inputFor(linked), 409);
+  }
+  const delivered = await create();
+  await f.database.client.projectDeliverable.create({ data: { projectId, issueId: delivered.id, authorId: f.admin.id, reviewerId: f.admin.id, body: "既有交付", status: "accepted" } });
+  await error(client, "delete_issue", inputFor(delivered), 409);
+  const release = (await call(client, "create_release", { projectId, requestId: randomUUID(), name: "v9.0" })).release;
+  const archived = await create({ releaseId: release.id });
+  await f.database.client.projectRelease.update({ where: { id: release.id }, data: { status: "archived" } });
+  await error(client, "delete_issue", inputFor(archived), 409);
+  const plain = await create();
+  f.setMaintenance(true);
+  await error(client, "delete_issue", inputFor(plain), 409);
+  f.setMaintenance(false);
+  await f.database.client.project.update({ where: { id: projectId }, data: { status: "archived" } });
+  await error(client, "delete_issue", inputFor(plain), 409);
+  assert.equal(await f.database.client.projectIssue.count({ where: { deletedAt: { not: null } } }), 0);
+  assert.equal(await f.database.client.mcpOperation.count({ where: { kind: "delete_issue" } }), 0);
+});
+
+test("MCP deletion rolls back content and receipts if authorization is revoked before commit", async t => {
+  const f = await fixture(t), client = await f.connect(), projectId = f.project.id;
+  const { issue } = await call(client, "create_issue", { projectId, requestId: randomUUID(), type: "bug", title: "事务内撤销授权" });
+  const { ProjectContentServices } = require("../../src/application/project-content-services.cjs");
+  const { McpProjectServices } = require("../../src/application/mcp-project-services.cjs");
+  const content = new ProjectContentServices(f.database, f.projects);
+  const remove = content.deleteIssue.bind(content);
+  t.mock.method(content, "deleteIssue", async (...args) => {
+    const result = await remove(...args);
+    await f.tokens.revoke(f.admin, f.credential.token.id);
+    return result;
+  });
+  const services = new McpProjectServices(f.database, { tokens: f.tokens, projects: f.projects, content });
+  const context = await f.tokens.authenticate("Bearer " + f.credential.secret);
+  await assert.rejects(services.deleteIssue(context, { projectId, issueId: issue.id, requestId: randomUUID(), revision: issue.revision }), { statusCode: 401 });
+  const stored = await f.database.client.projectIssue.findUnique({ where: { id: issue.id } });
+  assert.equal(stored.deletedAt, null);
+  assert.equal(stored.revision, issue.revision);
+  assert.equal(await f.database.client.mcpOperation.count({ where: { kind: "delete_issue" } }), 0);
+  assert.equal(await f.database.client.issueHistory.count({ where: { action: "deleted" } }), 0);
+  assert.equal(await f.database.client.auditEvent.count({ where: { event: { in: ["issue.deleted", "mcp.delete_issue"] } } }), 0);
+});
+
 test("MCP client publishes images, release and assignment atomically with replay and conflict recovery", async t => {
   const f = await fixture(t), client = await f.connect();
   const projectId = f.project.id;
@@ -393,6 +523,14 @@ test("console token management keeps cookie authentication and CSRF separate fro
   }
   await browser("/api/auth/session");
   assert.equal((await browser("/api/auth/login", { username: "admin", password: "fixture-password-123" })).status, 200);
+  const issuePath = `/api/projects/${f.project.id}/issues`;
+  const issue = await browser(issuePath, { type: "bug", title: "误提交的 Bug" });
+  assert.equal(issue.status, 201);
+  const deletePath = `${issuePath}/${issue.data.id}/delete`, deletion = { revision: issue.data.revision };
+  assert.equal((await browser(deletePath, deletion, { "x-csrf-token": "invalid" })).status, 403);
+  assert.equal((await f.request(deletePath, { method: "POST", body: JSON.stringify(deletion), headers: { "content-type": "application/json" } })).status, 403);
+  assert.equal((await browser(deletePath, deletion)).status, 200);
+  assert.equal((await browser(`${issuePath}/${issue.data.id}`)).status, 404);
   const input = { name: "控制台 Token", expiresInDays: 7, scopes: ["read"], allProjects: true, projectIds: [] };
   assert.equal((await browser("/api/account/mcp-tokens", input, { "x-csrf-token": "invalid" })).status, 403);
   const created = await browser("/api/account/mcp-tokens", input);

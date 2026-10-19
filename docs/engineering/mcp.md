@@ -13,7 +13,7 @@
 - 用户在已登录且完成初始改密的浏览器会话中创建、列出和撤销本人 Token，管理接口继续要求 Cookie 和 CSRF；Bearer Token 不能管理或增发个人 MCP Token。
 - Token 明文仅创建时返回一次，数据库只保存随机令牌的 SHA-256 摘要、前缀、名称和授权信息。有效期为 1–365 天，默认 30 天。
 - 请求使用 Authorization: Bearer <Token>；不接受 URL 中的 Token。MCP 请求使用个人 MCP Token，HTTP 上传仅使用 MCP 签发的临时上传 Token；读取请求体后再次检查；应用写事务再次验证账号、Token、项目权限和归档状态。
-- 权限目录为 shared/mcp-scopes.json：read、issues.write、issues.assign、releases.write、files.upload。有效操作取 Token scope 与当前用户项目权限的交集。可限制指定项目，或明确授权全部当前及以后可访问项目。
+- 权限目录为 shared/mcp-scopes.json：read、issues.write、issues.delete、issues.assign、releases.write、files.upload。有效操作取 Token scope 与当前用户项目权限的交集。可限制指定项目，或明确授权全部当前及以后可访问项目。删除使用独立的 issues.delete，既有 Token 不自动扩权，新建 Token 表单默认不选删除权限。
 - 撤销、过期、账号停用、强制改密或账号 authVersion 变化使 Token 失效。改名不失效；项目撤权在后续操作中生效。管理员现有项目管理特例继续适用，Token 不授予额外开发资格。
 - /api/mcp/whoami 与 MCP whoami 返回当前身份、Token 公共元数据、上传约定、runtime.siteOrigin/mcpUrl 和 skills（name、version、guideUrl、manifestUrl、entryUrl、packageUrl）。地址来自经过验证的 request.applicationUrl.origin；不返回凭据摘要。
 - MCP 保留现有 Host/Origin 校验和 PUBLIC_ORIGIN HTTPS 部署规则。只对明确的 MCP/Bearer 路由免除浏览器 CSRF，其他 API 不接受此豁免。
@@ -32,6 +32,7 @@
 | search_issues / get_issue | 查重、详情、事项和开发任务修订号、附件与站内链接 |
 | create_issue | 原子创建事项、绑定附件、设置职责、关注人和可选开发负责人 |
 | update_issue | 带 revision 更新内容、版本、职责、关注人和追加附件 |
+| delete_issue | 带 revision 删除无任何开发任务或交付关联的需求/Bug；要求 issues.delete 与项目 issue.delete |
 | assign_issue | 指派／转派负责人及设置关注人 |
 | get_request_result | 响应丢失后读取本人原请求结果 |
 
@@ -42,6 +43,10 @@ create_issue / update_issue 字段与事项表单同步：title、description、
 get_issue_workflow 复用 SystemWorkflowServices.readPublished，要求 Token read、项目范围及 issue.view，返回前重新鉴权。流程 requiredFields 在相应流转时生效；创建使用当前已发布版本和初始节点，带 developerId 时还需满足该节点的分派与流转门禁。MCP 不提供手动状态流转或启动开发工具；仅发布不会启动 Agent，分派也只创建待开发任务。
 
 工具返回结构化 JSON 并同时提供 JSON 文本；可预期错误带 isError 和 error.status/code/message。Token 不具备某写 scope 时，不在工具列表中暴露对应工具；执行时仍重新验证，不能依赖工具列表作为授权。
+
+`delete_issue({projectId,issueId,requestId,revision})` 复用网页的逻辑删除服务，在同一 Serializable 事务中校验当前 Token、项目权限、归档、修订和所有历史任务/交付关联，并保存幂等结果与 MCP 审计。参数严格校验，不支持强制删除或批量删除。成功返回 `{id,deleted:true,reused:false}`；同一账号使用相同 requestId 和全部原参数重试返回 `reused:true`，不同参数返回 409；更换 requestId 删除已删除事项返回 404。重试仍要求当前删除权限；不会再次删除、递增修订或重复记录审计。
+
+删除的 `get_request_result` 同样要求 issues.delete、issue.view 和 issue.delete，只返回删除回执，不读取或泄露已删除正文。其他创建、编辑或指派请求仍不得回放已删除事项内容。Agent 必须先核对目标和 get_issue 返回的 revision，只在用户明确授权的对象范围内调用；修订冲突后重新核对变更，不能盲目覆盖。新增 MCP scope 不需要数据库迁移；旧 Token 需重新创建并明确勾选「删除需求与 Bug」。
 
 ## 受鉴权 HTTP 附件上传
 

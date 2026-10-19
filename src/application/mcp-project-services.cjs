@@ -6,7 +6,7 @@ const { projectFileInput, previewMimeType } = require("../domain/project-files.c
 const { presentMcpProject, presentMcpMember, presentMcpUpload, presentMcpIssue, presentMcpIssueResult } = require("./mcp-presenter.cjs");
 
 const markdownFields = ["description", "acceptanceCriteria", "reproductionSteps", "expectedResult", "actualResult"];
-const writeScopes = { create_release: "releases.write", create_issue: "issues.write", update_issue: "issues.write", assign_issue: "issues.assign" };
+const writeScopes = { create_release: "releases.write", create_issue: "issues.write", update_issue: "issues.write", delete_issue: "issues.delete", assign_issue: "issues.assign" };
 class McpProjectServices {
   constructor(database, { tokens, projects, content, lifecycle, development, workflows }) {
     this.store = new McpStore(database);
@@ -101,6 +101,7 @@ class McpProjectServices {
       if (existing) {
         if (existing.kind !== kind || existing.projectId !== projectId || existing.inputHash !== inputHash)
           throw accountError("相同请求标识不能提交不同操作或参数。", 409, "MCP_REQUEST_CONFLICT");
+        if (existing.result.issue?.id) await this.content.readIssue(projectId, existing.result.issue.id, actor);
         return { ...existing.result, reused: true };
       }
       const result = await operation(actor);
@@ -168,10 +169,16 @@ class McpProjectServices {
       return this.issueResult(input.projectId, issue.id, actor);
     });
   }
+  async deleteIssue(context, input) {
+    return this.write(context, "delete_issue", input, ["issue.delete"], actor =>
+      this.content.deleteIssue(input.projectId, input.issueId, actor, { revision: input.revision }));
+  }
   async requestResult(context, input) {
     return this.read(context, input.projectId, async () => {
       const saved = await this.store.operation(context.userId, mcpId(input.requestId));
       if (!saved || saved.projectId !== input.projectId) throw accountError("未找到已成功提交的请求；可使用原标识和原参数重试。", 404);
+      if (saved.kind === "delete_issue") await this.authorize(context, input.projectId, "issue.delete", "issues.delete");
+      if (saved.result.issue?.id) await this.content.readIssue(input.projectId, saved.result.issue.id, { id: context.userId });
       return { operation: saved.kind, ...saved.result, reused: true };
     });
   }

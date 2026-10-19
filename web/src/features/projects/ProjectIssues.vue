@@ -35,6 +35,13 @@ async function search(nextOffset = 0) {
   void reload();
 }
 function openIssue(id) { void router.push({ query: { ...route.query, issue: id || undefined, task: undefined, create: undefined } }); }
+async function deleted(id) {
+  checked.value = checked.value.filter(value => value !== id);
+  await router.replace({ query: { ...route.query, issue: undefined, offset: undefined, selection: checked.value.length ? checked.value : undefined } });
+  offset.value = 0;
+  await reload();
+  notice.value = "事项已删除。";
+}
 async function planned(tasks) {
   startingIssues.value = []; checked.value = [];
   if (assigning.value) {
@@ -57,7 +64,7 @@ watch(() => [route.query.q, route.query.status, route.query.offset, route.query.
   <FeedbackMessage :message="releases.error.value" type="error" /><button v-if="releases.error.value" :disabled="releases.loading.value" @click="releases.reload">{{ $t("重新读取版本") }}</button>
   <FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="notice" type="success" />
   <p v-if="selected && saving" role="status">{{ $t("正在保存任务规划…") }}</p>
-  <IssueDetail ref="detail" v-if="selected" :key="selected" :project-id="projectId" :project-name="projectName" :issue-id="selected" :permissions="permissions" :development-busy="saving" @back="openIssue('')" @changed="reload" @start-development="start" @assign-development="issue => start(issue, true)" />
+  <IssueDetail ref="detail" v-if="selected" :key="selected" :project-id="projectId" :project-name="projectName" :issue-id="selected" :permissions="permissions" :development-busy="saving" @back="openIssue('')" @changed="reload" @deleted="deleted" @start-development="start" @assign-development="issue => start(issue, true)" />
   <section v-else><header class="project-heading"><h2>{{ type === 'bug' ? 'Bug' : $t("需求") }}</h2><IssueCreateMenu v-if="can('issue.create')" @create="target => router.push(issueCreateLocation(projectId, target, route.fullPath))" /></header>
     <form class="project-filter ui-project-filter" @submit.prevent="search()"><label class="ui-compact-search"><SearchOutlined aria-hidden="true" /><input v-model="query" type="search" :aria-label="$t('搜索事项')" :placeholder="$t('搜索标题与描述')" /></label><AppSelect native-events v-model="status" :aria-label="$t('事项状态')"><option value="">{{ $t("全部状态") }}</option><option v-for="node in statuses" :key="node.id" :value="node.id">{{ node.name }}</option></AppSelect><AppSelect native-events v-model="releaseId" :aria-label="$t('版本筛选')"><option value="">{{ $t("全部版本") }}</option><option value="unassigned">{{ $t("未排期") }}</option><option v-for="release in releases.data.value?.items" :key="release.id" :value="release.id">{{ release.name }}{{ release.status === 'archived' ? $t("（已归档）") : '' }}</option></AppSelect><label class="permission-choice"><input v-model="includeArchived" type="checkbox" />{{ $t("包含归档事项") }}</label><button type="submit" :disabled="loading">{{ $t("查询") }}</button></form>
     <div v-if="can('session.start') || can('issue.assign')" class="project-development-action ui-selection-bar"><button v-if="can('session.start')" class="primary" :disabled="saving || !checked.length" @click="start()">{{ $t("认领") }}</button><button v-if="can('issue.assign')" :disabled="saving || !checked.length" @click="start(null, true)">{{ $t("指派") }}</button><span class="field-hint">{{ $t("先认领或指派，每条事项分别进入负责人的待开发任务。") }}</span></div>

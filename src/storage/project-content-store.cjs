@@ -18,7 +18,7 @@ function hashCreationRequest(data, attachments) {
 }
 const fileMetadata = { id: true, projectId: true, issueId: true, assetId: true, authorId: true, name: true, mimeType: true, size: true, sha256: true, createdAt: true };
 
-const issueRelations = { actions: { where: { status: { in: ["ready", "active"] } } }, deliverables: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1, select: { authorId: true, reviewerId: true, status: true, actionId: true } }, source: true, release: true, workflowVersion: { include: { workflow: { select: { publishedVersion: true } } } }, developmentClaim: { select: { task: { select: { id: true, status: true, executorId: true, executor: { select: { displayName: true } } } } } } };
+const issueRelations = { _count: { select: { taskLinks: true, deliverables: true } }, actions: { where: { status: { in: ["ready", "active"] } } }, deliverables: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1, select: { authorId: true, reviewerId: true, status: true, actionId: true } }, source: true, release: true, workflowVersion: { include: { workflow: { select: { publishedVersion: true } } } }, developmentClaim: { select: { task: { select: { id: true, status: true, executorId: true, executor: { select: { displayName: true } } } } } } };
 
 class ProjectContentStore {
   constructor(database) { this.database = database; }
@@ -39,12 +39,12 @@ class ProjectContentStore {
     return this.database.client.user.findMany({ where: { status: "active", OR: [{ role: "admin" }, { projectMemberships: { some: { projectId, status: "active" } } }] }, select: { id: true, displayName: true, username: true } });
   }
   async issue(projectId, id) {
-    const value = await this.database.client.projectIssue.findFirst({ where: { projectId, id }, include: issueRelations });
+    const value = await this.database.client.projectIssue.findFirst({ where: { projectId, id, deletedAt: null }, include: issueRelations });
     if (!value) throw missing();
     return value;
   }
   async issues(projectId, { type, status, releaseId, includeArchived, query, limit, offset }) {
-    const where = { projectId, ...(releaseId !== undefined ? { releaseId } : {}), ...(!includeArchived ? { OR: [{ releaseId: null }, { release: { status: "active" } }] } : {}), ...(type ? { type } : {}), ...(status ? { status } : {}),
+    const where = { projectId, deletedAt: null, ...(releaseId !== undefined ? { releaseId } : {}), ...(!includeArchived ? { OR: [{ releaseId: null }, { release: { status: "active" } }] } : {}), ...(type ? { type } : {}), ...(status ? { status } : {}),
       ...(query ? { AND: [{ OR: [{ title: { contains: query, mode: "insensitive" } }, { description: { contains: query, mode: "insensitive" } }] }] } : {}) };
     const rows = await this.database.client.projectIssue.findMany({ where, orderBy: [{ number: "desc" }], skip: offset, take: limit + 1, include: issueRelations });
     return { items: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
@@ -55,6 +55,7 @@ class ProjectContentStore {
       const existing = await this.database.client.projectIssue.findUnique({ where: { id: requestId } });
       if (existing) {
         if (existing.projectId !== projectId || existing.createdById !== actorId) throw conflict();
+        if (existing.deletedAt) throw accountError("事项已删除，不能使用原创建标识重新发布。", 409);
         const history = await this.database.client.issueHistory.findFirst({ where: { projectId, issueId: requestId, actorId, action: "created" } });
         const storedHash = history?.data?.creationRequestHash;
         if (storedHash !== creationRequestHash) throw conflict();
@@ -79,7 +80,7 @@ class ProjectContentStore {
       await new ProjectLifecycleStore(this.database).writableRelease(projectId, data.releaseId);
       if (data.releaseId !== before.releaseId && await this.database.client.issueDevelopmentClaim.count({ where: { projectId, issueId: id } })) throw accountError("事项有未结束开发任务，不能变更版本。", 409);
     }
-    const updated = await this.database.client.projectIssue.updateMany({ where: { id, projectId, revision }, data: { ...data, updatedById: actorId, revision: { increment: 1 } } });
+    const updated = await this.database.client.projectIssue.updateMany({ where: { id, projectId, revision, deletedAt: null }, data: { ...data, updatedById: actorId, revision: { increment: 1 } } });
     if (!updated.count) throw conflict();
     await new WorkActionStore(this.database).syncIssue(await this.issue(projectId, id), { handlerId: extra.handlerId, explicitHandler: extra.explicitHandler });
     const after = await this.issue(projectId, id);
@@ -88,6 +89,18 @@ class ProjectContentStore {
   }
   async issueHistory(projectId, issueId, actorId, action, data) {
     return this.database.client.issueHistory.create({ data: { projectId, issueId, actorId, action, data: serializable(data) } });
+  }
+  async deleteIssue(projectId, id, actorId, revision) {
+    const deletedAt = new Date();
+    const updated = await this.database.client.projectIssue.updateMany({
+      where: { projectId, id, revision, deletedAt: null, taskLinks: { none: {} }, deliverables: { none: {} }, developmentClaim: { is: null } },
+      data: { deletedAt, updatedById: actorId, revision: { increment: 1 } },
+    });
+    if (!updated.count) throw conflict();
+    await this.database.client.workAction.updateMany({ where: { projectId, issueId: id, status: { in: ["ready", "active"] } },
+      data: { status: "cancelled", endedAt: deletedAt, revision: { increment: 1 } } });
+    await this.issueHistory(projectId, id, actorId, "deleted", { revision, deletedAt });
+    await this.audit(actorId, "issue.deleted", projectId, id);
   }
   async childList(kind, projectId, issueId, { limit, offset }) {
     await this.issue(projectId, issueId);
@@ -164,25 +177,25 @@ class ProjectContentStore {
     return this.readDeliverable(projectId, id);
   }
   async asset(projectId, id) {
-    const row = await this.database.client.projectAsset.findFirst({ where: { projectId, id }, include: { issueLinks: { select: { issueId: true } } } });
+    const row = await this.database.client.projectAsset.findFirst({ where: { projectId, id }, include: { issueLinks: { where: { issue: { deletedAt: null } }, select: { issueId: true } } } });
     if (!row) throw missing();
     return row;
   }
   async assets(projectId, { type, query, limit, offset }) {
     const rows = await this.database.client.projectAsset.findMany({ where: { projectId, ...(type ? { type } : {}),
       ...(query ? { OR: [{ title: { contains: query, mode: "insensitive" } }, { content: { contains: query, mode: "insensitive" } }, { category: { contains: query, mode: "insensitive" } }, { tags: { has: query } }] } : {}) },
-    orderBy: [{ updatedAt: "desc" }, { id: "desc" }], skip: offset, take: limit + 1, include: { issueLinks: { select: { issueId: true } } } });
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }], skip: offset, take: limit + 1, include: { issueLinks: { where: { issue: { deletedAt: null } }, select: { issueId: true } } } });
     return { items: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
   }
   async linkIssues(projectId, assetId, issueIds) {
-    if (await this.database.client.projectIssue.count({ where: { projectId, id: { in: issueIds } } }) !== issueIds.length)
+    if (await this.database.client.projectIssue.count({ where: { projectId, deletedAt: null, id: { in: issueIds } } }) !== issueIds.length)
       throw accountError("关联事项不属于当前项目。", 400);
-    const existing = await this.database.client.assetIssueLink.findMany({ where: { projectId, assetId } });
+    const existing = await this.database.client.assetIssueLink.findMany({ where: { projectId, assetId, issue: { deletedAt: null } } });
     const before = new Set(existing.map(link => link.issueId));
     const after = new Set(issueIds);
     const changed = [...new Set([...before, ...after])].filter(id => before.has(id) !== after.has(id));
     for (const issueId of changed) assertIssueWritable(await this.issue(projectId, issueId));
-    await this.database.client.assetIssueLink.deleteMany({ where: { projectId, assetId, issueId: { notIn: issueIds } } });
+    await this.database.client.assetIssueLink.deleteMany({ where: { projectId, assetId, issue: { deletedAt: null }, issueId: { notIn: issueIds } } });
     const added = issueIds.filter(issueId => !before.has(issueId));
     if (added.length) await this.database.client.assetIssueLink.createMany({ data: added.map(issueId => ({ projectId, assetId, issueId })) });
   }
@@ -217,7 +230,7 @@ class ProjectContentStore {
     await this.database.client.auditEvent.create({ data: { actorUserId: actorId, event, details: { projectId, resourceId } } });
   }
   async file(projectId, id, withData = false) {
-    const row = await this.database.client.projectFile.findFirst({ where: { projectId, id }, ...(withData ? {} : { select: fileMetadata }) });
+    const row = await this.database.client.projectFile.findFirst({ where: { projectId, id, OR: [{ issueId: null }, { issue: { deletedAt: null } }] }, ...(withData ? {} : { select: fileMetadata }) });
     if (!row) throw missing();
     return withData ? { ...row, data: Buffer.from(row.data) } : row;
   }

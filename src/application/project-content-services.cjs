@@ -1,4 +1,5 @@
 const { WorkflowExecutionStore } = require("../storage/workflow-execution-store.cjs");
+const { issueDeletionReason } = require("../domain/issue-deletion.cjs");
 const { issueAttachments, projectFileInput, previewMimeType } = require("../domain/project-files.cjs");
 const { ProjectContentStore } = require("../storage/project-content-store.cjs");
 const { issueRequestId, issueInput, issueTransition, pageInput, text, object, identifier, choice, ISSUE_TYPES, contentFields, assignmentFields } = require("../domain/project-issues.cjs");
@@ -121,6 +122,17 @@ class ProjectContentServices {
       const result = await this.workflow.apply(current, actor, edge, { reason: transition.reason, handlerId: input.handlerId });
       for (const taskId of await this.executionWorkflow.taskIds(id)) await this.executionWorkflow.settle(taskId);
       return { ...presentIssue(result, actor.id, (await this.projects.authorize(projectId, actor, "project.view")).permissions), images: presentIssueImages(await this.store.issuePreviewFiles(projectId, id), result.source) };
+    });
+  }
+  async deleteIssue(projectId, id, actor, input) {
+    object(input, ["revision"]); revision(input.revision);
+    return this.mutate(projectId, actor, ["issue.view", "issue.delete"], async () => {
+      const issue = await this.store.issue(projectId, id);
+      if (issue.revision !== input.revision) throw accountError("事项已变化，请刷新后重新确认删除。", 409);
+      const reason = issueDeletionReason(issue);
+      if (reason) throw accountError(reason, 409);
+      await this.store.deleteIssue(projectId, id, actor.id, input.revision);
+      return { id, deleted: true };
     });
   }
   async reassignIssueStep(projectId, id, actor, input) {

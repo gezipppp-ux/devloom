@@ -43,6 +43,7 @@ async function serveProjectContent(request, response, url, { services, actor, in
       { name: query.name, mimeType: request.headers["content-type"], data: input }));
   }
   if (resource === "issues" && id) {
+    if (action === "delete" && request.method === "POST") return send(200, await services.deleteIssue(projectId, id, actor, input));
     if (action === "workflow-upgrade" && request.method === "GET") return send(200, await services.previewWorkflowUpgrade(projectId, id, actor));
     if (action === "workflow-upgrade" && request.method === "POST") return send(200, await services.upgradeIssueWorkflow(projectId, id, actor, input));
     if (request.method === "POST" && action === "step/assign") return send(200, await services.reassignIssueStep(projectId, id, actor, input));

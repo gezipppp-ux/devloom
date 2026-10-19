@@ -534,6 +534,7 @@ async function main() {
         }
       }
       await verifyIssueCreation({ page, origin, projects });
+      await require("./issue-deletion.test.cjs").verifyIssueDeletion({ page, origin, projects });
       for (const width of [2560, 1920, 1440, 1280, 1100, 768, 390, 320]) {
         scenario = "session";
         await page.setViewportSize({ width, height: { 2560: 1440, 1920: 1080, 1440: 900, 1280: 720, 1100: 900, 768: 1024, 390: 844, 320: 740 }[width] });
