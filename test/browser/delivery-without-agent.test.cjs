@@ -19,8 +19,8 @@ import Workflow from '/src/features/settings/SystemWorkflows.vue'; import Publis
 import '/src/shared/styles/style.css'; import '/src/shared/styles/workbench.css'; import '/src/shared/styles/projects.css';
 const router=createRouter({history:createWebHistory(),routes:[{path:'/projects/:projectId',name:'project',component:{render:()=>null}},{path:'/deliveries',name:'deliveries',component:{render:()=>null}},{path:'/:pathMatch(.*)*',component:{render:()=>null}}]});
 await router.push(location.pathname+location.search); await router.isReady();
-const kind=new URLSearchParams(location.search).get('kind'); const component={issue:Detail,upgrade:Upgrade,workflow:Workflow,task:Publish,project:Issues,tasks:Tasks,queue:Queue,review:Delivery}[kind];
-createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,{projectId:'p',...(kind==='tasks'||kind==='project'?{}:{issueId:'i'}),type:'requirement',kind:'tasks',deliveryId:'d',onOpenTask:()=>router.push({query:{tab:'tasks'}}),...(kind==='task'?{taskId:'t'}:{}),permissions:['issue.view','issue.assign','issue.transition','collaboration.view','deliverable.create','comment.create']})])}).use(router).use(i18n).mount('#app');`;
+const kind=new URLSearchParams(location.search).get('kind'); const component={issue:Detail,upgrade:Upgrade,workflow:Workflow,task:Publish,resubmit:Publish,project:Issues,tasks:Tasks,queue:Queue,review:Delivery}[kind];
+createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,{projectId:'p',...(kind==='tasks'||kind==='project'?{}:{issueId:'i'}),type:'requirement',kind:'tasks',deliveryId:'d',onOpenTask:()=>router.push({query:{tab:'tasks'}}),...(kind==='task'?{taskId:'t'}:{}),...(kind==='resubmit'?{previous:{id:'previous-delivery',issueId:'i',title:'原交付',body:'原成果与核验记录',commit:'abc123',reviewerId:'qa',revision:4}}:{}),permissions:['issue.view','issue.assign','issue.transition','collaboration.view','deliverable.create','comment.create']})])}).use(router).use(i18n).mount('#app');`;
   const server = await createServer({ configFile: false, root: path.resolve("web"), logLevel: "error", plugins: [vue(), {
     name: "delivery-fixture", resolveId(id) { if (id === "virtual:delivery") return "\0delivery"; }, load(id) { if (id === "\0delivery") return source; },
     configureServer(server) { server.middlewares.use(async (req, res, next) => { if (!req.url.startsWith("/fixture")) return next(); res.setHeader("Content-Type", "text/html"); res.end(await server.transformIndexHtml(req.url, '<html><body><main id="app"></main><script type="module" src="/@id/virtual:delivery"></script></body></html>')); }); },
@@ -34,7 +34,7 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,
     const output = path.resolve("state/browser/delivery-without-agent"); fs.mkdirSync(output, { recursive: true });
     const origin = `http://127.0.0.1:${server.httpServer.address().port}`, definition = recommendedWorkflow("requirement");
     let mode = "manual", rejectWrite = true, latestVersion = 2, actionLabel = "线下处理";
-    const issue = (id = "i") => ({ id, number: id === "i" ? 1 : 2, type: "requirement", title: id === "i" ? "可验证的业务成果" : "另一条待处理事项", description: "已完成配置或开发，并提供实际核验记录。", acceptanceCriteria: "结果符合业务要求", priority: "normal", revision: 3, watcherIds: [],
+    const issue = (id = "i") => ({ id, number: id === "i" ? 1 : 2, type: "requirement", title: id === "i" ? "客户列表支持跨页筛选与导出，保留筛选条件并补齐错误反馈" : "另一条待处理事项", description: "已完成配置或开发，并提供实际核验记录。", acceptanceCriteria: "结果符合业务要求", priority: "normal", revision: 3, watcherIds: [],
       status: "ready", statusName: "待开发", workflow: { version: 2, latestPublishedVersion: latestVersion, definition }, processing: { handlerId: "u", status: "ready" },
       deliverySubmission: { allowed: true, label: actionLabel, taskId: mode === "manual" ? null : "t" },
       assignmentAllowed: true, developerId: assigned.has(id) ? "u" : null, development: mode === "manual" && !assigned.has(id) ? null : { taskId: "t", executorId: "u", executorName: "处理人" }, people: [], availableTransitions: [],
@@ -105,8 +105,12 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,
       await page.getByRole('button', { name: /采用新流程版本/ }).waitFor();
       latestVersion = 2;
       await page.getByRole("button", { name: "线下处理", exact: true }).click();
+      await page.getByText("请填写交付说明。", { exact: true }).waitFor();
+      assert.equal(await page.getByRole("dialog").getByRole("button", { name: actionLabel, exact: true }).isDisabled(), true);
+      assert.equal(await page.getByLabel("验证结果", { exact: true }).count(), 0);
+      assert.equal(await page.getByLabel("提交标识（可选）", { exact: true }).count(), 0);
+      if (mode === "existing") await capture("delivery-required");
       await page.getByLabel("交付说明", { exact: true }).fill("已完成工作和可复核的证据");
-      await page.getByLabel("验证结果", { exact: true }).fill("验证通过");
       await selectOption(page.getByLabel("交付验证人", { exact: true }), "qa");
       await page.getByRole("dialog").getByRole("checkbox").check();
       await capture(`delivery-${mode}`);
@@ -114,6 +118,7 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,
       await submit.click(); await submit.waitFor({ state: "visible" });
       await page.getByRole("dialog").getByText("事项、任务或流程已变化，请重新预览后提交。", { exact: true }).waitFor();
       assert.equal(await page.getByLabel("交付说明", { exact: true }).inputValue(), "已完成工作和可复核的证据");
+      if (mode === "existing") await capture("delivery-failed");
       await dismissOperationMessages(page);
       rejectWrite = false; await submit.click(); await page.getByRole("dialog").waitFor({ state: "hidden" });
       const attempts = writes.filter(write => write.pathname.endsWith("/deliveries")).slice(-2);
@@ -129,6 +134,15 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,
     assert.equal(await page.getByText("已送验范围", { exact: true }).count(), 0, "pending scope cannot be selected again");
     await page.screenshot({ path: path.join(output, "delivery-en-320.png") });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth));
+    await open("resubmit");
+    assert.equal(await page.getByLabel("Delivery notes", { exact: true }).inputValue(), "原成果与核验记录");
+    await page.getByRole("dialog").getByRole("checkbox").check();
+    await page.getByRole("dialog").getByRole("button", { name: actionLabel, exact: true }).click();
+    await page.getByText("Delivery submitted. Issue status and review work have been updated.", { exact: true }).last().waitFor();
+    const resubmission = writes.at(-1).input;
+    assert.equal(resubmission.body, "原成果与核验记录");
+    assert.equal(resubmission.commit, "abc123", "resubmission preserves existing commit information without a new input");
+    assert.equal(resubmission.supersedesId, "previous-delivery");
     await open("workflow");
     await selectPreference(page, "locale", "zh-CN");
     await page.getByRole('button', { name: '流程模板', exact: true }).waitFor();

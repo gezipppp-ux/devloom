@@ -23,23 +23,38 @@ async function verifyIndependentDelivery({ page, origin, projectId, output }) {
     await open();
     assert.equal(await page.getByRole("combobox", { name: "关联事项", exact: true }).count(), 0);
     assert.equal(await page.getByRole("button", { name: "发布交付", exact: true }).isDisabled(), true);
+    assert.equal(await page.getByLabel("验证结果", { exact: true }).count(), 0);
+    assert.equal(await page.getByLabel("提交标识（可选）", { exact: true }).count(), 0);
+    await page.getByText("请填写交付说明。", { exact: true }).waitFor();
+    await page.getByLabel("交付标题", { exact: true }).fill("   ");
+    await page.getByText("请填写交付标题。", { exact: true }).waitFor();
     await page.getByLabel("交付标题", { exact: true }).fill("启动速度优化成果");
+    await page.getByLabel("交付说明", { exact: true }).fill("   ");
+    await page.getByText("请填写交付说明。", { exact: true }).waitFor();
+    assert.equal(await page.getByRole("button", { name: "发布交付", exact: true }).isDisabled(), true);
     await page.getByLabel("交付说明", { exact: true }).fill("完成缓存复用，保留失败反馈。");
-    await page.getByLabel("验证结果", { exact: true }).fill("构建已通过；线上耗时待验证。");
-    await page.getByLabel("提交标识（可选）", { exact: true }).fill("abc123");
+    await page.getByText("请选择交付验证人。", { exact: true }).waitFor();
     await selectOption(page.getByRole("combobox", { name: "交付验证人", exact: true }), "member-2");
+    await page.getByText("请勾选共享确认后提交。", { exact: true }).waitFor();
     await selectPreference(page, "locale", "en");
     assert.equal(await page.getByLabel("Delivery title", { exact: true }).inputValue(), "启动速度优化成果");
+    await page.getByText("Confirm sharing before submitting.", { exact: true }).waitFor();
     await selectPreference(page, "locale", "zh-CN");
-    for (const [width, height] of [[1920,1080],[2560,1440],[1440,900],[1280,720],[768,1024],[390,844],[320,740]]) {
-      await page.setViewportSize({ width, height });
-      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `delivery overflow at ${width}`);
-      const publish = page.getByRole("button", { name: "发布交付", exact: true });
-      await publish.scrollIntoViewIfNeeded();
-      const bounds = await publish.boundingBox();
-      await page.screenshot({ path: path.join(output, `independent-delivery-${width}.png`) });
-      assert.ok(bounds.y >= 0 && bounds.y + bounds.height <= height + 1, `publish reachable at ${width}: ${JSON.stringify(bounds)}`);
+    for (const locale of ["zh-CN", "en"]) {
+      await selectPreference(page, "locale", locale);
+      for (const [width, height] of [[1920,1080],[2560,1440],[1440,900],[1280,720],[768,1024],[390,844],[320,740]]) {
+        await page.setViewportSize({ width, height });
+        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `delivery overflow at ${width}`);
+        await page.locator(".delivery-heading").scrollIntoViewIfNeeded();
+        await page.screenshot({ path: path.join(output, `independent-delivery-${locale}-${width}.png`) });
+        const publish = page.locator(".delivery-submit button");
+        await publish.scrollIntoViewIfNeeded();
+        const bounds = await publish.boundingBox();
+        await page.screenshot({ path: path.join(output, `independent-delivery-${locale}-${width}-actions.png`) });
+        assert.ok(bounds.y >= 0 && bounds.y + bounds.height <= height + 1, `publish reachable at ${width}: ${JSON.stringify(bounds)}`);
+      }
     }
+    await selectPreference(page, "locale", "zh-CN");
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: "发布交付", exact: true }).click();
@@ -48,7 +63,8 @@ async function verifyIndependentDelivery({ page, origin, projectId, output }) {
     assert.equal(publications[0].taskId, task.id);
     assert.equal(publications[0].reviewerId, "member-2");
     assert.equal(Object.hasOwn(publications[0], "issueId"), false);
-    assert.match(publications[0].body, /构建已通过；线上耗时待验证/);
+    assert.equal(publications[0].body, "完成缓存复用，保留失败反馈。");
+    assert.equal(Object.hasOwn(publications[0], "commit"), false);
     assert.equal(completions.length, 0, "sharing does not finish development");
     await open();
     await page.getByRole("button", { name: "返回会话", exact: true }).click();
