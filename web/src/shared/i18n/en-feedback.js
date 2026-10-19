@@ -1,5 +1,10 @@
 // Known application feedback. Unknown upstream diagnostics remain verbatim.
 export const enFeedback = {
+    "当前 Worktree 处于分离 HEAD 状态，请先将需要的提交保存到分支后再删除。": "This worktree has a detached HEAD. Save the commits you need on a branch before deleting it.",
+    "原任务分支已被其他 Worktree 使用，不能删除。": "The original task branch is checked out in another worktree and cannot be deleted.",
+    "当前分支在清理期间发生变化，请重新确认删除。": "The current branch changed during cleanup. Confirm deletion again.",
+    "切换分支后的 Worktree 标记已缺失，无法验证任务目录。": "The Git marker is missing after switching branches. The task directory cannot be verified.",
+    "Worktree 已锁定或处于分离 HEAD 状态，不能强制删除。": "The worktree is locked or has a detached HEAD and cannot be forcibly deleted.",
     "请求批准": "Ask for approval",
     "帮我批准": "Automatic review",
     "账号与个人设置": "Account and preferences",

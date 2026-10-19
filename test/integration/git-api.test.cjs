@@ -226,6 +226,36 @@ test("delete refuses another Web owner and active external Codex session; reposi
   assert.equal((await manager.store.readWorktreeDeletion(key)).status, undefined);
 });
 
+test("delete API persists both branch tips and recovers switched cleanup after intent-only interruption", async (t) => {
+  const f = await fixture(t);
+  f.git("checkout", "--detach");
+  execFileSync("git", ["-C", f.tree, "checkout", "main"], { windowsHide: true, stdio: "pipe" });
+  execFileSync("git", ["-C", f.tree, "commit", "--allow-empty", "-m", "main only"], { windowsHide: true, stdio: "pipe" });
+  const snapshot = await f.snapshot();
+  assert.notEqual(snapshot.head, snapshot.taskBranchHead);
+  const save = f.manager.store.writeWorktreeDeletion.bind(f.manager.store);
+  let intent;
+  f.manager.store.writeWorktreeDeletion = async (key, value) => {
+    if (value.status === "deleting" && !value.worktreeRemoved && !intent) {
+      intent = structuredClone(value);
+      await save(key, value);
+      f.git("worktree", "remove", "--force", f.tree);
+      throw new Error("fixture crash after removing directory");
+    }
+    return save(key, value);
+  };
+  assert.equal((await f.remove()).status, 400);
+  assert.equal(intent.taskBranchHead, snapshot.taskBranchHead);
+  assert.equal(intent.head, snapshot.head);
+  assert.equal(intent.retainedBranch, "main");
+  f.manager.store.writeWorktreeDeletion = save;
+  assert.equal((await f.snapshot()).canDelete, true);
+  assert.equal((await f.remove()).status, 200);
+  assert.equal(f.git("rev-parse", "main"), snapshot.head);
+  assert.equal(f.git("branch", "--list", f.branch), "");
+  assert.equal((await f.manager.store.hasRun(f.key)), true);
+});
+
 test("repository HTTP fetch uses saved repository and configured remote; persists refresh timestamp", async (t) => {
   const f = await fixture(t);
   const remote = path.join(f.directory, "remote.git");

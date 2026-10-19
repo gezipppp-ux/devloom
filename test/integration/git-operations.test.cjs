@@ -156,14 +156,113 @@ test("task Git distinguishes unpublished branches, upstream ahead/behind and tra
   assert.equal(unknown.canDelete, true);
 });
 
-test("task Git exposes the live branch but keeps branch-changing worktrees ineligible for deletion", (t) => {
-  const { state } = fixture(t);
-  command(state.worktree.path, "checkout", "-b", "follow-up-branch");
+test("cleanup after merging and staying on main removes only the task directory and recorded branch", async (t) => {
+  const { repository, state } = fixture(t);
+  const tree = state.worktree.path;
+  fs.writeFileSync(path.join(tree, "task.txt"), "task commit");
+  commit(tree);
+  const taskHead = command(tree, "rev-parse", "HEAD");
+  command(repository, "checkout", "--detach");
+  command(tree, "checkout", "main");
+  command(tree, "merge", "--ff-only", state.worktree.branch);
+  fs.writeFileSync(path.join(tree, "main-only.txt"), "main commit");
+  commit(tree);
+  command(tree, "push", "origin", "main");
+  const mainHead = command(tree, "rev-parse", "HEAD");
   const status = readTaskGit(state);
   assert.equal(status.branch, state.worktree.branch);
-  assert.equal(status.currentBranch, "follow-up-branch");
+  assert.equal(status.currentBranch, "main");
+  assert.equal(status.retainedBranch, "main");
+  assert.equal(status.head, mainHead);
+  assert.equal(status.taskBranchHead, taskHead);
+  assert.notEqual(mainHead, taskHead);
+  assert.equal(status.canDelete, true, status.deleteReason);
+  await assert.rejects(deleteTaskWorktree(state, { ...confirmation(state, status), confirmBranch: "main" }), /完整/);
+  await assert.rejects(deleteTaskWorktree(state, { ...confirmation(state, status), discardChanges: false }), /确认丢弃/);
+  assert.equal((await deleteTaskWorktree(state, confirmation(state, status))).deleted, true);
+  assert.equal(fs.existsSync(tree), false);
+  assert.throws(() => command(repository, "show-ref", "--verify", `refs/heads/${state.worktree.branch}`));
+  assert.equal(command(repository, "rev-parse", "main"), mainHead);
+  assert.equal(command(repository, "rev-parse", "origin/main"), mainHead);
+});
+
+test("switched cleanup detects a same-commit branch switch and changes to the original task branch", async (t) => {
+  const { repository, state } = fixture(t);
+  const tree = state.worktree.path;
+  command(tree, "checkout", "-b", "retained");
+  const snapshot = readTaskGit(state);
+  command(tree, "checkout", "-b", "another-retained");
+  await assert.rejects(deleteTaskWorktree(state, confirmation(state, snapshot)), /状态已变化/);
+  command(tree, "checkout", "retained");
+  fs.writeFileSync(path.join(repository, "new-main.txt"), "new original tip");
+  commit(repository);
+  command(repository, "branch", "-f", state.worktree.branch, "main");
+  await assert.rejects(deleteTaskWorktree(state, confirmation(state, snapshot)), /状态已变化/);
+  const changed = readTaskGit(state);
+  assert.equal(changed.head, snapshot.head);
+  assert.notEqual(changed.taskBranchHead, snapshot.taskBranchHead);
+  command(repository, "branch", "-D", state.worktree.branch);
+  await assert.rejects(deleteTaskWorktree(state, confirmation(state, changed)), /状态已变化/);
+  assert.equal(fs.existsSync(tree), true);
+});
+
+test("cleanup supports an already removed task branch and preserves the current branch", async (t) => {
+  const { repository, state } = fixture(t);
+  command(state.worktree.path, "checkout", "-b", "retained");
+  command(repository, "branch", "-D", state.worktree.branch);
+  const status = readTaskGit(state);
+  assert.equal(status.taskBranchHead, null);
+  assert.equal(status.canDelete, true);
+  const result = await deleteTaskWorktree(state, { ...confirmation(state, status), discardChanges: false });
+  assert.equal(result.deleted, true);
+  assert.equal(fs.existsSync(state.worktree.path), false);
+  assert.equal(command(repository, "rev-parse", "retained"), status.head);
+  assert.equal(readTaskGit(state, result).deleted, true);
+  command(repository, "branch", state.worktree.branch, "retained");
+  assert.match(readTaskGit(state, result).deleteReason, /新的提交/);
+  await assert.rejects(deleteTaskWorktree(state, confirmation(state), result), /新的提交/);
+  assert.equal(command(repository, "rev-parse", state.worktree.branch), status.head,
+    "a task branch recreated after directory-only cleanup is retained");
+});
+
+test("a task branch used by another worktree and a detached checkout block directory cleanup", async (t) => {
+  const { directory, repository, state } = fixture(t);
+  command(state.worktree.path, "checkout", "--detach");
+  assert.match(readTaskGit(state).deleteReason, /分离 HEAD/);
+  command(state.worktree.path, "checkout", "-b", "retained");
+  const peer = path.join(directory, "other-task");
+  command(repository, "worktree", "add", peer, state.worktree.branch);
+  const status = readTaskGit(state);
   assert.equal(status.canDelete, false);
-  assert.match(status.deleteReason, /切换到其他分支/);
+  assert.match(status.deleteReason, /其他 Worktree/);
+  await assert.rejects(deleteTaskWorktree(state, confirmation(state, status)), /其他 Worktree/);
+  assert.equal(fs.existsSync(state.worktree.path), true);
+  assert.equal(fs.existsSync(peer), true);
+});
+
+test("switched cleanup retries against the original task tip rather than the retained branch tip", async (t) => {
+  const { repository, state } = fixture(t);
+  command(state.worktree.path, "checkout", "-b", "retained");
+  fs.writeFileSync(path.join(state.worktree.path, "retained.txt"), "keep this commit");
+  commit(state.worktree.path);
+  const status = readTaskGit(state);
+  assert.notEqual(status.head, status.taskBranchHead);
+  let progress;
+  await assert.rejects(deleteTaskWorktree(state, confirmation(state, status), {}, (value) => {
+    progress = value;
+    throw new Error("simulate interruption after directory removal");
+  }), error => Boolean(error.partial));
+  assert.equal(fs.existsSync(state.worktree.path), false);
+  let retry = readTaskGit(state, progress);
+  assert.equal(retry.canDelete, true, retry.deleteReason);
+  assert.equal(retry.taskBranchHead, status.taskBranchHead);
+  assert.equal(retry.retainedBranch, "retained");
+  command(repository, "branch", "-f", state.worktree.branch, "retained");
+  assert.match(readTaskGit(state, progress).deleteReason, /新的提交/);
+  command(repository, "branch", "-f", state.worktree.branch, status.taskBranchHead);
+  retry = readTaskGit(state, progress);
+  assert.equal((await deleteTaskWorktree(state, confirmation(state, retry), progress)).deleted, true);
+  assert.equal(command(repository, "rev-parse", "retained"), status.head);
 });
 
 test("a removed remote upstream allows cleanup only after confirming unknown push risk", async (t) => {

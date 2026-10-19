@@ -1,7 +1,7 @@
 const { selectOption, selectPreference } = require("../support/select.cjs");
 const { openSessionContext } = require("../support/browser-navigation.cjs");
 const { openProjectTab } = require("../support/browser-navigation.cjs");
-/* global document, window */
+/* global document, window, localStorage */
 // Visual fixtures only: intercepted APIs cannot run real tasks.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -228,8 +228,11 @@ async function main() {
         return send({
           path: "/srv/wt/customer-system/customer-search-a1b2c3d4e5f6",
           branch: "codex/a1b2c3d4e5f6",
+          currentBranch: scenario === "git-switched" ? "main" : "codex/a1b2c3d4e5f6",
+          retainedBranch: scenario === "git-switched" ? "main" : null,
+          taskBranchHead: (scenario === "git-switched" ? "b" : "a").repeat(40),
           head: "a".repeat(40),
-          upstream: scenario === "git-unpublished" ? null : "origin/codex/a1b2c3d4e5f6",
+          upstream: scenario === "git-unpublished" ? null : scenario === "git-switched" ? "origin/main" : "origin/codex/a1b2c3d4e5f6",
           unpublished: scenario === "git-unpublished",
           ahead: scenario === "git-unpublished" ? null : 2,
           behind: scenario === "git-unpublished" ? null : 1,
@@ -441,6 +444,7 @@ async function main() {
       await page.keyboard.press("Escape");
     }
     async function captureGitViews(suffix) {
+      await load("git-switched");
       await openSessionContext(page, 'Worktree Git');
       await page.getByRole("button", { name: "删除 Worktree…", exact: true }).waitFor();
       await page.locator(".session-git").scrollIntoViewIfNeeded();
@@ -448,6 +452,8 @@ async function main() {
       await page.getByRole("button", { name: "删除 Worktree…", exact: true }).click();
       const dialog = page.getByRole("dialog", { name: "删除 Worktree", exact: true });
       await dialog.getByRole("textbox", { name: "确认删除的本地分支", exact: true }).waitFor();
+      await dialog.getByText("保留本地分支", { exact: true }).waitFor();
+      await dialog.getByText("main", { exact: true }).waitFor();
       await dialog.getByRole("button", { name: "删除文件与本地分支", exact: true }).scrollIntoViewIfNeeded();
       await capture("09-delete-worktree-" + suffix);
       await page.keyboard.press("Escape");
@@ -827,6 +833,31 @@ async function main() {
       await page.keyboard.press('Escape');
       await page.locator('.app-select-popup:visible').waitFor({ state: 'hidden' });
       await captureSystemSettings(width);
+    }
+    for (const locale of ["zh-CN", "en"]) {
+      await page.evaluate(value => localStorage.setItem("web-coding.locale", value), locale);
+      for (const [width, height] of [[1920, 1080], [2560, 1440], [1440, 900], [1280, 720], [768, 1024], [390, 844], [320, 740]]) {
+        await page.setViewportSize({ width, height });
+        await load("git-switched");
+        await page.getByRole("button", { name: locale === "en" ? "Context" : "上下文", exact: true }).click();
+        const gitSection = page.getByRole("button", { name: "Worktree Git", exact: true });
+        if (await gitSection.getAttribute("aria-expanded") !== "true") await gitSection.click();
+        await page.getByRole("button", { name: locale === "en" ? "Delete worktree…" : "删除 Worktree…", exact: true }).click();
+        const dialog = page.getByRole("dialog", { name: locale === "en" ? "Delete worktree" : "删除 Worktree", exact: true });
+        await dialog.getByText(locale === "en" ? "Local branch to keep" : "保留本地分支", { exact: true }).waitFor();
+        await dialog.getByText("main", { exact: true }).waitFor();
+        if (locale === "en") assert.doesNotMatch(await dialog.innerText(), /[\u4e00-\u9fff]/u,
+          "all cleanup instructions are translated in English");
+        const prefix = `09-delete-switched-${locale}-${width}x${height}`;
+        await dialog.evaluate(element => { element.scrollTop = 0; });
+        await capture(prefix);
+        const submit = dialog.getByRole("button", { name: locale === "en" ? "Delete files and local branch" : "删除文件与本地分支", exact: true });
+        await submit.scrollIntoViewIfNeeded();
+        const bounds = await submit.boundingBox();
+        assert.ok(bounds.y >= 0 && bounds.y + bounds.height <= height, "cleanup confirmation stays reachable");
+        if (height <= 844) await capture(prefix + "-actions");
+        await page.keyboard.press("Escape");
+      }
     }
     assert.deepEqual(errors, []);
     assert.equal(client.calls.length, 0, "visual fixtures must not call Codex");

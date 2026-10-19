@@ -180,6 +180,8 @@ class SessionGit {
           path: state.worktree.path,
           branch: state.worktree.branch,
           head: snapshot.head,
+          taskBranchHead: snapshot.taskBranchHead,
+          retainedBranch: snapshot.retainedBranch,
           startedAt: new Date().toISOString(),
           error: null,
         };

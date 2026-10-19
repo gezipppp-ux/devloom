@@ -139,6 +139,33 @@ test("force deletion cleans a stale registration when the local directory is alr
   assert.equal(f.git("branch", "--list", f.branch), "");
 });
 
+test("force cleanup removes a missing switched worktree registration while preserving main", async (t) => {
+  const f = await fixture(t);
+  f.git("checkout", "--detach");
+  execFileSync("git", ["-C", f.tree, "checkout", "main"], { windowsHide: true, stdio: "ignore" });
+  const mainHead = f.git("rev-parse", "main");
+  fs.unlinkSync(path.join(f.tree, ".git"));
+  await assert.rejects(f.manager.deleteSession(f.key, f.input), /标记已缺失/);
+  assert.equal(fs.existsSync(f.tree), true, "unverified remaining files cannot be recursively removed");
+  assert.equal(path.dirname(path.resolve(f.tree)), path.resolve(f.root));
+  fs.rmSync(f.tree, { recursive: true, force: true });
+  await f.manager.deleteSession(f.key, f.input);
+  assert.equal(f.git("worktree", "list", "--porcelain").includes("branch refs/heads/main"), false);
+  assert.equal(f.git("branch", "--list", f.branch), "");
+  assert.equal(f.git("rev-parse", "main"), mainHead);
+});
+
+test("force cleanup refuses a previously absent task branch recreated after directory removal", async (t) => {
+  const f = await fixture(t);
+  execFileSync("git", ["-C", f.tree, "checkout", "-b", "retained"], { windowsHide: true, stdio: "ignore" });
+  f.git("branch", "-D", f.branch);
+  await assert.rejects(forceDeleteTaskWorktree(f.state, {}, (progress) => {
+    if (progress.worktreeRemoved) f.git("branch", f.branch, "retained");
+  }), /分支已有新的提交/);
+  assert.equal(fs.existsSync(f.tree), false);
+  assert.equal(f.git("rev-parse", f.branch), f.git("rev-parse", "retained"));
+});
+
 test("force deletion refuses running tasks, foreign owners, active Codex and Git locks", async (t) => {
   const f = await fixture(t);
   const runtime = f.manager.runtime(f.key, "original");
@@ -161,12 +188,12 @@ test("force deletion refuses running tasks, foreign owners, active Codex and Git
   assert.equal((await f.manager.store.hasRun(f.key)), true);
 });
 
-test("force cleanup refuses main/ancestor directories, switched branches and replacement links", async (t) => {
+test("force cleanup refuses main/ancestor directories, detached checkouts and replacement links", async (t) => {
   const f = await fixture(t);
   for (const location of [f.repository, f.root])
     await assert.rejects(forceDeleteTaskWorktree({ ...f.state, worktree: { ...f.state.worktree, path: location } }), /主目录|包含仓库/);
-  execFileSync("git", ["-C", f.tree, "checkout", "-b", "other"], { windowsHide: true, stdio: "ignore" });
-  await assert.rejects(f.manager.deleteSession(f.key, f.input), /不再属于任务分支/);
+  execFileSync("git", ["-C", f.tree, "checkout", "--detach"], { windowsHide: true, stdio: "ignore" });
+  await assert.rejects(f.manager.deleteSession(f.key, f.input), /分离 HEAD/);
   execFileSync("git", ["-C", f.tree, "checkout", f.branch], { windowsHide: true, stdio: "ignore" });
   f.git("worktree", "remove", "--force", f.tree);
   fs.symlinkSync(f.repository, f.tree, process.platform === "win32" ? "junction" : "dir");
@@ -174,6 +201,30 @@ test("force cleanup refuses main/ancestor directories, switched branches and rep
     await assert.rejects(f.manager.deleteSession(f.key, f.input), /符号链接/);
     assert.equal(fs.readFileSync(path.join(f.repository, "tracked.txt"), "utf8"), "original");
   } finally { fs.unlinkSync(f.tree); }
+});
+
+test("force cleanup after switching to main preserves main and removes the recorded task branch", async (t) => {
+  const f = await fixture(t);
+  f.git("checkout", "--detach");
+  execFileSync("git", ["-C", f.tree, "checkout", "main"], { windowsHide: true, stdio: "ignore" });
+  execFileSync("git", ["-C", f.tree, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+    "-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "-m", "retained main"], { windowsHide: true, stdio: "ignore" });
+  const mainHead = f.git("rev-parse", "main");
+  fs.writeFileSync(path.join(f.tree, "uncommitted.txt"), "explicitly discarded");
+  await f.manager.deleteSession(f.key, f.input);
+  assert.equal(fs.existsSync(f.tree), false);
+  assert.equal(f.git("branch", "--list", f.branch), "");
+  assert.equal(f.git("rev-parse", "main"), mainHead);
+});
+
+test("force cleanup rejects a current branch switch after saving deletion intent", async (t) => {
+  const f = await fixture(t);
+  await assert.rejects(forceDeleteTaskWorktree(f.state, {}, () => {
+    execFileSync("git", ["-C", f.tree, "checkout", "-b", "retained"], { windowsHide: true, stdio: "ignore" });
+  }), /当前分支.*发生变化/);
+  assert.equal(fs.existsSync(f.tree), true);
+  assert.ok(f.git("branch", "--list", f.branch));
+  assert.ok(f.git("branch", "--list", "retained"));
 });
 
 test("failed branch cleanup retains the session and can be retried", async (t) => {

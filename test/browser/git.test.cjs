@@ -124,8 +124,8 @@ async function verifyGit(browser, { origin, output, errors, directory, workspace
     await gitPanel.getByText("follow-up-branch", { exact: true }).waitFor();
     assert.equal(
       await page.getByRole("button", { name: "删除 Worktree…", exact: true }).isDisabled(),
-      true,
-      "switching branches keeps destructive cleanup bound to the recorded task branch",
+      false,
+      "a switched worktree can be cleaned while retaining its current branch",
     );
     git(tree, "checkout", branch);
     await refreshGit();
@@ -137,6 +137,13 @@ async function verifyGit(browser, { origin, output, errors, directory, workspace
     assert.equal(pushedStatus.ahead, 1, JSON.stringify(pushedStatus));
     await refreshGit();
     await gitPanel.getByText(/待推送\s*1/).waitFor();
+    const taskHead = git(tree, "rev-parse", "HEAD");
+    git(repository, "checkout", "--detach");
+    git(tree, "checkout", "main");
+    git(tree, "-c", "user.name=Browser Fixture", "-c", "user.email=browser@example.invalid",
+      "-c", "core.hooksPath=/dev/null", "merge", "--no-edit", branch);
+    git(tree, "push", "origin", "main");
+    const retainedMain = git(tree, "rev-parse", "HEAD");
     fs.appendFileSync(path.join(tree, "README.md"), "uncommitted content\n");
     fs.writeFileSync(path.join(tree, "untracked.txt"), "untracked content\n");
     fs.mkdirSync(path.join(tree, "cache"));
@@ -146,6 +153,8 @@ async function verifyGit(browser, { origin, output, errors, directory, workspace
     await capture("git-worktree-status-desktop");
     await page.getByRole("button", { name: "删除 Worktree…", exact: true }).click();
     await dialog.waitFor();
+    await dialog.getByText("保留本地分支", { exact: true }).waitFor();
+    await dialog.getByText("main", { exact: true }).waitFor();
     assert.equal(
       await dialog.getByText(`请准确输入：${branch}`, { exact: true }).count(),
       1,
@@ -172,7 +181,7 @@ async function verifyGit(browser, { origin, output, errors, directory, workspace
     await dialog.getByRole("button", { name: "取消", exact: true }).click();
     await dialog.waitFor({ state: "hidden" });
     assert.ok(fs.existsSync(tree), "cancel keeps files");
-    assert.equal(git(repository, "rev-parse", `refs/heads/${branch}`), git(tree, "rev-parse", "HEAD"));
+    assert.equal(git(repository, "rev-parse", `refs/heads/${branch}`), taskHead);
 
     for (const width of [390, 320]) {
       await page.setViewportSize({ width, height: 844 });
@@ -221,6 +230,8 @@ async function verifyGit(browser, { origin, output, errors, directory, workspace
     assert.equal(git(repository, "for-each-ref", "--format=%(refname)", `refs/heads/${branch}`), "",
       "delete removes the local task branch");
     assert.ok(git(repository, "ls-remote", "origin", `refs/heads/${branch}`), "remote branch remains intact");
+    assert.equal(git(repository, "rev-parse", "main"), retainedMain, "main and its merge commit are retained");
+    assert.equal(git(repository, "rev-parse", "origin/main"), retainedMain);
     const after = await (await page.request.get(`${api}/runs/${key}`)).json();
     assert.equal(after.sessionId, originalSession, "deletion preserves session identity");
     assert.ok(after.readOnlyReason, "deleted sessions remain readable");

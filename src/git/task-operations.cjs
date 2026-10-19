@@ -42,12 +42,18 @@ function inspectWorktree(state) {
 
 function verifyWorktree(state) {
   const tree = inspectWorktree(state);
-  if (tree.currentBranch !== tree.branch)
-    throw new Error("原 Worktree 已不再属于任务分支。");
-  if (tree.locked) throw new Error("Worktree 已被 Git 锁定，请先解除锁定。");
-  const reason = operationReason(tree.path);
+  const reason = deletionReason(tree);
   if (reason) throw new Error(reason);
   return tree;
+}
+
+function deletionReason(tree) {
+  if (!tree.currentBranch) return "当前 Worktree 处于分离 HEAD 状态，请先将需要的提交保存到分支后再删除。";
+  if (tree.locked) return "Worktree 已被 Git 锁定，请先解除锁定。";
+  if (registeredWorktrees(tree.repository).some((entry) =>
+    !sameWorktreePath(entry.path, tree.path) && entry.branch === `refs/heads/${tree.branch}`))
+    return "原任务分支已被其他 Worktree 使用，不能删除。";
+  return operationReason(tree.path);
 }
 
 function repositoryRoot(common) {
@@ -69,7 +75,7 @@ function statusEntries(output) {
 }
 
 function statusToken(tree, head, upstream, entries) {
-  const hash = createHash("sha256").update(JSON.stringify({ path: tree.path, branch: tree.branch, head, upstream, entries }));
+  const hash = createHash("sha256").update(JSON.stringify({ path: tree.path, branch: tree.branch, currentBranch: tree.currentBranch, head, upstream, entries }));
   hash.update(git(tree.path, ["diff", "--cached", "--raw", "--abbrev=64", "--no-renames", "--no-ext-diff", "HEAD", "--"]));
   const budget = { remaining: 10000, deadline: Date.now() + 250 };
   for (const { file } of entries) {
@@ -146,14 +152,16 @@ function currentBranch(tree) {
 
 function recoveryState(state, deletion) {
   const tree = taskIdentity(state);
+  const expectedBranchHead = Object.hasOwn(deletion, "taskBranchHead") ? deletion.taskBranchHead : deletion.head;
   if (!samePath(deletion.path || "", tree.path) || deletion.branch !== tree.branch ||
-      !/^[a-f\d]{40,64}$/i.test(deletion.head || ""))
+      !/^[a-f\d]{40,64}$/i.test(deletion.head || "") ||
+      (expectedBranchHead !== null && !/^[a-f\d]{40,64}$/i.test(expectedBranchHead || "")))
     throw new Error("删除记录与原任务不一致，不能继续删除。");
   if (pathExists(tree.path) || registeredWorktrees(tree.repository).some((entry) =>
     samePath(entry.path, tree.path) || entry.branch === `refs/heads/${tree.branch}`))
     throw new Error("原路径或分支已被重新使用，不能继续删除。");
   const head = branchHead(tree);
-  if (head && head !== deletion.head) throw new Error("任务分支已有新的提交，不能继续删除。");
+  if (head && head !== expectedBranchHead) throw new Error("任务分支已有新的提交，不能继续删除。");
   return {
     tree, head,
     token: createHash("sha256").update(JSON.stringify({ path: tree.path, branch: tree.branch, head, recovery: true })).digest("hex"),
@@ -164,6 +172,7 @@ function readTaskGit(state, deletion = {}) {
   const empty = {
     path: state.worktree?.path || null, branch: state.worktree?.branch || null,
     currentBranch: currentBranch(state.worktree),
+    taskBranchHead: null, retainedBranch: null,
     head: null, upstream: null, unpublished: null, ahead: null, behind: null,
     upstreamMissing: null, warning: null,
     changedFiles: null, untrackedFiles: null, ignoredFiles: null,
@@ -175,6 +184,7 @@ function readTaskGit(state, deletion = {}) {
       const recovery = recoveryState(state, deletion);
       return {
         ...empty, head: recovery.head || deletion.head, statusToken: recovery.token,
+        taskBranchHead: recovery.head, retainedBranch: deletion.retainedBranch || null,
         worktreeRemoved: true, branchDeleted: !recovery.head, deleted: !recovery.head,
         canDelete: Boolean(recovery.head),
         deleteReason: recovery.head ? null : "Worktree 和本地分支已删除。",
@@ -182,6 +192,8 @@ function readTaskGit(state, deletion = {}) {
     }
     const tree = inspectWorktree(state);
     const head = git(tree.path, ["rev-parse", "--verify", "HEAD"]);
+    const taskBranchHead = branchHead(tree);
+    const retainedBranch = tree.currentBranch !== tree.branch ? tree.currentBranch : null;
     const upstreamRef = tree.currentBranch
       ? git(tree.path, ["for-each-ref", "--format=%(upstream)", `refs/heads/${tree.currentBranch}`])
       : "";
@@ -210,22 +222,19 @@ function readTaskGit(state, deletion = {}) {
     const ignoredFiles = entries.filter(({ code }) => code === "!!").length;
     const status = {
       ...empty, path: tree.path, branch: tree.branch, currentBranch: tree.currentBranch, head, upstream,
+      taskBranchHead, retainedBranch,
       unpublished: !upstream, ahead, behind, changedFiles, untrackedFiles, ignoredFiles,
       upstreamMissing,
       warning: upstreamMissing ? "远端上游已不存在，无法计算待推送数量。" : null,
       clean: changedFiles + untrackedFiles === 0,
     };
-    const deleteReason = tree.currentBranch !== tree.branch
-      ? "当前 Worktree 已切换到其他分支；请恢复记录的任务分支后再删除。"
-      : tree.locked
-        ? "Worktree 已被 Git 锁定，请先解除锁定。"
-        : operationReason(tree.path);
+    const deleteReason = deletionReason(tree);
     if (deleteReason) {
       status.deleteReason = deleteReason;
       return status;
     }
     try {
-      status.statusToken = statusToken(tree, head, { ref: upstreamRef, ahead, behind }, entries);
+      status.statusToken = statusToken(tree, head, { ref: upstreamRef, ahead, behind, taskBranchHead }, entries);
       status.canDelete = true;
     } catch (error) {
       // Deletion requires a complete fingerprint; an incomplete fingerprint
@@ -242,6 +251,7 @@ function readTaskGit(state, deletion = {}) {
 
 async function removeBranch(tree, head, allowForce) {
   if (branchHead(tree) !== head) throw new Error("任务分支已有新的提交，请检查后重试。");
+  if (!head) return;
   try {
     await gitAsync(tree.repository, ["branch", "-d", "--", tree.branch]);
   } catch {
@@ -259,12 +269,17 @@ async function deleteTaskWorktree(state, input = {}, deletion = {}, onProgress =
   if (input.confirmBranch !== snapshot.branch) throw new Error("请输入完整的任务分支名称以确认删除。");
   if (input.expectedHead !== snapshot.head || input.statusToken !== snapshot.statusToken)
     throw new Error("Worktree 状态已变化，请刷新并重新确认删除。");
-  const risk = snapshot.worktreeRemoved || snapshot.unpublished || snapshot.ahead === null || snapshot.ahead > 0 ||
+  const branchRisk = snapshot.retainedBranch
+    ? Boolean(snapshot.taskBranchHead)
+    : snapshot.unpublished || snapshot.ahead === null || snapshot.ahead > 0;
+  const risk = snapshot.worktreeRemoved || branchRisk ||
     snapshot.changedFiles > 0 || snapshot.untrackedFiles > 0 || snapshot.ignoredFiles > 0;
   if (risk && input.discardChanges !== true)
     throw new Error("请确认丢弃未提交、未推送的内容及目录内所有文件后再删除。");
   const tree = snapshot.worktreeRemoved ? recoveryState(state, deletion).tree : verifyWorktree(state);
-  const progress = { path: tree.path, branch: tree.branch, head: snapshot.head, worktreeRemoved: true, branchDeleted: false };
+  const progress = { path: tree.path, branch: tree.branch, head: snapshot.head,
+    taskBranchHead: snapshot.taskBranchHead, retainedBranch: snapshot.retainedBranch,
+    worktreeRemoved: true, branchDeleted: false };
   if (!snapshot.worktreeRemoved) {
     try {
       await gitAsync(tree.repository, ["worktree", "remove", ...(risk ? ["--force"] : []), "--", tree.path]);
@@ -280,7 +295,7 @@ async function deleteTaskWorktree(state, input = {}, deletion = {}, onProgress =
   }
   try {
     await onProgress(progress);
-    await removeBranch(tree, snapshot.head, input.discardChanges === true);
+    await removeBranch(tree, snapshot.taskBranchHead, input.discardChanges === true);
     const completed = { ...progress, branchDeleted: true, deleted: true };
     await onProgress(completed);
     return completed;
@@ -325,25 +340,37 @@ function forceDeletionTarget(state, deletion) {
     throw new Error("原任务路径已被重新使用，不能强制删除。");
   if (exists && !fs.lstatSync(tree.path).isDirectory())
     throw new Error("任务目录已被其他文件替换，不能强制删除。");
-  if (entry && (entry.locked || entry.branch !== `refs/heads/${tree.branch}`))
-    throw new Error("Worktree 已锁定或不再属于任务分支，不能强制删除。");
+  if (entry && (entry.locked || !entry.branch))
+    throw new Error("Worktree 已锁定或处于分离 HEAD 状态，不能强制删除。");
+  const checkoutBranch = entry?.branch || null;
+  if (entry && Object.hasOwn(deletion, "checkoutBranch") && checkoutBranch !== deletion.checkoutBranch)
+    throw new Error("当前分支在清理期间发生变化，请重新确认删除。");
+  let checkoutHead = null;
   if (exists && pathExists(path.join(tree.path, ".git"))) {
     if (!entry) throw new Error("原路径包含未登记的 Git 仓库，不能强制删除。");
     verifyWorktree(state);
+    checkoutHead = git(tree.path, ["rev-parse", "--verify", "HEAD"]);
+    if (Object.hasOwn(deletion, "checkoutHead") && checkoutHead !== deletion.checkoutHead)
+      throw new Error("当前分支在清理期间发生变化，请重新确认删除。");
+  } else if (exists && entry && entry.branch !== `refs/heads/${tree.branch}`) {
+    throw new Error("切换分支后的 Worktree 标记已缺失，无法验证任务目录。");
   }
   const head = branchHead(tree);
   if (Object.hasOwn(deletion, "expectedHead") && head && head !== deletion.expectedHead)
     throw new Error("任务分支在清理期间发生变化，请重新确认删除。");
-  if ((deletion.worktreeRemoved || deletion.status === "deleted") && head && head !== deletion.head)
+  if ((deletion.worktreeRemoved || deletion.status === "deleted") && head &&
+      head !== (Object.hasOwn(deletion, "taskBranchHead") ? deletion.taskBranchHead : deletion.head))
     throw new Error("任务分支已有新的提交，不能继续删除。");
-  return { tree, head, registered: Boolean(entry), exists, directoryIdentity };
+  return { tree, head, checkoutBranch, checkoutHead, registered: Boolean(entry), exists, directoryIdentity };
 }
 
 async function forceDeleteTaskWorktree(state, deletion = {}, onProgress = () => {}) {
   let target = forceDeletionTarget(state, deletion);
-  const guard = { ...deletion, directoryIdentity: target.directoryIdentity, expectedHead: target.head };
+  const guard = { ...deletion, directoryIdentity: target.directoryIdentity, expectedHead: target.head,
+    checkoutBranch: target.checkoutBranch, checkoutHead: target.checkoutHead };
   const progress = {
     path: target.tree.path, branch: target.tree.branch, head: target.head || deletion.head,
+    taskBranchHead: target.head,
     directoryIdentity: target.directoryIdentity,
     worktreeRemoved: Boolean(deletion.worktreeRemoved), branchDeleted: Boolean(deletion.branchDeleted),
   };
@@ -370,7 +397,7 @@ async function forceDeleteTaskWorktree(state, deletion = {}, onProgress = () => 
     if (target.exists || target.registered) throw new Error("任务目录或 Worktree 登记尚未清理完成。");
     progress.worktreeRemoved = true;
     await onProgress(progress);
-    if (target.head) await removeBranch(target.tree, target.head, true);
+    await removeBranch(target.tree, target.head, true);
     progress.branchDeleted = true;
     await onProgress(progress);
     return { ...progress, deleted: true };

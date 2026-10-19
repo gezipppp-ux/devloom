@@ -23,9 +23,9 @@ const hasRisk = computed(() =>
     (snapshot.value.changedFiles > 0 ||
       snapshot.value.untrackedFiles > 0 ||
       snapshot.value.ignoredFiles > 0 ||
-      snapshot.value.unpublished ||
-      snapshot.value.ahead > 0 ||
-      !Number.isInteger(snapshot.value.ahead)),
+      (snapshot.value.retainedBranch
+        ? Boolean(snapshot.value.taskBranchHead)
+        : snapshot.value.unpublished || snapshot.value.ahead > 0 || !Number.isInteger(snapshot.value.ahead))),
   ),
 );
 const canDelete = computed(() =>
@@ -121,8 +121,7 @@ defineExpose({ open });
         </button>
       </div>
       <p class="muted">
-        永久删除此任务的 Worktree
-        目录及其中所有文件，并删除对应的本地分支。会话历史保留为只读，远程分支保留。
+        {{ $t("永久删除此任务的 Worktree 目录及其中所有文件，并删除原任务本地分支。会话历史保留为只读，远程分支保留。") }}
       </p>
       <p v-if="loading" class="muted" role="status">
         {{ $t("正在检查文件、提交和分支状态…") }}
@@ -146,11 +145,14 @@ defineExpose({ open });
           <dd>
             <code>{{ snapshot.branch }}</code>
           </dd>
+          <template v-if="snapshot.retainedBranch">
+            <dt>{{ $t("保留本地分支") }}</dt>
+            <dd><code>{{ snapshot.retainedBranch }}</code></dd>
+          </template>
         </dl>
         <div class="git-feedback warning">
           <p>
-            此操作包含未跟踪文件、被 Git 忽略的文件（如
-            .env、依赖和构建产物），不能通过工作台撤销。
+            {{ $t("此操作包含未跟踪文件、被 Git 忽略的文件（如 .env、依赖和构建产物），不能通过工作台撤销。") }}
           </p>
           <p>
             {{ $t("已跟踪文件的修改：") }}{{
@@ -159,7 +161,12 @@ defineExpose({ open });
               snapshot.untrackedFiles ?? $t("未知")
             }}{{ $t("；忽略条目：") }}{{ snapshot.ignoredFiles ?? $t("未知") }}。
           </p>
-          <p v-if="snapshot.unpublished">
+          <p v-if="snapshot.retainedBranch">
+            {{ snapshot.taskBranchHead
+              ? $t("切换分支后仍将删除原任务分支，请确认其需要的提交已保留。当前分支及其提交会保留，目录内未提交的文件修改会被删除。")
+              : $t("原任务分支已不存在，本次仅删除工作目录。当前分支及其提交会保留。") }}
+          </p>
+          <p v-else-if="snapshot.unpublished">
             {{ $t("此分支尚未发布，删除本地分支可能丢失尚未保存在远端的提交。") }}
           </p>
           <p v-else>
