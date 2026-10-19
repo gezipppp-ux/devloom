@@ -14,6 +14,7 @@ const { testGitConnection } = require("../git/account-credentials.cjs");
 const { executionOptions } = require("../domain/agent-config.cjs");
 const { presentDepartment, presentProject, presentMember, presentSpace, presentProjectPrompts } = require("./project-presenter.cjs");
 const { presentError } = require("./error-presenter.cjs");
+const { normalizeSpaceProgress } = require("../domain/development-space-progress.cjs");
 
 class ProjectServices {
   constructor(database, { workspaces, clone = cloneProject, checkConnection = testGitConnection, onRevoke = () => {} } = {}) {
@@ -233,7 +234,9 @@ class ProjectServices {
       if (space.status === "preparing") throw accountError("开发空间正在准备，请稍候。", 409);
       const latest = await this.gitAccounts.read(account.id, actor.id);
       if (latest.revision !== account.revision || current.project.revision !== context.project.revision) throw accountError("项目或凭据已变更，请重试。", 409);
-      return { space: await this.store.updateSpace(space.id, space.revision, { status: "preparing", gitAccountId: account.id, requestId: value.requestId, error: null, workerPid: process.pid }), start: true };
+      const now = new Date().toISOString();
+      return { space: await this.store.updateSpace(space.id, space.revision, { status: "preparing", gitAccountId: account.id, requestId: value.requestId, error: null, workerPid: process.pid,
+        progress: { stage: "validating", percent: null, startedAt: now, updatedAt: now } }), start: true };
     });
     if (accepted.start) {
       const operation = { controller: new AbortController(), projectId: id, userId: actor.id };
@@ -246,6 +249,16 @@ class ProjectServices {
   }
   async prepareOperation(space, context, account, remote, signal) {
     const actor = { id: space.userId };
+    let lastProgress = "validating:null";
+    const onProgress = async value => {
+      if (signal.aborted || this.closed) throw accountError("开发空间准备已停止。", 409);
+      const progress = normalizeSpaceProgress({ ...value, startedAt: space.progress.startedAt, updatedAt: new Date().toISOString() });
+      if (!progress) return;
+      const key = `${progress.stage}:${progress.percent}`;
+      if (key === lastProgress) return;
+      await this.store.updateSpaceProgress(space, progress);
+      lastProgress = key;
+    };
     const authorize = async () => {
       if (signal.aborted || this.closed) throw accountError("开发空间准备已停止。", 409);
       const current = await this.authorize(space.projectId, actor, "code.operate");
@@ -263,7 +276,7 @@ class ProjectServices {
       // short path while failed checkouts remain available for inspection.
       const target = path.join(memberStorageRoot, "projects", validateDirectoryName(context.project.directoryName),
         "members", memberDirectoryName(context.user.username), `repository-${space.revision}`);
-      await this.clone({ account, remote, target, memberStorageRoot, signal, preserveOnFailure: true,
+      await this.clone({ account, remote, target, memberStorageRoot, signal, preserveOnFailure: true, onProgress,
         publish: () => this.store.transaction(async () => {
           const latest = await authorize();
           const saved = await this.store.space(space.projectId, space.userId);

@@ -116,8 +116,8 @@ async function main() {
     assert.deepEqual((await selectOptions(gitAccounts)).map(option => option.label), [
       '选择 Git 账号', '演示 Gitee SSH · gitee.com · SSH 密钥', '演示 Gitee HTTPS · https://gitee.com · HTTP/HTTPS 凭据',
     ]);
-    await page.getByText('Gitee（gitee.com）默认端口的 HTTPS 与 SSH 仓库地址会按所选账号的认证方式匹配。其他 Git 服务需与项目地址的主机和认证方式一致。', { exact: true }).waitFor();
-    const prepare = page.getByRole('button', { name: '验证访问并准备空间', exact: true });
+    await page.getByText('使用此账号验证仓库访问并下载项目代码。', { exact: true }).waitFor();
+    const prepare = page.getByRole('button', { name: '创建工作空间', exact: true });
     assert.equal(await prepare.isDisabled(), true);
     await selectOption(gitAccounts, 'fixture-ssh');
     assert.equal(await prepare.isEnabled(), true);
@@ -217,6 +217,7 @@ async function main() {
     await verifyWorkflowCanvas({ page, origin, output });
     await verifyDevelopmentTaskDetail({ browser, output });
     await require("./development-archive.test.cjs").verifyDevelopmentArchive({ page, origin, projectId: fixture.projectId, output });
+    await require("./project-space-progress.test.cjs").verifyProjectSpaceProgress({ browser, output });
     assert.deepEqual(errors,[]);
     process.stdout.write('Development flow regression passed.\n');
   } finally {await browser.close();}

@@ -14,6 +14,14 @@ Project configuration includes initCommands and manual prompt templates. Updates
 
 WorkspaceManager owns lazy contexts, channels, RunStore and SessionManager; it does not own project permissions or catalogue data. ProjectServices authorizes the current user and development-space binding before context access. Each context retains independent execution and subscription state. Account credential revisions are read before new transport use; idle connection replacement waits for all preparation, approvals, turns and commands, preserving sessions and never replaying uncertain work.
 
+## Personal preparation progress
+
+`DevelopmentSpace.progress` persists a sanitized snapshot: `stage`, nullable stage-local `percent`, `startedAt`, and `updatedAt`. Accepted requests begin at `validating`; the Git progress callback supplies connection, counting, compression, receiving, resolving, checkout and publishing milestones. No overall percentage, ETA, stderr or credential data is inferred. The existing owner-scoped space and project presenters expose these snapshots.
+
+Progress updates match the space, project, user, request ID, preparation revision and `preparing` status. They do not increment the revision used in the repository directory. Late updates cannot overwrite a completed or retried attempt. Failure retains the last snapshot; a new explicit request resets it. Existing spaces without progress remain valid.
+
+The A inline panel replaces the form immediately on submission and polls `/projects/:id/space` every two seconds while preparing or reconciling an unknown response. It shows actual stage progress, elapsed time and last progress time; thirty seconds without a new milestone explains the wait without declaring failure. Requests time out after fifteen seconds and are aborted on disposal. A lost POST response preserves its UUID and input. Automatic recovery uses GET only; explicit confirmation may replay the identical request. Ready/failed status stops polling. Permission loss clears progress. Preparation never starts an Agent turn.
+
 ## Development branch selection
 
 Projects and issues do not store default or suggested development branches. Planning and assignment require no Git credentials or prepared space. A planned task starts only through its explicit start endpoint: the executor selects a branch from GET /api/projects/:id/branches, fetched live with their own credentials. ProjectDevelopmentServices freezes that selection in the accepted task snapshot; missing branches never fall back to HEAD or local cached refs. See [the lifecycle PRD](../prd/project-lifecycle.md).

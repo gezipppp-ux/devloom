@@ -96,7 +96,7 @@ test("fresh baseline matches Prisma, preserves database constraints and publishe
   await fixture.deploy();
   await fixture.deploy();
   const database = await fixture.open();
-  assert.deepEqual(readPostgresMigrations().map(row => row.name), ["20261012200000_baseline", "20261013070000_mcp_access", "20261013110000_agent_suppliers", "20261013150000_initialization_guide", "20261013180000_project_directory_names", "20261013210000_neutral_workbench", "20261014120000_project_overview", "20261014150000_administrator_permissions", "20261014160000_remove_setup_credentials", "20261014170000_project_deliveries", "20261014200000_workflow_responsibilities", "20261015120000_workflow_handoffs", "20261015150000_mcp_upload_tokens", "20261019120000_issue_deletion"]);
+  assert.deepEqual(readPostgresMigrations().map(row => row.name), ["20261012200000_baseline", "20261013070000_mcp_access", "20261013110000_agent_suppliers", "20261013150000_initialization_guide", "20261013180000_project_directory_names", "20261013210000_neutral_workbench", "20261014120000_project_overview", "20261014150000_administrator_permissions", "20261014160000_remove_setup_credentials", "20261014170000_project_deliveries", "20261014200000_workflow_responsibilities", "20261015120000_workflow_handoffs", "20261015150000_mcp_upload_tokens", "20261019120000_issue_deletion", "20261019150000_space_preparation_progress"]);
   const workflows = await database.client.systemWorkflow.findMany({ include: { versions: true }, orderBy: { type: "asc" } });
   assert.deepEqual(workflows.map(row => row.type), ["bug", "requirement"]);
   for (const row of workflows) {

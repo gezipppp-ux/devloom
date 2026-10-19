@@ -62,18 +62,18 @@ export async function uploadManualImage(file) {
   if (!response.ok) throw responseError(response, result);
   return result;
 }
-export async function appApi(url, data) {
-  return request(`/api${url}`, data);
+export async function appApi(url, data, options) {
+  return request(`/api${url}`, data, options);
 }
 export async function api(url, data) {
   return request(apiPath(url), data);
 }
-async function request(url, data) {
+async function request(url, data, { signal } = {}) {
   const expected = generation;
   const response = await fetch(
     url,
     data === undefined
-      ? {}
+      ? { signal }
       : {
           method: "POST",
           headers: {
@@ -81,6 +81,7 @@ async function request(url, data) {
             "x-csrf-token": token,
           },
           body: JSON.stringify(data),
+          signal,
         },
   );
   let result;

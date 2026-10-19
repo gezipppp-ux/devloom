@@ -1,5 +1,6 @@
 const { getPromptTemplates, storedPromptOverrides, promptTemplateCatalog, MAX_PROMPT_TEMPLATE_LENGTH } = require("../domain/prompt-templates.cjs");
 const { projectContextPermissions, grantableProjectPermissions } = require("../domain/project-permissions.cjs");
+const { normalizeSpaceProgress } = require("../domain/development-space-progress.cjs");
 function dates(row) { return { createdAt: row.createdAt?.toISOString(), updatedAt: row.updatedAt?.toISOString() }; }
 function presentDepartment(row) { return { id: row.id, name: row.name, status: row.status, permissions: row.permissions, revision: row.revision, ...dates(row) }; }
 function presentProject(row, permissions = []) {
@@ -16,7 +17,7 @@ function presentMember(row) { if (!row) return null; return { projectId: row.pro
   ...(row.user ? { username: row.user.username, displayName: row.user.displayName, departmentId: row.user.departmentId, departmentName: row.user.department?.name || "", userStatus: row.user.status, departmentPermissions: row.user.department?.status === "active" ? row.user.department.permissions : [],
     administratorAccess: row.user.status === "active" && row.user.role === "admin", grantablePermissions: grantableProjectPermissions(row.user),
     effectivePermissions: projectContextPermissions({ user: row.user, department: row.user.department, membership: row, project: { id: row.projectId } }) } : {}) }; }
-function presentSpace(row) { return row ? { id: row.id, projectId: row.projectId, userId: row.userId, workspaceId: row.workspaceId, gitAccountId: row.gitAccountId, status: row.status, error: row.error, revision: row.revision, requestId: row.requestId, ...dates(row) } : null; }
+function presentSpace(row) { return row ? { id: row.id, projectId: row.projectId, userId: row.userId, workspaceId: row.workspaceId, gitAccountId: row.gitAccountId, status: row.status, error: row.error, revision: row.revision, requestId: row.requestId, progress: normalizeSpaceProgress(row.progress), ...dates(row) } : null; }
 function presentProjectPrompts(project, membership, permissions) {
   const projectTemplates = getPromptTemplates({ prompt_templates: project.settings.prompts || {} });
   const overrides = storedPromptOverrides(membership?.prompts);

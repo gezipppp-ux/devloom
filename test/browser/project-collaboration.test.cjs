@@ -361,7 +361,7 @@ async function main() {
     await page.getByRole("button", { name: "去准备开发环境", exact: true }).click();
     assert.equal(new URL(page.url()).searchParams.get("returnTask"), planned.id);
     await selectOption(page.getByRole("combobox", { name: /^个人 Git 账号/ }), git.id);
-    await page.getByRole("button", { name: "验证访问并准备空间", exact: true }).click();
+    await page.getByRole("button", { name: "创建工作空间", exact: true }).click();
     const deadline = Date.now() + 20000;
     while ((await database.client.developmentSpace.findFirst({ where: { projectId: project.id, userId: admin.id } })).status !== "ready" && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
     await page.getByRole("button", { name: "刷新项目", exact: true }).click();
@@ -469,8 +469,8 @@ async function main() {
     assert.equal(await page.locator(".project-tab-bar").getByRole("button", { name: "需求", exact: true }).count(), 0);
     await tab("代码与环境");
     await selectOption(page.getByRole("combobox", { name: /^个人 Git 账号/ }), codeGit.id);
-    await page.getByRole("button", { name: "验证访问并准备空间", exact: true }).click();
-    await page.getByText("已提交空间准备请求。空间可用后，请返回开发任务开始开发。", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "创建工作空间", exact: true }).click();
+    await page.getByRole("heading", { name: "工作空间准备好了", exact: true }).waitFor();
     const codeDeadline = Date.now() + 20000;
     while ((await database.client.developmentSpace.findFirst({ where: { projectId: project.id, userId: codeOnly.id } })).status !== "ready" && Date.now() < codeDeadline) await new Promise(resolve => setTimeout(resolve, 50));
     await page.getByRole("button", { name: "刷新项目", exact: true }).click();

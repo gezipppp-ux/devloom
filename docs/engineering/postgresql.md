@@ -34,6 +34,8 @@
 
 ## 事务与生命周期
 
+`20261019150000_space_preparation_progress` 为 `development_spaces` 增加可空 JSONB `preparation_progress`，保存当前准备阶段、阶段百分比和时间。兼容已有空间，不回填、不移动仓库、不改变准备修订号。启用此功能前执行 `npm run db:deploy`。
+
 `20261019120000_issue_deletion` 为事项增加可空 `deleted_at`，兼容当前基线已有数据，默认全部未删除，不回填或清理业务记录。部署此功能前执行 `npm run db:deploy`；迁移仅改变结构。删除与关联门禁在应用短事务内完成，详见[删除无效事项](workflow-actions.md#删除无效事项)。
 
 通过 `PostgresDatabase.transaction()` 运行短事务，默认 Serializable，等待和执行各最多 5 秒。回调只包含数据库操作，不等待网络、Git 或 Codex。冲突由上层按业务幂等性处理，不自动重放任意回调。

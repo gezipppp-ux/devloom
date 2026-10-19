@@ -459,6 +459,7 @@ model DevelopmentSpace {
   status      String   @default("awaiting_credentials")
   requestId   String?  @map("request_id")
   workerPid   Int?     @map("worker_pid")
+  progress    Json?    @map("preparation_progress")
   error       String?
   revision    Int      @default(1)
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)

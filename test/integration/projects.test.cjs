@@ -36,6 +36,74 @@ async function fixture(t, options = {}) {
   return { projects, accounts, admin, member, analyst, database, department, product, project, calls };
 }
 
+test("personal space progress persists without changing preparation identity and rejects stale writers", async t => {
+  let reach, release, report, cloneCount = 0;
+  const reached = new Promise(resolve => { reach = resolve; });
+  const gate = new Promise(resolve => { release = resolve; });
+  const f = await fixture(t, { clone: async input => {
+    cloneCount++; report = input.onProgress;
+    await report({ stage: "receiving", percent: 64, raw: "private remote output" });
+    reach(); await gate; return input.publish();
+  } });
+  t.after(() => release());
+  await f.projects.saveMember(f.project.id, f.admin, { userId: f.member.id, permissions: developerTemplate });
+  const account = await new GitAccountServices(f.database).save(f.member, { name: "git", authType: "http", host: "https://git.example", username: "login", password: "fixture-only" });
+  const input = { gitAccountId: account.id, requestId: randomUUID() };
+  const accepted = await f.projects.prepare(f.project.id, f.member, input);
+  const pending = f.projects.active.get(accepted.space.id).promise;
+  assert.equal(accepted.space.progress.stage, "validating");
+  assert.equal(accepted.space.progress.percent, null);
+  await reached;
+  const reopened = new ProjectServices(f.database);
+  t.after(() => reopened.close());
+  const snapshot = (await reopened.space(f.project.id, f.member)).space;
+  assert.equal(snapshot.progress.stage, "receiving");
+  assert.equal(snapshot.progress.percent, 64);
+  assert.equal(snapshot.progress.startedAt, accepted.space.progress.startedAt);
+  assert.ok(snapshot.progress.updatedAt >= snapshot.progress.startedAt);
+  assert.equal(snapshot.revision, accepted.space.revision, "Git progress never changes the directory revision");
+  assert.ok(!JSON.stringify(snapshot).includes("private remote output"));
+  assert.equal((await reopened.space(f.project.id, f.admin)).space?.progress ?? null, null, "administrators only see their own progress");
+  await f.projects.prepare(f.project.id, f.member, input);
+  assert.equal(cloneCount, 1, "same request cannot reclone while polling");
+  await assert.rejects(f.projects.store.updateSpaceProgress({ ...snapshot, requestId: randomUUID() }, snapshot.progress), /已失效/);
+  await report({ stage: "checkout", percent: 18 });
+  const checkout = (await reopened.space(f.project.id, f.member)).space;
+  assert.equal(checkout.progress.percent, 18, "percentage is scoped to the new stage");
+  assert.equal(checkout.revision, snapshot.revision);
+  release(); await pending;
+  const ready = (await reopened.space(f.project.id, f.member)).space;
+  assert.equal(ready.status, "ready");
+  const config = await f.projects.store.readWorkspace(ready.workspaceId, f.member.id);
+  assert.ok(config.execution.repository.endsWith(`repository-${accepted.space.revision}`));
+  await assert.rejects(f.projects.store.updateSpaceProgress(snapshot, snapshot.progress), /已失效/);
+  assert.equal((await reopened.space(f.project.id, f.member)).space.status, "ready");
+});
+
+test("failed preparations retain their progress and only a new explicit request resets it", async t => {
+  let count = 0;
+  const f = await fixture(t, { clone: async input => {
+    count++;
+    await input.onProgress({ stage: "receiving", percent: 23 });
+    throw new Error("模拟仓库连接失败");
+  } });
+  const account = await new GitAccountServices(f.database).save(f.admin, { name: "git", authType: "http", host: "https://git.example", username: "login", password: "fixture-only" });
+  const input = { gitAccountId: account.id, requestId: randomUUID() };
+  const first = await f.projects.prepare(f.project.id, f.admin, input);
+  await f.projects.active.get(first.space.id).promise;
+  const failed = (await f.projects.space(f.project.id, f.admin)).space;
+  assert.equal(failed.status, "failed"); assert.equal(failed.progress.percent, 23);
+  assert.equal((await f.projects.prepare(f.project.id, f.admin, input)).space.status, "failed");
+  assert.equal(count, 1);
+  const retry = await f.projects.prepare(f.project.id, f.admin, { ...input, requestId: randomUUID() });
+  assert.equal(retry.space.id, first.space.id);
+  assert.equal(retry.space.progress.stage, "validating");
+  assert.equal(retry.space.progress.percent, null);
+  assert.ok(retry.space.revision > failed.revision);
+  await f.projects.active.get(retry.space.id).promise;
+  assert.equal(count, 2);
+});
+
 test("repository directories reserve names case-insensitively and retain suffixes across updates and reopening", async t => {
   const f = await fixture(t);
   assert.equal(f.project.directoryName, "repo");

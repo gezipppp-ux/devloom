@@ -88,6 +88,14 @@ class ProjectStore {
       throw accountError("开发空间状态已变更，请刷新后重试。", 409, "REVISION_CONFLICT");
     return this.database.client.developmentSpace.findUnique({ where: { id } });
   }
+  async updateSpaceProgress(space, progress) {
+    // Progress must not advance the preparation revision used in directory names.
+    const result = await this.database.client.developmentSpace.updateMany({
+      where: { id: space.id, projectId: space.projectId, userId: space.userId, requestId: space.requestId, revision: space.revision, status: "preparing" },
+      data: { progress },
+    });
+    if (!result.count) throw accountError("空间准备请求已失效。", 409);
+  }
   async projectSpaces(projectId) { return this.database.client.developmentSpace.findMany({ where: { projectId } }); }
   async audit(actor, event, details) { return this.database.client.auditEvent.create({ data: { actorUserId: actor.id, event, details } }); }
   async recoverSpaces() {

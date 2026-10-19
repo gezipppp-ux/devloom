@@ -111,7 +111,7 @@ function returnToIssue() {
       <ProjectMembers v-else-if="currentTab === 'members'" ref="actionPanel" :project-id="projectId" :can-manage="can('project.members.manage') && !archived" header-action @saved="reload" />
       <ProjectPromptSettings v-else-if="currentTab === 'prompts'" :key="projectId" :project-id="projectId" @saved="reload" />
       <ProjectSettings v-else-if="currentTab === 'settings'" :project="data.project" :can-configure="can('project.configure') && !archived" :can-archive="can('project.archive')" :can-manage-members="can('project.members.manage') && !archived" @members="emit('tab', 'members')" @saved="reload" />
-      <ProjectDevelopment v-else-if="currentTab === 'development'" :project-id="projectId" :remote-url="data.project.remoteUrl" :space="data.space" :can-view-session="can('session.view')" :can-start="can('code.operate') && !archived" @refresh="reload" @return-to-issue="returnToIssue" @open-workspace="(id, key, options) => emit('open-workspace', id, key, options)" />
+      <ProjectDevelopment v-else-if="currentTab === 'development'" :project-id="projectId" :remote-url="data.project.remoteUrl" :space="data.space" :can-view-session="can('session.view')" :can-start="can('code.operate') && !archived" @refresh="reload" @browse="router.push({ query: { ...route.query, tab: 'overview' } })" @return-to-issue="returnToIssue" @open-workspace="(id, key, options) => emit('open-workspace', id, key, options)" />
     </template>
   </section>
 </template>

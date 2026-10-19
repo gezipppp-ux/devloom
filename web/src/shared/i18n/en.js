@@ -8,8 +8,10 @@ import {enWorkbench} from "./en-workbench.js";
 import {enNavigation} from "./en-navigation.js";
 import {enMcp} from "./en-mcp.js";
 import { enDeliveryWorkflow } from "./en-delivery-workflow.js";
+import { enProjectSpace } from "./en-project-space.js";
 
 export const en = {
+  ...enProjectSpace,
   ...enDeliveryWorkflow,
   ...enMcp,
   ...enNavigation,
