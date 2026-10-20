@@ -11,6 +11,16 @@ import { enDeliveryWorkflow } from "./en-delivery-workflow.js";
 import { enProjectSpace } from "./en-project-space.js";
 
 export const en = {
+  "{count} 项活动": "{count} activities",
+  "正在思考": "Thinking",
+  "正在执行命令": "Running a command",
+  "正在修改文件": "Editing files",
+  "正在调用工具": "Calling a tool",
+  "正在检索网页": "Searching the web",
+  "正在整理上下文": "Compacting context",
+  "正在初始化工作区": "Initializing the worktree",
+  "过程记录": "Activity",
+  "执行失败，展开查看详情。": "Execution failed. Expand for details.",
   ...enProjectSpace,
   ...enDeliveryWorkflow,
   ...enMcp,

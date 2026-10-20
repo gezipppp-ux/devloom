@@ -1,9 +1,12 @@
 <script setup>
 import { computed } from "vue";
-import { UserOutlined, RobotOutlined } from "@antdv-next/icons";
+import { UserOutlined, RobotOutlined, CodeOutlined, FileTextOutlined, BulbOutlined, RightOutlined, ExclamationCircleOutlined } from "@antdv-next/icons";
 import { renderMessage } from "./message-content.js";
-const props = defineProps({ item: { type: Object, required: true }, agentLabel: { type: String, default: "Agent" } });
-const emit = defineEmits(["open-file"]);
+import { activityFailed, activityLabels, activityPreview } from "./session-activity.js";
+const props = defineProps({ item: { type: Object, required: true }, agentLabel: { type: String, default: "Agent" }, compact: Boolean, toolOpen: Boolean });
+const emit = defineEmits(["open-file", "tool-toggle"]);
+const failed = computed(() => activityFailed(props.item));
+const preview = computed(() => activityPreview(props.item));
 function openFile(event) {
   const target = event.target.closest("button[data-file-path]");
   if (!target || !event.currentTarget.contains(target)) return;
@@ -23,16 +26,6 @@ const images = computed(() =>
       )
     : [],
 );
-const labels = {
-  worktreeInitialization: "工作区初始化",
-  commandExecution: "命令执行",
-  fileChange: "文件修改",
-  mcpToolCall: "工具调用",
-  webSearch: "网页检索",
-  reasoning: "思考摘要",
-  plan: "执行计划",
-  contextCompaction: "上下文整理",
-};
 const pretty = (value) =>
   typeof value === "string" ? value : JSON.stringify(value, null, 2);
 // User messages and tool output retain their literal text representation.
@@ -78,13 +71,14 @@ const pretty = (value) =>
       /></a>
     </div>
   </article>
-  <details v-else class="tool-item" :open="item.status === 'inProgress'">
+  <div v-else class="session-tool" :class="{ compact, failed }">
+  <details class="tool-item" :open="toolOpen" @toggle="emit('tool-toggle', $event.currentTarget.open)">
     <summary>
-      <span class="tool-symbol">⌘</span
-      ><span>{{ $t(labels[item.type] || item.name || item.type) }}</span
-      ><code v-if="item.command">{{ item.command }}</code
-      ><small>{{
-        item.status === "inProgress"
+      <span class="tool-symbol" aria-hidden="true"><ExclamationCircleOutlined v-if="failed" /><CodeOutlined v-else-if="item.command" /><BulbOutlined v-else-if="item.type === 'reasoning'" /><FileTextOutlined v-else /></span>
+      <span class="tool-label" :class="{ 'sr-only': compact && preview }">{{ $t(activityLabels[item.type] || item.name || item.type) }}</span>
+      <span v-if="preview" class="tool-preview" :title="preview">{{ preview }}</span>
+      <small>{{
+        failed ? $t('失败') : item.status === "inProgress"
           ? $t("执行中")
           : ["pending", "skipped", "interrupted", "failed"].includes(
                 item.status,
@@ -95,18 +89,22 @@ const pretty = (value) =>
                 interrupted: $t("已停止"),
                 failed: $t("失败"),
               }[item.status]
-            : item.exitCode != null
-              ? $t("退出码 {p0}", { p0: item.exitCode })
-              : $t("已记录")
+              : item.status === 'completed' ? $t('已完成') : ''
       }}</small>
+      <RightOutlined class="tool-chevron" aria-hidden="true" />
     </summary>
+    <template v-if="toolOpen">
     <pre v-if="item.command">{{ item.command }}</pre>
     <pre v-if="item.output || item.text">{{ item.output || item.text }}</pre>
     <pre v-if="item.arguments">{{ item.arguments }}</pre>
     <pre v-if="item.result">{{ item.result }}</pre>
     <pre v-if="item.changes">{{ pretty(item.changes) }}</pre>
     <p v-if="item.error" class="error">{{ item.error }}</p>
+    <p v-if="item.exitCode != null" class="tool-exit">{{ $t('退出码 {p0}', { p0: item.exitCode }) }}</p>
+    </template>
   </details>
+  <p v-if="failed && !toolOpen" class="tool-failure">{{ item.error || (item.exitCode != null ? $t('退出码 {p0}', { p0: item.exitCode }) : $t('执行失败，展开查看详情。')) }}</p>
+  </div>
 </template>
 
 <style scoped>
@@ -117,12 +115,30 @@ const pretty = (value) =>
 .message-text { font-size: 14px; line-height: 1.9; }
 .from-user { margin-top: 0; padding: 0; background: transparent; border: 0; border-radius: 0; }
 .from-user .message-text { padding: 14px 16px; border-radius: 8px; background: var(--soft); }
-.tool-item { margin: 8px 0 20px 43px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
-.tool-item > summary { padding: 10px 12px; min-width: 0; }
-.tool-symbol { color: var(--muted); }
+.session-tool { margin: 0 0 20px 43px; min-width: 0; }
+.tool-item { margin: 0; border: 0; border-radius: 0; background: transparent; font-size: 12px; }
+.tool-item > summary { padding: 4px 0; min-height: 32px; min-width: 0; gap: 8px; list-style: none; color: var(--muted); }
+.tool-item > summary::-webkit-details-marker { display: none; }
+.tool-item > summary:hover { color: var(--ink); }
+.tool-symbol { display: inline-flex; font-size: 13px; flex-shrink: 0; }
+.tool-label { flex-shrink: 0; }
+.tool-preview { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-item small { font-size: 12px; }
+.tool-chevron { font-size: 10px; flex-shrink: 0; transition: transform .15s; }
+.tool-item[open] > summary .tool-chevron { transform: rotate(90deg); }
+.tool-item pre { margin: 6px 0 10px 21px; padding: 12px 14px; border-radius: 5px; background: var(--soft); max-height: 320px; overflow: auto; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tool-exit { margin: 8px 0 12px 21px; color: var(--muted); font-size: 12px; }
+.compact { margin: 0; }
+.failed { border-left: 2px solid var(--danger); padding-left: 12px; }
+.failed > .tool-item > summary, .failed .tool-item small, .tool-failure { color: var(--danger); }
+.tool-failure { margin: 4px 0 0 21px; font-size: 12px; overflow-wrap: anywhere; white-space: pre-wrap; }
 @media (max-width: 767px) {
   .message { column-gap: 10px; margin-bottom: 24px; }
   .from-user .message-text { padding: 12px; }
-  .tool-item { margin-left: 0; }
+  .session-tool { margin-left: 0; }
+  .tool-item > summary { min-height: 44px; flex-wrap: nowrap; }
+  .tool-preview { white-space: normal; overflow-wrap: anywhere; }
+  .tool-item pre { margin-left: 0; }
 }
+@media (prefers-reduced-motion: reduce) { .tool-chevron { transition: none; } }
 </style>

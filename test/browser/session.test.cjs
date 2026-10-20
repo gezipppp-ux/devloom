@@ -21,6 +21,7 @@ const { verifySessionArchiveTitle } = require('./session-archive-title.test.cjs'
 const { verifyStartTaskLock } = require('./start-task.test.cjs');
 const { verifySessionMarkdown } = require('./session-markdown.test.cjs');
 const { verifySessionScroll } = require('./session-scroll.test.cjs');
+const { verifySessionActivity } = require('./session-activity.test.cjs');
 const { verifySessionSuppliers } = require('./session-suppliers.test.cjs');
 const { dismissOperationMessages: dismissFeedback } = require('../support/operation-feedback.cjs');
 
@@ -889,7 +890,8 @@ async function main() {
     );
     assert.deepEqual(externalRequests, []);
     await openSessionContext(page, '需求资料');
-    await page.getByText('工作区初始化', { exact: true }).click();
+    await page.locator('.session-activity').first().locator(':scope > summary').click();
+    await page.locator('.tool-item').filter({ hasText: '工作区初始化' }).locator('summary').click();
     await page.getByText('初始化依赖安装完成', { exact: true }).waitFor();
     const input = page.getByRole('textbox', { name: '发送给 Codex 的指令' });
     await input.fill('检查充值入口');
@@ -1242,6 +1244,7 @@ async function main() {
     await verifyLanManualCreation(browser, directory, errors);
     await verifySessionMarkdown(browser, origin, client, key, errors);
     await verifySessionScroll(browser, origin, manager, key, errors, output);
+    await verifySessionActivity(browser, origin, manager, key, errors, output);
     await verifySessionFiles(browser, origin, key, errors, output);
     await verifySessionImages(browser, origin, manager, client, key, errors, output);
     await verifySessionDeletion(browser, origin, manager, directory, errors, output);

@@ -38,6 +38,8 @@
 
 会话文件查看归 `features/session/`：`file-reference.js` 解析本地链接，`SessionItem` 发出文件请求，app 仅协调侧栏开关；`use-session-files.js` 拥有文件/列表请求与代际隔离，`SessionFilePanel`、`SessionChangedFiles` 呈现预览和 Git 列表，`code-content.js` 处理高亮与差异行。高亮库仅在打开文件侧栏时加载。文件内容始终由后端按会话的 Worktree 校验，前端不拼接服务器磁盘路径。
 
+会话过程采用用户选定的 [A 方案](../../docs/prototypes/ui-refactor/session-activity/README.md)：`SessionTimeline` 将同一已知 turn 内相邻的普通过程合成默认折叠的一行，`session-activity.js` 只负责呈现分组、状态与预览。消息、执行计划、未知类型和失败条目保持独立；非零退出码即使标为 completed 也按失败显示。未提供 turnId 的记录不相互合并。`SessionItem` 保留原样输出和按需展开详情，审批／澄清仍由 `SessionRequest` 单独展示。展开状态按成员 ID 在当前会话内记忆，增量更新、历史前插及分组拆分不因组件重建丢失，切换会话清空；不修改原始记录、顺序、存储或执行状态。
+
 | 目录 | 职责 |
 | --- | --- |
 | `app/` | 导航壳层与应用 composable：工作区 URL 选择，以及跨功能的启动、刷新和 SSE 生命周期协调。 |

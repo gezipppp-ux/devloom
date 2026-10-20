@@ -22,7 +22,7 @@ import RemoteBranchSelect from "../features/projects/RemoteBranchSelect.vue";
 import SettingsPanel from "../features/settings/SettingsPanel.vue";
 import RepositoryGitPanel from "../features/settings/RepositoryGitPanel.vue";
 import SessionDetailsDrawer from "../features/session/SessionDetailsDrawer.vue";
-import SessionItem from "../features/session/SessionItem.vue";
+import SessionTimeline from "../features/session/SessionTimeline.vue";
 import SessionRequest from "../features/session/SessionRequest.vue";
 import SessionComposer from "../features/session/SessionComposer.vue";
 import SessionTitleEditor from "../features/session/SessionTitleEditor.vue";
@@ -346,10 +346,9 @@ async function refreshCurrentSession() {
                     : $t("还没有消息，输入指令继续这个 session。")
                 }}
               </p>
-              <SessionItem
-                v-for="item in session.items"
-                :key="item.id"
-                :item="item"
+              <SessionTimeline
+                :key="session.key"
+                :items="session.items"
                 :agent-label="session.agent?.label || 'Agent'"
                 @open-file="openFile"
               /><SessionRequest
@@ -362,7 +361,7 @@ async function refreshCurrentSession() {
                 :auto-open="request.id === session.requests.find((entry) => entry.kind === 'user-input' && entry.blocking !== false)?.id"
                 @respond="(data) => action('responses', data)"
               />
-              <p v-if="running" class="working-line">
+              <p v-if="running && (waitingForInput || !session.items.some(item => item.status === 'inProgress'))" class="working-line">
                 <span class="connection online"></span>{{ session.agent?.label || 'Agent' }}
                 {{ waitingForInput ? $t("等待你的回答或审批，可停止当前一轮。") : $t("正在执行，可以补充指令或停止当前一轮。") }}
               </p>
@@ -484,15 +483,16 @@ async function refreshCurrentSession() {
 .working-line { font-size: 12px; line-height: 1.8; }
 .empty-state { background: var(--canvas); }
 @media (max-width: 767px) {
-  .development-navigation { padding: 8px 12px; padding-right: 100px; gap: 4px; }
-  .development-navigation:lang(en) { padding-right: 164px; }
-  .development-navigation button { min-height: 44px; padding: 6px; }
+  .workspace > main { overflow-y: auto; }
+  .development-navigation { padding: 8px 12px; margin-right: 108px; gap: 4px; flex-wrap: nowrap; overflow-x: auto; flex-shrink: 0; }
+  .development-navigation:lang(en) { padding-right: 12px; margin-right: 164px; }
+  .development-navigation button { min-height: 44px; padding: 6px; flex-shrink: 0; white-space: nowrap; }
   .development-history { right: 8px; }
   .development-connection { display: none; }
   .session-header { min-height: 0; padding: 20px 16px 16px; gap: 10px; }
   .session-header :deep(.session-heading) { font-size: 24px; }
   .session-body { margin: 0 12px 12px; gap: 0; }
-  .timeline { padding: 20px 8px; }
+  .session-conversation > .timeline { min-height: 240px; padding: 20px 8px; }
   .session-conversation :deep(.composer-wrap) { padding: 12px 0; }
 }
 </style>

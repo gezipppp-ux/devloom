@@ -87,6 +87,7 @@ async function verifySessionMarkdown(browser, origin, client, key, errors) {
     await user.waitFor();
     assert.equal((await user.textContent()).trim(), literal);
     assert.equal(await user.locator('strong, script').count(), 0);
+    await page.locator('.session-activity').last().locator(':scope > summary').click();
     const tool = page.locator('.tool-item').filter({ hasText: 'fixture-only' });
     await tool.locator('summary').click();
     assert.equal(await tool.locator('pre').last().textContent(), literal);
