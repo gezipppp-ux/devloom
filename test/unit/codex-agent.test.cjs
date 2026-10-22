@@ -36,24 +36,26 @@ test("provider registry only accepts explicitly implemented providers", () => {
 
 test("session and turn operations translate input and native state behind the provider", async () => {
   const { agent, calls } = fixture({
+    "config/read": { config: { developer_instructions: "Existing policy" } },
     "thread/start": { thread: { id: "session" } },
     "turn/start": { turn: { id: "turn", status: "inProgress" } },
   });
   const cwd = path.resolve(".");
   assert.deepEqual(await agent.createSession({ cwd, selection }), { sessionId: "session" });
-  assert.equal(calls[0].params.ephemeral, false);
-  assert.equal(calls[0].params.approvalPolicy, "on-request");
+  assert.equal(calls.find(call => call.method === "thread/start").params.ephemeral, false);
+  assert.equal(calls.find(call => call.method === "thread/start").params.approvalPolicy, "on-request");
+  assert.match(calls.find(call => call.method === "thread/start").params.developerInstructions, /^Existing policy\n\nDevLoom supports/);
   await agent.resumeSession({ sessionId: "session", cwd, selection });
-  assert.equal(calls[1].params.excludeTurns, true);
+  assert.equal(calls.find(call => call.method === "thread/resume").params.excludeTurns, true);
   const input = [{ type: "text", text: "hello" }, { type: "image", path: "/image.png" }];
   const result = await agent.startTurn({ sessionId: "session", cwd, selection, input });
   assert.equal(result.status, "running");
-  assert.deepEqual(calls[2].params.input, [{ type: "text", text: "hello", text_elements: [] }, { type: "localImage", path: "/image.png" }]);
-  assert.equal(calls[2].params.effort, "high");
+  assert.deepEqual(calls.find(call => call.method === "turn/start").params.input, [{ type: "text", text: "hello", text_elements: [] }, { type: "localImage", path: "/image.png" }]);
+  assert.equal(calls.find(call => call.method === "turn/start").params.effort, "high");
   await agent.steerTurn({ sessionId: "session", turnId: "turn", input });
-  assert.equal(calls[3].params.expectedTurnId, "turn");
+  assert.equal(calls.find(call => call.method === "turn/steer").params.expectedTurnId, "turn");
   await agent.interruptTurn({ sessionId: "session", turnId: "turn" }, 123);
-  assert.equal(calls[4].timeout, 123);
+  assert.equal(calls.find(call => call.method === "turn/interrupt").timeout, 123);
   await assert.rejects(agent.startTurn({ sessionId: "session", cwd, selection, input: [{ type: "localImage", path: "/x" }] }), /输入/);
 });
 
@@ -74,7 +76,7 @@ test("new and resumed sessions combine supplier selection with the current Git i
   };
   await agent.createSession({ cwd, selection });
   await agent.resumeSession({ sessionId: "session", cwd, selection });
-  for (const call of calls) {
+  for (const call of calls.filter(call => call.method.startsWith("thread/"))) {
     assert.equal(call.params.modelProvider, "web_coding_supplier");
     assert.equal(call.params.config.model_reasoning_effort, "high");
     assert.deepEqual(call.params.config.shell_environment_policy, environment);

@@ -11,8 +11,11 @@ const { SessionHistoryStore } = require("./session-history-store.cjs");
 const { RunRequirementsStore } = require("./run-requirements-store.cjs");
 const { validateSessionTitle } = require("../domain/session-title.cjs");
 const { REQUEST_ID } = require("../domain/requirement-fusion.cjs");
+const { SessionPreviewStore } = require("./session-preview-store.cjs");
 
 class RunStore {
+  previews(key) { return new SessionPreviewStore(this.dir(key)); }
+
   constructor(directory) {
     this.directory = path.resolve(directory);
     this.owned = new Set();

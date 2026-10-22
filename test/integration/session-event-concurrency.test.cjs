@@ -35,6 +35,7 @@ class RotatingClient extends EventEmitter {
   async request(method, params) {
     this.calls.push({ method, params });
     if (!this.connected) throw new Error("fixture transport disconnected");
+    if (method === "config/read") return { config: { developer_instructions: "Fixture policy" } };
     if (method === "thread/read") return { thread: { status: { type: "idle" } } };
     if (method === "thread/resume") return {};
     if (method === "turn/start") return { turn: { id: "continued-turn", status: "inProgress" } };
@@ -88,7 +89,7 @@ test("credential rotation reconnects another idle session while the first discon
     assert.equal(outcome.error, undefined, outcome.error?.message);
     assert.equal(outcome.value.sessionId, "1-2");
     assert.equal(outcome.value.turnId, "continued-turn");
-    assert.deepEqual(client.calls.map(call => call.method), ["connect", "thread/read", "thread/resume", "turn/start"]);
+    assert.deepEqual(client.calls.map(call => call.method), ["connect", "thread/read", "config/read", "thread/resume", "turn/start"]);
     assert.equal(client.calls.find(call => call.method === "thread/resume").params.threadId, "1-2");
     assert.equal(client.calls.find(call => call.method === "turn/start").params.threadId, "1-2");
     assert.equal(manager.sessions.get("1-2").connected, true);

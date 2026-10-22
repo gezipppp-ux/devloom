@@ -8,10 +8,17 @@ import SessionItem from "./SessionItem.vue";
 const props = defineProps({
   items: { type: Array, required: true },
   agentLabel: { type: String, default: "Agent" },
+  runKey: { type: String, default: "" }, readonly: Boolean, canFeedback: Boolean,
 });
-const emit = defineEmits(["open-file"]);
+const emit = defineEmits(["open-file", "preview-feedback"]);
 const expandedGroups = reactive(new Set());
 const expandedItems = reactive(new Set());
+const latestPreviewVersions = computed(() => {
+  const versions = {};
+  for (const item of props.items) for (const part of item.contentParts || [])
+    if (part.type === "preview" && part.group) versions[part.group] = Math.max(versions[part.group] || 0, part.version);
+  return versions;
+});
 const rows = computed(() => sessionRows(props.items).map(row => row.kind === "activity"
   ? { ...row, summary: activitySummary(row.items) } : row));
 // Remember expansion by member identity so prepending history or a failure
@@ -49,6 +56,8 @@ function toggleItem(id, open) {
       </div>
     </details>
     <SessionItem v-else :item="row.item" :agent-label="agentLabel" :tool-open="expandedItems.has(row.item.id)"
+      :run-key="runKey" :readonly="readonly" :can-feedback="canFeedback" @preview-feedback="emit('preview-feedback', $event)"
+      :latest-preview-versions="latestPreviewVersions"
       @tool-toggle="toggleItem(row.item.id, $event)" @open-file="emit('open-file', $event)" />
   </template>
 </template>

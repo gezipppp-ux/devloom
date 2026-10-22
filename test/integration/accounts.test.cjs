@@ -23,6 +23,22 @@ const { saveSystemSettings } = require("../../src/config/system-settings.cjs");
 
 const password = "fixture-password-123";
 
+test("preview reads and writes retain workspace ownership and separate session permissions", async t => {
+  const f = await fixture(t), owner = f.client(), other = f.client(), anonymous = f.client();
+  await owner.login("member"); await other.login("admin");
+  const space = await owner.space({ name: "preview-access" });
+  const base = `/api/workspaces/${space.data.id}/runs/1-2/previews/${"a".repeat(32)}`;
+  for (const [route, input] of [[base, undefined], [base + "/content", undefined], [base + "/state", { revision: 0, state: {} }]]) {
+    assert.equal((await anonymous.request(route, input)).status, input === undefined ? 401 : 403);
+    assert.equal((await other.request(route, input)).status, 404);
+  }
+  const membership = await f.app.projects.store.membership(space.projectId, f.member.id);
+  await f.app.projects.saveMember(space.projectId, f.admin, {
+    permissions: ["project.view", "code.view", "session.view"], revision: membership.revision,
+  }, f.member.id);
+  assert.equal((await owner.request(base + "/state", { revision: 0, state: {} })).status, 403);
+});
+
 test("requirement searches require current issue and session access before and after source queries", async t => {
   const f = await fixture(t);
   const browser = f.client(), other = f.client();

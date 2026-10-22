@@ -15,6 +15,7 @@ import { usePermissionModes } from "../../shared/api/use-permission-modes.js";
 const props = defineProps({
   agent: { type: Object, default: null },
   modelValue: { type: String, default: "" },
+  preview: { type: Object, default: null },
   images: { type: Array, default: () => [] },
   imagesUploading: Boolean,
   imagesBlocked: Boolean,
@@ -45,6 +46,7 @@ const emit = defineEmits([
   "images-retry",
   "stop",
   "settings-change",
+  "preview-remove",
 ]);
 const form = computed(() => ({ text: props.modelValue }));
 const formRef = ref();
@@ -114,6 +116,12 @@ function send() {
       :model="form"
       @finish="send"
     >
+      <div v-if="preview" class="composer-preview-reference">
+        <div><strong>{{ $t('引用预览') }} · {{ preview.title }} · {{ $t('版本 {version}', { version: preview.version }) }}</strong>
+          <details><summary>{{ $t('查看本次反馈上下文') }}</summary><pre>{{ JSON.stringify(preview.state, null, 2) }}</pre></details>
+        </div>
+        <button type="button" class="text-button" :disabled="busy" :aria-label="$t('移除预览引用')" @click="emit('preview-remove')"><CloseOutlined /></button>
+      </div>
       <a-form-item name="text">
         <textarea
           :value="modelValue"
@@ -302,6 +310,11 @@ function send() {
 .composer-note, .execution-settings-hint { font-size: 12px; line-height: 1.6; }
 .composer-send { border-radius: 6px; box-shadow: none; }
 .composer-add-images { border-color: transparent; background: transparent; }
+.composer-preview-reference { display: flex; align-items: start; gap: 12px; padding: 10px 12px; margin-bottom: 10px; background: var(--selected); border-radius: 6px; font-size: 12px; }
+.composer-preview-reference > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.composer-preview-reference strong { font-weight: 500; }
+.composer-preview-reference summary { cursor: pointer; min-height: 32px; color: var(--muted); }
+.composer-preview-reference pre { max-height: 150px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
 @media (max-width: 767px) {
   .composer-wrap { padding: 16px; }
   .composer textarea { min-height: 64px; }

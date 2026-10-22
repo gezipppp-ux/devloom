@@ -6,6 +6,7 @@ const { validatePermissionMode } = require("../domain/permissions.cjs");
 const { USER_INPUT_METHOD, validateUserInput, userInputResponse } = require("../codex/user-input.cjs");
 const { normalizeItem } = require("../codex/session-item.cjs");
 const { supplierSelection } = require("../domain/agent-supplier.cjs");
+const { previewInstructions } = require("../domain/session-preview.cjs");
 
 function requestKey(id) { return `${typeof id}:${id}`; }
 function turn(value) {
@@ -139,6 +140,8 @@ class CodexAgent extends EventEmitter {
 
   async #sessionParams(cwd, selection) {
     const params = await this.#supplierParams(cwd, selection);
+    const configuration = await this.#client.request("config/read", { cwd, includeLayers: false });
+    params.developerInstructions = [configuration?.config?.developer_instructions, previewInstructions(cwd)].filter(Boolean).join("\n\n");
     const identity = await this.#client.gitIdentityConfig?.(cwd);
     return identity ? { ...params, config: { ...params.config, ...identity } } : params;
   }

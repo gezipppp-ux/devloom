@@ -16,6 +16,22 @@ async function serve(t, staticDirectory) {
   return origin;
 }
 
+test("opaque preview frames can load only the two public runtime assets across origins", async t => {
+  const directory = temporary(t);
+  fs.writeFileSync(path.join(directory, "preview-runtime.js"), "window.preview = true;");
+  fs.writeFileSync(path.join(directory, "preview-runtime.css"), "body { color: black; }");
+  const origin = await serve(t, directory);
+  const headers = { origin: "null", "sec-fetch-site": "cross-site" };
+  for (const file of ["preview-runtime.js", "preview-runtime.css"]) {
+    const response = await fetch(`${origin}/${file}`, { headers });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("access-control-allow-origin"), "*");
+    assert.equal(response.headers.get("access-control-allow-credentials"), null);
+  }
+  for (const file of ["api/bootstrap", "api/runs/1-2", "index.html", "preview-runtime.js?other=1"])
+    assert.equal((await fetch(`${origin}/${file}`, { headers })).status, 403);
+});
+
 test("production serves the entry page for direct application and detail links", async (t) => {
   const directory = temporary(t);
   const html = "<!doctype html><html><body><div id=\"app\"></div></body></html>";

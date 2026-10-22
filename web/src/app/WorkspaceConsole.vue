@@ -62,7 +62,7 @@ const sessionPicker = ref(false), publishing = ref(false);
 const settingsOpen = ref(false),
   creating = ref(false),
   repositoryOpen = ref(false);
-const composer = reactive({ text: "" });
+const composer = reactive({ text: "", preview: null });
 const timeline = ref();
 const fileRequest = ref(null), detailsDrawer = ref();
 let fileTrigger;
@@ -123,6 +123,7 @@ const {
     creating.value = false;
     repositoryOpen.value = false;
     composer.text = "";
+    composer.preview = null;
     imageDraft.reset();
   },
   onOpened: () => {
@@ -207,13 +208,21 @@ async function send() {
     (composer.text.trim() || imageDraft.images.value.length)
   ) {
     const data = { text: composer.text };
+    if (composer.preview) data.preview = { id: composer.preview.id, state: composer.preview.state };
     if (imageDraft.images.value.length)
       data.images = imageDraft.images.value.map((image) => image.id);
     await action("messages", data, () => {
       composer.text = "";
+      composer.preview = null;
       imageDraft.reset();
     });
   }
+}
+async function previewFeedback(reference) {
+  composer.preview = reference;
+  if (reference.prompt) composer.text = [composer.text, reference.prompt].filter(Boolean).join("\n\n");
+  await nextTick();
+  document.querySelector('.session-composer textarea')?.focus();
 }
 async function worktreeDeleted() {
   if (session.value)
@@ -349,6 +358,10 @@ async function refreshCurrentSession() {
               <SessionTimeline
                 :key="session.key"
                 :items="session.items"
+                :run-key="session.key"
+                :readonly="Boolean(session.readOnlyReason || session.archivedAt || !allowed('session.continue') || !online)"
+                :can-feedback="Boolean(canSend) && !session.archivedAt && allowed('session.continue')"
+                @preview-feedback="previewFeedback"
                 :agent-label="session.agent?.label || 'Agent'"
                 @open-file="openFile"
               /><SessionRequest
@@ -371,6 +384,8 @@ async function refreshCurrentSession() {
             </div>
             <SessionComposer
               v-model="composer.text"
+              :preview="composer.preview"
+              @preview-remove="composer.preview = null"
               :agent="session.agent"
               :images="imageDraft.images.value"
               :images-uploading="imageDraft.uploading.value"

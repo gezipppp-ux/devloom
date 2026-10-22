@@ -17,7 +17,7 @@ async function verifyAccountProfileRaces(browser, origin) {
     const name = new URL(route.request().url()).pathname.slice('/profile-fixture/'.length);
     if (name === "index.html") return route.fulfill({ contentType: "text/html", body: '<script type="importmap">{"imports":{"vue":"/profile-fixture/vue.js","vue-i18n":"/profile-fixture/vue-i18n.js"}}</script><script type="module">import * as account from "/profile-fixture/api/account-session.js"; window.account = account; await account.loadAccountSession(); window.ready = true;</script>' });
     const vendor = { 'vue.js': 'node_modules/vue/dist/vue.esm-browser.prod.js', 'vue-i18n.js': 'node_modules/vue-i18n/dist/vue-i18n.esm-browser.prod.js' };
-    assert.ok(vendor[name] || /^(api\/(account-session|api)|i18n\/(index|en(?:-common|-actions|-details|-dynamic|-parameters|-feedback|-workbench|-navigation|-mcp|-delivery-workflow|-project-space)?))\.js$/.test(name));
+    assert.ok(vendor[name] || /^(api\/(account-session|api)|i18n\/(index|en(?:-common|-actions|-details|-dynamic|-parameters|-feedback|-workbench|-navigation|-mcp|-delivery-workflow|-project-space|-previews)?))\.js$/.test(name));
     const file = vendor[name] || `web/src/shared/${name}`;
     return route.fulfill({ contentType: "text/javascript", body: fs.readFileSync(path.resolve(file), "utf8") });
   });

@@ -12,6 +12,7 @@ const { SessionManager } = require('../support/session-manager.cjs');
 const { createWebServer } = require('../../src/http/server.cjs');
 const { FakeClient } = require('../fixtures/web-client.cjs');
 const { verifySessionFiles } = require('./session-files.test.cjs');
+const { verifySessionPreviews } = require('./session-previews.test.cjs');
 const { temporary, png } = require('../support/helpers.cjs');
 const { ChannelRegistry } = require('../../src/channels/channel-registry.cjs');
 const { createManualChannel } = require('../../src/channels/manual/adapter.cjs');
@@ -1246,6 +1247,7 @@ async function main() {
     await verifySessionScroll(browser, origin, manager, key, errors, output);
     await verifySessionActivity(browser, origin, manager, key, errors, output);
     await verifySessionFiles(browser, origin, key, errors, output);
+    await verifySessionPreviews(browser, origin, manager, key, output);
     await verifySessionImages(browser, origin, manager, client, key, errors, output);
     await verifySessionDeletion(browser, origin, manager, directory, errors, output);
     await verifySessionDeletion(browser, origin, manager, directory, errors, output, true);

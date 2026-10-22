@@ -43,6 +43,8 @@ Git 账号引用保护读取 `execution.gitAccountId`；凭据临时环境按连
 
 ## 事件与呈现
 
+完成的 Agent 消息可提供 `previewReferences: [{start,end,path,title}]`，由宿主捕获 HTML 并生成内联预览。Codex 原生 `visualize` 标记在适配器转换；Claude Code/pi 将来可复用此协议，当前尚未实现。状态与续聊属于宿主通用能力，详见[交互预览](./session-previews.md)。
+
 Agent 发出 `event`、`request` 和 `disconnected`。标准事件包括 `turn-started`、`turn-completed`、`item`、`item-delta`、`request-resolved`；共同携带 sessionId，涉及轮次的事件携带 turnId 或 turn 对象。执行器的 `running` 轮次状态与 UI 条目 `inProgress` 状态各自保持定义。
 
 交互请求为 `{id,sessionId,turnId,kind,blocking,...展示字段}`，kind 为 `approval` 或 `user-input`；不支持的请求明确拒绝。ID 不透明，不能在应用或浏览器中还原为原生 RPC ID。协议方法、原生参数和审批响应格式只属于 adapter。数字和字符串形式的原生 ID 不得互相覆盖。

@@ -2,6 +2,7 @@ const path = require("node:path");
 const { runKey, recordedSources } = require("../domain/run-identity.cjs");
 const { agentConfig } = require("../domain/agent-config.cjs");
 const { describeAgent } = require("./agent-presenter.cjs");
+const { previewSummary } = require("./preview-presenter.cjs");
 
 function text(value) {
   return typeof value === "string" ? value : "";
@@ -113,9 +114,30 @@ class SessionPresenter {
     };
   }
 
-  async item(key, item, turnId) {
-    const { imageSources, ...fields } = item;
+  async item(key, item, turnId, { capturePreviews = true } = {}) {
+    const { imageSources, previewReferences, ...fields } = item;
     const normalized = { ...fields, turnId: turnId ?? item.turnId };
+    if (normalized.type === "agentMessage" && normalized.status === "completed" && previewReferences?.length) {
+      const parts = [];
+      let offset = 0;
+      const state = await this.store.read(key);
+      for (const [ordinal, reference] of previewReferences.slice(0, 8).entries()) {
+        if (!Number.isInteger(reference.start) || !Number.isInteger(reference.end) ||
+            reference.start < offset || reference.end <= reference.start || reference.end > normalized.text.length) continue;
+        parts.push({ type: "text", text: normalized.text.slice(offset, reference.start) });
+        try {
+          const entry = await this.store.previews(key).capture({ itemId: item.id, turnId: normalized.turnId,
+            reference, ordinal, worktree: state.worktree?.path, allowCapture: capturePreviews });
+          parts.push({ type: "preview", ...previewSummary(entry) });
+        } catch {
+          parts.push({ type: "preview-error", title: reference.title || "", error: "预览无法保存，请让 Agent 在当前任务内重新生成 HTML。" });
+        }
+        offset = reference.end;
+      }
+      parts.push({ type: "text", text: normalized.text.slice(offset) });
+      normalized.contentParts = parts;
+      normalized.text = parts.map(part => part.type === "text" ? part.text : `[${part.title || "预览"}]`).join("");
+    }
     if (normalized.type === "userMessage") {
       const images = (await (await this.store.messageImages(key)).match(imageSources));
       if (images.length)
