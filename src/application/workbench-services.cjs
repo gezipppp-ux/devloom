@@ -42,6 +42,8 @@ class WorkbenchServices {
       } catch (error) { if (![401, 403, 404, 409].includes(error.statusCode)) throw error; action.assignmentProblem = true; }
     }
     snapshot.actions = snapshot.actions.filter(action => action.assignmentProblem ? action.issue.businessOwnerId === actor.id : action.handlerId === actor.id);
+    snapshot.tasks = snapshot.tasks.filter(task => task.status !== "completed" || task.snapshot.kind !== "manual" && task.snapshot.issues?.length && task.executorId === actor.id
+      && ["running", "preparing", "starting"].includes(task.execution?.status));
     for (const task of snapshot.tasks) {
       try {
         const { permissions } = await this.projects.authorize(task.projectId, { id: task.executorId }, "session.start");

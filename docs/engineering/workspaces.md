@@ -99,6 +99,8 @@ Session archive is independent of Worktree deletion: archived sessions are exclu
 
 The Web app has no merge or conflict-resolution button. Users instruct Codex in the existing task session when they want merge/conflict work.
 
+Session deletion is independent of issue delivery and verification. An ended execution may be deleted while its development task is still awaiting review. The task retains only a deletion marker and its last verified execution summary, atomically with run deletion, so acceptance can settle normally. A removed worktree is never silently recreated. Returned issue work explicitly creates a linked planned replacement task, transfers the original scope and preserves delivery history; the developer selects the remote starting branch before launching a new session. See [accounts and database](accounts-and-database.md).
+
 ## Development state and deliveries
 
 Personal sessions have execution state and a display title; they do not store manual type/progress metadata or grouping preferences. The metadata endpoint, SSE event and catalog have been removed without compatibility readers. Development task lifecycle and issue workflow stay independent of Agent execution.

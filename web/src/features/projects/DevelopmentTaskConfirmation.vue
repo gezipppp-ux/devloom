@@ -6,6 +6,7 @@ const props = defineProps({
   title: { type: String, required: true },
   busy: Boolean,
   disabled: Boolean,
+  retainSession: Boolean,
 });
 const emit = defineEmits(["confirm", "closed"]);
 const dialog = ref();
@@ -15,7 +16,7 @@ const copy = computed(
       complete: {
         title: "确认完成开发任务",
         description:
-          "完成后释放关联事项的认领，保留开发负责人和历史；此会话转为只读。需求与 Bug 的验收状态保持不变。",
+          props.retainSession ? "完成任务会释放认领，保留的会话仍可继续使用；续聊不会改变验收结论。" : "完成后释放关联事项的认领，保留开发负责人和历史；此会话转为只读。需求与 Bug 的验收状态保持不变。",
         button: "确认完成开发任务",
       },
       cancel: {
@@ -73,7 +74,7 @@ onUnmounted(() => {
         :disabled="busy || disabled"
         @click="emit('confirm')"
       >
-        {{ busy ? $t("正在提交…") : copy.button }}
+        {{ busy ? $t("正在提交…") : $t(copy.button) }}
       </button>
     </div>
   </dialog>

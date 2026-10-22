@@ -11,6 +11,8 @@ const { issueWorkflowNode } = require("../domain/issue-workflows.cjs");
 const { WorkflowExecutionServices } = require("./workflow-execution-services.cjs");
 const { presentDevelopment } = require("./project-development-presenter.cjs");
 const { isImageAttachment } = require("../domain/attachment-prompts.cjs");
+const { developmentReworkInput } = require("../domain/project-development.cjs");
+const { reworkAvailable, reworkPrompt } = require("../domain/development-lifecycle.cjs");
 
 class ProjectDevelopmentServices {
   constructor(database, projects, workspaces) {
@@ -54,6 +56,28 @@ class ProjectDevelopmentServices {
     if (task.executorId !== actor.id || task.revision !== input.revision) throw accountError("任务归属或修订已变化。", 409);
     await this.workflowExecution.recoverTask(task, true);
     return this.read(projectId, id, actor);
+  }
+  async rework(projectId, id, actor, input) {
+    const request = { ...developmentReworkInput(input), sourceTaskId: id, executorId: actor.id };
+    const accepted = await this.store.transaction(async () => {
+      await this.authorizePlan(projectId, actor, actor.id);
+      await this.authorize(projectId, actor, "collaboration.view");
+      const existing = await this.store.existing(projectId, actor.id, request.requestId);
+      if (existing) { this.store.sameRequest(existing, request); return { task: existing, reused: true }; }
+      const task = await this.store.task(projectId, id);
+      if (task.executorId !== actor.id) throw accountError("只有原任务执行人能创建返工任务。", 403);
+      this.assertRevision(task, request.revision);
+      const execution = await this.store.execution(task);
+      if (!reworkAvailable(task, execution)) throw accountError("仅工作目录已清理且有退回交付的任务可以创建返工任务。", 409);
+      const returned = task.issueLinks.flatMap(({ issue }) => issue.deliverables || []).filter(delivery => delivery.status === "returned");
+      if (returned.some(delivery => delivery.authorId !== actor.id) || !isDeepStrictEqual(returned.map(({ id, revision }) => ({ id, revision })).sort((a, b) => a.id.localeCompare(b.id)), request.deliveries))
+        throw accountError("退回交付已变化，请刷新后重新确认。", 409);
+      const issues = await this.store.issues(projectId, task.issueLinks.map(link => link.issueId));
+      this.assertIssues(issues, task.releaseId);
+      if (!issues.some(issueDevelopmentAllowed)) throw accountError("事项当前流程不允许返工开发。", 409);
+      return { task: await this.store.replaceForRework(task, actor.id, request), reused: false };
+    });
+    return { task: await this.present(accepted.task, actor, true), reused: accepted.reused };
   }
   async readSession(projectId, actor, input) {
     await this.authorize(projectId, actor, "session.view");
@@ -158,6 +182,7 @@ class ProjectDevelopmentServices {
       await this.authorize(projectId, actor, "session.start");
       const current = await this.store.task(projectId, id);
       if (current.executorId !== actor.id) throw accountError("只有任务执行人能开始开发。", 403);
+      if (current.snapshot.reworkOfTaskId) await this.authorize(projectId, actor, "collaboration.view");
       if (current.snapshot.startRequest) {
         if (!isDeepStrictEqual(current.snapshot.startRequest, request)) throw accountError("任务已接受启动请求，不能修改参数或再次启动。", 409);
         return { task: current, created: false };
@@ -171,7 +196,7 @@ class ProjectDevelopmentServices {
       if (!issues.length) throw accountError("关联事项当前流程节点不允许开发，请先完成业务流转。", 409);
       this.assertIssues(issues, current.releaseId, true);
       const prompt = developmentPrompt(issues, false, await this.projects.effectivePrompts(projectId, actor), {
-        title: current.snapshot.title, content: request.supplementaryPrompt,
+        title: current.snapshot.title, content: [reworkPrompt(current, issues), request.supplementaryPrompt].filter(Boolean).join("\n\n"),
       }, this.store.attachmentPaths(current, issues));
       const defaults = await this.accounts.settings(actor.id);
       const selection = Object.fromEntries(["model", "reasoningEffort", "permissionMode"].map(field => [field,
@@ -195,6 +220,7 @@ class ProjectDevelopmentServices {
       await this.authorize(projectId, actor, "session.start");
       const current = await this.store.task(projectId, id);
       if (current.executorId !== actor.id) throw accountError("只有任务执行人能开始开发。", 403);
+      if (current.snapshot.reworkOfTaskId) await this.authorize(projectId, actor, "collaboration.view");
       if (current.snapshot.startRequest) {
         if (!isDeepStrictEqual(current.snapshot.startRequest, request)) throw accountError("任务已接受启动请求，不能修改参数或再次启动。", 409);
         return { task: current, created: false };
@@ -297,6 +323,7 @@ class ProjectDevelopmentServices {
     });
     let task;
     if (initial.runKey) {
+      if (initial.snapshot.sessionDeletion) return { task: await this.present(await save(), actor, true) };
       const { sessions } = await this.workspaces.get(initial.workspaceId, { id: initial.executorId });
       task = await sessions.exclusive(initial.runKey, async () => {
         const reason = sessions.git.activeReason(initial.runKey);
@@ -370,7 +397,7 @@ class ProjectDevelopmentServices {
           const issues = await this.store.issues(projectId, batch.issueIds);
           this.assertIssues(issues, current.releaseId, true);
           const pending = await this.store.updateBatch(current, requestId, { status: "sending" }, "ready");
-          await this.workflowExecution.prepare(pending, actor);
+          await this.workflowExecution.prepare(pending, actor, { continuation: true });
         });
         dispatched = true;
       }));

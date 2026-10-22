@@ -21,6 +21,11 @@ const { data, loading, saving, error, reload, save } = useResource(() => props.t
   ? appApi(endpoint + '/tasks/session?' + new URLSearchParams({ runKey: props.runKey }))
   : appApi(endpoint + '/issues?' + new URLSearchParams({ query: query.value, offset: String(offset.value), limit: '30' })));
 const deliveryIssue = useResource(() => form.issueId ? appApi(endpoint + '/issues/' + form.issueId) : null);
+const previousId = computed(() => props.previous?.id || deliveryIssue.data.value?.deliverySubmission?.previous?.id || '');
+const previousDelivery = useResource(() => previousId.value && !props.previous ? appApi(endpoint + '/deliveries/' + previousId.value) : null, { immediate: false });
+const priorDelivery = computed(() => props.previous || previousDelivery.data.value?.delivery || null);
+watch(previousId, () => { previousDelivery.data.value = null; void previousDelivery.reload(); });
+watch(priorDelivery, value => { if (value && !form.body) form.body = value.body; });
 watch(() => form.issueId, () => { deliveryIssue.data.value = null; void deliveryIssue.reload(); void reviewers.reload(); });
 watch([form, additionalIssueIds], () => { requestId.value = createRequestId(); }, { deep: true });
 const target = computed(() => deliveryIssue.data.value?.workflowActions?.find(edge => edge.trigger === 'delivery.submitted'));
@@ -34,6 +39,10 @@ const publishable = computed(() => props.canPublish && (!props.runKey || task.va
 const submitHint = computed(() => {
   if (loading.value || !data.value) return '正在核对送验条件…';
   if (!publishable.value) return '当前开发状态或权限不允许提交交付。';
+  if (previousId.value && !props.previous) {
+    if (previousDelivery.error.value) return '原退回交付读取失败，请重新读取后提交。';
+    if (previousDelivery.loading.value || !priorDelivery.value) return '正在核对送验条件…';
+  }
   if (!independent.value) {
     if (!form.issueId) return '请选择关联事项。';
     if (deliveryIssue.loading.value) return '正在核对送验条件…';
@@ -56,10 +65,15 @@ function search(next = 0) { offset.value = next; void reload(); }
 function choose() { selected.value = issues.value.find(item => item.id === form.issueId) || selected.value; if (selected.value && !form.title) form.title = selected.value.title; }
 function publish() {
   if (!canSubmit.value) return;
-  const input = { requestId: requestId.value, ...(deliveryIssue.data.value ? { issueRevision: deliveryIssue.data.value.revision } : {}), title: form.title, body: form.body, ...(props.previous?.commit ? { commit: props.previous.commit } : {}), reviewerId: form.reviewerId,
-    ...(props.previous ? { supersedesId: props.previous.id, previousRevision: props.previous.revision, taskId: deliveryIssue.data.value?.development?.taskId || props.previous.taskId } : task.value ? { taskId: task.value.id } : deliveryIssue.data.value?.development ? { taskId: deliveryIssue.data.value.development.taskId } : {}), ...(form.issueId ? { issueId: form.issueId } : {}) };
+  const previous = priorDelivery.value;
+  const input = { requestId: requestId.value, ...(deliveryIssue.data.value ? { issueRevision: deliveryIssue.data.value.revision } : {}), title: form.title, body: form.body, ...(previous?.commit ? { commit: previous.commit } : {}), reviewerId: form.reviewerId,
+    ...(previous ? { supersedesId: previous.id, previousRevision: previous.revision, taskId: task.value?.id || deliveryIssue.data.value?.development?.taskId || previous.taskId } : task.value ? { taskId: task.value.id } : deliveryIssue.data.value?.development ? { taskId: deliveryIssue.data.value.development.taskId } : {}), ...(form.issueId ? { issueId: form.issueId } : {}) };
   const additional = additionalIssueIds.value.filter(id => id !== form.issueId);
-  const items = [input, ...additional.map(id => ({ ...input, requestId: requestId.value + '-' + id, issueId: id, issueRevision: undefined }))];
+  const items = [input, ...additional.map(id => {
+    const delivery = task.value?.scope?.find(issue => issue.id === id)?.delivery;
+    return { ...input, requestId: requestId.value + '-' + id, issueId: id, issueRevision: undefined, commit: undefined,
+      supersedesId: delivery?.status === 'returned' ? delivery.id : undefined, previousRevision: delivery?.status === 'returned' ? delivery.revision : undefined };
+  })];
   return save(endpoint + (additional.length ? '/deliveries/batch' : '/deliveries'), additional.length ? { items } : input, result => emit('published', additional.length ? result.items[0] : result), '交付已提交，事项和验证待办已同步更新。');
 }
 function finish() {
@@ -82,6 +96,8 @@ function close() { if (!saving.value) emit('close'); }
       <aside class="delivery-sharing"><h2>{{ $t('送验安排') }}</h2>
         <template v-if="previous"><h3>{{ $t("重新提交交付") }}</h3><p>{{ previous.reviewNote }}</p><p class="field-hint">{{ $t("保留原交付与验收记录，以新版本再次提交验证。") }}</p></template><template v-else-if="independent"><h3>{{ $t('独立开发') }}</h3><p class="muted">{{ $t('本次开发不关联事项，可直接发布项目交付。') }}</p></template>
         <template v-else><div v-if="!runKey && !taskId && !issueId" class="ui-filter-bar"><input v-model="query" :aria-label="$t('搜索事项')" :placeholder="$t('搜索标题与描述')" :disabled="saving" @keydown.enter.prevent="search()" /><button type="button" :disabled="saving || loading" @click="search()">{{ $t('搜索') }}</button></div><PagePagination v-if="!runKey && !issueId" :offset="offset" :next-offset="data?.nextOffset" :disabled="loading || saving" @change="search" /><label><span>{{ $t('关联事项') }} <span class="delivery-required" aria-hidden="true">*</span></span><AppSelect native-events :aria-label="$t('关联事项')" v-model="form.issueId" required @change="choose" :disabled="loading || saving"><option value="" disabled>{{ $t('选择事项') }}</option><option v-if="selected && !eligibleIssues.some(item => item.id === selected.id)" :value="selected.id">#{{ selected.number }} {{ selected.title }}</option><option v-for="issue in eligibleIssues" :key="issue.id" :value="issue.id">#{{ issue.number }} {{ issue.title }}</option></AppSelect></label></template>
+        <template v-if="!previous && priorDelivery"><h3>{{ $t('重新提交交付') }}</h3><p class="project-text">{{ priorDelivery.reviewNote }}</p><p class="field-hint">{{ $t('保留原交付与验收记录，以新版本再次提交验证。') }}</p></template>
+        <p v-if="previousDelivery.error.value" class="error" role="alert">{{ previousDelivery.error.value }}</p><button v-if="previousDelivery.error.value" type="button" :disabled="saving || previousDelivery.loading.value" @click="previousDelivery.reload">{{ $t('重新读取') }}</button>
         <fieldset v-if="!previous && task && eligibleIssues.some(item => item.id !== form.issueId)"><legend>{{ $t('同批送验的其他事项') }}</legend><label v-for="issue in eligibleIssues.filter(item => item.id !== form.issueId)" :key="issue.id" class="ui-check-row"><input v-model="additionalIssueIds" type="checkbox" :value="issue.id" :disabled="saving" />{{ issue.title }}</label><p class="field-hint">{{ $t('每条事项独立记录交付；本批全部校验通过后一起提交。') }}</p></fieldset>
         <FeedbackMessage :message="reviewers.error.value" type="error" /><button v-if="reviewers.error.value" type="button" @click="reviewers.reload">{{ $t('重新读取验证人') }}</button><label><span>{{ $t('交付验证人') }} <span class="delivery-required" aria-hidden="true">*</span></span><AppSelect search-pinyin native-events v-model="form.reviewerId" :aria-label="$t('交付验证人')" required :disabled="saving || reviewers.loading.value"><option value="" disabled>{{ $t('选择明确的验证人') }}</option><option v-for="person in reviewers.data.value?.items || []" :key="person.id" :value="person.id">{{ person.displayName }}（{{ person.username }}）</option></AppSelect></label>
         <FeedbackMessage :message="deliveryIssue.error.value" type="error" /><button v-if="deliveryIssue.error.value" type="button" :disabled="saving || deliveryIssue.loading.value" @click="deliveryIssue.reload">{{ $t('重新读取') }}</button><p v-if="target" class="field-hint">{{ deliveryIssue.data.value.statusName }} → {{ target.statusName }} · {{ $t('交给所选验证人') }}</p>
@@ -91,7 +107,7 @@ function close() { if (!saving.value) emit('close'); }
         <p class="field-hint">{{ $t(independent ? '私人会话与代码保持私有。' : '送验后保留返工能力，全部关联范围验收结束后完成开发任务。') }}</p>
       </aside>
     </form>
-    <DevelopmentTaskConfirmation v-if="finishing && task" action="complete" :title="task.title" :busy="saving" :disabled="!task.canComplete" @closed="finishing = false" @confirm="finish" />
+    <DevelopmentTaskConfirmation v-if="finishing && task" action="complete" :retain-session="task.kind !== 'manual'" :title="task.title" :busy="saving" :disabled="!task.canComplete" @closed="finishing = false" @confirm="finish" />
   </component>
 </template>
 <style scoped>

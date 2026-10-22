@@ -56,6 +56,25 @@ test("release creation and editing reject invalid names without changing persist
   assert.equal(await database.client.projectRelease.count({ where: { projectId } }), 3);
 });
 
+test("release archive checks continued execution after task completion and retained deletion summaries", async t => {
+  const { database, actor, projectId, lifecycle, content } = await fixture(t);
+  let release = await lifecycle.saveRelease(projectId, null, actor, { name: "v3.2" });
+  let issue = await content.createIssue(projectId, actor, { type: "requirement", title: "Finished scope", releaseId: release.id });
+  issue = await content.transitionIssue(projectId, issue.id, actor, { revision: issue.revision, transitionId: "pending_cancelled", reason: "Finished" });
+  const workspace = await database.client.workspace.create({ data: { name: "Continued session", ownerUserId: actor.id } });
+  const snapshot = { kind: "issues", issues: [issue], additions: [] };
+  const task = await database.client.developmentTask.create({ data: { projectId, releaseId: release.id, creatorId: actor.id, executorId: actor.id, requestId: randomUUID(), status: "completed", snapshot, workspaceId: workspace.id, runKey: "continued" } });
+  const run = await database.client.run.create({ data: { path: `workspaces/${workspace.id}/runs/continued`, workspaceId: workspace.id, ownerUserId: actor.id, runKey: "continued", executionState: "running", data: { execution: { status: "running" } } } });
+  await assert.rejects(lifecycle.archiveRelease(projectId, release.id, actor, { revision: release.revision }, true), /执行/);
+  await database.client.run.update({ where: { path: run.path }, data: { executionState: "completed", data: { execution: { status: "completed" } } } });
+  release = await lifecycle.archiveRelease(projectId, release.id, actor, { revision: release.revision }, true);
+  release = await lifecycle.archiveRelease(projectId, release.id, actor, { revision: release.revision }, false);
+  await database.client.run.delete({ where: { path: run.path } });
+  await assert.rejects(lifecycle.archiveRelease(projectId, release.id, actor, { revision: release.revision }, true), /状态不明/);
+  await database.client.developmentTask.update({ where: { id: task.id }, data: { snapshot: { ...snapshot, sessionDeletion: { execution: { status: "completed" } } } } });
+  assert.equal((await lifecycle.archiveRelease(projectId, release.id, actor, { revision: release.revision }, true)).status, "archived");
+});
+
 test("release archive gates unfinished work and protects all issue write paths until restore", async t => {
   const { actor, projectId, lifecycle, content } = await fixture(t);
   let release = await lifecycle.saveRelease(projectId, null, actor, { name: "v0.2" });

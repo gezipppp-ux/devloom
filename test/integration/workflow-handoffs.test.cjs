@@ -65,6 +65,9 @@ test("returned work retains the same task and creates a new verification round",
   const f = await fixture(t); await f.run();
   let delivery = await f.submit();
   delivery = await f.content.reviewDeliverable(f.project.id, delivery.id, f.qa, { revision: delivery.revision, status: "returned", checkedItems: [], reviewNote: "Fix the edge case" });
+  const current = (await f.development.read(f.project.id, f.task.id, f.dev)).task;
+  assert.equal(current.canRework, false, "a retained worktree must continue its original task");
+  await assert.rejects(f.development.rework(f.project.id, f.task.id, f.dev, { requestId: randomUUID(), revision: current.revision, deliveries: [{ id: delivery.id, revision: delivery.revision }] }), { statusCode: 409 });
   assert.equal((await f.read()).status, "rework");
   assert.equal((await f.read()).processing.handlerId, f.dev.id);
   await f.run();
@@ -74,6 +77,28 @@ test("returned work retains the same task and creates a new verification round",
   assert.equal(next.supersedesId, delivery.id);
   assert.equal((await f.read()).status, "pending_verification");
   await assert.rejects(f.content.reviewDeliverable(f.project.id, delivery.id, f.qa, { revision: delivery.revision, status: "accepted", checkedItems: delivery.checklist.map((_, i) => i) }), { statusCode: 409 });
+});
+
+test("concurrent cleaned-worktree rework transfers claims once and preserves the original request", async t => {
+  const f = await fixture(t); await f.run();
+  const delivery = await f.submit();
+  await f.content.reviewDeliverable(f.project.id, delivery.id, f.qa, { revision: delivery.revision, status: "returned", checkedItems: [], reviewNote: "Rework" });
+  const task = await f.development.store.task(f.project.id, f.task.id);
+  const root = path.join(f.database.dataRoot, "workspaces", task.workspaceId, "runs", task.runKey);
+  await f.database.writeDocument(path.join(root, "worktree-deletion.json"), { status: "deleted", worktreeRemoved: true });
+  const presented = (await f.development.read(f.project.id, task.id, f.dev)).task;
+  const input = { requestId: randomUUID(), revision: presented.revision, deliveries: presented.reworkDeliveries };
+  const outcomes = await Promise.allSettled([f.development.rework(f.project.id, task.id, f.dev, input), f.development.rework(f.project.id, task.id, f.dev, input)]);
+  assert.ok(outcomes.some(result => result.status === "fulfilled"));
+  for (const result of outcomes.filter(result => result.status === "rejected")) assert.equal(result.reason.statusCode, 409);
+  const replacement = (await f.development.rework(f.project.id, task.id, f.dev, input)).task;
+  assert.equal(await f.database.client.developmentTask.count(), 2);
+  assert.equal((await f.read()).development.taskId, replacement.id);
+  assert.equal((await f.read()).processing.handlerId, f.dev.id);
+  await assert.rejects(f.development.rework(f.project.id, task.id, f.dev, { ...input, revision: input.revision + 1 }), { statusCode: 409 });
+  const original = await f.development.store.task(f.project.id, task.id);
+  assert.equal(original.workspaceId, task.workspaceId); assert.equal(original.runKey, task.runKey);
+  assert.equal(original.status, "cancelled");
 });
 
 test("failed handoff rolls back delivery; another qualified reviewer becomes the actual handler", async t => {

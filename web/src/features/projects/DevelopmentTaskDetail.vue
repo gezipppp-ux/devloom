@@ -16,6 +16,7 @@ import StatusBadge from "../../shared/components/StatusBadge.vue";
 import { accountSession } from "../../shared/api/account-session.js";
 import RemoteBranchSelect from "./RemoteBranchSelect.vue";
 import PublishDelivery from "./PublishDelivery.vue";
+import ReworkDevelopment from "./ReworkDevelopment.vue";
 import DevelopmentTaskConfirmation from "./DevelopmentTaskConfirmation.vue";
 import DevelopmentTaskContext from "./DevelopmentTaskContext.vue";
 import { useDevelopmentTask } from "./use-development-task.js";
@@ -153,7 +154,7 @@ const codexStatus = computed(() =>
       : "未提供执行状态",
 );
 const sessionLabel = computed(() =>
-  ["completed", "cancelled"].includes(task.value.status) || readOnly.value
+  task.value.worktreeRemoved || task.value.status === "cancelled" || task.value.status === "completed" && task.value.kind === "manual" || readOnly.value
     ? "查看历史会话"
     : view.value.step === 4
       ? "查看会话与代码"
@@ -531,15 +532,17 @@ async function submitConfirmation() {
         >
           {{ readOnlyReason || $t("版本已归档，开发任务只读。") }}
         </p>
-        <div v-if="task.mergedIntoTaskId" class="actions">
+        <div v-if="task.replacedByTaskId" class="actions"><button class="primary" @click="emit('open-task', { id: task.replacedByTaskId })">{{ $t('查看返工任务') }}</button></div>
+        <div v-else-if="task.mergedIntoTaskId" class="actions">
           <button @click="emit('open-task', { id: task.mergedIntoTaskId })">
             {{ $t("查看合并后的任务") }}
           </button>
         </div>
         <div v-else class="actions">
+          <ReworkDevelopment :key="task.id + ':' + task.revision" :project-id="projectId" :task="task" />
           <button
             v-if="task.canOpenSession && task.runKey"
-            class="primary"
+            :class="{ primary: !task.canRework }"
             :disabled="busy"
             @click="emit('open-workspace', task.workspaceId, task.runKey)"
           >
@@ -553,11 +556,12 @@ async function submitConfirmation() {
           </button>
         </div>
         <p v-if="canComplete" class="field-hint">
-          {{ $t("完成后会话转为只读。Codex 本轮结束不代表需求或 Bug 已验收。") }}
+          {{ $t(task.kind === 'manual' ? "完成后会话转为只读。Codex 本轮结束不代表需求或 Bug 已验收。" : "完成任务会释放认领，保留的会话仍可继续使用；续聊不会改变验收结论。") }}
         </p>
       </section>
       </div>
       <aside class="development-detail-aside" :aria-label="$t('任务信息')">
+        <button v-if="task.reworkOfTaskId" @click="emit('open-task', { id: task.reworkOfTaskId })">{{ $t('查看原开发任务') }}</button>
         <DevelopmentTaskContext :project-id="projectId" :project-name="projectName" :task="task" :refreshing="loading">
         <details class="development-info" :open="infoExpanded">
         <summary>{{ $t('任务信息') }}</summary>
@@ -627,6 +631,7 @@ async function submitConfirmation() {
       <DevelopmentTaskConfirmation
         v-if="confirmation"
         :action="confirmation.action"
+        :retain-session="task.kind !== 'manual'"
         :title="confirmation.title"
         :busy="saving"
         :disabled="loading || !confirmationAllowed"

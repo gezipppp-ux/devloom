@@ -18,7 +18,7 @@ function hashCreationRequest(data, attachments) {
 }
 const fileMetadata = { id: true, projectId: true, issueId: true, assetId: true, authorId: true, name: true, mimeType: true, size: true, sha256: true, createdAt: true };
 
-const issueRelations = { _count: { select: { taskLinks: true, deliverables: true } }, actions: { where: { status: { in: ["ready", "active"] } } }, deliverables: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1, select: { authorId: true, reviewerId: true, status: true, actionId: true } }, source: true, release: true, workflowVersion: { include: { workflow: { select: { publishedVersion: true } } } }, developmentClaim: { select: { task: { select: { id: true, status: true, executorId: true, executor: { select: { displayName: true } } } } } } };
+const issueRelations = { _count: { select: { taskLinks: true, deliverables: true } }, actions: { where: { status: { in: ["ready", "active"] } } }, deliverables: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1, select: { id: true, revision: true, authorId: true, reviewerId: true, status: true, actionId: true } }, source: true, release: true, workflowVersion: { include: { workflow: { select: { publishedVersion: true } } } }, developmentClaim: { select: { task: { select: { id: true, status: true, executorId: true, executor: { select: { displayName: true } } } } } } };
 
 class ProjectContentStore {
   constructor(database) { this.database = database; }

@@ -17,6 +17,7 @@ export function developmentTaskView(
   task,
   { spaceReady = false, readOnlyReason = "" } = {},
 ) {
+  if (task.replacedByTaskId) return { step: 0, title: "已转入返工任务", description: "旧任务已取消，事项认领已转入新的返工任务；原交付与验收记录保留。" };
   if (task.mergedIntoTaskId || task.status === "merged")
     return {
       step: 0,
@@ -29,6 +30,7 @@ export function developmentTaskView(
       title: "开发任务只读",
       description: readOnlyReason || "版本已归档，可查看任务资料与历史记录。",
     };
+  if (task.sessionDeleted || task.worktreeRemoved) return { step: 0, title: task.sessionDeleted ? "会话已删除" : "工作目录已清理", description: task.canRework ? "交付已退回，可创建返工任务并选择包含原交付代码的分支。" : "事项与交付记录保留，验收继续按原流程处理。" };
   if (task.status === "completed")
     return {
       step: 4,

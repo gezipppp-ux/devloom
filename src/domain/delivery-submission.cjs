@@ -7,7 +7,9 @@ function deliverySubmission(issue, actorId, permissions) {
   const allowed = issue.release?.status !== "archived" && Boolean(edge) && ["issue.view", "deliverable.create", edge?.permission].every(permission => permissions.includes(permission))
     && workflowActorAllowed(issue, edge, actorId, permissions)
     && (!task || permissions.includes("session.view") && task.executorId === actorId && ["planned", "started", "completed"].includes(task.status));
-  return { allowed, taskId: task?.id || null, label: edge?.name || "", transitionId: edge?.id || null };
+  const previous = issue.deliverables?.[0];
+  return { allowed, taskId: task?.id || null, label: edge?.name || "", transitionId: edge?.id || null,
+    previous: previous?.status === "returned" ? { id: previous.id, revision: previous.revision } : null };
 }
 
 module.exports = { deliverySubmission };

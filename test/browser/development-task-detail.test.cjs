@@ -15,7 +15,7 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
   const apiTask = `/api${base}/tasks/search-task`;
   const initial = structuredClone(fixture.response(new URL(origin + apiTask)).task);
   let task, spaceReady = false, readonly = false, failBranches = false, failStart = false, rejectStart = false;
-  let permissionsAvailable = false;
+  let permissionsAvailable = false, failRework = false, replacement;
   const writes = [], errors = [];
   const planned = () => ({ ...structuredClone(initial), revision: 1, status: "planned", execution: null, runKey: null, baseBranch: "", baseCommit: null, fetchedAt: null, additions: [], canStart: true, canEdit: true, canComplete: false, canCancel: true, canOpenSession: false });
   const started = (status = "completed") => ({ ...structuredClone(initial), execution: { status, sessionId: "fixture-session" }, canComplete: status === "completed", canCancel: status === "completed" });
@@ -35,6 +35,13 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
         return send({ ...result, project: { ...result.project, status: readonly ? "archived" : "active" }, space: { ...result.space, status: spaceReady ? "ready" : "awaiting_credentials" } });
       }
       if (endpoint === apiTask && request.method() === "GET") return send({ task });
+      if (endpoint === `/api${base}/tasks/rework-task`) return send({ task: replacement });
+      if (endpoint === `/api${base}/deliveries/returned-delivery`) return send({
+        delivery: { id: "returned-delivery", title: "客户搜索交付：补齐长标题、多事项关联与移动端验收", body: "已交付客户搜索功能与回归测试，请根据退回意见检查空结果与移动端操作。", status: "returned", revision: 2,
+          authorId: "visual-admin", reviewerId: "member-2", reviewedById: "member-2", reviewedAt: "2026-10-22T08:00:00Z", reviewNote: "窄屏下清除条件后仍显示旧列表，请补充此场景并重新提交。", checklist: ["搜索结果正确", "移动端操作可用"], checkedItems: [], commit: "feature/customer-search", taskId: task.id, issueId: "search" },
+        developmentTask: task, permissions: fixture.permissions, canReview: false, canResubmit: true,
+        issue: { ...initial.issues[0], statusName: "待返工", deliverySubmission: { allowed: true, label: "重新送验" } }, people: initial.issues[0].people,
+      });
       if (endpoint === `/api${base}/tasks/other-task`) return send({ task: { ...planned(), id: "other-task", title: "切换后的另一任务" } });
       if (endpoint === `/api${base}/tasks`) return send({ tasks: [task], nextOffset: null });
       if (endpoint === `/api${base}/branches` && failBranches) return send({ error: "远端暂不可用，请刷新重试。" }, 502);
@@ -45,6 +52,10 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
         if (endpoint === apiTask) {
           if (input.revision !== task.revision) return send({ error: "任务已变更，请刷新后重试。" }, 409);
           task = { ...task, ...input, revision: task.revision + 1 };
+        } else if (endpoint.endsWith("/rework")) {
+          if (failRework) return send({ error: "返工创建响应中断，请使用原请求重试。" }, 502);
+          replacement = { ...planned(), id: "rework-task", title: "新的返工任务", reworkOfTaskId: task.id };
+          return send({ task: replacement });
         } else if (endpoint.endsWith("/start")) {
           if (rejectStart) return send({ error: "启动前校验失败，请修正后重试。" }, 400);
           if (failStart) { task = { ...task, status: "unknown", canStart: false, canEdit: false, canComplete: false, canCancel: false, error: "启动响应中断，请确认原会话。" }; return send({ error: task.error }, 502); }
@@ -104,7 +115,8 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
       const dialog = page.getByRole("dialog");
       if (await dialog.count()) {
         assert.ok(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth), `${name}: dialog overflow at ${width}`);
-        assert.ok(await dialog.getByRole("button", { name: "关闭确认", exact: true }).evaluate(el => el.getBoundingClientRect().width >= 52), "confirmation close label does not shrink vertically");
+        const close = dialog.getByRole("button", { name: "关闭确认", exact: true });
+        if (await close.count()) assert.ok(await close.evaluate(el => el.getBoundingClientRect().width >= 52), "confirmation close label does not shrink vertically");
       }
       await page.screenshot({ path: path.join(output, `task-detail-${name}-${width}.png`), fullPage: true });
     }
@@ -257,6 +269,45 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     assert.equal(finishes(), 1);
     assert.equal(await button("发送资料并继续 Codex").count(), 0);
     await capture("completed");
+
+    task = { ...started(), title: "交付退回后继续处理长标题、验证意见和多事项范围的返工任务", canRework: true, canComplete: false, canOpenSession: false,
+      sessionDeleted: true, worktreeRemoved: true, reworkDeliveries: [{ id: "returned-delivery", revision: 2 }] };
+    await page.reload();
+    await button("创建返工任务").waitFor();
+    assert.equal(await button("查看历史会话").count(), 0, "deleted sessions cannot be opened");
+    await capture("rework-ready");
+    await page.goto(`${origin}/deliveries?projectId=${fixture.projectId}&delivery=returned-delivery`);
+    await button("创建返工任务").waitFor();
+    await capture("delivery-rework");
+    await button("创建返工任务").click();
+    await capture("delivery-rework-confirmation");
+    await page.keyboard.press("Escape");
+    await page.getByRole("link", { name: "查看开发任务", exact: true }).click();
+    await button("创建返工任务").waitFor();
+    await button("创建返工任务").click();
+    dialog = page.getByRole("dialog", { name: "创建返工任务", exact: true });
+    await capture("rework-confirmation");
+    await page.keyboard.press("Escape");
+    assert.equal(writes.filter(write => write.endpoint.endsWith("/rework")).length, 0);
+    await selectPreference(page, "locale", "en");
+    await button("Create rework task").click();
+    await capture("rework-confirmation-en");
+    await page.keyboard.press("Escape");
+    await selectPreference(page, "locale", "zh-CN");
+    await button("创建返工任务").click();
+    failRework = true;
+    await button("确认创建返工任务").click();
+    await dialog.getByRole("alert").waitFor();
+    await capture("rework-failed");
+    const reworkInput = writes.at(-1).input;
+    failRework = false;
+    const startCount = writes.filter(write => write.endpoint.endsWith("/start")).length;
+    await button("确认创建返工任务").click();
+    await page.getByRole("heading", { name: "新的返工任务", exact: true }).waitFor();
+    assert.deepEqual(writes.at(-1).input, reworkInput, "uncertain creation retries the identical request");
+    assert.equal(writes.filter(write => write.endpoint.endsWith("/start")).length, startCount, "creating rework never starts an Agent");
+    await button("查看原开发任务").click();
+    await button("创建返工任务").waitFor();
 
     task = planned(); failStart = true;
     await page.reload();

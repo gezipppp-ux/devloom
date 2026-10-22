@@ -1,5 +1,6 @@
 const { accountError } = require("../domain/account.cjs");
 const { issueCompleted, issueWorkflowNode } = require("../domain/issue-workflows.cjs");
+const { completedSessionWritable, executionEnded } = require("../domain/development-lifecycle.cjs");
 
 function conflict() { return accountError("资料已修改，请刷新后重试。", 409); }
 class ProjectLifecycleStore {
@@ -55,6 +56,13 @@ class ProjectLifecycleStore {
       const issues = await this.database.client.projectIssue.findMany({ where: { projectId, releaseId: id, deletedAt: null }, include: { workflowVersion: true } });
       if (issues.some(issue => !issueCompleted(issue))) throw accountError("版本仍有未完成或未取消事项。", 409);
       if (await this.database.client.developmentTask.count({ where: { projectId, releaseId: id, status: { notIn: ["completed", "cancelled", "merged"] } } })) throw accountError("版本仍有未结束开发任务。", 409);
+      const tasks = (await this.database.client.developmentTask.findMany({ where: { projectId, releaseId: id, status: "completed", runKey: { not: null } } })).filter(completedSessionWritable);
+      const runs = tasks.length ? await this.database.client.run.findMany({ where: { OR: tasks.map(task => ({ workspaceId: task.workspaceId, runKey: task.runKey })) }, select: { workspaceId: true, runKey: true, executionState: true, data: true } }) : [];
+      for (const task of tasks) {
+        const run = runs.find(run => run.workspaceId === task.workspaceId && run.runKey === task.runKey);
+        const execution = run ? { status: run.executionState || run.data?.execution?.status } : task.snapshot.sessionDeletion?.execution;
+        if (!executionEnded(execution)) throw accountError("版本仍有执行中的会话或执行状态不明，请先结束并确认本轮。", 409);
+      }
     }
     return this.changeRelease(projectId, id, revision, { status: archive ? "archived" : "active" });
   }

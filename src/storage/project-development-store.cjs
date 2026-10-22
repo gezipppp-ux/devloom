@@ -131,7 +131,7 @@ class ProjectDevelopmentStore {
   async acceptStart(task, space, request, issues, prompt, selection) {
     for (const issue of issues) await this.database.client.taskIssueLink.update({ where: { taskId_issueId: { taskId: task.id, issueId: issue.id } }, data: { snapshot: issue } });
     return this.update(task, { spaceId: space.id, workspaceId: space.workspaceId, runKey: runKey({ channel: "manual", scope: "local", id: task.id }), status: "unknown",
-      snapshot: json({ ...task.snapshot, issues: task.snapshot.issues.map(previous => issues.find(issue => issue.id === previous.id) || previous), prompt, selection, supplementaryPrompt: request.supplementaryPrompt || "", baseBranch: request.baseBranch, startRequest: request }) });
+      snapshot: json({ ...task.snapshot, issues: task.snapshot.issues.map(previous => issues.find(issue => issue.id === previous.id) || previous), startIssueIds: issues.map(issue => issue.id), prompt, selection, supplementaryPrompt: request.supplementaryPrompt || "", baseBranch: request.baseBranch, startRequest: request }) });
   }
   async acceptManual(projectId, actorId, space, request, prompt, selection) {
     const id = randomUUID();
@@ -192,7 +192,27 @@ class ProjectDevelopmentStore {
   async execution(task) {
     if (!task.runKey) return null;
     const run = await this.database.readDocument(path.join(this.database.dataRoot, "workspaces", task.workspaceId, "runs", task.runKey, "run.json"));
-    return run ? { status: run.execution?.status || "unknown", error: run.execution?.error || null, sessionId: run.session_id || null, baseline: run.worktree?.baseline || null } : null;
+    if (!run) return task.snapshot.sessionDeletion ? { ...task.snapshot.sessionDeletion.execution, sessionId: null, sessionDeleted: true, worktreeRemoved: true } : null;
+    const deletion = await this.database.readDocument(path.join(this.database.dataRoot, "workspaces", task.workspaceId, "runs", task.runKey, "worktree-deletion.json"));
+    return { status: run.execution?.status || "unknown", error: run.execution?.error || null, sessionId: run.session_id || null, baseline: run.worktree?.baseline || null,
+      sessionDeleted: false, worktreeRemoved: Boolean(deletion?.worktreeRemoved || deletion?.status === "deleted") };
+  }
+  async recordSessionDeletion(task, execution) {
+    await this.update(task, { snapshot: { ...task.snapshot, sessionDeletion: { deletedAt: new Date().toISOString(),
+      execution: { status: execution.status, baseline: execution.baseline || null } } } });
+    await this.audit(task.executorId, "development.session.deleted", task.projectId, task.id);
+  }
+  async replaceForRework(task, actorId, request) {
+    const claims = await this.database.client.issueDevelopmentClaim.findMany({ where: { issueId: { in: task.issueLinks.map(link => link.issueId) } } });
+    if (claims.some(claim => claim.taskId !== task.id)) throw accountError("关联事项已有其他开发任务，请刷新后核对返工范围。", 409);
+    const issues = await this.issues(task.projectId, task.issueLinks.map(link => link.issueId));
+    await this.database.client.issueDevelopmentClaim.deleteMany({ where: { taskId: task.id } });
+    const created = await this.create(task.projectId, actorId, { ...request, executorId: actorId }, issues);
+    const replacement = await this.update(created, { snapshot: { ...created.snapshot, title: task.snapshot.title, reworkOfTaskId: task.id } });
+    await this.update(task, { status: "cancelled", snapshot: { ...task.snapshot, replacedByTaskId: replacement.id,
+      cancellationReason: "会话或工作目录已清理，转入返工任务。" } });
+    await this.audit(actorId, "development.rework.created", task.projectId, replacement.id);
+    return replacement;
   }
   async taskForRun(workspaceId, runKey) {
     return this.database.client.developmentTask.findUnique({ where: { workspaceId_runKey: { workspaceId, runKey } }, include: { release: true } });

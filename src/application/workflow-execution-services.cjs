@@ -8,12 +8,12 @@ const { presentError } = require("./error-presenter.cjs");
 
 class WorkflowExecutionServices {
   constructor(database, projects) { this.store = new WorkflowExecutionStore(database); this.development = new ProjectDevelopmentStore(database); this.workflow = new ProjectWorkflowServices(database, projects); this.projects = projects; }
-  async prepare(task, actor) {
+  async prepare(task, actor, { continuation = false } = {}) {
     if (task.snapshot.kind === "manual") return;
-    const ids = [...task.snapshot.issues.map(issue => issue.id), ...task.snapshot.additions.filter(batch => ["sending", "sent"].includes(batch.status)).flatMap(batch => batch.issueIds)];
+    const ids = !continuation && task.snapshot.startIssueIds ? task.snapshot.startIssueIds : [...task.snapshot.issues.map(issue => issue.id), ...task.snapshot.additions.filter(batch => ["sending", "sent"].includes(batch.status)).flatMap(batch => batch.issueIds)];
     const steps = [];
     let eligible = false;
-    for (const issue of await this.development.issues(task.projectId, ids)) {
+    for (const issue of task.status === "completed" ? [] : await this.development.issues(task.projectId, ids)) {
       const node = issueWorkflowNode(issue);
       if (!node.allowDevelopment) continue;
       eligible = true;
@@ -23,8 +23,9 @@ class WorkflowExecutionServices {
       await this.workflow.validate(issue, actor, edge, { executorId: task.executorId });
       steps.push({ issueId: issue.id, actionId: issue.actions[0]?.id, revision: issue.revision, edgeId: edge.id });
     }
-    if (!eligible) throw accountError("关联事项正在验证或已结束，当前没有可继续开发的范围。", 409);
-    if (steps.length && JSON.stringify(task.snapshot.workflowIntent?.steps) !== JSON.stringify(steps)) await this.store.capture(task, steps);
+    if (!eligible && !continuation) throw accountError("关联事项当前流程节点不允许开始开发。", 409);
+    // Empty continuation intent must replace an older development transition.
+    if (JSON.stringify(task.snapshot.workflowIntent?.steps || []) !== JSON.stringify(steps)) await this.store.capture(task, steps);
   }
   async recoverTask(task, retry = false) {
     if (!task.runKey || task.snapshot.kind === "manual") return;

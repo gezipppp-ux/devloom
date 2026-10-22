@@ -32,6 +32,14 @@ function developmentMergeInput(input) {
   identifiers(tasks.map(task => task.id), "开发任务", 20);
   return { requestId: input.requestId, tasks, title: text(input.title, "合并后的任务标题", 200, { required: true }) };
 }
+function developmentReworkInput(input) {
+  object(input, ["requestId", "revision", "deliveries"]);
+  if (!UUID.test(input.requestId || "")) throw accountError("返工请求标识无效。", 400);
+  if (!Array.isArray(input.deliveries) || !input.deliveries.length || input.deliveries.length > 20) throw accountError("请确认退回的交付。", 400);
+  const deliveries = input.deliveries.map(item => { object(item, ["id", "revision"]); return { id: identifier(item.id, "交付"), revision: revision(item.revision) }; }).sort((a, b) => a.id.localeCompare(b.id));
+  identifiers(deliveries.map(item => item.id), "交付", 20);
+  return { requestId: input.requestId, revision: revision(input.revision), deliveries };
+}
 function developmentStartInput(input) {
   object(input, ["requestId", "revision", "baseBranch", "model", "reasoningEffort", "permissionMode", "supplementaryPrompt"]);
   if (!UUID.test(input.requestId || "")) throw accountError("开发请求标识无效。", 400);
@@ -98,4 +106,4 @@ function developmentPrompt(issues, addition = false, templates = getPromptTempla
   return content;
 }
 
-module.exports = { developmentStatus, developmentInput, developmentMergeInput, developmentStartInput, manualDevelopmentInput, manualDevelopmentPrompt, developmentEditInput, developmentPrompt };
+module.exports = { developmentStatus, developmentInput, developmentMergeInput, developmentReworkInput, developmentStartInput, manualDevelopmentInput, manualDevelopmentPrompt, developmentEditInput, developmentPrompt };

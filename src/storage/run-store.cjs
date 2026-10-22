@@ -169,12 +169,12 @@ class RunStore {
     return { archivedAt: null };
   }
 
-  async deleteRun(key) {
+  async deleteRun(key, beforeDelete) {
     const directory = this.dir(key);
     (await this.read(key));
     this.release(key);
     fs.rmSync(directory, { recursive: true, force: true, maxRetries: 3 });
-    return this.database ? (await this.database.deleteRunDirectory(directory)) : true;
+    return this.database ? (await this.database.deleteRunDirectory(directory, beforeDelete)) : true;
   }
 
   async readExecutionSettings(key) {

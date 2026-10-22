@@ -115,11 +115,12 @@ class ApplicationDatabase extends PostgresDatabase {
     return (await table.deleteMany({ where: { path: relative } })).count > 0;
   }
 
-  async deleteRunDirectory(directory) {
+  async deleteRunDirectory(directory, beforeDelete) {
     const relative = this.relative(directory);
     const prefix = `${relative}/`;
     const { workspaceId, runKey } = this.scope(relative);
     return (await this.transaction(async () => {
+      await beforeDelete?.();
       if (workspaceId && runKey) await this.client.agentSupplierUse.deleteMany({ where: { workspaceId, runKey } });
       await this.client.sessionItem.deleteMany({ where: { runPath: relative } });
       for (const table of [this.client.runDocument, this.client.attachment, this.client.logChunk])

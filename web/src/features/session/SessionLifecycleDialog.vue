@@ -75,6 +75,7 @@ onUnmounted(() => { revision++; });
         <p v-if="mode === 'archive'" class="muted">{{ $t("归档后会话不再显示在会话列表中，可从「已归档会话」恢复。历史、需求资料和 Worktree 保留。") }}</p>
         <template v-else>
           <p class="git-feedback warning">{{ $t("永久删除会话会移除全部会话记录、需求资料和附件，无法恢复。") }}</p>
+          <p class="muted">{{ $t('关联事项、开发任务和交付记录仍保留。工作目录清理后如需返工，可从退回交付创建新任务。') }}</p>
           <p v-if="!codeRemoved" class="muted">{{ $t("此会话仍有关联代码。可先在 Git 面板清理，或在下方选择强制删除。") }}</p>
         </template>
         <p v-if="active" class="error">{{ $t("任务正在执行或等待处理，请先停止并等待本轮结束。") }}</p>

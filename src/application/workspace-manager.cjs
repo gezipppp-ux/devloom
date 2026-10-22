@@ -1,4 +1,5 @@
 const { WorkflowExecutionServices } = require("./workflow-execution-services.cjs");
+const { executionEnded, completedSessionWritable } = require("../domain/development-lifecycle.cjs");
 const { ProjectServices } = require("./project-services.cjs");
 const path = require("node:path");
 const { dataRoot } = require("../config/runtime.cjs");
@@ -208,24 +209,34 @@ class WorkspaceManager {
         } : undefined,
         authorize: permission => this.authorizeProject?.(id, { id: config.workspace.owner_user_id }, permission),
         onExecutionEvent: workflow ? key => workflow.event(id, key) : undefined,
+        deleteSessionRecords: workflow ? (key, remove) => remove(async () => {
+          const task = await workflow.development.taskForRun(id, key);
+          if (task) {
+            const execution = await workflow.development.execution(task);
+            if (!executionEnded(execution)) throw accountError("执行仍在进行或状态不明，请先确认原会话已结束。", 409);
+            await workflow.development.recordSessionDeletion(task, execution);
+          }
+        }) : undefined,
         authorizeRun: this.store.database ? async (key, operation) => {
           const development = new ProjectDevelopmentStore(this.store.database);
           const task = await development.taskForRun(id, key);
           if (operation === "delete") {
-            if (task && !["completed", "cancelled", "merged"].includes(task.status))
-              throw accountError("请先完成或取消关联开发任务，再删除会话。", 409);
+            if (task && !executionEnded(await development.execution(task)))
+              throw accountError("执行仍在进行或状态不明，请先确认原会话已结束。", 409);
             return;
           }
-          if (task && ["completed", "cancelled"].includes(task.status)) throw accountError("开发任务已结束，不能继续执行或处理审批。", 409);
+          if (task && ["completed", "cancelled", "merged"].includes(task.status) && !completedSessionWritable(task)) throw accountError("开发任务已结束，不能继续执行或处理审批。", 409);
           if (task?.release?.status === "archived") throw accountError("任务发布版本已归档，不能继续执行。", 409);
-          if (task && ["start", "continue", "dispatch"].includes(operation)) await workflow.store.transaction(async () => {
+          if (task && ["start", "start-dispatch", "continue", "dispatch"].includes(operation)) await workflow.store.transaction(async () => {
             const current = await development.task(task.projectId, task.id);
-            if (!["started", "unknown"].includes(current.status)) throw accountError("开发任务已结束，不能继续执行。", 409);
-            await workflow.prepare(current, { id: config.workspace.owner_user_id });
-            if (operation === "dispatch") await workflow.store.markDispatch(current);
+            if (current.release?.status === "archived") throw accountError("任务发布版本已归档，不能继续执行。", 409);
+            const continuation = !["start", "start-dispatch"].includes(operation);
+            if (!["started", "unknown"].includes(current.status) && !(continuation && completedSessionWritable(current))) throw accountError("开发任务已结束，不能继续执行。", 409);
+            await workflow.prepare(current, { id: config.workspace.owner_user_id }, { continuation });
+            if (["dispatch", "start-dispatch"].includes(operation)) await workflow.store.markDispatch(current);
           });
           if (task && operation === "start") {
-            const issues = await development.issues(task.projectId, task.snapshot.issues.map(issue => issue.id));
+            const issues = await development.issues(task.projectId, task.snapshot.startIssueIds || task.snapshot.issues.map(issue => issue.id));
             if (issues.some(issue => !issueDevelopmentAllowed(issue))) throw accountError("事项当前流程节点不允许开发，请核对事项后处理已记录任务。", 409);
           }
         } : undefined,

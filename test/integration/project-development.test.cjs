@@ -206,9 +206,8 @@ test("project tasks and image additions use the real session manager with tempor
   client.notify("turn/completed", { turn: { id: runtime.turnId, status: "completed" } });
   await sessions.events.drain();
   const latest = (await services.read(project.id, task.id, actor)).task;
-  for (const input of [{ confirm: true }, { confirm: true, force: true, confirmBranch: state.worktree.branch }])
-    await assert.rejects(sessions.deleteSession(task.runKey, input), /先完成或取消关联开发任务/);
-  assert.ok(fs.existsSync(state.worktree.path), "rejected session deletion must not clean up the worktree");
+  await assert.rejects(sessions.deleteSession(task.runKey, { confirm: true }), /请先删除 Worktree/);
+  assert.ok(fs.existsSync(state.worktree.path), "ordinary deletion still requires explicit code cleanup");
   assert.equal(await database.client.issueDevelopmentClaim.count({ where: { taskId: task.id } }), 2);
   await services.finish(project.id, task.id, actor, { revision: latest.revision }, "cancelled");
   await assert.rejects(sessions.send(task.runKey, "不能重启已结束任务", []), /开发任务已结束/);

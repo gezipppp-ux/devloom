@@ -19,8 +19,8 @@ import Workflow from '/src/features/settings/SystemWorkflows.vue'; import Publis
 import '/src/shared/styles/style.css'; import '/src/shared/styles/workbench.css'; import '/src/shared/styles/projects.css';
 const router=createRouter({history:createWebHistory(),routes:[{path:'/projects/:projectId',name:'project',component:{render:()=>null}},{path:'/deliveries',name:'deliveries',component:{render:()=>null}},{path:'/:pathMatch(.*)*',component:{render:()=>null}}]});
 await router.push(location.pathname+location.search); await router.isReady();
-const kind=new URLSearchParams(location.search).get('kind'); const component={issue:Detail,upgrade:Upgrade,workflow:Workflow,task:Publish,resubmit:Publish,project:Issues,tasks:Tasks,queue:Queue,review:Delivery}[kind];
-createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,{projectId:'p',...(kind==='tasks'||kind==='project'?{}:{issueId:'i'}),type:'requirement',kind:'tasks',deliveryId:'d',onOpenTask:()=>router.push({query:{tab:'tasks'}}),...(kind==='task'?{taskId:'t'}:{}),...(kind==='resubmit'?{previous:{id:'previous-delivery',issueId:'i',title:'原交付',body:'原成果与核验记录',commit:'abc123',reviewerId:'qa',revision:4}}:{}),permissions:['issue.view','issue.assign','issue.transition','collaboration.view','deliverable.create','comment.create']})])}).use(router).use(i18n).mount('#app');`;
+const kind=new URLSearchParams(location.search).get('kind'); const component={issue:Detail,upgrade:Upgrade,workflow:Workflow,task:Publish,session:Publish,resubmit:Publish,project:Issues,tasks:Tasks,queue:Queue,review:Delivery}[kind];
+createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,{projectId:'p',...(kind==='tasks'||kind==='project'?{}:{issueId:'i'}),type:'requirement',kind:'tasks',deliveryId:'d',onOpenTask:()=>router.push({query:{tab:'tasks'}}),...(kind==='task'?{taskId:'t'}:kind==='session'?{runKey:'rework-session'}:{}),...(kind==='resubmit'?{previous:{id:'previous-delivery',issueId:'i',title:'原交付',body:'原成果与核验记录',commit:'abc123',reviewerId:'qa',revision:4}}:{}),permissions:['issue.view','issue.assign','issue.transition','collaboration.view','deliverable.create','comment.create']})])}).use(router).use(i18n).mount('#app');`;
   const server = await createServer({ configFile: false, root: path.resolve("web"), logLevel: "error", plugins: [vue(), {
     name: "delivery-fixture", resolveId(id) { if (id === "virtual:delivery") return "\0delivery"; }, load(id) { if (id === "\0delivery") return source; },
     configureServer(server) { server.middlewares.use(async (req, res, next) => { if (!req.url.startsWith("/fixture")) return next(); res.setHeader("Content-Type", "text/html"); res.end(await server.transformIndexHtml(req.url, '<html><body><main id="app"></main><script type="module" src="/@id/virtual:delivery"></script></body></html>')); }); },
@@ -33,10 +33,10 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,
     page.on("pageerror", error => { errors.push(error.message); console.error(error.message); });
     const output = path.resolve("state/browser/delivery-without-agent"); fs.mkdirSync(output, { recursive: true });
     const origin = `http://127.0.0.1:${server.httpServer.address().port}`, definition = recommendedWorkflow("requirement");
-    let mode = "manual", rejectWrite = true, latestVersion = 2, actionLabel = "线下处理";
-    const issue = (id = "i") => ({ id, number: id === "i" ? 1 : 2, type: "requirement", title: id === "i" ? "客户列表支持跨页筛选与导出，保留筛选条件并补齐错误反馈" : "另一条待处理事项", description: "已完成配置或开发，并提供实际核验记录。", acceptanceCriteria: "结果符合业务要求", priority: "normal", revision: 3, watcherIds: [],
+    let mode = "manual", rejectWrite = true, rejectPrevious = false, latestVersion = 2, actionLabel = "线下处理";
+    const issue = (id = "i") => ({ id, number: id === "i" ? 1 : 2, type: "requirement", title: id === "i" ? "客户列表支持跨页筛选与导出，保留筛选条件并补齐错误反馈" : id === "k" ? "首次送验的事项" : "另一条待处理事项", description: "已完成配置或开发，并提供实际核验记录。", acceptanceCriteria: "结果符合业务要求", priority: "normal", revision: 3, watcherIds: [],
       status: "ready", statusName: "待开发", workflow: { version: 2, latestPublishedVersion: latestVersion, definition }, processing: { handlerId: "u", status: "ready" },
-      deliverySubmission: { allowed: true, label: actionLabel, taskId: mode === "manual" ? null : "t" },
+      deliverySubmission: { allowed: true, label: actionLabel, taskId: mode === "manual" ? null : "t", previous: mode === "rework" && id !== "k" ? { id: 'previous-' + id, revision: 4 } : null },
       assignmentAllowed: true, developerId: assigned.has(id) ? "u" : null, development: mode === "manual" && !assigned.has(id) ? null : { taskId: "t", executorId: "u", executorName: "处理人" }, people: [], availableTransitions: [],
       workflowActions: [{ trigger: "delivery.submitted", name: actionLabel, statusName: "待验证" }],
     });
@@ -48,17 +48,22 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,
         writes.push({ pathname, input });
         if (pathname.endsWith('/tasks')) { input.issueIds.forEach(id => assigned.add(id)); return route.fulfill({ json: { tasks: input.issueIds.map(id => ({ id: 't-' + id })) } }); }
         if (rejectWrite && !pathname.startsWith("/api/system/")) return route.fulfill({ status: 409, json: { error: "事项、任务或流程已变化，请重新预览后提交。" } });
+        if (pathname.endsWith('/deliveries/batch')) return route.fulfill({ json: { items: input.items.map((_, index) => ({ id: 'delivery-' + index })) } });
         return route.fulfill({ json: pathname.includes("workflow-upgrade") ? issue() : pathname.startsWith("/api/system/") ? { workflow: { draft: input.definition, revision: 2, publishedVersion: 1 }, recommendedDefinition: definition } : { id: "delivery" } });
       }
       let result = { items: [], people: [] };
       if (pathname.endsWith("/workflow-upgrade")) result = { available: true, issueRevision: 3, actionRevision: 2, targetVersionId: "v2", currentVersion: 1, targetVersion: 2, statusName: "规划中", targetStatusName: "规划中", handlerId: "u", tasks: [], people: [{ id: "u", displayName: "处理人" }] };
       else if (pathname.startsWith("/api/system/")) result = { workflow: { draft: defaultWorkflow("requirement"), revision: 1, publishedVersion: 1 }, recommendedDefinition: definition };
-      else if (/\/issues\/[ij]$/.test(pathname)) result = issue(pathname.split("/").at(-1));
+      else if (/\/issues\/[ijk]$/.test(pathname)) result = issue(pathname.split("/").at(-1));
       else if (pathname.endsWith("/issues")) result = { items: [issue(), issue("j")], people: [{ id: "u", displayName: "处理人" }] };
       else if (pathname.endsWith("/members")) result = { members: [{ userId: "u", username: "dev", displayName: "处理人", status: "active", userStatus: "active", effectivePermissions: ["session.start"] }] };
       else if (pathname.endsWith("/history")) result = { items: [{ id: "h", action: "workflow.upgraded", data: { before: { workflowVersion: { version: 1 } }, after: { workflowVersion: { version: 2 } }, reason: "已审核新流程" } }], people: [] };
       else if (pathname.endsWith("/reviewers")) result = { items: [{ id: "qa", displayName: "验证人", username: "qa" }] };
-      else if (pathname.endsWith("/tasks/t")) result = { task: { id: "t", title: "已有成果", status: "planned", kind: "issues", issues: [issue(), { id: "done", title: "已送验范围" }], issueIds: ["i", "done"], additions: [], scope: [{ id: "i", submission: { allowed: true } }, { id: "done", submission: { allowed: false } }] } };
+      else if (pathname.endsWith("/tasks/t") || pathname.endsWith('/tasks/session')) result = { task: { id: "t", title: "已有成果", status: mode === 'rework' ? "started" : "planned", kind: "issues", issues: [issue(), ...(mode === 'rework' ? [issue('j'), issue('k')] : []), { id: "done", title: "已送验范围" }], issueIds: ["i", "done"], additions: [], scope: [{ id: "i", submission: { allowed: true } }, ...(mode === 'rework' ? [{ id: 'j', submission: { allowed: true }, delivery: { id: 'previous-j', revision: 7, status: 'returned' } }, { id: 'k', submission: { allowed: true } }] : []), { id: "done", submission: { allowed: false } }] } };
+      else if (pathname.endsWith('/deliveries/previous-i')) {
+        if (rejectPrevious) return route.fulfill({ status: 503, json: { error: '原交付暂不可用' } });
+        result = { delivery: { id: 'previous-i', taskId: 'old-task', issueId: 'i', title: '原交付', body: '原成果与核验记录', reviewNote: '导出结果缺少筛选条件，请补齐后再次验证。', commit: 'abc123', status: 'returned', revision: 4 } };
+      }
       else if (pathname.endsWith('/issue-workflows/requirement')) result = { workflow: { versions: [{ version: 1, definition }] } };
       else if (pathname.endsWith('/tasks')) result = { tasks: [], items: [], total: 0 };
       else if (pathname.endsWith('/deliveries/d')) result = { delivery: { id: 'd', title: '定制验证', status: 'pending', reviewerId: 'qa', checklist: ['核验结果'], checkedItems: [] }, canReview: true, permissions: ['deliverable.review', 'issue.accept'], people: [], issue: { ...issue(), workflowActions: [
@@ -77,6 +82,10 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,
         const dialog = page.getByRole("dialog");
         if (await dialog.count()) assert.ok(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1), `${name} dialog overflow at ${width}`);
         await page.screenshot({ path: path.join(output, `${name}-${width}.png`) });
+        if (name.startsWith('rework-')) {
+          await page.getByRole('button', { name: actionLabel, exact: true }).scrollIntoViewIfNeeded();
+          await page.screenshot({ path: path.join(output, `${name}-submit-${width}.png`) });
+        }
       }
     }
     await open("upgrade");
@@ -143,6 +152,33 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,
     assert.equal(resubmission.body, "原成果与核验记录");
     assert.equal(resubmission.commit, "abc123", "resubmission preserves existing commit information without a new input");
     assert.equal(resubmission.supersedesId, "previous-delivery");
+    mode = 'rework';
+    for (const kind of ['task', 'session']) {
+      rejectPrevious = kind === 'task'; await open(kind);
+      if (rejectPrevious) {
+        await page.getByRole('alert').getByText('原交付暂不可用', { exact: true }).waitFor();
+        assert.equal(await page.getByRole('button', { name: actionLabel, exact: true }).isDisabled(), true);
+        await page.getByLabel('Delivery notes', { exact: true }).fill('失败后保留的返工草稿');
+        rejectPrevious = false;
+        await page.getByRole('button', { name: 'Reload', exact: true }).click();
+      }
+      await page.getByText('导出结果缺少筛选条件，请补齐后再次验证。', { exact: true }).waitFor();
+      assert.equal(await page.getByLabel('Delivery notes', { exact: true }).inputValue(), kind === 'task' ? '失败后保留的返工草稿' : '原成果与核验记录');
+      await selectOption(page.getByLabel('Delivery reviewer', { exact: true }), 'qa');
+      await page.getByRole('checkbox', { name: /I confirm/ }).check();
+      await page.getByRole('checkbox', { name: '另一条待处理事项', exact: true }).check();
+      await page.getByRole('checkbox', { name: '首次送验的事项', exact: true }).check();
+      if (kind === 'task') await capture('rework-submit-en');
+      else { await selectPreference(page, 'locale', 'zh-CN'); await capture('rework-session-submit'); }
+      await page.getByRole('button', { name: actionLabel, exact: true }).click();
+      await page.getByText(kind === 'task' ? 'Delivery submitted. Issue status and review work have been updated.' : '交付已提交，事项和验证待办已同步更新。', { exact: true }).last().waitFor();
+      const batch = writes.at(-1).input.items;
+      assert.deepEqual(batch.map(item => [item.issueId, item.taskId, item.supersedesId, item.previousRevision]), [['i', 't', 'previous-i', 4], ['j', 't', 'previous-j', 7], ['k', 't', undefined, undefined]]);
+      assert.equal(batch[0].commit, 'abc123');
+      assert.equal(batch[1].commit, undefined, 'other issues never inherit the first delivery commit');
+      assert.equal(batch[2].commit, undefined);
+    }
+    mode = 'existing';
     await open("workflow");
     await selectPreference(page, "locale", "zh-CN");
     await page.getByRole('button', { name: '流程模板', exact: true }).waitFor();

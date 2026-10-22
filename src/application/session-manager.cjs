@@ -40,6 +40,7 @@ class SessionManager extends EventEmitter {
     authorize = async () => {},
     authorizeRun = async () => {},
     onExecutionEvent = async () => {},
+    deleteSessionRecords = (_key, remove) => remove(),
     worktreeReason = defaultWorktreeReason,
     apiPrefix = "/api",
   }) {
@@ -47,6 +48,7 @@ class SessionManager extends EventEmitter {
     this.configFile = configFile;
     this.authorize = authorize;
     this.authorizeRun = authorizeRun;
+    this.deleteSessionRecords = deleteSessionRecords;
     this.gitOperationCredentials = gitOperationCredentials;
     /** @type {RunStore} */
     this.store = store || new RunStore(runsDirectory);
@@ -560,7 +562,7 @@ class SessionManager extends EventEmitter {
             await this.authorizeRun(key, "start");
             (await this.events.persist(runtime));
             await this.authorize("session.start");
-            await this.authorizeRun(key, "dispatch");
+            await this.authorizeRun(key, "start-dispatch");
             this.assertOpen();
             return new Promise((resolve, reject) => {
               const initial = { resolve, reject, onStarted, started: false };
@@ -720,7 +722,7 @@ class SessionManager extends EventEmitter {
         const deletion = (await this.store.readWorktreeDeletion(key));
         if (state.worktree?.path && deletion.status !== "deleted")
           throw new Error("请先删除 Worktree 与本地分支，避免遗留无法管理的代码目录。");
-        (await this.store.deleteRun(key));
+        await this.deleteSessionRecords(key, beforeDelete => this.store.deleteRun(key, beforeDelete));
         await this.agent.forget?.(key);
         this.sessions.delete(key);
         this.emit("event", { key, type: "deleted", at: new Date().toISOString() });

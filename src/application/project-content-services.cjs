@@ -13,6 +13,7 @@ const { ProjectWorkflowServices } = require("./project-workflow-services.cjs");
 const { currentHandler, workflowEventEdge } = require("../domain/workflow-handoffs.cjs");
 const { ProjectDevelopmentStore } = require("../storage/project-development-store.cjs");
 const { IssueWorkflowVersionServices } = require("./issue-workflow-version-services.cjs");
+const { presentDevelopment } = require("./project-development-presenter.cjs");
 const { presentIssueImages, presentIssue, presentIssueAssignment, presentAsset, presentProjectFile, presentPage, presentDeliverable } = require("./project-content-presenter.cjs");
 
 class ProjectContentServices {
@@ -234,7 +235,12 @@ class ProjectContentServices {
       const delivery = await this.store.readDeliverable(projectId, id);
       const issue = delivery.issueId ? await this.store.issue(projectId, delivery.issueId) : null;
       const context = await this.projects.authorize(projectId, actor, "collaboration.view");
-      return { delivery: presentDeliverable(delivery), issue: issue ? presentIssue(issue, actor.id, context.permissions) : null, canReview: delivery.reviewerId === actor.id, canResubmit: (delivery.authorId === actor.id || !delivery.taskId && issue?.actions[0]?.explicitHandler && currentHandler(issue) === actor.id) && delivery.status === "returned" && !delivery.next, permissions: context.project.status === "archived" ? context.permissions.filter(p => p.endsWith(".view")) : context.permissions, people: await this.store.people([delivery.authorId, delivery.reviewerId, delivery.reviewedById]) };
+      let developmentTask = null;
+      if (delivery.taskId && delivery.authorId === actor.id && delivery.status === "returned" && !delivery.next && ["session.view", "issue.view"].every(permission => context.permissions.includes(permission))) {
+        const task = await this.development.task(projectId, issue?.developmentClaim?.task.id || delivery.taskId);
+        if (task.executorId === actor.id) developmentTask = presentDevelopment(task, actor.id, await this.development.execution(task), { permissions: context.permissions, projectStatus: context.project.status });
+      }
+      return { delivery: presentDeliverable(delivery), developmentTask, issue: issue ? presentIssue(issue, actor.id, context.permissions) : null, canReview: delivery.reviewerId === actor.id, canResubmit: (delivery.authorId === actor.id || !delivery.taskId && issue?.actions[0]?.explicitHandler && currentHandler(issue) === actor.id) && delivery.status === "returned" && !delivery.next, permissions: context.project.status === "archived" ? context.permissions.filter(p => p.endsWith(".view")) : context.permissions, people: await this.store.people([delivery.authorId, delivery.reviewerId, delivery.reviewedById]) };
     });
   }
   async beginDelivery(projectId, id, actor, input) {

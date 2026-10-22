@@ -88,14 +88,17 @@ test("manual outcomes return to their submitter and resubmit without development
   const f = await fixture(t); await f.publish(true);
   let issue = await f.prepare((await f.upgrade()).issue);
   assert.equal(issue.deliverySubmission.allowed, true);
+  assert.equal(issue.deliverySubmission.previous, null);
   let delivery = await f.submit(issue, f.product);
   delivery = await f.review(delivery, "returned");
   issue = await f.read();
   assert.equal(issue.status, "rework");
   assert.equal(issue.processing.handlerId, f.product.id);
   assert.equal(issue.developerId, null);
+  assert.deepEqual(issue.deliverySubmission.previous, { id: delivery.id, revision: delivery.revision });
   const next = await f.submit(issue, f.product, { supersedesId: delivery.id, previousRevision: delivery.revision });
   assert.equal(next.supersedesId, delivery.id);
+  assert.equal((await f.read()).deliverySubmission.previous, null, "pending successors cannot be resubmitted");
   await f.review(next);
   assert.equal((await f.read()).status, "implemented");
   assert.equal(await f.database.client.developmentTask.count(), 0);
@@ -108,6 +111,7 @@ test("existing outcomes retain an unstarted task through return and resubmission
   await f.publish(); const { issue } = await f.upgrade();
   const returned = await f.review(await f.submit(issue, f.dev, { taskId: task.id }), "returned");
   const current = await f.read();
+  assert.deepEqual(current.deliverySubmission.previous, { id: returned.id, revision: returned.revision });
   assert.equal(current.processing.handlerId, f.dev.id);
   assert.equal((await f.development.store.task(f.project.id, task.id)).status, "planned");
   const next = await f.submit(current, f.dev, { taskId: task.id, supersedesId: returned.id, previousRevision: returned.revision });
