@@ -8,7 +8,7 @@ import { useResource } from "../../shared/api/use-resource.js";
 import PlanDevelopmentDialog from "./PlanDevelopmentDialog.vue";
 import IssueDetail from "./IssueDetail.vue";
 import IssueCreateMenu from "./IssueCreateMenu.vue";
-import { issueCreateLocation } from "./work-navigation.js";
+import { issueCreateLocation, workReturnLocation } from "./work-navigation.js";
 import WorkItemTable from "./WorkItemTable.vue";
 import { SearchOutlined } from "@antdv-next/icons";
 const props = defineProps({ projectId: { type: String, required: true }, projectName: { type: String, default: '' }, type: { type: String, required: true }, permissions: { type: Array, required: true } });
@@ -34,9 +34,14 @@ async function search(nextOffset = 0) {
   await router.push({ query: { ...route.query, q: query.value || undefined, status: status.value || undefined, offset: nextOffset || undefined, selection: undefined, releaseId: releaseId.value || undefined, includeArchived: includeArchived.value ? "true" : undefined } });
   void reload();
 }
-function openIssue(id) { void router.push({ query: { ...route.query, issue: id || undefined, task: undefined, create: undefined } }); }
+function openIssue(id) {
+  const target = !id && workReturnLocation(router, route, "issues");
+  void router.push(target ? target.fullPath : { query: { ...route.query, issue: id || undefined, task: undefined, create: undefined, returnTo: undefined } });
+}
 async function deleted(id) {
   checked.value = checked.value.filter(value => value !== id);
+  const target = workReturnLocation(router, route, "issues");
+  if (target) { await router.replace(target.fullPath); return; }
   await router.replace({ query: { ...route.query, issue: undefined, offset: undefined, selection: checked.value.length ? checked.value : undefined } });
   offset.value = 0;
   await reload();

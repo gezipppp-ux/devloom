@@ -13,7 +13,7 @@ const { ProjectWorkflowServices } = require("./project-workflow-services.cjs");
 const { currentHandler, workflowEventEdge } = require("../domain/workflow-handoffs.cjs");
 const { ProjectDevelopmentStore } = require("../storage/project-development-store.cjs");
 const { IssueWorkflowVersionServices } = require("./issue-workflow-version-services.cjs");
-const { presentIssueImages, presentIssue, presentAsset, presentProjectFile, presentPage, presentDeliverable } = require("./project-content-presenter.cjs");
+const { presentIssueImages, presentIssue, presentIssueAssignment, presentAsset, presentProjectFile, presentPage, presentDeliverable } = require("./project-content-presenter.cjs");
 
 class ProjectContentServices {
   constructor(database, projects) {
@@ -79,8 +79,9 @@ class ProjectContentServices {
   async readIssue(projectId, id, actor) {
     return this.read(projectId, actor, ["issue.view"], async () => {
       const issue = await this.store.issue(projectId, id);
+      const developmentAssignment = presentIssueAssignment(await this.store.developmentAssignment(issue), issue.developerId);
       const { permissions } = await this.projects.authorize(projectId, actor, "issue.view");
-      return { ...presentIssue(issue, actor.id, permissions), images: presentIssueImages(await this.store.issuePreviewFiles(projectId, id), issue.source), people: await this.store.people([issue.createdById, issue.updatedById, issue.developerId, issue.deliverables?.[0]?.authorId, ...responsibilityFields.map(field => issue[field]), currentHandler(issue), ...issue.watcherIds]) };
+      return { ...presentIssue(issue, actor.id, permissions), developmentAssignment, images: presentIssueImages(await this.store.issuePreviewFiles(projectId, id), issue.source), people: await this.store.people([issue.createdById, issue.updatedById, issue.developerId, developmentAssignment?.actorId, issue.deliverables?.[0]?.authorId, ...responsibilityFields.map(field => issue[field]), currentHandler(issue), ...issue.watcherIds]) };
     });
   }
   async createIssue(projectId, actor, input) {

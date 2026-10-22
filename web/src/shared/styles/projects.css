@@ -13,6 +13,12 @@
 .development-info > button { margin-bottom: 22px; }
 .development-cancel-button { width: 100%; }
 .development-info .ui-meta-list { margin-bottom: 24px; }
+.development-context .development-info .ui-meta-list { display: grid; grid-template-columns: 90px minmax(0,1fr); gap: 14px 12px; font-size: 13px; align-items: start; }
+.development-context .development-info .ui-meta-list dt, .development-context .development-info .ui-meta-list dd { margin: 0; min-width: 0; overflow-wrap: anywhere; line-height: 1.8; }
+.development-records { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 20px; }
+.development-records > summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+.development-detail-aside .development-records .development-footer { border-top: 0; padding-top: 20px; }
+@media(max-width:1199px) { .development-detail-aside { order: -1; } }
 .development-detail-aside .development-footer { display: grid; gap: 20px; border-top: 1px solid var(--line); padding-top: 20px; }
 .development-list-scopes { margin-bottom: 22px; }
 .ui-selection-bar { padding: 12px 18px; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; font-size: 12px; }

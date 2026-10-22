@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DevLoom · 详情信息三方案</title>
+    <link
+      rel="stylesheet"
+      href="../../../../.agents/skills/neutral-workbench/assets/tokens.css"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="prototype.js" defer></script>
+  </head>
+  <body>
+    <header class="review-bar">
+      <div class="review-label">
+        <strong>详情信息 · 方案评审</strong><span>模拟数据</span>
+      </div>
+      <nav class="variants" aria-label="方案选择">
+        <button data-variant="a">A · 分组侧栏</button
+        ><button data-variant="b">B · 页首摘要</button
+        ><button data-variant="c">C · 资料抽屉</button>
+      </nav>
+      <div class="review-options">
+        <label
+          >场景<select id="scenario">
+            <option value="assigned">已指派 · 两条事项</option>
+            <option value="claimed">本人认领</option>
+            <option value="empty">未分派 / 独立开发</option>
+            <option value="readonly">已归档 · 只读</option>
+            <option value="error">资料读取失败</option>
+            <option value="long">长标题与长姓名</option>
+          </select></label
+        ><button id="language">EN</button>
+      </div>
+    </header>
+    <div class="shell">
+      <aside class="sidebar">
+        <a class="brand" href="#a-task"><span>›_</span> DevLoom</a>
+        <nav id="main-nav" aria-label="主导航"></nav>
+        <span class="sidebar-foot">MY智营 · 协作空间</span>
+      </aside>
+      <div class="shell-body">
+        <header class="topbar">
+          <span
+            >▱ <span class="project-name">MY智营</span>
+            <span class="slash">/</span> <span id="breadcrumb"></span></span
+          ><span class="avatar">王</span>
+        </header>
+        <main id="page"></main>
+      </div>
+    </div>
+    <nav id="mobile-nav" aria-label="移动主导航"></nav>
+    <dialog id="info-drawer" aria-labelledby="drawer-title">
+      <header>
+        <div>
+          <small id="drawer-kicker"></small>
+          <h2 id="drawer-title"></h2>
+        </div>
+        <button id="close-drawer" aria-label="关闭资料">×</button>
+      </header>
+      <div id="drawer-content"></div>
+    </dialog>
+  </body>
+</html>

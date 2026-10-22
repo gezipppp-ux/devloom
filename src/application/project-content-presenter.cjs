@@ -7,6 +7,10 @@ const { deliverySubmission } = require("../domain/delivery-submission.cjs");
 function dates(row) {
   return { ...row, ...(row.createdAt ? { createdAt: row.createdAt.toISOString() } : {}), ...(row.updatedAt ? { updatedAt: row.updatedAt.toISOString() } : {}) };
 }
+function presentIssueAssignment(record, developerId) {
+  if (!record || !developerId || record.developerId !== developerId) return null;
+  return { actorId: record.actorId, developerId, createdAt: record.createdAt.toISOString(), method: record.actorId === developerId ? "claimed" : "assigned" };
+}
 function presentIssue(row, actorId, permissions = []) {
   const { source, release, workflowVersion, developmentClaim, actions = [], deliverables = [], _count, deletedAt, ...issue } = row;
   const deletionReason = issueDeletionReason({ release, developmentClaim, _count });
@@ -52,4 +56,4 @@ function presentDeliverable(row) {
     reviewedById: row.reviewedById, reviewedAt: row.reviewedAt?.toISOString() || null, createdAt: row.createdAt.toISOString() };
 }
 
-module.exports = { presentIssueImages, presentIssue, presentAsset, presentProjectFile, presentPage, presentDeliverable };
+module.exports = { presentIssueImages, presentIssue, presentIssueAssignment, presentAsset, presentProjectFile, presentPage, presentDeliverable };

@@ -11,13 +11,13 @@ import {RouterLink} from "vue-router";
 import {EditOutlined, FileTextOutlined, SwapOutlined, UserAddOutlined, ArrowLeftOutlined} from "@antdv-next/icons";
 import {appApi} from "../../shared/api/api.js";
 import {useResource} from "../../shared/api/use-resource.js";
-import {priorityLabels} from "./project-labels.js";
+import IssueAssignment from "./IssueAssignment.vue";
 import EditConflict from "./EditConflict.vue";
 import ProjectFiles from "./ProjectFiles.vue";
 import IssueDiscussion from "./IssueDiscussion.vue";
 import IssueFields from "./IssueFields.vue";
 import MarkdownContent from "../../shared/components/MarkdownContent.vue";
-import PersonAvatar from "../../shared/components/PersonAvatar.vue";
+import IssueInformation from "./IssueInformation.vue";
 import {issueDetailFields, issueFieldsInput, removeAttachmentLinks} from "./issue-fields.js";
 import {useProjectAttachments} from "./use-project-attachments.js";
 
@@ -312,58 +312,8 @@ function person(id) {
                         :to="{ name: 'deliveries', query: { projectId } }">{{ $t('查看交付与验收') }}
             </RouterLink>
           </section>
-          <section v-if="!editing" class="issue-panel issue-information" :aria-label="$t('事项信息')">
-            <h3 class="issue-panel-heading">{{ $t("事项信息") }}</h3>
-            <dl class="issue-facts">
-              <template v-if="projectName">
-                <dt>{{ $t('所属项目') }}</dt>
-                <dd>{{ projectName }}</dd>
-              </template>
-              <dt>{{ $t('目标版本') }}</dt>
-              <dd>
-                <RouterLink v-if="data.release" :to="{ path: `/projects/${projectId}`, query: { tab: 'releases' } }">
-                  {{ data.release.name }}
-                </RouterLink>
-                <span v-else>{{ $t('未排期') }}</span></dd>
-              <dt>{{ $t('优先级') }}</dt>
-              <dd>{{ $t(priorityLabels[data.priority]) }}</dd>
-              <template
-                  v-for="[key, label] in [['reporterId', '提报人'], ['businessOwnerId', '业务负责人'], ['qaOwnerId', '测试负责人'], ['acceptanceOwnerId', '业务验收人']]"
-                  :key="key">
-                <dt>{{ $t(label) }}</dt>
-                <dd>{{ person(data[key]) }}</dd>
-              </template>
-              <dt>{{ $t('开发负责人') }}</dt>
-              <dd class="ui-person">
-                <PersonAvatar v-if="data.developerId" :name="person(data.developerId)"/>
-                {{ person(data.developerId) }}
-              </dd>
-              <template v-if="data.createdById">
-                <dt>{{ $t('创建者') }}</dt>
-                <dd class="ui-person">
-                  <PersonAvatar :name="person(data.createdById)"/>
-                  {{ person(data.createdById) }}
-                </dd>
-              </template>
-              <dt>{{ $t('关注人') }}</dt>
-              <dd class="issue-participants"><span v-for="id in data.watcherIds" :key="id" class="ui-person"><PersonAvatar
-                  :name="person(id)"/>{{ person(id) }}</span><span v-if="!data.watcherIds.length">{{ $t('无') }}</span>
-              </dd>
-              <template v-if="data.type === 'bug'">
-                <dt>{{ $t('严重程度') }}</dt>
-                <dd>{{
-                    {minor: $t('轻微'), normal: $t('普通'), major: $t('严重'), critical: $t('致命')}[data.severity]
-                  }}
-                </dd>
-              </template>
-              <template v-if="data.dueDate">
-                <dt>{{ $t('截止日期') }}</dt>
-                <dd>{{ formatDate(data.dueDate) }}</dd>
-              </template>
-            </dl>
-            <div v-if="data.tags?.length" class="ui-tags"><span v-for="tag in data.tags" :key="tag">{{ tag }}</span>
-            </div>
-          </section>
+          <IssueAssignment v-if="!editing" :issue="data" />
+          <IssueInformation v-if="!editing" :issue="data" :project-name="projectName" />
           <section v-if="!editing && data.workflow" class="issue-panel issue-workflow" :aria-label="$t('流程版本')">
             <h3 class="issue-panel-heading">{{ $t('流程版本') }}</h3>
             <p class="field-hint">v{{ data.workflow.version }}</p>
@@ -385,13 +335,16 @@ function person(id) {
 .issue-current-actions { display: grid; gap: 10px; margin: 20px 0; }
 .issue-current-actions > button { width: 100%; }
 .issue-current-actions > a { text-align: center; padding: 10px 0; }
+.issue-detail-sidebar > .issue-assignment { order: -3; }
 .issue-detail-sidebar > .issue-status { order: -4; border-top: 0; padding-top: 0; }
 .issue-detail-sidebar > .issue-information { order: 0; border-top: 1px solid var(--line); padding-top: 24px; }
 .issue-workflow { border-top: 1px solid var(--line); padding-top: 24px; }
 @media (max-width: 1000px) {
   .issue-detail-grid:not(.issue-detail-editing) .issue-detail-main,
   .issue-detail-grid:not(.issue-detail-editing) .issue-detail-sidebar { display: contents; }
-  .issue-detail-sidebar > .issue-status { order: -1; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
-  .issue-detail-sidebar > .issue-information, .issue-workflow, .issue-sharing-hint { order: 2; }
+  .issue-detail-sidebar > .issue-assignment { order: -1; }
+  .issue-detail-sidebar > .issue-status { order: -2; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+  .issue-detail-sidebar > .issue-information { order: -1; }
+  .issue-workflow, .issue-sharing-hint { order: 2; }
 }
 </style>

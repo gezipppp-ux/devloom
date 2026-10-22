@@ -90,6 +90,19 @@ class ProjectContentStore {
   async issueHistory(projectId, issueId, actorId, action, data) {
     return this.database.client.issueHistory.create({ data: { projectId, issueId, actorId, action, data: serializable(data) } });
   }
+  async developmentAssignment(issue) {
+    const schema = this.database.schema.replace(/"/g, '""');
+    // Revisions order changes even when several records have the same timestamp.
+    // Read only public assignment metadata, never the stored before/after documents.
+    const rows = await this.database.client.$queryRawUnsafe(
+      `SELECT actor_id AS "actorId", data #>> '{after,developerId}' AS "developerId", created_at AS "createdAt"
+       FROM "${schema}".issue_history
+       WHERE project_id = $1 AND issue_id = $2 AND action = 'assigned'
+         AND (data #>> '{after,revision}')::integer <= $3
+       ORDER BY (data #>> '{after,revision}')::integer DESC, created_at DESC, id DESC LIMIT 1`,
+      issue.projectId, issue.id, issue.revision);
+    return rows[0] || null;
+  }
   async deleteIssue(projectId, id, actorId, revision) {
     const deletedAt = new Date();
     const updated = await this.database.client.projectIssue.updateMany({

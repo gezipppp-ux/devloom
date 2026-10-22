@@ -534,6 +534,8 @@ async function main() {
         }
       }
       await verifyIssueCreation({ page, origin, projects });
+      await require("./detail-navigation.test.cjs").verifyDetailNavigation({ page, origin, projects });
+      await require("./issue-context.test.cjs").verifyIssueContext({ page, origin, projects });
       await require("./issue-deletion.test.cjs").verifyIssueDeletion({ page, origin, projects });
       for (const width of [2560, 1920, 1440, 1280, 1100, 768, 390, 320]) {
         scenario = "session";

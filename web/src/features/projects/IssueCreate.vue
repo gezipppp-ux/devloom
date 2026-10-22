@@ -46,7 +46,7 @@ function create() {
   const location = route.fullPath, type = props.type;
   const query = returnLocation.value.name === "project" ? returnLocation.value.query : {};
   return save(`/projects/${props.projectId}/issues`, { requestId, type, ...issueFieldsInput(form, { assign: can("issue.assign") }), attachments: serialize() }, issue => {
-    if (route.fullPath === location) void router.replace({ name: "project", params: { projectId: props.projectId }, query: { ...query, tab: type === "bug" ? "bugs" : "issues", issue: issue.id, create: undefined, returnTo: undefined } });
+    if (route.fullPath === location) void router.replace({ name: "project", params: { projectId: props.projectId }, query: { ...query, tab: type === "bug" ? "bugs" : "issues", issue: issue.id, create: undefined, returnTo: returnLocation.value.name === "issues" ? returnLocation.value.fullPath : undefined } });
   });
 }
 </script>

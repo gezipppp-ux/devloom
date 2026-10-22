@@ -8,6 +8,7 @@ import MergeDevelopmentDialog from "./MergeDevelopmentDialog.vue";
 import DevelopmentTaskDetail from "./DevelopmentTaskDetail.vue";
 import { useResource } from "../../shared/api/use-resource.js";
 import WorkItemTable from "./WorkItemTable.vue";
+import { workReturnLocation } from "./work-navigation.js";
 const props = defineProps({
   projectId: { type: String, required: true },
   projectName: { type: String, default: "" },
@@ -85,9 +86,12 @@ function open(task) {
   });
 }
 function back() {
+  const target = workReturnLocation(router, route, "tasks");
+  if (target) return router.push(target.fullPath);
   const query = { ...route.query };
   delete query.task;
   delete query.taskStart;
+  delete query.returnTo;
   return router.push({ query });
 }
 function page(nextOffset) {

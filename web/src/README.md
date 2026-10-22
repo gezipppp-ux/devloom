@@ -28,6 +28,10 @@
 
 跨项目的工作台、搜索与事项／本人开发／交付队列由 `features/projects/` 组合；`PageHeader`、`FilterBar`、`EmptyState`、`PagePagination`、`StatusBadge`、`ModalDialog` 为共享呈现组件。分页、权限及提交由所属业务组件和 API 负责。项目内需求／Bug 分类保留完整批量分配和版本筛选，主「事项」提供统一跨项目查询。
 
+从统一事项／开发队列进入详情时，`workLocation` 通过 `returnTo` 保留原列表完整查询；详情刷新和浏览器前进后退后仍可返回原筛选、分页及项目范围。事项详情的导航高亮保留「事项」，面包屑显示「事项详情」。`workReturnLocation` 仅接受对应站内队列，项目入口和无来源深链继续返回项目内列表；不直接信任任意返回地址。统一事项入口新建成功后沿用相同来源，删除后也返回原队列。
+
+2026-10-22 用户选定[详情资料 A · 分组侧栏](../../docs/prototypes/ui-refactor/detail-context/README.md)。`IssueAssignment` 与 `IssueInformation` 分别复用真实开发分派摘要和事项字段，事项详情与开发详情保持相同含义。`DevelopmentTaskContext` 按来源事项 ID 读取当前详情，多事项任务可切换；它不把任务快照当作当前人员资料。切换时清空前一事项资料，迟到响应由 `useResource` 代际隔离，失败／撤权显示局部错误并提供重试。分派摘要常驻，资料在 1200px 以下默认折叠；刷新不丢失当前来源选择。开发任务状态、执行者与 Agent 状态仍独立显示。
+
 事项创建、独立开发和查看已归档会话入口共用 `ProjectPickerDialog` 的精简项目列表；App 拥有按操作筛选项目和路由协调，取消与重开使旧空间查询失效。`GlobalSearch` 使用输入框与紧凑结果行，`use-global-search.js` 拥有最近项目读取、200ms 防抖、部分失败和卸载／查询代际隔离，沿用真实聚合接口与 `workLocation` 深链。`ModalDialog` 的 header 插槽承载专用头部，原生模态负责焦点限制，关闭或卸载恢复触发点焦点。交互约定见[项目选择与快捷搜索](../../docs/prd/quick-entry.md)。
 
 原型对齐后的项目目录使用 `ProjectCard`，项目概览由 `ProjectDashboard` 组合真实事项／交付计数、当前版本和项目资产；请求失败显示错误与重试，不把未知计数显示为零。`WorkItemTable` 复用事项和开发队列的桌面表格／移动条目；`WorkItemList` 呈现交付等完整工作列表。项目详情的主导航为概览、版本、资产、成员、设置、提示词，其余协作入口在展开菜单中保留原深链。

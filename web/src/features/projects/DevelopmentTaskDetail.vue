@@ -17,6 +17,7 @@ import { accountSession } from "../../shared/api/account-session.js";
 import RemoteBranchSelect from "./RemoteBranchSelect.vue";
 import PublishDelivery from "./PublishDelivery.vue";
 import DevelopmentTaskConfirmation from "./DevelopmentTaskConfirmation.vue";
+import DevelopmentTaskContext from "./DevelopmentTaskContext.vue";
 import { useDevelopmentTask } from "./use-development-task.js";
 import {
   developmentTaskLabels,
@@ -557,6 +558,7 @@ async function submitConfirmation() {
       </section>
       </div>
       <aside class="development-detail-aside" :aria-label="$t('任务信息')">
+        <DevelopmentTaskContext :project-id="projectId" :project-name="projectName" :task="task" :refreshing="loading">
         <details class="development-info" :open="infoExpanded">
         <summary>{{ $t('任务信息') }}</summary>
         <dl class="ui-meta-list">
@@ -567,6 +569,11 @@ async function submitConfirmation() {
           <dt>{{ $t('Agent 状态') }}</dt><dd><StatusBadge>{{ $t(codexStatus) }}</StatusBadge></dd>
         </dl>
         <button v-if="canEdit" ref="editButton" :disabled="busy || editing" @click="edit">{{ $t('编辑任务信息') }}</button>
+
+        </details>
+        </DevelopmentTaskContext>
+        <details class="development-records" :open="infoExpanded">
+          <summary>{{ $t('开发记录与操作') }}</summary>
       <footer class="development-footer">
         <details class="development-baseline">
           <summary>{{ $t("起始代码与开发记录") }}</summary>

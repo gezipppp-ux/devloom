@@ -72,6 +72,36 @@ async function fixture(t) {
   return { database, actor, other, project, content, services, sessions, calls, issue };
 }
 
+test("issue assignment summaries preserve the real actor through edits, reassignment, merge and release", async t => {
+  const { database, content, services, actor, other, project, issue } = await fixture(t);
+  const first = await issue("分派来源"), second = await issue("合并来源");
+  assert.equal((await content.readIssue(project.id, first.id, actor)).developmentAssignment, null);
+  const batch = await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [first.id, second.id], executorId: other.id });
+  const assigned = await content.readIssue(project.id, first.id, other);
+  assert.deepEqual(Object.keys(assigned.developmentAssignment).sort(), ["actorId", "createdAt", "developerId", "method"]);
+  assert.equal(assigned.developmentAssignment.actorId, actor.id);
+  assert.equal(assigned.developmentAssignment.developerId, other.id);
+  assert.equal(assigned.developmentAssignment.method, "assigned");
+  assert.ok(assigned.people.some(person => person.id === actor.id));
+  await content.updateIssue(project.id, first.id, other, { revision: assigned.revision, title: "编辑不改变分派记录" });
+  assert.deepEqual((await content.readIssue(project.id, first.id, actor)).developmentAssignment, assigned.developmentAssignment);
+  const merged = (await services.merge(project.id, other, { requestId: randomUUID(), tasks: batch.tasks.map(({ id, revision }) => ({ id, revision })), title: "合并后保留来源" })).task;
+  assert.deepEqual((await content.readIssue(project.id, first.id, other)).developmentAssignment, assigned.developmentAssignment, "merging does not replace the assignment actor with the merger");
+  const changed = (await services.update(project.id, merged.id, other, { revision: merged.revision, executorId: actor.id })).task;
+  await database.client.issueHistory.updateMany({ where: { issueId: first.id, action: "assigned" }, data: { createdAt: new Date("2026-10-21T06:30:00Z") } });
+  const reassigned = (await content.readIssue(project.id, first.id, actor)).developmentAssignment;
+  assert.equal(reassigned.actorId, other.id, "latest revision wins even with identical history timestamps");
+  assert.equal(reassigned.developerId, actor.id);
+  assert.equal(reassigned.method, "assigned");
+  await services.finish(project.id, changed.id, actor, { revision: changed.revision }, "cancelled");
+  assert.equal((await content.readIssue(project.id, first.id, actor)).developmentAssignment, null);
+  await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [first.id] });
+  assert.equal((await content.readIssue(project.id, first.id, actor)).developmentAssignment.method, "claimed");
+  await database.client.projectIssue.update({ where: { id: second.id }, data: { developerId: other.id } });
+  assert.equal((await content.readIssue(project.id, second.id, actor)).developmentAssignment, null, "missing matching evidence never guesses an actor from creator or editor");
+  await assert.rejects(content.readIssue(project.id, first.id, { id: randomUUID() }), error => [401, 403, 404].includes(error.statusCode));
+});
+
 test("attachment materialization verifies scope and bytes, isolates tasks and restores corrupted caches", async t => {
   const { services, content, actor, project, issue } = await fixture(t);
   const selected = await issue("附件读取门禁");
