@@ -12,6 +12,7 @@ import FormSection from "../../shared/components/FormSection.vue";
 import AgentModelControls from "../../shared/components/AgentModelControls.vue";
 import PermissionSelect from "../../shared/components/PermissionSelect.vue";
 import AccountProfile from "./AccountProfile.vue";
+import DesktopNotificationSettings from "./DesktopNotificationSettings.vue";
 import PasswordForm from "./PasswordForm.vue";
 import GitAccountSettings from "./GitAccountSettings.vue";
 import McpTokenSettings from "./McpTokenSettings.vue";
@@ -54,14 +55,7 @@ async function save() {
         <FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="saved ? '个人设置已保存。' : ''" type="success" />
       </a-form>
     </FormSection>
-    <FormSection :title="$t('通知')">
-      <div class="notification-setting-row"><div><strong>{{ $t("需要我处理时提醒") }}</strong><p>{{ $t("浏览器打开应用期间，提醒新的执行审批、提问、待验证交付和 Codex 未读结果。每台设备需单独允许通知。") }}</p></div>
-      <button v-if="notifications.available.value" type="button" class="notification-switch" role="switch" :aria-label="$t('需要我处理时提醒')" :aria-checked="notifications.enabled.value && notifications.permission.value === 'granted'" :title="notifications.enabled.value && notifications.permission.value === 'granted' ? $t('关闭桌面通知') : $t('开启桌面通知')" :disabled="notifications.busy.value" @click="notifications.toggle"><span aria-hidden="true" /></button>
-      </div>
-      <p v-if="!notifications.available.value" class="muted">{{ $t("当前浏览器不支持系统桌面通知。") }}</p>
-      <p v-if="notifications.permission.value === 'denied'" class="field-hint">{{ $t("浏览器已拦截通知，请在网站权限中允许后重试。") }}</p>
-      <FeedbackMessage :message="notifications.error.value" type="error" />
-    </FormSection>
+    <DesktopNotificationSettings v-if="currentTab === 'profile'" :notifications="notifications" />
     <footer class="profile-settings-footer"><button type="submit" form="personal-defaults-form" class="primary" :disabled="busy || !permissions.isAvailable(form.permissionMode)">{{ busy ? $t("正在保存…") : $t("保存个人设置") }}</button></footer>
     </div>
     </div>
@@ -84,15 +78,6 @@ async function save() {
 .profile-settings-panel :deep(.form-section-heading) { flex-wrap: wrap; }
 .profile-settings-panel :deep(.section-action) { margin-left: auto; }
 .profile-settings-footer { display: flex; justify-content: flex-end; border-top: 1px solid var(--line); padding: 20px 28px; }
-.notification-setting-row { display: flex; justify-content: space-between; align-items: center; gap: 24px; min-width: 0; }
-.notification-setting-row strong { font-size: 13px; }
-.notification-setting-row p { margin: 6px 0 0; max-width: 760px; font-size: 12px; line-height: 1.8; color: var(--muted); }
-.notification-switch { position: relative; flex: 0 0 44px; width: 44px; height: 44px; min-height: 44px; border: 0; padding: 0; background: transparent; }
-.notification-switch::before { content: ''; position: absolute; inset: 11px 0; border-radius: 20px; background: var(--field-border); }
-.notification-switch span { position: absolute; top: 13px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--surface); transition: transform .15s ease; }
-.notification-switch[aria-checked="true"]::before { background: var(--highlight); }
-.notification-switch[aria-checked="true"] span { transform: translateX(22px); }
-.notification-switch:hover:not(:disabled) { background: transparent; }
 @media (max-width: 767px) {
   .profile-settings-panel :deep(.form-section) { padding: 20px; }
   .profile-settings-panel :deep(.section-action) { margin-left: 0; }

@@ -53,3 +53,19 @@ test("copyText reports an error only when neither copy mechanism succeeds", asyn
     /Clipboard copy is unavailable/,
   );
 });
+
+test("copyText keeps the fallback field inside an open modal instead of the inert page", async () => {
+  const { copyText } = await import("../../web/src/shared/components/clipboard.js");
+  let parent, restored = false;
+  const field = { style: {}, setAttribute() {}, focus() {}, select() {}, setSelectionRange() {}, remove() {} };
+  const modal = { append(element) { assert.equal(element, field); parent = modal; } };
+  const document = {
+    body: { append() { assert.fail("The body is inert while the modal is open"); } },
+    activeElement: { isConnected: true, closest(selector) { assert.equal(selector, "dialog[open]"); return modal; }, focus() { restored = true; } },
+    createElement() { return field; },
+    execCommand(command) { assert.equal(command, "copy"); assert.equal(parent, modal); return true; },
+  };
+  await copyText("http://192.0.2.64:4317", { clipboard: undefined, document });
+  assert.equal(field.value, "http://192.0.2.64:4317");
+  assert.equal(restored, true);
+});

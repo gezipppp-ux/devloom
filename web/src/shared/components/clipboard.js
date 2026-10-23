@@ -17,7 +17,9 @@ function legacyCopy(text, document) {
     opacity: "0",
     pointerEvents: "none",
   });
-  document.body.append(field);
+  // A modal makes the rest of the document inert, including a body-level field.
+  const host = previousFocus?.closest?.("dialog[open]") || document.body;
+  host.append(field);
   try {
     field.focus({ preventScroll: true });
     field.select();

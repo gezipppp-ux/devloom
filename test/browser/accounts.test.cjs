@@ -12,6 +12,7 @@ const { createServer } = require("node:http");
 const { chromium } = require("playwright");
 const { verifyAccountProfileRaces } = require("./account-profile.test.cjs");
 const { verifyAttentionNotifications } = require("./attention-notifications.test.cjs");
+const { verifyDesktopNotifications } = require("./desktop-notifications.test.cjs");
 const { verifyAccountPreferenceRaces } = require("./account-preferences.test.cjs");
 const { verifyGitAccounts } = require("./git-accounts.test.cjs");
 const { verifyEnvironment } = require("./environment.test.cjs");
@@ -303,6 +304,7 @@ async function main() {
     await verifyAccountPreferenceRaces(browser, origin);
     await verifyAccountProfileRaces(browser, origin);
     await verifyAttentionNotifications(browser, origin);
+    await verifyDesktopNotifications(browser);
     await verifyPageTitles(browser, origin);
     await verifyAutomaticLocale(browser, origin);
     assert.deepEqual(errors, []);

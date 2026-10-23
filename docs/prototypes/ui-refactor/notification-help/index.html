@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DevLoom · 通知提示三方案</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../../../../.agents/skills/neutral-workbench/assets/tokens.css">
+  <link rel="stylesheet" href="prototype.css">
+  <script defer src="prototype.js"></script>
+</head>
+<body>
+  <section class="review" aria-label="方案评审">
+    <div class="review-heading"><span class="eyebrow">DESIGN REVIEW / 03</span><strong id="review-title">通知访问提示</strong><span class="sample-label" id="sample-label">交互原型 · 模拟环境</span></div>
+    <div class="review-controls">
+      <div class="schemes" role="group" aria-label="切换方案"><button data-scheme="a">A · 就地展开</button><button data-scheme="b">B · 引导弹窗</button><button data-scheme="c">C · 帮助侧栏</button></div>
+      <div class="tools"><label for="environment" id="environment-label">访问场景</label><select id="environment"></select><button id="language" aria-label="Switch language">EN</button><button id="preview-open">查看展开效果</button></div>
+    </div>
+    <p id="scheme-description"></p>
+  </section>
+  <div class="shell">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="workspace">
+      <header class="topbar"><span id="breadcrumb"></span><span class="avatar">林</span></header>
+      <main id="main"></main>
+    </div>
+  </div>
+  <dialog id="help-dialog" aria-labelledby="dialog-title"></dialog>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>
