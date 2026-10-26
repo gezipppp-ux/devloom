@@ -1,6 +1,9 @@
 const { WorkflowExecutionServices } = require("./workflow-execution-services.cjs");
 const { WorkbenchStore } = require("../storage/workbench-store.cjs");
-const { pageInput, choice, text, ISSUE_TYPES, PRIORITIES } = require("../domain/project-issues.cjs");
+const { pageInput, choice, text, ISSUE_TYPES } = require("../domain/project-issues.cjs");
+const { workListFilters } = require("../domain/work-list-filters.cjs");
+const { WorkListFilterStore } = require("../storage/work-list-filter-store.cjs");
+const { presentWorkFilters } = require("./work-list-presenter.cjs");
 const { accountError } = require("../domain/account.cjs");
 const { presentWorkbenchPage, presentProjectActivity, presentRecentProjects } = require("./workbench-presenter.cjs");
 const { WorkActionQueryStore } = require("../storage/work-action-query-store.cjs");
@@ -8,7 +11,6 @@ const { presentWorkActions } = require("./work-action-presenter.cjs");
 const { issueWorkflowNode } = require("../domain/issue-workflows.cjs");
 const { workflowHandler, canProcessWorkflowStep } = require("../domain/workflow-actions.cjs");
 
-const { developmentStatus } = require("../domain/project-development.cjs");
 
 class WorkbenchServices {
   constructor(database, projects, { workspaces } = {}) { this.store = new WorkbenchStore(database); this.actionStore = new WorkActionQueryStore(database); this.projects = projects; this.workspaces = workspaces; this.workflowExecution = new WorkflowExecutionServices(database, projects); }
@@ -93,18 +95,17 @@ class WorkbenchServices {
     const permission = kind === "deliveries" ? "collaboration.view" : kind === "tasks" ? "session.view" : "issue.view";
     const page = { ...pageInput(input), scope: choice(input.scope || "all", ["all", "mine"], "范围") };
     if (input.type) page.type = choice(input.type, ISSUE_TYPES, "事项类型");
-    if (input.priority) page.priority = choice(input.priority, PRIORITIES, "优先级");
-    if (kind === "tasks") page.status = developmentStatus(input.status);
-    else if (input.status) page.status = text(input.status, "状态", 100);
+    page.filters = workListFilters(input, kind);
     if (input.tag) page.tag = text(input.tag, "标签", 30);
     page.active = input.active === "true";
     const directory = await this.projects.list(actor);
     const projects = directory.projects.filter(p => p.permissions.includes(permission) && (kind !== "deliveries" || p.permissions.includes("issue.view")) && (!input.projectId || p.id === input.projectId));
     if (input.projectId && !projects.length) throw accountError("无权访问此项目的内容。", 403);
     const result = await this.store.list(kind, projects.map(p => p.id), actor.id, page);
+    const filterOptions = presentWorkFilters(await new WorkListFilterStore(this.store.database).options(projects.map(p => p.id), { type: page.type, ...(kind === "tasks" ? { executorId: actor.id } : {}) }));
     // Recheck every scope after the query, including projects contributing only totals.
     for (const project of projects) { await this.projects.authorize(project.id, actor, permission); if (kind === "deliveries") await this.projects.authorize(project.id, actor, "issue.view"); }
-    return presentWorkbenchPage(kind, result, projects, actor.id);
+    return { ...presentWorkbenchPage(kind, result, projects, actor.id), filterOptions };
   }
 }
 module.exports = { WorkbenchServices };

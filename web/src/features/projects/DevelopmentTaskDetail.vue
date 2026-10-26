@@ -447,6 +447,7 @@ async function submitConfirmation() {
             <h5>{{ $t('查看开发内容与验收标准') }}</h5>
             <MarkdownContent
               :content="issue.description || '暂无描述。'"
+              :images="issue.images || []"
             /><template
               v-for="[field, label] in [
                 ['acceptanceCriteria', '验收标准'],
@@ -457,7 +458,7 @@ async function submitConfirmation() {
               :key="field"
               ><template v-if="issue[field]"
                 ><h5>{{ $t(label) }}</h5>
-                <MarkdownContent :content="issue[field]" /></template
+                <MarkdownContent :content="issue[field]" :images="issue.images || []" /></template
             ></template>
           </details>
           <button v-if="canEdit && task.issueIds.length > 1" class="development-quiet-button development-danger-text development-remove-issue" :disabled="busy" @click="confirm('remove', issue)">{{ $t('移出此任务') }}</button>

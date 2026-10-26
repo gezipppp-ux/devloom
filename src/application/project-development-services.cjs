@@ -1,7 +1,10 @@
 const { isDeepStrictEqual } = require("node:util");
 const { ProjectDevelopmentStore } = require("../storage/project-development-store.cjs");
 const { AccountStore } = require("../storage/account-store.cjs");
-const { developmentStatus, developmentInput, developmentMergeInput, developmentStartInput, manualDevelopmentInput, manualDevelopmentPrompt, developmentEditInput, developmentPrompt } = require("../domain/project-development.cjs");
+const { developmentInput, developmentMergeInput, developmentStartInput, manualDevelopmentInput, manualDevelopmentPrompt, developmentEditInput, developmentPrompt } = require("../domain/project-development.cjs");
+const { workListFilters } = require("../domain/work-list-filters.cjs");
+const { WorkListFilterStore } = require("../storage/work-list-filter-store.cjs");
+const { presentWorkFilters } = require("./work-list-presenter.cjs");
 const { issueDevelopmentAllowed, assertIssueWritable } = require("../domain/issue-workflows.cjs");
 const { pageInput, identifier, object, revision } = require("../domain/project-issues.cjs");
 const { accountError } = require("../domain/account.cjs");
@@ -33,16 +36,18 @@ class ProjectDevelopmentServices {
     await this.workflowExecution.recoverTask(task);
     task = await this.store.task(task.projectId, task.id);
     const execution = await this.store.execution(task);
+    const previews = detail ? await this.store.issuePreviews(task) : [];
     const { permissions, project } = await this.authorize(task.projectId, actor, "issue.view");
-    return presentDevelopment(task, actor.id, execution, { detail, permissions, projectStatus: project.status });
+    return presentDevelopment(task, actor.id, execution, { detail, permissions, projectStatus: project.status, previews });
   }
   async list(projectId, actor, input = {}) {
     await this.authorize(projectId, actor, "issue.view");
     if (input.scope && !["mine", "all"].includes(input.scope)) throw accountError("任务范围无效。", 400);
-    const page = await this.store.list(projectId, { ...pageInput(input), status: developmentStatus(input.status), ...(input.scope === "mine" ? { executorId: actor.id } : {}), ...(input.issueId ? { issueId: identifier(input.issueId, "事项") } : {}) });
+    const page = await this.store.list(projectId, { ...pageInput(input), filters: workListFilters(input, "tasks"), ...(input.scope === "mine" ? { executorId: actor.id } : {}), ...(input.issueId ? { issueId: identifier(input.issueId, "事项") } : {}) });
     const tasks = await Promise.all(page.tasks.map(task => this.present(task, actor)));
+    const filterOptions = presentWorkFilters(await new WorkListFilterStore(this.store.database).options([projectId]));
     await this.authorize(projectId, actor, "issue.view");
-    return { tasks, nextOffset: page.nextOffset };
+    return { tasks, total: page.total, filterOptions, nextOffset: page.nextOffset };
   }
   async read(projectId, id, actor) {
     await this.authorize(projectId, actor, "issue.view");

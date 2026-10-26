@@ -58,11 +58,11 @@ async function verifyProjectLifecycle({ page, origin, project, database, output,
     await page.screenshot({ path: path.join(output, `system-workflow-editor-${width}.png`), fullPage: true });
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
-  const publishedFlowLoaded = page.waitForResponse(response => response.url().endsWith(`/projects/${project.id}/issue-workflows/requirement`) && response.status() === 200);
+  const publishedFlowLoaded = page.waitForResponse(response => new URL(response.url()).pathname === `/api/projects/${project.id}/issues` && response.status() === 200);
   await page.goto(`${origin}/projects/${project.id}?tab=issues`);
   await publishedFlowLoaded;
   const publishedStatuses = await selectOptions(page.getByLabel("事项状态", { exact: true }));
-  assert.ok(publishedStatuses.some(option => option.label === "需求规划"), JSON.stringify(publishedStatuses));
+  assert.ok(publishedStatuses.some(option => option.label.includes("需求规划")), JSON.stringify(publishedStatuses));
   await require("../support/browser-navigation.cjs").openIssueCreate(page);
   await page.getByLabel("标题", { exact: true }).fill("版本规划事项");
   await selectOption(page.getByLabel("目标版本", { exact: true }), { label: "v0.2" });
@@ -73,7 +73,7 @@ async function verifyProjectLifecycle({ page, origin, project, database, output,
   const first = await database.client.projectIssue.findFirst({ where: { projectId: project.id, title: "版本规划事项" } });
   assert.notEqual(first.workflowVersionId, oldIssue.workflowVersionId, "new issues use the newly published system workflow");
   const other = (await projects.create(admin, { name: "复用系统流程的另一项目", remoteUrl: project.remoteUrl })).project;
-  const otherFlowLoaded = page.waitForResponse(response => response.url().endsWith(`/projects/${other.id}/issue-workflows/requirement`) && response.status() === 200);
+  const otherFlowLoaded = page.waitForResponse(response => new URL(response.url()).pathname === `/api/projects/${other.id}/issues` && response.status() === 200);
   await page.goto(`${origin}/projects/${other.id}?tab=issues`);
   await otherFlowLoaded;
   await page.getByRole("heading", { name: other.name, exact: true }).waitFor();

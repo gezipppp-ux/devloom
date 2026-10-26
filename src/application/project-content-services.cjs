@@ -1,4 +1,7 @@
 const { WorkflowExecutionStore } = require("../storage/workflow-execution-store.cjs");
+const { workListFilters } = require("../domain/work-list-filters.cjs");
+const { WorkListFilterStore } = require("../storage/work-list-filter-store.cjs");
+const { presentWorkFilters } = require("./work-list-presenter.cjs");
 const { issueDeletionReason } = require("../domain/issue-deletion.cjs");
 const { issueAttachments, projectFileInput, previewMimeType } = require("../domain/project-files.cjs");
 const { ProjectContentStore } = require("../storage/project-content-store.cjs");
@@ -46,15 +49,13 @@ class ProjectContentServices {
     });
   }
   async listIssues(projectId, actor, input) {
-    const page = pageInput(input);
+    const page = { ...pageInput(input), filters: workListFilters(input, "issues") };
     if (input.type) page.type = choice(input.type, ISSUE_TYPES, "事项类型");
-    if (input.releaseId !== undefined) page.releaseId = ["none", "unassigned"].includes(input.releaseId) ? null : identifier(input.releaseId, "发布版本");
     page.includeArchived = input.includeArchived === "true" || input.includeArchived === "1";
-    if (input.status) page.status = text(input.status, "状态", 100);
     return this.read(projectId, actor, ["issue.view"], async () => {
       const { permissions } = await this.projects.authorize(projectId, actor, "issue.view");
       const result = await this.store.issues(projectId, page);
-      return { ...presentPage(result, row => presentIssue(row, actor.id, permissions)), people: await this.store.people(result.items.flatMap(issue => [issue.developerId, ...responsibilityFields.map(field => issue[field])])) };
+      return { ...presentPage(result, row => presentIssue(row, actor.id, permissions)), filterOptions: presentWorkFilters(await new WorkListFilterStore(this.store.database).options([projectId], { type: page.type })), people: await this.store.people(result.items.flatMap(issue => [issue.developerId, ...responsibilityFields.map(field => issue[field])])) };
     });
   }
   previewWorkflowUpgrade(projectId, issueId, actor) { return this.workflowVersions.preview(projectId, issueId, actor); }

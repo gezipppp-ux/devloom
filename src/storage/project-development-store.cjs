@@ -7,6 +7,7 @@ const { runKey } = require("../domain/run-identity.cjs");
 const { ProjectContentStore } = require("./project-content-store.cjs");
 const { writeArtifact } = require("./artifact-store.cjs");
 const { isImageAttachment } = require("../domain/attachment-prompts.cjs");
+const { workListWhere } = require("./work-list-where.cjs");
 
 function missing() { return accountError("开发任务不存在。", 404); }
 function conflict() { return accountError("开发任务已变更，请刷新后重试。", 409); }
@@ -69,6 +70,16 @@ class ProjectDevelopmentStore {
     const task = await this.database.client.developmentTask.findFirst({ where: { projectId, executorId, runKey } });
     if (!task) throw missing();
     return this.task(projectId, task.id);
+  }
+  async issuePreviews(task) {
+    const content = new ProjectContentStore(this.database);
+    const issues = [...task.snapshot.issues, ...(task.snapshot.additions || []).flatMap(batch => batch.issues || [])];
+    return Promise.all(issues.map(async issue => {
+      const files = (await content.issuePreviewFiles(task.projectId, issue.id)).filter(file =>
+        (issue.files || []).some(snapshot => snapshot.id === file.id && snapshot.sha256 === file.sha256));
+      const source = await this.database.client.issueSource.findFirst({ where: { projectId: task.projectId, issueId: issue.id }, select: { snapshot: true } });
+      return { issueId: issue.id, files, source };
+    }));
   }
   async existing(projectId, creatorId, requestId) {
     return this.database.client.developmentTask.findUnique({ where: { projectId_creatorId_requestId: { projectId, creatorId, requestId } }, include: { executor: { select: { id: true, displayName: true } }, release: true } });
@@ -155,11 +166,12 @@ class ProjectDevelopmentStore {
     if (!(await this.database.client.developmentTask.updateMany({ where: { id: task.id, projectId: task.projectId, revision: task.revision }, data: { ...data, revision: { increment: 1 } } })).count) throw conflict();
     return this.task(task.projectId, task.id);
   }
-  async list(projectId, { limit, offset, issueId, executorId, status = "not_cancelled" }) {
+  async list(projectId, { limit, offset, issueId, executorId, status = "not_cancelled", filters, query }) {
     if (issueId && !await this.database.client.projectIssue.findFirst({ where: { projectId, id: issueId, deletedAt: null }, select: { id: true } }))
       throw accountError("事项不存在或不属于当前项目。", 404);
-    const rows = await this.database.client.developmentTask.findMany({ where: { projectId, ...(executorId ? { executorId } : {}), ...(status === "all" ? {} : { status: status === "not_cancelled" ? { not: "cancelled" } : status }), ...(issueId ? { issueLinks: { some: { projectId, issueId } } } : {}) }, include: { executor: { select: { id: true, displayName: true } }, release: true }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: offset, take: limit + 1 });
-    return { tasks: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
+    const where = { projectId, ...(executorId ? { executorId } : {}), ...(filters || status === "all" ? {} : { status: status === "not_cancelled" ? { not: "cancelled" } : status }), ...(issueId ? { issueLinks: { some: { projectId, issueId } } } : {}), ...(query ? { snapshot: { path: ["title"], string_contains: query } } : {}), AND: workListWhere("tasks", filters) };
+    const [rows, total] = await Promise.all([this.database.client.developmentTask.findMany({ where, include: { executor: { select: { id: true, displayName: true } }, release: true }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: offset, take: limit + 1 }), this.database.client.developmentTask.count({ where })]);
+    return { tasks: rows.slice(0, limit), total, nextOffset: rows.length > limit ? offset + limit : null };
   }
   async addIssues(task, input, issues, prompt) {
     const batches = task.snapshot.additions || [];

@@ -134,6 +134,25 @@ test("issue assignment summaries preserve the real actor through edits, reassign
   await assert.rejects(content.readIssue(project.id, first.id, { id: randomUUID() }), error => [401, 403, 404].includes(error.statusCode));
 });
 
+test("development snapshots expose verified inline image mappings without rewriting captured content", async t => {
+  const { services, content, actor, project, issue, database } = await fixture(t);
+  const selected = await issue("图片快照");
+  const fileId = randomUUID(), source = `/api/projects/${project.id}/files/${fileId}`;
+  const imported = "https://example.test/requirement/original.png";
+  await content.updateIssue(project.id, selected.id, actor, { revision: 1, description: `![原图](${source})\n![导入图片](${imported})`, acceptanceCriteria: `![验收图片](${source})`, attachments: [{ id: fileId, name: "screenshot.png", mimeType: "image/png", data: png.toString("base64") }] });
+  await database.client.issueSource.create({ data: { projectId: project.id, issueId: selected.id, channel: "manual", scope: "fixture", type: "requirement", externalId: selected.id, snapshot: { projectImages: [{ source: imported, fileId }] } } });
+  const { tasks: [task] } = await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [selected.id] });
+  const before = (await services.store.task(project.id, task.id)).snapshot;
+  const result = (await services.read(project.id, task.id, actor)).task.issues[0];
+  assert.equal(result.images.find(image => image.source === source).url, `${source}?inline=1`);
+  assert.equal(result.images.find(image => image.source === imported).url, `${source}?inline=1`);
+  assert.equal(result.description, before.issues[0].description);
+  assert.deepEqual((await services.store.task(project.id, task.id)).snapshot, before);
+  await assert.rejects(services.read(project.id, task.id, { id: randomUUID() }));
+  await database.client.projectFile.update({ where: { id: fileId }, data: { sha256: "changed" } });
+  assert.deepEqual((await services.read(project.id, task.id, actor)).task.issues[0].images, [], "a changed attachment must not silently replace the snapshot image");
+});
+
 test("attachment materialization verifies scope and bytes, isolates tasks and restores corrupted caches", async t => {
   const { services, content, actor, project, issue } = await fixture(t);
   const selected = await issue("附件读取门禁");

@@ -226,7 +226,6 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,
     assert.equal(writes.at(-1).input.issueIds.length, 2);
     for (const kind of ['tasks', 'queue']) {
       await open(kind);
-      if (kind === 'queue') await page.getByRole('button', { name: '筛选', exact: true }).click();
       await page.getByLabel('任务状态', { exact: true }).waitFor();
       assert.equal(reads.filter(url => url.pathname.endsWith('/tasks')).at(-1).searchParams.get('status'), 'not_cancelled');
       for (const status of ['all', 'cancelled']) {

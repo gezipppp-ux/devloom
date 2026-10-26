@@ -1,10 +1,15 @@
 const { deliverySubmission } = require("../domain/delivery-submission.cjs");
 const { issueDevelopmentAllowed } = require("../domain/issue-workflows.cjs");
 const { reworkAvailable } = require("../domain/development-lifecycle.cjs");
+const { presentIssueImages } = require("./project-content-presenter.cjs");
 
-function presentDevelopment(task, actorId, execution = null, { detail = false, permissions = [], projectStatus = "active" } = {}) {
+function presentDevelopment(task, actorId, execution = null, { detail = false, permissions = [], projectStatus = "active", previews = [] } = {}) {
   const snapshot = task.snapshot;
   const additions = snapshot.additions || [];
+  const withImages = issue => {
+    const preview = previews.find(item => item.issueId === issue.id);
+    return { ...issue, images: preview ? presentIssueImages(preview.files, preview.source) : [] };
+  };
   const own = actorId === task.executorId;
   const privateSession = own && permissions.includes("session.view");
   const sessionDeleted = Boolean(task.snapshot.sessionDeletion);
@@ -23,14 +28,14 @@ function presentDevelopment(task, actorId, execution = null, { detail = false, p
     canRework: writable && own && permissions.includes("session.start") && permissions.includes("collaboration.view") && Boolean(reworkAvailable(task, execution)),
     reworkDeliveries: own && permissions.includes("collaboration.view") ? (task.issueLinks || []).flatMap(({ issue }) => issue.deliverables || []).filter(delivery => delivery.status === "returned").map(({ id, revision }) => ({ id, revision })) : [],
     reworkOfTaskId: snapshot.reworkOfTaskId || null, replacedByTaskId: snapshot.replacedByTaskId || null,
-    executor: task.executor || null, releaseId: task.releaseId, release: task.release ? { id: task.release.id, name: task.release.name, status: task.release.status } : null,
+    executor: task.executor || null, reporterIds: [...new Set((task.issueLinks || []).map(link => link.issue.reporterId).filter(Boolean))], releaseId: task.releaseId, release: task.release ? { id: task.release.id, name: task.release.name, status: task.release.status } : null,
     workspaceId: privateSession ? task.workspaceId : null, runKey: privateSession ? task.runKey : null, status: task.status, error: privateSession ? task.error : null, revision: task.revision,
     canStart: writable && own && permissions.includes("session.start") && task.status === "planned" && scope.some(issue => issue.developmentAllowed), canEdit: canManage && task.status === "planned" && !scope.some(issue => issue.delivery?.status === "pending"), canComplete: canManage && open && idle && task.status !== "planned" && (snapshot.kind === "manual" || scope.length > 0 && scope.every(issue => issue.complete)), canCancel: canManage && open && idle && !scope.some(issue => issue.delivery?.status === "pending"),
     baseBranch: snapshot.baseBranch || "", baseCommit: execution?.baseline?.commit || null, fetchedAt: execution?.baseline?.fetchedAt || null,
     execution: privateSession && execution ? { status: execution.status, error: execution.error || null, sessionId: execution.sessionId } : null, canOpenSession: privateSession && !sessionDeleted && Boolean(task.runKey), createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString(),
     issueIds: [...snapshot.issues.map(issue => issue.id), ...additions.flatMap(batch => batch.issueIds)],
     additions: additions.map(batch => ({ requestId: batch.requestId, issueIds: batch.issueIds, status: batch.status, error: privateSession ? batch.error || null : null, createdAt: batch.createdAt, sentAt: batch.sentAt || null })),
-    ...(detail ? { issues: snapshot.issues, manualContent: snapshot.manual?.content, selection: privateSession ? snapshot.selection : undefined, additions: additions.map(batch => ({ requestId: batch.requestId, issueIds: batch.issueIds, issues: batch.issues, status: batch.status, createdAt: batch.createdAt, sentAt: batch.sentAt || null })) } : {}) };
+    ...(detail ? { issues: snapshot.issues.map(withImages), manualContent: snapshot.manual?.content, selection: privateSession ? snapshot.selection : undefined, additions: additions.map(batch => ({ requestId: batch.requestId, issueIds: batch.issueIds, issues: batch.issues.map(withImages), status: batch.status, createdAt: batch.createdAt, sentAt: batch.sentAt || null })) } : {}) };
 }
 
 module.exports = { presentDevelopment };

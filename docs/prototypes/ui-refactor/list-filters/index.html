@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DevLoom · 列表筛选三方案</title>
+  <link rel="stylesheet" href="../../../../.agents/skills/neutral-workbench/assets/tokens.css" />
+  <link rel="stylesheet" href="prototype.css" />
+  <script src="prototype.js" defer></script>
+</head>
+<body>
+  <header class="review-bar">
+    <div class="review-brand"><strong>列表筛选 · 方案评审</strong><span>交互原型 / 模拟数据</span></div>
+    <nav id="variants" aria-label="方案选择"></nav>
+    <div class="review-tools"><select id="scenario" aria-label="演示场景"><option value="normal">常规内容</option><option value="long">长内容</option><option value="empty">无结果</option><option value="loading">加载中</option><option value="error">读取失败</option><option value="readonly">归档只读</option></select><button id="language">EN</button></div>
+  </header>
+  <div class="shell">
+    <aside class="sidebar"><a href="#a-issues" class="brand"><span>›_</span>DevLoom</a><nav id="main-nav" aria-label="主导航"></nav><div class="sidebar-bottom"><span class="workspace-dot"></span><span>MY智营 · 协作空间</span></div></aside>
+    <div class="workspace"><header class="topbar"><span class="breadcrumb">▱ <span>MY智营</span><span class="slash">/</span><span id="breadcrumb"></span></span><div class="topbar-right"><span class="top-search">⌕ <span>搜索项目、事项或页面</span><kbd>Ctrl K</kbd></span><span class="avatar">陈</span></div></header><main id="page"></main></div>
+  </div>
+  <nav id="mobile-nav" aria-label="移动主导航"></nav>
+  <dialog id="picker" aria-labelledby="picker-title"></dialog>
+  <dialog id="filter-sheet" aria-labelledby="sheet-title"></dialog>
+  <dialog id="detail" aria-labelledby="detail-title"></dialog>
+  <dialog id="image-viewer" aria-labelledby="image-title"></dialog>
+  <div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
+</body>
+</html>

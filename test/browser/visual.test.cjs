@@ -515,6 +515,7 @@ async function main() {
       await input.fill("");
     }
     async function captureProjects() {
+      await require("./list-filters.test.cjs").verifyListFilters({ page, origin, projects });
       async function checkIssueCards(width) {
         const content = await page.getByRole('region', { name: /^(需求内容|Bug 信息)$/ }).boundingBox();
         const status = await page.getByRole('region', { name: '当前操作', exact: true }).boundingBox();

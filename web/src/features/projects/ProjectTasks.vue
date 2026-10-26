@@ -1,5 +1,6 @@
 <script setup>
-import AppSelect from "../../shared/components/AppSelect.vue";
+import ListFilters from "../../shared/components/ListFilters.vue";
+import { useWorkListFilters } from "./use-work-list-filters.js";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -38,15 +39,15 @@ const offset = computed(() =>
 const scope = computed(() =>
   props.issueId || route.query.taskScope === "all" ? "all" : "mine",
 );
-const status = computed(() => typeof route.query.taskStatus === "string" ? route.query.taskStatus : props.issueId ? "all" : "not_cancelled");
 const selectedTasks = ref([]),
   merging = ref(false);
 const { data, loading, error, reload } = useResource(() =>
   appApi(
-    `${endpoint}?offset=${offset.value}&scope=${scope.value}&status=${encodeURIComponent(status.value)}${props.issueId ? `&issueId=${props.issueId}` : ""}`,
+    endpoint + "?" + new URLSearchParams({ offset: String(offset.value), scope: scope.value, ...filters.params.value, ...(props.issueId ? { issueId: props.issueId } : {}) }),
   ),
 );
-watch([offset, scope, status], () => {
+const filters = useWorkListFilters("tasks", () => data.value?.filterOptions, { prefix: "task", defaultStatus: () => props.issueId ? "all" : "not_cancelled" });
+watch([offset, scope, () => JSON.stringify(filters.params.value)], () => {
   selectedTasks.value = [];
   merging.value = false;
   void reload();
@@ -159,7 +160,7 @@ function refresh() {
         {{ $t("项目全部任务") }}
       </button>
     </nav>
-    <label class="development-status-filter">{{ $t('任务状态') }}<AppSelect :model-value="status" :aria-label="$t('任务状态')" @update:model-value="value => router.push({ query: { ...route.query, taskStatus: value, taskOffset: undefined } })"><option v-for="[value, label] in [['not_cancelled','未取消'], ['all','全部状态'], ['planned','待开发'], ['started','已启动'], ['unknown','执行结果待确认'], ['completed','已完成'], ['merged','已合并'], ['cancelled','已取消']]" :key="value" :value="value">{{ $t(label) }}</option></AppSelect></label>
+    <ListFilters :fields="filters.fields.value" :model-value="filters.model.value" @update:model-value="filters.update" @reset="filters.reset" />
     <div v-if="!issueId && !readOnlyReason && selectedTasks.length" class="project-development-action ui-selection-bar">
       <button
         class="primary"
@@ -171,7 +172,7 @@ function refresh() {
         mergeError || $t("所选任务将共用一个 Codex 会话，合并后再开始开发。")
       }}</span>
     </div>
-    <WorkItemTable v-if="taskRows.length" v-model:selected="selectedTasks" :items="taskRows" kind="tasks" :selectable="!issueId && !readOnlyReason" :disabled="loading" @open="open" @open-session="item => emit('open-workspace', item.workspaceId, item.runKey)">
+    <WorkItemTable v-if="taskRows.length" v-model:selected="selectedTasks" :items="taskRows" :people="data?.filterOptions?.people || []" kind="tasks" :selectable="!issueId && !readOnlyReason" :disabled="loading" @open="open" @open-session="item => emit('open-workspace', item.workspaceId, item.runKey)">
       <template #details="{ item }"><p>{{ item.baseBranch || $t('基线未记录') }}<span v-if="item.execution"> · Codex：{{ $t(statusLabel(item.execution.status)) }}</span></p></template>
     </WorkItemTable>
     <p v-if="data && !data.tasks.length" class="muted">

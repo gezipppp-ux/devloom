@@ -1,4 +1,5 @@
 const { SystemWorkflowStore } = require("./system-workflow-store.cjs");
+const { workListWhere } = require("./work-list-where.cjs");
 const { WorkActionStore } = require("./work-action-store.cjs");
 const { ProjectLifecycleStore } = require("./project-lifecycle-store.cjs");
 const { assertIssueWritable } = require("../domain/issue-workflows.cjs");
@@ -43,11 +44,12 @@ class ProjectContentStore {
     if (!value) throw missing();
     return value;
   }
-  async issues(projectId, { type, status, releaseId, includeArchived, query, limit, offset }) {
+  async issues(projectId, { type, status, releaseId, includeArchived, query, limit, offset, filters }) {
     const where = { projectId, deletedAt: null, ...(releaseId !== undefined ? { releaseId } : {}), ...(!includeArchived ? { OR: [{ releaseId: null }, { release: { status: "active" } }] } : {}), ...(type ? { type } : {}), ...(status ? { status } : {}),
       ...(query ? { AND: [{ OR: [{ title: { contains: query, mode: "insensitive" } }, { description: { contains: query, mode: "insensitive" } }] }] } : {}) };
-    const rows = await this.database.client.projectIssue.findMany({ where, orderBy: [{ number: "desc" }], skip: offset, take: limit + 1, include: issueRelations });
-    return { items: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
+    where.AND = [...(where.AND || []), ...workListWhere("issues", filters)];
+    const [rows, total] = await Promise.all([this.database.client.projectIssue.findMany({ where, orderBy: [{ number: "desc" }], skip: offset, take: limit + 1, include: issueRelations }), this.database.client.projectIssue.count({ where })]);
+    return { items: rows.slice(0, limit), total, nextOffset: rows.length > limit ? offset + limit : null };
   }
   async createIssue(projectId, actorId, data, { requestId, attachments = [] } = {}) {
     const creationRequestHash = requestId ? hashCreationRequest(data, attachments) : null;

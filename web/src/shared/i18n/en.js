@@ -12,6 +12,15 @@ import { enProjectSpace } from "./en-project-space.js";
 import { enPreviews } from "./en-previews.js";
 
 export const en = {
+  "不同条件同时满足，同一条件可多选。": "Match every filter; select multiple values within each.",
+  "全部优先级": "All priorities",
+  "全部负责人": "All assignees",
+  "进入会话": "Open session",
+  "进入会话：{title}": "Open session: {title}",
+  "全部提报人": "All reporters",
+  "无关联事项": "No linked issues",
+  "清空筛选": "Clear filters",
+  "查看结果": "Show results",
   ...enPreviews,
   "{count} 项活动": "{count} activities",
   "正在思考": "Thinking",

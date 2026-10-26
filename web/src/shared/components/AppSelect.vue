@@ -61,6 +61,7 @@ export default defineComponent({
     toolbar: Boolean,
     iconOnly: Boolean,
     searchPinyin: Boolean,
+    popupWidth: { type: [Number, Boolean], default: false },
   },
   emits: ["update:modelValue", "update:value", "change"],
   setup(props, { attrs, slots, emit, expose }) {
@@ -256,7 +257,7 @@ export default defineComponent({
                 attrs.onOpenChange?.(value);
               },
               variant: props.toolbar ? "borderless" : attrs.variant,
-              popupMatchSelectWidth: false,
+              popupMatchSelectWidth: props.popupWidth,
               classes: { popup: { root: "app-select-popup" } },
               getPopupContainer: (trigger) =>
                 trigger.closest("dialog[open], [popover]:popover-open") || document.body,

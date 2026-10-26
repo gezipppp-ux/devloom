@@ -82,7 +82,7 @@ async function verifyWorkbench(browser) {
         ['home', '/', '.work-action'], ['action-queue', '/work?bucket=verify', '.work-action'], ['projects', '/projects', '.project-card'],
         ['overview', `/projects/${projectId}`, '.project-overview-grid'],
         ['issues', '/issues', '.ui-data-table'], ['development', '/development', '.ui-data-table'],
-        ['deliveries', '/deliveries', '.ui-work-row'], ['personal', '/personal', '.ui-profile-settings form'],
+        ['deliveries', '/deliveries', '.ui-data-table'], ['personal', '/personal', '.ui-profile-settings form'],
         ['administration', '/accounts', '.account-list-row'],
         ['prompts', `/projects/${projectId}?tab=prompts`, '.prompt-placeholders'],
         ['project-settings', `/projects/${projectId}?tab=settings`, '.project-config-actions'],
@@ -138,7 +138,6 @@ async function verifyWorkbench(browser) {
     await page.locator('.project-entry-card').first().getByRole('button', { name: `Open project ${project.name}`, exact: true }).click();
     await enteredProject();
     await page.goto(origin + '/development');
-    await page.getByRole('button', { name: 'Filters', exact: true }).click();
     await selectOption(page.getByLabel('Task status', { exact: true }), 'started');
     await page.waitForURL('**status=started**');
     await page.locator('.ui-data-table').waitFor();

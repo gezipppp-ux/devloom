@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="610" viewBox="0 0 960 610">
+  <rect width="960" height="610" fill="#f1f1f5"/>
+  <rect x="60" y="40" width="840" height="530" rx="12" fill="white" stroke="#e0e0e8"/>
+  <g font-family="Segoe UI, Microsoft YaHei, sans-serif" fill="#292a33">
+    <text x="92" y="86" font-size="20" font-weight="600">选择默认模型 · 文本模型</text><text x="855" y="86" font-size="24" fill="#727480">×</text>
+    <rect x="92" y="114" width="776" height="42" rx="6" fill="#f1edfd"/>
+    <text x="110" y="141" font-size="15" fill="#7256d8">平台默认变更仅影响跟随平台的租户</text>
+    <path d="M92 167H868" stroke="#e9e9ef" stroke-dasharray="4 4"/>
+    <g fill="#fff" stroke="#e0e0e8"><rect x="92" y="184" width="378" height="134" rx="8"/><rect x="490" y="184" width="378" height="134" rx="8"/><rect x="92" y="338" width="378" height="134" rx="8"/><rect x="490" y="338" width="378" height="134" rx="8"/></g>
+    <g fill="#7256d8"><circle cx="118" cy="215" r="7"/></g><g fill="none" stroke="#b7b7c3" stroke-width="2"><circle cx="516" cy="215" r="7"/><circle cx="118" cy="369" r="7"/><circle cx="516" cy="369" r="7"/></g>
+    <g font-size="18"><text x="138" y="221">默认文本模型</text><text x="536" y="221">快速文本模型</text><text x="138" y="375">推理文本模型</text><text x="536" y="375">通用文本模型</text></g>
+    <g font-size="14" fill="#727480"><text x="138" y="251">已配置供应商</text><text x="536" y="251">已配置供应商</text><text x="138" y="405">已配置供应商</text><text x="536" y="405">已配置供应商</text><text x="138" y="283">适用于日常内容处理</text><text x="536" y="283">适用于快速响应</text><text x="138" y="437">适用于复杂任务</text><text x="536" y="437">适用于通用文本任务</text></g>
+    <path d="M60 495H900" stroke="#e9e9ef"/><rect x="690" y="515" width="80" height="36" rx="6" fill="white" stroke="#d9d9e3"/><rect x="788" y="515" width="80" height="36" rx="6" fill="#292a33"/><text x="714" y="539" font-size="14">取消</text><text x="814" y="539" font-size="14" fill="white">保存</text>
+    <text x="92" y="539" font-size="12" fill="#9496a2">原型附件示例</text>
+  </g>
+</svg>
