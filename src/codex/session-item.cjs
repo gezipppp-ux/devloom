@@ -1,5 +1,6 @@
 const { createHash } = require("node:crypto");
 const { OUTPUT_LIMIT } = require("../domain/session-item.cjs");
+const { previewReferences } = require("./preview-references.cjs");
 
 function imageSources(content) {
   if (!Array.isArray(content)) return [];
@@ -29,7 +30,7 @@ function normalizeItem(item, turnId) {
       command_execution: "commandExecution",
       file_change: "fileChange",
     }[item.type] || item.type;
-  return {
+  const normalized = {
     id: item.id,
     turnId,
     type,
@@ -57,6 +58,8 @@ function normalizeItem(item, turnId) {
     result: printable(item.result || item.contentItems).slice(-OUTPUT_LIMIT),
     imageSources: imageSources(item.content),
   };
+  if (type === "agentMessage") normalized.previewReferences = previewReferences(normalized.text);
+  return normalized;
 }
 
 module.exports = { normalizeItem };

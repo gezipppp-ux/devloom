@@ -9,8 +9,10 @@ import {enNavigation} from "./en-navigation.js";
 import {enMcp} from "./en-mcp.js";
 import { enDeliveryWorkflow } from "./en-delivery-workflow.js";
 import { enProjectSpace } from "./en-project-space.js";
+import { enPreviews } from "./en-previews.js";
 
 export const en = {
+  ...enPreviews,
   "{count} 项活动": "{count} activities",
   "正在思考": "Thinking",
   "正在执行命令": "Running a command",

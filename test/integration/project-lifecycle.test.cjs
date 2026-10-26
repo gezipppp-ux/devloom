@@ -60,7 +60,7 @@ test("release archive checks continued execution after task completion and retai
   const { database, actor, projectId, lifecycle, content } = await fixture(t);
   let release = await lifecycle.saveRelease(projectId, null, actor, { name: "v3.2" });
   let issue = await content.createIssue(projectId, actor, { type: "requirement", title: "Finished scope", releaseId: release.id });
-  issue = await content.transitionIssue(projectId, issue.id, actor, { revision: issue.revision, transitionId: "pending_cancelled", reason: "Finished" });
+  issue = await content.transitionIssue(projectId, issue.id, actor, { revision: issue.revision, transitionId: "planned_rejected", reason: "Finished" });
   const workspace = await database.client.workspace.create({ data: { name: "Continued session", ownerUserId: actor.id } });
   const snapshot = { kind: "issues", issues: [issue], additions: [] };
   const task = await database.client.developmentTask.create({ data: { projectId, releaseId: release.id, creatorId: actor.id, executorId: actor.id, requestId: randomUUID(), status: "completed", snapshot, workspaceId: workspace.id, runKey: "continued" } });

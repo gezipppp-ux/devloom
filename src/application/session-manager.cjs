@@ -15,6 +15,7 @@ const { SessionViews } = require("./session-views.cjs");
 const { SessionSettings } = require("./session-settings.cjs");
 const { SessionGit } = require("./session-git.cjs");
 const { SessionFiles } = require("./session-files.cjs");
+const { SessionPreviews } = require("./session-previews.cjs");
 const { SessionRequirements } = require("./session-requirements.cjs");
 const { runExecution } = require("../execution/runner.cjs");
 const { defaultChannels } = require("../channels/channel-registry.cjs");
@@ -76,6 +77,7 @@ class SessionManager extends EventEmitter {
     this.worktreeReason = worktreeReason;
     this.git = new SessionGit(this);
     this.files = new SessionFiles(this);
+    this.previews = new SessionPreviews(this);
     this.requirements = new SessionRequirements(this);
     this.settings = new SessionSettings({
       store: this.store,
@@ -228,19 +230,22 @@ class SessionManager extends EventEmitter {
     return runtime;
   }
 
-  async send(key, message, images) {
+  async send(key, message, images, preview) {
     const validated = validateSessionMessage(message, images);
     if (validated.images.length) assertCapability(this.agent, "images");
     await this.authorize("session.continue");
     assertAgentIdentity(this.agent, await this.store.read(key));
     (await this.refreshGitCredentials());
     return (await this.exclusive(key, async () => {
+      if (preview !== undefined) await this.previews.writable(key);
+      const feedback = preview === undefined ? "" : await this.previews.feedback(key, preview);
+      if (feedback) validateSessionMessage(validated.text + feedback, validated.images);
       const attachments = (await Promise.all(validated.images.map(async (id) =>
         (await (await this.store.messageImages(key)).read(id)),
       )));
       const input = [
-        ...(validated.text
-          ? [{ type: "text", text: validated.text }]
+        ...(validated.text || feedback
+          ? [{ type: "text", text: validated.text + feedback }]
           : []),
         ...attachments.map((image) => ({
           type: "image",

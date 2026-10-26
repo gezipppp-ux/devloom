@@ -118,6 +118,22 @@ async function serveApi(
   const route = /^\/api\/runs\/([^/]+)(?:\/(.*))?$/.exec(url.pathname);
   if (route && RUN_KEY.test(route[1])) {
     const [, key, action] = route;
+    const preview = /^previews\/([a-f0-9]{32})(?:\/(content|state))?$/.exec(action || "");
+    if (preview && request.method === "GET" && !preview[2])
+      return json(response, 200, await sessions.previews.read(key, preview[1]));
+    if (preview && request.method === "POST" && preview[2] === "state")
+      return json(response, 200, await sessions.previews.save(key, preview[1], input));
+    if (preview && request.method === "GET" && preview[2] === "content") {
+      const html = await sessions.previews.document(key, preview[1]);
+      const cdn = "https://cdnjs.cloudflare.com https://esm.sh https://cdn.jsdelivr.net https://unpkg.com";
+      response.writeHead(200, {
+        "content-type": "text/html; charset=utf-8", "cache-control": "private, no-store",
+        "content-security-policy": `sandbox allow-scripts; default-src 'none'; script-src 'self' 'unsafe-inline' ${cdn}; style-src 'self' 'unsafe-inline' ${cdn} https://fonts.googleapis.com https://fonts.bunny.net; font-src https://fonts.gstatic.com https://fonts.bunny.net data:; img-src data: blob:; connect-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'`,
+        "permissions-policy": "camera=(), microphone=(), geolocation=(), clipboard-read=(), clipboard-write=()",
+      });
+      response.end(html);
+      return;
+    }
     if (request.method === "POST" && action === "requirements/continue")
       return json(response, 202, await sessions.requirements.continue(key, input.id));
     if (request.method === "GET" && /^addition-images\/[^/]+\/\d+$/.test(action || "")) {
@@ -163,7 +179,7 @@ async function serveApi(
       return json(
         response,
         202,
-        await sessions.send(key, input.text, input.images),
+        await sessions.send(key, input.text, input.images, input.preview),
       );
     }
     if (request.method === "POST" && action === "title")

@@ -216,7 +216,13 @@ function createWebServer({
           "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'",
         );
       if (closing) return reply.code(503).send({ error: "服务正在关闭。" });
-      const origin = requestOrigin(request.raw, externalOrigin);
+      // Opaque-origin iframes fetch these two public, credential-free assets as
+      // cross-site requests. Keep the strict origin policy for every API/page.
+      const previewAsset = request.method === "GET" && /^\/preview-runtime\.(?:js|css)$/.test(request.raw.url);
+      const originRequest = previewAsset ? { socket: request.raw.socket,
+        headers: { ...request.raw.headers, origin: undefined, "sec-fetch-site": "same-origin" } } : request.raw;
+      const origin = requestOrigin(originRequest, externalOrigin);
+      if (previewAsset) reply.header("access-control-allow-origin", "*").header("cross-origin-resource-policy", "cross-origin");
       if (!origin)
         return reply
           .code(403)

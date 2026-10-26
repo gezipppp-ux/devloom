@@ -3,8 +3,9 @@ import { computed } from "vue";
 import { UserOutlined, RobotOutlined, CodeOutlined, FileTextOutlined, BulbOutlined, RightOutlined, ExclamationCircleOutlined } from "@antdv-next/icons";
 import { renderMessage } from "./message-content.js";
 import { activityFailed, activityLabels, activityPreview } from "./session-activity.js";
-const props = defineProps({ item: { type: Object, required: true }, agentLabel: { type: String, default: "Agent" }, compact: Boolean, toolOpen: Boolean });
-const emit = defineEmits(["open-file", "tool-toggle"]);
+import SessionPreview from "./SessionPreview.vue";
+const props = defineProps({ item: { type: Object, required: true }, agentLabel: { type: String, default: "Agent" }, runKey: { type: String, default: "" }, latestPreviewVersions: { type: Object, default: () => ({}) }, readonly: Boolean, canFeedback: Boolean, compact: Boolean, toolOpen: Boolean });
+const emit = defineEmits(["open-file", "tool-toggle", "preview-feedback"]);
 const failed = computed(() => activityFailed(props.item));
 const preview = computed(() => activityPreview(props.item));
 function openFile(event) {
@@ -12,11 +13,8 @@ function openFile(event) {
   if (!target || !event.currentTarget.contains(target)) return;
   emit("open-file", { path: target.dataset.filePath, line: Number(target.dataset.fileLine) || null });
 }
-const messageHtml = computed(() =>
-  props.item.type === "agentMessage"
-    ? renderMessage(props.item.text || "…")
-    : "",
-);
+const messageParts = computed(() => (props.item.contentParts || [{ type: "text", text: props.item.text || "…" }])
+  .map(part => part.type === "text" ? { ...part, html: renderMessage(part.text) } : part));
 const images = computed(() =>
   props.item.type === "userMessage"
     ? (props.item.images || []).filter((image) =>
@@ -45,14 +43,15 @@ const pretty = (value) =>
         >{{ $t("正在回复") }}</span
       >
     </div>
-    <!-- Only sanitized Markdown output is rendered as HTML. -->
-    <!-- eslint-disable-next-line vue/no-v-html -->
-    <div
-      v-if="item.type === 'agentMessage'"
-      class="message-text message-markdown"
-      @click="openFile"
-      v-html="messageHtml"
-    />
+    <div v-if="item.type === 'agentMessage'" class="message-text message-markdown" @click="openFile">
+      <template v-for="(part, index) in messageParts" :key="part.id || index">
+        <!-- Only sanitized Markdown output is rendered as HTML. -->
+        <!-- eslint-disable-next-line vue/no-v-html -->
+        <div v-if="part.type === 'text' && part.text" v-html="part.html" />
+        <SessionPreview v-else-if="part.type === 'preview' && runKey" :preview="part" :run-key="runKey" :readonly="readonly" :latest-version="latestPreviewVersions[part.group] || part.version" :can-feedback="canFeedback" @feedback="emit('preview-feedback', $event)" />
+        <p v-else-if="part.type === 'preview-error'" class="error">{{ part.title }} · {{ $t(part.error) }}</p>
+      </template>
+    </div>
     <div v-else-if="item.text || !images.length" class="message-text">
       {{ item.text || "…" }}
     </div>

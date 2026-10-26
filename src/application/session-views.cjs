@@ -43,7 +43,7 @@ class SessionViews {
       ...(cursor ? { cursor } : {}),
     });
     return {
-      items: await Promise.all(result.items.map(item => this.presenter.item(key, item, item.turnId))),
+      items: await Promise.all(result.items.map(item => this.presenter.item(key, item, item.turnId, { capturePreviews: false }))),
       nextCursor: result.nextCursor,
     };
   }
@@ -74,7 +74,7 @@ class SessionViews {
     const items = [];
     for (const page of pages.reverse()) for (const item of page) {
       (await this.store.recordNotification(key, { type: "history-item", item }));
-      items.push((await this.presenter.item(key, item, item.turnId)));
+      items.push((await this.presenter.item(key, item, item.turnId, { capturePreviews: false })));
     }
     (await this.store.reconcileHistory(key, items, startedAt));
   }
