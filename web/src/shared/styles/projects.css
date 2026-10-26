@@ -69,6 +69,46 @@
 .development-confirmation-target { font-weight: 600; overflow-wrap: anywhere; }
 .development-confirmation > p { line-height: 1.8; }
 .development-confirmation .workspace-dialog-heading > button { flex-shrink: 0; white-space: nowrap; }
+.ui-dialog.merge-development-dialog { width: min(624px, calc(100vw - 32px)); overflow: hidden; }
+.ui-dialog.merge-development-dialog[open] { display: flex; flex-direction: column; }
+.ui-dialog.merge-development-dialog > header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px 16px; flex: 0 0 auto; padding: 28px 32px 0; border-bottom: 0; }
+.ui-dialog.merge-development-dialog > header h2 { font-size: 22px; line-height: 1.4; overflow-wrap: anywhere; }
+.ui-dialog.merge-development-dialog > header > button { grid-column: 2; grid-row: 1; margin: -4px -8px 0 0; }
+.merge-development-heading { display: contents; }
+.merge-development-heading p { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.ui-dialog.merge-development-dialog > .ui-dialog-body { min-height: 0; overflow-y: auto; padding: 24px 32px 28px; }
+.merge-development-form { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+.merge-development-form p { margin: 0; }
+.merge-development-form h3 { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 0; font-size: 13px; }
+.merge-development-form h3 > span { color: var(--muted); font-size: 12px; font-weight: 400; }
+.merge-development-tasks { list-style: none; padding: 0; margin: 12px 0 0; }
+.merge-development-tasks > li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; padding: 12px 0; }
+.merge-development-tasks > li + li { border-top: 1px solid var(--line); }
+.merge-development-tasks > li:first-child { padding-top: 0; }
+.merge-development-tasks > li:last-child { padding-bottom: 0; }
+.merge-development-index { display: grid; place-items: center; width: 24px; height: 24px; margin-top: 1px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); font-size: 12px; }
+.merge-development-task-title { font-size: 14px; line-height: 1.65; overflow-wrap: anywhere; }
+.merge-development-form .merge-development-task-meta { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.merge-development-field { display: grid; gap: 12px; min-width: 0; }
+.merge-development-label { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.merge-development-label > label { margin: 0; font-size: 14px; font-weight: 600; }
+.merge-development-label > span { flex-shrink: 0; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.merge-development-field > textarea { width: 100%; min-width: 0; min-height: 90px; padding: 12px 14px; resize: vertical; font-size: 14px; line-height: 1.65; }
+.merge-development-field > p { margin-top: -4px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.merge-development-note { color: var(--muted); font-size: 13px; line-height: 1.8; }
+.merge-development-note > p:last-child { color: var(--ink); }
+.ui-dialog.merge-development-dialog > footer { flex: 0 0 auto; display: flex; justify-content: flex-end; gap: 12px; padding: 18px 32px; }
+.ui-dialog.merge-development-dialog > footer .primary { min-width: 108px; white-space: nowrap; }
+@media (max-width: 767px) {
+  .ui-dialog.merge-development-dialog > header { padding: 24px 20px 0; }
+  .ui-dialog.merge-development-dialog > header h2 { font-size: 20px; }
+  .ui-dialog.merge-development-dialog > header > button { width: 44px; min-height: 44px; }
+  .merge-development-field > textarea { min-height: 120px; font-size: 16px; }
+  .ui-dialog.merge-development-dialog > .ui-dialog-body { padding: 24px 20px; }
+  .ui-dialog.merge-development-dialog > footer { padding: 16px 20px max(16px, env(safe-area-inset-bottom)); }
+  .ui-dialog.merge-development-dialog > footer button { min-height: 44px; flex: 1; }
+  .ui-dialog.merge-development-dialog > footer .primary { min-width: 132px; }
+}
 @media (max-width: 768px) {
   .page-tabs.project-navigation { gap: 4px; }
   .page-tabs.project-navigation > button { padding-inline: 12px; }

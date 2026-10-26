@@ -73,6 +73,7 @@ async function main() {
       return route.fulfill({body:fs.readFileSync(path.join(dist,'index.html')),contentType:'text/html'});
     });
 
+    await require('./merge-development-dialog.test.cjs').verifyMergeDevelopmentDialog({ page, origin, fixture, output });
     const projectName = fixture.response(new URL(origin + '/api/projects')).projects[0].name;
     await page.goto(origin + '/development');
     assert.equal(await page.getByRole('button', { name: '项目全部任务', exact: true }).isDisabled(), true, 'all project tasks requires a specific top-navigation project');

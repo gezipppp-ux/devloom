@@ -1,0 +1,266 @@
+<div id="merge-spacing-review">
+  <div class="viz-carousel" aria-label="合并开发任务的三套布局" data-previous-label="上一方案" data-next-label="下一方案">
+    <section data-variant="舒展分区" aria-label="舒展分区方案"><div class="dm-stage" data-layout="stack"></div></section>
+    <section data-variant="标题优先" aria-label="标题优先方案" hidden><div class="dm-stage" data-layout="title"></div></section>
+    <section data-variant="左右对照" aria-label="左右对照方案" hidden><div class="dm-stage" data-layout="split"></div></section>
+  </div>
+</div>
+<style>
+  #merge-spacing-review .dm-stage {
+    --dm-bg: #fafafb; --dm-surface: #fff; --dm-soft: #f5f5f8;
+    --dm-line: #e9e9ef; --dm-field: #d9d9e3; --dm-text: #24252d;
+    --dm-muted: #727480; --dm-primary: #292a33; --dm-purple: #7256d8;
+    --dm-selected: #f1edfd; --dm-danger: #b64750;
+    --dm-label-gap: 12px; --dm-section-gap: 28px;
+    position: relative; isolation: isolate; width: 100%; min-width: 0;
+    min-height: 760px; background: var(--dm-bg); color: var(--dm-text);
+    font: 14px/1.6 Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    color-scheme: light; container-type: inline-size;
+  }
+  #merge-spacing-review .dm-stage *, #merge-spacing-review .dm-stage *::before, #merge-spacing-review .dm-stage *::after { box-sizing: border-box; }
+  #merge-spacing-review .dm-stage [hidden] { display: none !important; }
+  #merge-spacing-review .dm-stage :is(h1,h2,h3,p,ol) { margin: 0; }
+  #merge-spacing-review .dm-stage button, #merge-spacing-review .dm-stage textarea { font: inherit; }
+  #merge-spacing-review .dm-button {
+    min-height: 40px; border: 1px solid var(--dm-field); border-radius: 7px;
+    padding: 8px 16px; background: var(--dm-surface); color: var(--dm-text);
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    cursor: pointer; line-height: 1.5;
+  }
+  #merge-spacing-review .dm-button:hover:not(:disabled) { background: var(--dm-soft); }
+  #merge-spacing-review .dm-button.dm-primary { background: var(--dm-primary); color: #fff; border-color: var(--dm-primary); font-weight: 600; }
+  #merge-spacing-review .dm-button.dm-primary:hover:not(:disabled) { background: #444551; }
+  #merge-spacing-review .dm-stage :disabled { cursor: not-allowed; opacity: .5; }
+  #merge-spacing-review .dm-stage :is(button,textarea,summary):focus-visible { outline: 2px solid var(--dm-purple); outline-offset: 3px; }
+  #merge-spacing-review .dm-app { display: grid; grid-template-columns: 208px minmax(0,1fr); min-height: 760px; }
+  #merge-spacing-review .dm-sidebar { border-right: 1px solid var(--dm-line); background: var(--dm-surface); padding: 26px 16px; }
+  #merge-spacing-review .dm-brand { display: flex; align-items: center; gap: 9px; font-size: 19px; font-weight: 650; padding: 0 12px 32px; }
+  #merge-spacing-review .dm-logo { width: 24px; height: 24px; border-radius: 6px; background: var(--dm-primary); color: #fff; font-size: 15px; text-align: center; }
+  #merge-spacing-review .dm-nav { display: grid; gap: 7px; }
+  #merge-spacing-review .dm-nav span { padding: 10px 15px; border-radius: 7px; color: var(--dm-muted); }
+  #merge-spacing-review .dm-nav .dm-active { background: var(--dm-selected); color: var(--dm-purple); }
+  #merge-spacing-review .dm-workspace { min-width: 0; }
+  #merge-spacing-review .dm-topbar { height: 72px; border-bottom: 1px solid var(--dm-line); background: var(--dm-surface); display: flex; align-items: center; justify-content: space-between; padding: 0 32px; color: var(--dm-muted); }
+  #merge-spacing-review .dm-avatar { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--dm-soft); font-size: 12px; }
+  #merge-spacing-review .dm-page { max-width: 1600px; margin: auto; padding: 34px 32px; }
+  #merge-spacing-review .dm-page h1 { font-size: 28px; font-weight: 650; margin-bottom: 6px; }
+  #merge-spacing-review .dm-muted { color: var(--dm-muted); }
+  #merge-spacing-review .dm-filters { display: flex; gap: 10px; margin: 26px 0 20px; flex-wrap: wrap; }
+  #merge-spacing-review .dm-filter { padding: 5px 12px; border-radius: 6px; color: var(--dm-muted); }
+  #merge-spacing-review .dm-filter.dm-active { background: var(--dm-selected); color: var(--dm-purple); }
+  #merge-spacing-review .dm-selection { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; padding: 14px 16px; background: var(--dm-surface); border: 1px solid var(--dm-line); border-radius: 8px; margin-bottom: 24px; }
+  #merge-spacing-review .dm-table { border: 1px solid var(--dm-line); border-radius: 9px; overflow: hidden; background: var(--dm-surface); }
+  #merge-spacing-review .dm-table-head, #merge-spacing-review .dm-table-row { display: grid; grid-template-columns: 18px minmax(0,1fr) 72px; align-items: center; gap: 18px; padding: 17px 20px; }
+  #merge-spacing-review .dm-table-head { font-size: 12px; background: var(--dm-soft); color: var(--dm-muted); }
+  #merge-spacing-review .dm-table-row { border-top: 1px solid var(--dm-line); min-height: 92px; }
+  #merge-spacing-review .dm-table-row strong { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 500; }
+  #merge-spacing-review .dm-table-row small { display: block; margin-top: 4px; color: var(--dm-muted); font-size: 12px; }
+  #merge-spacing-review .dm-check { width: 16px; height: 16px; background: var(--dm-purple); color: #fff; border-radius: 4px; text-align: center; font-size: 12px; line-height: 16px; }
+  #merge-spacing-review .dm-status { color: var(--dm-purple); background: var(--dm-selected); border-radius: 5px; font-size: 12px; padding: 3px 7px; white-space: nowrap; }
+  #merge-spacing-review .dm-layer { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 28px; background: #24252d38; }
+  #merge-spacing-review .dm-dialog { width: min(624px,100%); min-width: 0; background: var(--dm-surface); border: 1px solid var(--dm-line); border-radius: 16px; box-shadow: 0 18px 56px #24252d20; overflow: hidden; }
+  #merge-spacing-review [data-layout="split"] .dm-dialog { width: min(880px,100%); }
+  #merge-spacing-review .dm-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 28px 32px 0; }
+  #merge-spacing-review .dm-heading > div { min-width: 0; }
+  #merge-spacing-review .dm-heading h2 { font-size: 22px; font-weight: 650; line-height: 1.4; }
+  #merge-spacing-review .dm-heading p { margin-top: 8px; color: var(--dm-muted); }
+  #merge-spacing-review .dm-stage .dm-close { flex-shrink: 0; width: 36px; min-height: 36px; padding: 0; border: 0; color: var(--dm-muted); font-size: 24px; margin: -4px -8px 0 0; }
+  #merge-spacing-review .dm-body { display: flex; flex-direction: column; gap: var(--dm-section-gap); padding: 24px 32px 28px; }
+  #merge-spacing-review .dm-section-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  #merge-spacing-review .dm-count { font-size: 12px; font-weight: 400; color: var(--dm-muted); }
+  #merge-spacing-review .dm-list { list-style: none; padding: 0; margin-top: 12px !important; }
+  #merge-spacing-review .dm-task { display: grid; grid-template-columns: 24px minmax(0,1fr); gap: 12px; padding: 12px 0; }
+  #merge-spacing-review .dm-task + .dm-task { border-top: 1px solid var(--dm-line); }
+  #merge-spacing-review .dm-task:first-child { padding-top: 0; }
+  #merge-spacing-review .dm-task:last-child { padding-bottom: 0; }
+  #merge-spacing-review .dm-index { width: 24px; height: 24px; border: 1px solid var(--dm-line); border-radius: 6px; color: var(--dm-muted); font-size: 12px; display: grid; place-items: center; margin-top: 1px; }
+  #merge-spacing-review .dm-task-title { font-size: 14px; line-height: 1.65; overflow-wrap: anywhere; }
+  #merge-spacing-review .dm-task-meta { font-size: 12px; color: var(--dm-muted); margin-top: 4px !important; }
+  #merge-spacing-review .dm-field { display: grid; gap: var(--dm-label-gap); min-width: 0; }
+  #merge-spacing-review .dm-label { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+  #merge-spacing-review .dm-label label { font-weight: 600; font-size: 14px; }
+  #merge-spacing-review .dm-counter { color: var(--dm-muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  #merge-spacing-review .dm-input { display: block; width: 100%; min-width: 0; min-height: 90px; padding: 12px 14px; resize: vertical; border: 1px solid var(--dm-field); border-radius: 8px; background: var(--dm-surface); color: var(--dm-text); line-height: 1.65; }
+  #merge-spacing-review .dm-help { font-size: 12px; color: var(--dm-muted); margin-top: -4px !important; }
+  #merge-spacing-review .dm-note { font-size: 13px; line-height: 1.8; color: var(--dm-muted); }
+  #merge-spacing-review .dm-note strong { color: var(--dm-text); font-weight: 500; }
+  #merge-spacing-review .dm-footer { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 18px 32px; border-top: 1px solid var(--dm-line); background: var(--dm-surface); }
+  #merge-spacing-review .dm-footer .dm-primary { min-width: 108px; }
+  #merge-spacing-review .dm-disclosure { border-top: 1px solid var(--dm-line); border-bottom: 1px solid var(--dm-line); }
+  #merge-spacing-review .dm-disclosure summary { min-height: 52px; padding: 14px 0; font-weight: 500; cursor: pointer; }
+  #merge-spacing-review .dm-disclosure[open] { padding-bottom: 16px; }
+  #merge-spacing-review .dm-disclosure .dm-list { margin-top: 0 !important; }
+  #merge-spacing-review .dm-split-content { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.05fr); margin-top: 24px; border-top: 1px solid var(--dm-line); }
+  #merge-spacing-review .dm-split-content .dm-scope { padding: 26px 28px 30px 32px; background: var(--dm-bg); border-right: 1px solid var(--dm-line); min-width: 0; }
+  #merge-spacing-review .dm-split-content .dm-edit { display: flex; flex-direction: column; gap: 24px; padding: 26px 32px 30px 28px; min-width: 0; }
+  #merge-spacing-review .dm-split-content .dm-input { min-height: 138px; }
+  #merge-spacing-review .dm-split-content .dm-note { margin-top: auto; }
+  #merge-spacing-review .dm-error { padding: 12px 14px; border-radius: 7px; color: var(--dm-danger); background: #fff0f1; font-size: 13px; }
+  #merge-spacing-review .dm-empty { color: var(--dm-muted); padding: 20px 0; }
+  #merge-spacing-review .dm-result { padding: 32px; display: grid; gap: 16px; }
+  #merge-spacing-review .dm-result h3 { font-size: 18px; }
+  #merge-spacing-review .dm-result .dm-button { justify-self: end; }
+  #merge-spacing-review .dm-mobile-nav { display: none; }
+  @container (max-width: 1199px) and (min-width: 768px) {
+    #merge-spacing-review .dm-app { grid-template-columns: 76px minmax(0,1fr); }
+    #merge-spacing-review .dm-sidebar { padding: 26px 8px; }
+    #merge-spacing-review .dm-brand { padding-inline: 17px; }
+    #merge-spacing-review .dm-brand-name { display: none; }
+    #merge-spacing-review .dm-nav span { padding: 10px 4px; text-align: center; font-size: 12px; }
+  }
+  @container (max-width: 767px) {
+    #merge-spacing-review .dm-app { display: block; }
+    #merge-spacing-review .dm-sidebar { display: none; }
+    #merge-spacing-review .dm-topbar { height: 60px; padding: 0 20px; }
+    #merge-spacing-review .dm-page { padding: 24px 20px; }
+    #merge-spacing-review .dm-heading { padding: 24px 24px 0; }
+    #merge-spacing-review .dm-body { padding: 24px; }
+    #merge-spacing-review .dm-footer { padding: 16px 24px; }
+    #merge-spacing-review .dm-layer { padding: 20px; }
+    #merge-spacing-review .dm-mobile-nav { display: flex; justify-content: space-around; padding: 16px 0; background: var(--dm-surface); border-top: 1px solid var(--dm-line); }
+    #merge-spacing-review .dm-table-head, #merge-spacing-review .dm-table-row { grid-template-columns: 16px minmax(0,1fr); gap: 12px; padding: 14px; }
+    #merge-spacing-review .dm-table-head > :last-child, #merge-spacing-review .dm-table-row > .dm-status { display: none; }
+  }
+  @container (max-width: 659px) {
+    #merge-spacing-review .dm-split-content { grid-template-columns: minmax(0,1fr); }
+    #merge-spacing-review .dm-split-content .dm-scope { padding: 20px 24px; border-right: 0; border-bottom: 1px solid var(--dm-line); }
+    #merge-spacing-review .dm-split-content .dm-edit { padding: 24px; }
+    #merge-spacing-review .dm-split-content .dm-input { min-height: 106px; }
+  }
+  @container (max-width: 479px) {
+    #merge-spacing-review .dm-layer { padding: 12px; }
+    #merge-spacing-review .dm-heading { padding: 24px 20px 0; }
+    #merge-spacing-review .dm-heading h2 { font-size: 20px; }
+    #merge-spacing-review .dm-body { padding: 24px 20px; }
+    #merge-spacing-review .dm-split-content .dm-scope, #merge-spacing-review .dm-split-content .dm-edit { padding: 20px; }
+    #merge-spacing-review .dm-footer { padding: 16px 20px max(16px,env(safe-area-inset-bottom)); }
+    #merge-spacing-review .dm-footer .dm-button { flex: 1; }
+    #merge-spacing-review .dm-footer .dm-primary { min-width: 132px; white-space: nowrap; }
+    #merge-spacing-review .dm-button, #merge-spacing-review summary { min-height: 44px; }
+    #merge-spacing-review .dm-stage .dm-close { width: 44px; min-width: 44px; min-height: 44px; }
+    #merge-spacing-review .dm-stage .dm-input { font-size: 16px; min-height: 120px; }
+    #merge-spacing-review .dm-task { gap: 10px; }
+    #merge-spacing-review .dm-label { gap: 8px; align-items: flex-start; }
+    #merge-spacing-review .dm-label label { font-size: 13px; }
+  }
+</style>
+<script>
+(() => {
+  const root = document.getElementById('merge-spacing-review');
+  const examples = [
+    ['36773689', '爆款洞察作品详情弹窗与原型不一致，比例信息位置及视觉样式需整改'],
+    ['744b0d3e', '热门账号洞察的账号分类未充分利用单行空间，提前显示“更多”'],
+    ['f614d89c', '爆款洞察行业热榜筛选区与原型不一致，缺少作品类型筛选']
+  ];
+  const options = { language: '中文', scenario: '正常', labelGap: 12, sectionGap: 28 };
+  const drafts = { stack: examples[0][1], title: examples[0][1], split: examples[0][1] };
+  const expanded = { stack: true, title: false, split: true };
+  const t = (zh, en) => options.language === 'English' ? en : zh;
+  const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
+  const tasks = () => options.scenario === '空选择' ? [] : options.scenario === '多任务' ? Array.from({length: 12}, (_,i) => [examples[i%3][0] + '-' + i, examples[i%3][1]]) : examples;
+  function remember() {
+    if (!window.openai?.setWidgetState) return;
+    window.openai.setWidgetState({modelContent: {language: options.language, labelGap: options.labelGap, sectionGap: options.sectionGap}, privateContent: {drafts, expanded, scenario: options.scenario}}).catch(() => {});
+  }
+  function restore(saved) {
+    if (!saved) return;
+    const m = saved.modelContent || {}, p = saved.privateContent || {};
+    if (['中文','English'].includes(m.language)) options.language = m.language;
+    if (Number.isFinite(m.labelGap)) options.labelGap = Math.min(16,Math.max(8,m.labelGap));
+    if (Number.isFinite(m.sectionGap)) options.sectionGap = Math.min(32,Math.max(20,m.sectionGap));
+    if (['正常','多任务','空选择','提交失败','只读'].includes(p.scenario)) options.scenario = p.scenario;
+    Object.keys(drafts).forEach(key => {
+      if (typeof p.drafts?.[key] === 'string') drafts[key] = p.drafts[key].slice(0,200);
+      if (typeof p.expanded?.[key] === 'boolean') expanded[key] = p.expanded[key];
+    });
+  }
+  function list() {
+    if (!tasks().length) return `<p class="dm-empty">${t('没有选中的待开发任务。','No planned tasks selected.')}</p>`;
+    return `<ol class="dm-list">${tasks().map(([id,title],i) => `<li class="dm-task"><span class="dm-index" aria-hidden="true">${i+1}</span><div><p class="dm-task-title">${escape(title)}</p><p class="dm-task-meta">#${id} · ${t('未排期','Unscheduled')}</p></div></li>`).join('')}</ol>`;
+  }
+  function scope() { return `<section class="dm-scope"><h3 class="dm-section-title">${t('本次合并','Tasks to merge')}<span class="dm-count">${tasks().length} ${t('个任务','tasks')}</span></h3>${list()}</section>`; }
+  function field(key) {
+    return `<div class="dm-field"><div class="dm-label"><label for="merge-title-${key}">${t('合并后的任务标题','Merged task title')}</label><span class="dm-counter">${drafts[key].length} / 200</span></div><textarea class="dm-input" id="merge-title-${key}" maxlength="200" rows="2" aria-describedby="merge-help-${key}" ${options.scenario === '只读' ? 'disabled' : ''}>${escape(drafts[key])}</textarea><p class="dm-help" id="merge-help-${key}">${t('使用一个标题概括本次开发范围。','Give this development scope a clear title.')}</p></div>`;
+  }
+  function note() { return `<p class="dm-note">${t('原任务保留合并记录，关联事项继续独立跟踪。','Original tasks retain the merge history. Linked issues remain tracked independently.')}<br><strong>${t('合并后仍需手动开始开发。','Development starts only when you choose to start it.')}</strong></p>`; }
+  function feedback() {
+    if (options.scenario === '提交失败') return `<p class="dm-error" role="alert">${t('合并未成功，请重试。你填写的标题已保留。','Merge failed. Please retry. Your title has been preserved.')}</p>`;
+    if (options.scenario === '只读') return `<p class="dm-error">${t('当前项目只读，暂时无法合并任务。','This project is read-only. Tasks cannot be merged.')}</p>`;
+    return '';
+  }
+  function body(key) {
+    if (key === 'split') return `<div class="dm-split-content">${scope()}<div class="dm-edit">${feedback()}${field(key)}${note()}</div></div>`;
+    if (key === 'title') return `<div class="dm-body">${feedback()}${field(key)}<details class="dm-disclosure" ${expanded.title ? 'open' : ''}><summary>${t('核对所选任务','Review selected tasks')} <span class="dm-count">· ${tasks().length}</span></summary>${list()}</details>${note()}</div>`;
+    return `<div class="dm-body">${feedback()}${scope()}${field(key)}${note()}</div>`;
+  }
+  function shell() {
+    return `<div class="dm-app" inert><aside class="dm-sidebar"><div class="dm-brand"><span class="dm-logo">D</span><span class="dm-brand-name">DevLoom</span></div><nav class="dm-nav" aria-label="${t('主导航','Main navigation')}">${[t('工作台','Home'),t('项目','Projects'),t('事项','Issues'),t('开发','Develop'),t('交付','Deliver')].map((name,i) => `<span class="${i===3 ? 'dm-active' : ''}">${name}</span>`).join('')}</nav></aside><div class="dm-workspace"><header class="dm-topbar"><span>MY智营 <span aria-hidden="true"> / </span> ${t('开发','Development')}</span><span class="dm-avatar">林</span></header><main class="dm-page"><h1>${t('开发任务','Development tasks')}</h1><p class="dm-muted">${t('整理开发范围，准备下一次协作。','Organize your scope for the next development session.')}</p><div class="dm-filters"><span class="dm-filter dm-active">${t('未取消','Active')}</span><span class="dm-filter">${t('待开发','Planned')}</span><span class="dm-filter">${t('已启动','Started')}</span><span class="dm-filter">${t('已完成','Completed')}</span></div><div class="dm-selection"><span>${t('已选择','Selected')} ${tasks().length} ${t('个任务','tasks')}</span><button class="dm-button dm-open">${t('合并开发任务','Merge tasks')}</button></div><div class="dm-table"><div class="dm-table-head"><span></span><span>${t('开发任务','Development task')}</span><span>${t('状态','Status')}</span></div>${[...examples, ['6ec81813','热门账号洞察（V1.4）']].map(([id,title])=>`<div class="dm-table-row"><span class="dm-check" aria-hidden="true">✓</span><div><strong>${escape(title)}</strong><small>#${id} · MY智营</small></div><span class="dm-status">${t('待开发','Planned')}</span></div>`).join('')}</div></main><nav class="dm-mobile-nav" aria-label="${t('移动导航','Mobile navigation')}"><span>${t('工作台','Home')}</span><span>${t('项目','Projects')}</span><span>${t('事项','Issues')}</span><span>${t('开发','Develop')}</span><span>${t('交付','Deliver')}</span></nav></div></div>`;
+  }
+  function alignStages() {
+    const stages = [...root.querySelectorAll('.dm-stage')];
+    // Content-driven height keeps long titles, expanded lists and mobile forms visible.
+    const visible = stages.find(stage => !stage.closest('[data-variant]').hidden);
+    if (!visible) return;
+    const dialog = visible.querySelector('.dm-dialog');
+    const base = visible.clientWidth < 480 ? 1030 : visible.clientWidth < 660 ? 900 : 760;
+    const height = Math.max(base, (dialog?.scrollHeight || 0) + 56);
+    stages.forEach(stage => stage.style.minHeight = `${height}px`);
+  }
+  function bind(stage,key) {
+    const layer = stage.querySelector('.dm-layer'), app = stage.querySelector('.dm-app'), trigger = stage.querySelector('.dm-open');
+    const close = () => { layer.hidden = true; app.inert = false; trigger.focus(); };
+    stage.querySelectorAll('.dm-cancel').forEach(button => button.addEventListener('click', close));
+    trigger.addEventListener('click', () => { layer.hidden = false; app.inert = true; stage.querySelector('.dm-input')?.focus({preventScroll:true}); alignStages(); });
+    const input = stage.querySelector('.dm-input'), confirm = stage.querySelector('.dm-confirm');
+    input.addEventListener('input', () => {
+      drafts[key] = input.value;
+      stage.querySelector('.dm-counter').textContent = `${input.value.length} / 200`;
+      confirm.disabled = !input.value.trim() || tasks().length < 2 || options.scenario === '只读';
+      remember();
+    });
+    stage.querySelector('details')?.addEventListener('toggle', event => { const changed = expanded[key] !== event.target.open; expanded[key] = event.target.open; alignStages(); if (changed) remember(); });
+    stage.onkeydown = event => {
+      if (layer.hidden) return;
+      if (event.key === 'Escape') { event.preventDefault(); close(); }
+      if (event.key === 'Tab') {
+        const controls = [...layer.querySelectorAll('button:not(:disabled),textarea:not(:disabled),summary')].filter(el => el.getClientRects().length);
+        const first = controls[0], last = controls.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
+    };
+    stage.querySelector('form').addEventListener('submit', event => {
+      event.preventDefault();
+      if (confirm.disabled) return;
+      if (options.scenario === '提交失败') { stage.querySelector('.dm-error').textContent = t('仍未成功，请稍后重试。标题已保留。','Still unable to merge. Retry later; your title is preserved.'); return; }
+      stage.querySelector('.dm-dialog').innerHTML = `<div class="dm-result" role="status"><h3 id="merge-heading-${key}">${t('合并效果预览','Merge result preview')}</h3><p>${escape(drafts[key])}</p><p class="dm-muted">${tasks().length} ${t('条关联事项 · 待开发','linked issues · Planned')}<br>${t('这是模拟结果，未修改真实任务。','This is a simulated result. No real tasks were changed.')}</p><button class="dm-button dm-back">${t('返回预览','Back to preview')}</button></div>`;
+      stage.querySelector('.dm-back').addEventListener('click', () => { render(); root.querySelector(`[data-layout="${key}"] .dm-input`).focus({preventScroll:true}); });
+      stage.querySelector('.dm-back').focus({preventScroll:true});
+    });
+  }
+  function render() {
+    root.querySelectorAll('.dm-stage').forEach(stage => {
+      const key = stage.dataset.layout;
+      stage.style.setProperty('--dm-label-gap', `${options.labelGap}px`);
+      stage.style.setProperty('--dm-section-gap', `${options.sectionGap}px`);
+      stage.innerHTML = `${shell()}<div class="dm-layer"><section class="dm-dialog" role="dialog" aria-modal="true" aria-labelledby="merge-heading-${key}"><header class="dm-heading"><div><h2 id="merge-heading-${key}">${t('合并开发任务','Merge development tasks')}</h2><p>${tasks().length} ${t('个待开发任务，关联','planned tasks, with')} ${tasks().length} ${t('条事项','linked issues')}</p></div><button type="button" class="dm-button dm-close dm-cancel" aria-label="${t('关闭','Close')}">×</button></header><form>${body(key)}<footer class="dm-footer"><button type="button" class="dm-button dm-cancel">${t('取消','Cancel')}</button><button class="dm-button dm-primary dm-confirm" ${options.scenario === '只读' || tasks().length < 2 || !drafts[key].trim() ? 'disabled' : ''}>${t('确认合并','Confirm merge')}</button></footer></form></section></div>`;
+      bind(stage,key);
+    });
+    requestAnimationFrame(alignStages);
+  }
+  restore(window.openai?.widgetState);
+  render();
+  window.addEventListener('openai:set_globals', event => { if (event.detail?.globals?.widgetState) { restore(event.detail.globals.widgetState); render(); } });
+  const observer = new ResizeObserver(alignStages);
+  root.querySelectorAll('.dm-stage').forEach(stage => observer.observe(stage));
+  new MutationObserver(alignStages).observe(root.querySelector('.viz-carousel'), {attributes:true, subtree:true, attributeFilter:['hidden','open']});
+  if (globalThis.Tweak) {
+    const tweak = new Tweak({container: root, onChange: () => { render(); remember(); }});
+    tweak.addSlider(options, 'labelGap', {label:'标签与输入框间距',min:8,max:16,step:2,unit:'px'});
+    tweak.addSlider(options, 'sectionGap', {label:'内容分区间距',min:20,max:32,step:4,unit:'px'});
+    tweak.addSelect(options, 'language', {label:'界面语言',options:['中文','English']});
+    tweak.addSelect(options, 'scenario', {label:'预览状态',options:['正常','多任务','空选择','提交失败','只读']});
+  }
+  window.mergeSpacingPreview = {setOptions(patch) { Object.assign(options,patch); render(); }, getDrafts: () => ({...drafts})};
+})();
+</script>
