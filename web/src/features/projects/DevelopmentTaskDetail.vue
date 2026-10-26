@@ -55,6 +55,7 @@ const {
   choices,
   mutate,
   start,
+  retryPreparation,
   append,
   send,
 } = useDevelopmentTask(props.projectId, props.taskId, () => emit("changed"));
@@ -90,6 +91,7 @@ const readOnly = computed(() =>
 const busy = computed(() => loading.value || saving.value);
 const canEdit = computed(() => !readOnly.value && task.value?.canEdit);
 const canStart = computed(() => !readOnly.value && task.value?.canStart);
+const canRetryPreparation = computed(() => !readOnly.value && task.value?.canRetryPreparation);
 const canComplete = computed(() => !readOnly.value && task.value?.canComplete);
 const canCancel = computed(() => !readOnly.value && task.value?.canCancel);
 const canAppend = computed(
@@ -154,14 +156,14 @@ const codexStatus = computed(() =>
       : "未提供执行状态",
 );
 const sessionLabel = computed(() =>
-  task.value.worktreeRemoved || task.value.status === "cancelled" || task.value.status === "completed" && task.value.kind === "manual" || readOnly.value
+  task.value.canRetryPreparation || task.value.worktreeRemoved || task.value.status === "cancelled" || task.value.status === "completed" && task.value.kind === "manual" || readOnly.value
     ? "查看历史会话"
     : view.value.step === 4
       ? "查看会话与代码"
       : "进入 Codex 会话",
 );
 const confirmationAllowed = computed(() =>
-  confirmation.value?.action === "complete"
+  confirmation.value?.action === "retry-preparation" ? canRetryPreparation.value : confirmation.value?.action === "complete"
     ? canComplete.value
     : confirmation.value?.action === "cancel"
       ? canCancel.value
@@ -223,6 +225,11 @@ function confirm(action, issue) {
 async function submitConfirmation() {
   if (!confirmationAllowed.value) return;
   const current = confirmation.value;
+  if (current.action === "retry-preparation") {
+    const result = await retryPreparation(current.revision);
+    if (result || !canRetryPreparation.value) confirmation.value = null;
+    return;
+  }
   const result = await mutate(
     current.action === "remove" ? "" : current.action,
     {
@@ -539,10 +546,11 @@ async function submitConfirmation() {
           </button>
         </div>
         <div v-else class="actions">
+          <button v-if="canRetryPreparation" class="primary" :disabled="busy" @click="confirm('retry-preparation')">{{ $t('重试准备并启动') }}</button>
           <ReworkDevelopment :key="task.id + ':' + task.revision" :project-id="projectId" :task="task" />
           <button
             v-if="task.canOpenSession && task.runKey"
-            :class="{ primary: !task.canRework }"
+            :class="{ primary: !task.canRework && !canRetryPreparation }"
             :disabled="busy"
             @click="emit('open-workspace', task.workspaceId, task.runKey)"
           >

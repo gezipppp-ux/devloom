@@ -1,4 +1,5 @@
 const path = require("node:path");
+const { canRetryPreparation } = require("../domain/preparation-retry.cjs");
 const { randomUUID, createHash } = require("node:crypto");
 const { isDeepStrictEqual } = require("node:util");
 const { accountError } = require("../domain/account.cjs");
@@ -194,7 +195,9 @@ class ProjectDevelopmentStore {
     const run = await this.database.readDocument(path.join(this.database.dataRoot, "workspaces", task.workspaceId, "runs", task.runKey, "run.json"));
     if (!run) return task.snapshot.sessionDeletion ? { ...task.snapshot.sessionDeletion.execution, sessionId: null, sessionDeleted: true, worktreeRemoved: true } : null;
     const deletion = await this.database.readDocument(path.join(this.database.dataRoot, "workspaces", task.workspaceId, "runs", task.runKey, "worktree-deletion.json"));
-    return { status: run.execution?.status || "unknown", error: run.execution?.error || null, sessionId: run.session_id || null, baseline: run.worktree?.baseline || null,
+    const archived = await this.database.readDocument(path.join(this.database.dataRoot, "workspaces", task.workspaceId, "runs", task.runKey, "session-archive.json"));
+    return { canRetryPreparation: canRetryPreparation(run) && !deletion && !archived?.archivedAt,
+      status: run.execution?.status || "unknown", error: run.execution?.error || null, sessionId: run.session_id || null, baseline: run.worktree?.baseline || null,
       sessionDeleted: false, worktreeRemoved: Boolean(deletion?.worktreeRemoved || deletion?.status === "deleted") };
   }
   async recordSessionDeletion(task, execution) {

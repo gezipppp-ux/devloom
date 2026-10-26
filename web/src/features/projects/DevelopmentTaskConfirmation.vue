@@ -13,6 +13,11 @@ const dialog = ref();
 const copy = computed(
   () =>
     ({
+      "retry-preparation": {
+        title: "确认重试准备",
+        description: "将沿用原任务资料、起始分支和执行设置，重新获取远端代码并准备工作目录。准备成功后会启动 Agent。",
+        button: "确认重试并启动",
+      },
       complete: {
         title: "确认完成开发任务",
         description:
@@ -70,7 +75,7 @@ onUnmounted(() => {
     <div class="actions">
       <button autofocus :disabled="busy" @click="close">{{ $t("返回") }}</button
       ><button
-        :class="action === 'complete' ? 'primary' : 'danger-button'"
+        :class="['complete', 'retry-preparation'].includes(action) ? 'primary' : 'danger-button'"
         :disabled="busy || disabled"
         @click="emit('confirm')"
       >

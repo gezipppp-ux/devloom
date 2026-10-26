@@ -16,6 +16,7 @@ async function serveProjectDevelopment(request, response, url, { services, actor
   if (id && action === "workflow/retry" && request.method === "POST") return send(200, await services.retryWorkflow(projectId, id, actor, input));
   if (id && action === "rework" && request.method === "POST") return send(201, await services.rework(projectId, id, actor, input));
   if (id && action === "start" && request.method === "POST") return send(202, await services.start(projectId, id, actor, input));
+  if (id && action === "retry-preparation" && request.method === "POST") return send(202, await services.retryPreparation(projectId, id, actor, input));
   if (id && ["complete", "cancel"].includes(action) && request.method === "POST") return send(200, await services.finish(projectId, id, actor, input, action === "complete" ? "completed" : "cancelled"));
   if (id && action === "issues" && request.method === "POST") return send(200, await services.append(projectId, id, actor, input));
   const addition = /^additions\/([^/]+)\/continue$/.exec(action || "");

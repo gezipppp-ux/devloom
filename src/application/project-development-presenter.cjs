@@ -17,6 +17,7 @@ function presentDevelopment(task, actorId, execution = null, { detail = false, p
   return { id: task.id, projectId: task.projectId, executorId: task.executorId, title: snapshot.title, kind: snapshot.kind || "issues", scope, deliveryPhase, canSubmitDelivery: writable && own && open && idle && scope.some(issue => issue.submission.allowed), workflowErrors: (task.workflowEvents || []).map(event => ({ id: event.id, error: event.error })),
     mergedIntoTaskId: snapshot.mergedIntoTaskId || null, mergedFromTaskIds: snapshot.mergedFromTaskIds || [],
     canMerge: writable && own && permissions.includes("session.start") && task.status === "planned" && !scope.some(issue => issue.delivery),
+    canRetryPreparation: writable && privateSession && permissions.includes("session.start") && !sessionDeleted && ["started", "unknown"].includes(task.status) && Boolean(execution?.canRetryPreparation),
     canArchive: writable && privateSession && !sessionDeleted && permissions.includes("session.continue") && Boolean(task.workspaceId && task.runKey),
     sessionDeleted: privateSession && sessionDeleted, worktreeRemoved: privateSession && Boolean(execution?.worktreeRemoved),
     canRework: writable && own && permissions.includes("session.start") && permissions.includes("collaboration.view") && Boolean(reworkAvailable(task, execution)),

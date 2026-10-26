@@ -67,6 +67,7 @@ export function developmentTaskView(
             "前往「代码与环境」配置个人 Git 并准备开发空间，完成后返回此任务。",
         };
   }
+  if (task.canRetryPreparation) return { step: 2, title: "准备失败，Agent 尚未启动", description: "可沿用原任务资料、起始分支和执行设置重试准备，成功后启动 Agent。" };
   if (task.status === "unknown")
     return {
       step: 3,

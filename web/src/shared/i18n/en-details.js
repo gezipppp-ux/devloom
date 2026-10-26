@@ -1,4 +1,11 @@
 export const enDetails = {
+    "准备失败，Agent 尚未启动": "Preparation failed; Agent has not started",
+    "可沿用原任务资料、起始分支和执行设置重试准备，成功后启动 Agent。": "Retry preparation with the original task, baseline branch, and execution settings. The Agent starts after preparation succeeds.",
+    "重试准备并启动": "Retry preparation and start",
+    "确认重试准备": "Confirm preparation retry",
+    "将沿用原任务资料、起始分支和执行设置，重新获取远端代码并准备工作目录。准备成功后会启动 Agent。": "Fetch remote code and prepare the work directory using the original task, baseline branch, and execution settings. The Agent starts after preparation succeeds.",
+    "确认重试并启动": "Confirm retry and start",
+    "已提交准备重试，请在会话中跟进。": "Preparation retry submitted. Follow progress in the session.",
     "自定义主机": "Custom host",
     "Git 主机地址": "Git host address",
     "已根据主机匹配 {service} 登录验证，无需重复选择服务。": "Authentication will use {service}, matched to this host. No service selection is needed.",

@@ -11,9 +11,10 @@ const { assertWorktreeLocation, assertMemberWorktreeLocation } = require("../con
 const { sourceFor, runKey } = require("../domain/run-identity.cjs");
 const { initializeWorktree } = require("./worktree-init.cjs");
 const { ExecutionStore } = require("../storage/execution-store.cjs");
+const { canRetryPreparation } = require("../domain/preparation-retry.cjs");
 
 async function runExecution(
-  { config, configFile, session, item, directory, channel, retry = false, baseBranch },
+  { config, configFile, session, item, directory, channel, retry = false, baseBranch, preparationRetry },
   dependencies = {},
 ) {
   const services = {
@@ -29,7 +30,7 @@ async function runExecution(
   const source = sourceFor(channel.id, item);
   const store = new ExecutionStore(directory);
   store.lock();
-  let state;
+  let state, previous;
   async function transition() {
     state = (await store.update({ transition: { status: "pending" } }));
     let transition;
@@ -53,17 +54,24 @@ async function runExecution(
         throw new Error(
           "Run identity does not match the requested requirement.",
         );
-      if (!retry) return { ...state, reused: true };
-      if (["succeeded", "skipped"].includes(state.transition.status))
-        return { ...state, reused: true };
-      if (!state.session_id || !state.execution_started_at)
-        throw new Error(
-          "No confirmed execution start is recorded; cannot retry the channel transition.",
-        );
-      await channel.validate?.(config);
-      await transition();
-      return state;
+      if (preparationRetry) {
+        if (state.preparationRetries?.some(entry => entry.requestId === preparationRetry)) return { ...state, reused: true };
+        if (!canRetryPreparation(state) || !dependencies.preparedTask) throw new Error("任务已有准备或执行记录，不能重新启动；请检查原会话。");
+        previous = state;
+      } else if (!retry) return { ...state, reused: true };
+      if (!preparationRetry) {
+        if (["succeeded", "skipped"].includes(state.transition.status))
+          return { ...state, reused: true };
+        if (!state.session_id || !state.execution_started_at)
+          throw new Error(
+            "No confirmed execution start is recorded; cannot retry the channel transition.",
+          );
+        await channel.validate?.(config);
+        await transition();
+        return state;
+      }
     }
+    if (preparationRetry && !previous) throw new Error("没有可重试的准备记录。");
     if (retry) throw new Error("No previous run exists for this requirement.");
     getAgentProvider(agentConfig(config).provider);
     if (typeof services.startSession !== "function")
@@ -79,8 +87,12 @@ async function runExecution(
       item.workspace_id,
       channel.id,
     );
-    const { workitem, task, target, worktreeSlug, worktreeName } =
-      await channel.prepare({
+    if (previous && (repository !== previous.worktree.repository || config.execution.baseBranch !== previous.worktree.baseline.branch))
+      throw new Error("开发仓库或起始分支已变更，不能重试原任务。");
+    const { workitem, task, target, worktreeSlug, worktreeName } = previous
+      ? { workitem: previous.workitem, task: dependencies.preparedTask, target: previous.target_status,
+        worktreeSlug: previous.preparation?.worktreeSlug, worktreeName: previous.preparation?.worktreeName ?? previous.workitem.worktree_name }
+      : await channel.prepare({
         session,
         item,
         directory,
@@ -90,12 +102,13 @@ async function runExecution(
     if (typeof taskPrompt(task) !== "string") throw new Error("任务必须包含 prompt 文本。");
     if (runKey(sourceFor(channel.id, workitem)) !== runKey(source))
       throw new Error("Channel returned a different requirement identity.");
-    (await store.writeTask(task));
+    if (!previous) (await store.writeTask(task));
     state = {
+      ...previous,
       version: 3,
       workspace_id: config.workspace?.id,
       source,
-      created_at: new Date().toISOString(),
+      created_at: previous?.created_at || new Date().toISOString(),
       workitem,
       worktree: { repository, baseline: { remote: "origin", branch: config.execution.baseBranch || null, commit: null, fetchedAt: null } },
       target_status: target,
@@ -109,6 +122,10 @@ async function runExecution(
       execution: { status: "preparing" },
       transition: { status: "not_started" },
       image_count: task.images.length,
+      preparation: { worktreeSlug, worktreeName },
+      ...(previous ? { preparationRetries: [...(previous.preparationRetries || []), {
+        requestId: preparationRetry, at: new Date().toISOString(), previousExecution: previous.execution,
+      }] } : {}),
     };
     // Keep preparation failures readable even when no worktree could be created.
     await store.save(state);

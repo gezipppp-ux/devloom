@@ -21,6 +21,9 @@ const { runExecution } = require("../execution/runner.cjs");
 const { defaultChannels } = require("../channels/channel-registry.cjs");
 const { executionConfig } = require("../config/execution-settings.cjs");
 const { validateBaseBranch } = require("../domain/development-baseline.cjs");
+const { canRetryPreparation } = require("../domain/preparation-retry.cjs");
+const { REQUEST_ID } = require("../domain/requirement-fusion.cjs");
+const { loadConfig } = require("../config/runtime.cjs");
 
 const { sourceFor, runKey } = require("../domain/run-identity.cjs");
 
@@ -459,6 +462,44 @@ class SessionManager extends EventEmitter {
     });
   }
 
+  retryPreparation(key, requestId, beforeLaunch = async () => {}) {
+    return this.trackStart(async () => {
+      if (typeof requestId !== "string" || !REQUEST_ID.test(requestId)) throw new Error("重试请求标识无效。");
+      await this.authorize("session.start");
+      await this.refreshGitCredentials();
+      return this.exclusive(key, async () => {
+        let state = await this.store.read(key);
+        if (this.sessions.get(key)?.preparationRetry === requestId || state.preparationRetries?.some(entry => entry.requestId === requestId))
+          return { key, accepted: true, reused: true };
+        const assertRetryable = async () => {
+          state = await this.store.read(key);
+          const web = await this.store.readWeb(key);
+          if (!canRetryPreparation(state) || this.git.activeReason(key) || web.sessionId || web.turnId || web.requests?.length ||
+              ["preparing", "initializing", "starting", "running", "inProgress"].includes(web.status) ||
+              await this.store.isArchived(key) || Object.keys(await this.store.readWorktreeDeletion(key)).length)
+            throw new Error("任务已有准备或执行记录，不能重新启动；请检查原会话。");
+          assertAgentIdentity(this.agent, state);
+        };
+        await assertRetryable();
+        this.store.claim(key);
+        try {
+          await assertRetryable();
+          await beforeLaunch();
+          await this.validateStartSelection(state.agent);
+          const config = await loadConfig(this.configFile);
+          config.agent = { ...readAgentConfig(config), ...state.agent };
+          const task = await this.store.readTask(key);
+          const images = await Promise.all((task.images || []).map(async (image, index) => ({ ...image, path: await this.store.imagePath(key, String(index)) })));
+          return await this.prepareLaunch(key, state.workitem, config, undefined,
+            { baseBranch: state.worktree.baseline.branch, preparationRetry: requestId, preparedTask: { ...task, images } }, this.channels.get(state.source.channel));
+        } catch (error) {
+          this.store.release(key);
+          throw error;
+        }
+      });
+    });
+  }
+
   async prepareLaunch(
     key,
     item,
@@ -471,7 +512,7 @@ class SessionManager extends EventEmitter {
     config = (await executionConfig(config, this.configFile, executionSelection));
     assertAgentIdentity(this.agent, config);
     const source = sourceFor(channel.id, item);
-    if (this.sessions.has(key) || (await this.store.hasRun(key))) {
+    if (!executionSelection.preparationRetry && (this.sessions.has(key) || (await this.store.hasRun(key)))) {
       if (item.request_fingerprint && (await this.store.requirements.read(key)).fingerprint === item.request_fingerprint)
         return { key, accepted: true, reused: true };
       throw new Error("该需求已有运行记录。");
@@ -488,6 +529,7 @@ class SessionManager extends EventEmitter {
       const binding = await this.agent.prepare?.(key);
       runtime = this.runtime(key);
       runtime.supplier = binding?.supplier;
+      runtime.operation = null;
       (await this.store.requirements.claim(key, item.sources || [source], { fingerprint: item.request_fingerprint }));
       claimed = true;
       this.assertOpen();
@@ -499,6 +541,8 @@ class SessionManager extends EventEmitter {
       runtime.prepareAbort = new AbortController();
       runtime.status = "preparing";
       runtime.connected = false;
+      runtime.error = null;
+      runtime.preparationRetry = executionSelection.preparationRetry;
       const directory = this.store.dir(key);
       (await this.store.writeWeb(key, { source }));
       this.assertOpen();
@@ -517,10 +561,12 @@ class SessionManager extends EventEmitter {
           session,
           item,
           directory,
+          preparationRetry: executionSelection.preparationRetry,
         },
         {
           signal: runtime.prepareAbort.signal,
           gitCredentials,
+          preparedTask: executionSelection.preparedTask,
           authorize: async () => {
             this.assertOpen();
             await this.authorize("session.start");
@@ -647,6 +693,13 @@ class SessionManager extends EventEmitter {
     } catch (error) {
       try {
         await this.agent.cancelPreparation?.(key);
+        if (runtime && !runtime.operation) {
+          runtime.pipelineActive = false;
+          runtime.prepareAbort = null;
+          runtime.preparationRetry = undefined;
+          runtime.status = "failed";
+          runtime.error = presentError(error).message;
+        }
         if (claimed) await this.store.requirements.releaseUnstarted(key);
         if (runtime && !(await this.store.hasRun(key))) this.sessions.delete(key);
       } finally {

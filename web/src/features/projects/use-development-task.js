@@ -22,6 +22,7 @@ export function useDevelopmentTask(projectId, taskId, changed) {
     ),
   );
   const startRequestId = createRequestId();
+  let preparationRequestId = createRequestId();
   let additionRequestId = createRequestId(),
     alive = true;
   onUnmounted(() => {
@@ -49,6 +50,17 @@ export function useDevelopmentTask(projectId, taskId, changed) {
     // A failed response may follow accepted dispatch. Read the recorded result,
     // keeping the original diagnostic rather than offering a blind restart.
     if (!result && alive) {
+      const message = resource.error.value;
+      await resource.reload();
+      if (alive && message) resource.error.value = message;
+    }
+    return result;
+  }
+  async function retryPreparation(revision) {
+    const result = await mutate("retry-preparation", { requestId: preparationRequestId, revision }, "已提交准备重试，请在会话中跟进。");
+    if (!alive) return result;
+    if (result) preparationRequestId = createRequestId();
+    else {
       const message = resource.error.value;
       await resource.reload();
       if (alive && message) resource.error.value = message;
@@ -88,6 +100,7 @@ export function useDevelopmentTask(projectId, taskId, changed) {
     choices,
     mutate,
     start,
+    retryPreparation,
     append,
     send,
   };

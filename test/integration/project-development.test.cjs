@@ -21,6 +21,8 @@ const { createWebServer } = require("../../src/http/server.cjs");
 const { hashPassword } = require("../../src/storage/account-passwords.cjs");
 const { AccountServices } = require("../../src/application/account-services.cjs");
 const { SystemWorkflowServices } = require("../../src/application/system-workflow-services.cjs");
+const { runExecution } = require("../../src/execution/runner.cjs");
+const { fetchDevelopmentBaseline } = require("../../src/git/development-baseline.cjs");
 
 async function fixture(t) {
   const database = await initializeTestDatabase(t, temporary(t));
@@ -71,6 +73,36 @@ async function fixture(t) {
   };
   return { database, actor, other, project, content, services, sessions, calls, issue };
 }
+
+test("preparation retry is scoped to the executor, current revision, writable task and original workspace", async t => {
+  const { services, sessions, database, actor, other, project, issue } = await fixture(t);
+  const selected = await issue("准备重试");
+  const { task } = await launch(services, project.id, actor, { requestId: randomUUID(), issueIds: [selected.id] });
+  const stored = await services.store.task(project.id, task.id);
+  const runFile = path.join(database.dataRoot, "workspaces", stored.workspaceId, "runs", stored.runKey, "run.json");
+  await database.writeDocument(runFile, { execution: { status: "failed", error: "fetch timeout" }, transition: { status: "not_started" },
+    worktree: { repository: "fixture", baseline: { branch: "main", commit: null } } });
+  const current = (await services.read(project.id, task.id, actor)).task;
+  assert.equal(current.canRetryPreparation, true);
+  assert.equal((await services.read(project.id, task.id, other)).task.canRetryPreparation, false);
+  let launches = 0;
+  const accepted = new Set();
+  sessions.retryPreparation = async (key, requestId, beforeLaunch) => {
+    assert.equal(key, stored.runKey);
+    if (accepted.has(requestId)) return { reused: true };
+    await beforeLaunch(); launches++; accepted.add(requestId); return { accepted: true };
+  };
+  const request = { requestId: randomUUID(), revision: current.revision };
+  await assert.rejects(services.retryPreparation(project.id, task.id, other, request), /执行人/);
+  await assert.rejects(services.retryPreparation(project.id, task.id, actor, { ...request, revision: current.revision + 1 }), /变更/);
+  await services.retryPreparation(project.id, task.id, actor, request);
+  assert.equal((await services.retryPreparation(project.id, task.id, actor, request)).reused, true);
+  assert.equal(launches, 1);
+  await database.client.project.update({ where: { id: project.id }, data: { status: "archived" } });
+  await assert.rejects(services.retryPreparation(project.id, task.id, actor, request), /归档/);
+  assert.equal((await services.read(project.id, task.id, actor)).task.canRetryPreparation, false);
+  assert.equal(launches, 1);
+});
 
 test("issue assignment summaries preserve the real actor through edits, reassignment, merge and release", async t => {
   const { database, content, services, actor, other, project, issue } = await fixture(t);
@@ -143,7 +175,13 @@ test("project tasks and image additions use the real session manager with tempor
   const client = new FakeClient();
   const request = client.request.bind(client);
   client.request = async (method, params) => method === "thread/items/list" ? { data: [], nextCursor: null } : request(method, params);
-  workspaces = new WorkspaceManager({ database, directory: path.join(root, "workspaces"), createManager: options => new SessionManager({ ...options, client }) });
+  let failPreparation = true;
+  workspaces = new WorkspaceManager({ database, directory: path.join(root, "workspaces"), createManager: options => new SessionManager({ ...options, client,
+    run: (input, dependencies) => runExecution(input, { ...dependencies, fetchDevelopmentBaseline: async (...args) => {
+      if (failPreparation) { failPreparation = false; throw new Error("fixture baseline timeout"); }
+      return fetchDevelopmentBaseline(...args);
+    } }),
+  }) });
   const projects = new ProjectServices(database, { workspaces });
   workspaces.authorizeProject = (id, user, permission) => projects.workspaceAuthorization(id, user, permission);
   const space = await database.client.developmentSpace.findUnique({ where: { projectId_userId: { projectId: project.id, userId: actor.id } } });
@@ -163,6 +201,15 @@ test("project tasks and image additions use the real session manager with tempor
   const { task } = await launch(services, project.id, actor, { requestId: randomUUID(), issueIds: [first.id] }, { supplementaryPrompt: "验证首轮补充 $& {{content}}" });
   const { sessions } = await workspaces.get(space.workspaceId, actor);
   const runtime = sessions.sessions.get(task.runKey);
+  await runtime.operation;
+  assert.equal(client.calls.filter(call => call.method === "turn/start").length, 0, "preparation failure never starts an Agent");
+  const failed = (await services.read(project.id, task.id, actor)).task;
+  assert.equal(failed.canRetryPreparation, true);
+  const savedTask = await sessions.store.readTask(task.runKey);
+  for (const image of savedTask.images) fs.unlinkSync(image.path);
+  const retryRequest = { requestId: randomUUID(), revision: failed.revision };
+  await services.retryPreparation(project.id, task.id, actor, retryRequest);
+  assert.equal((await services.retryPreparation(project.id, task.id, actor, retryRequest)).reused, true);
   const deadline = Date.now() + 10000;
   while (!runtime.turnId && !runtime.error && Date.now() < deadline) await immediate();
   assert.ok(runtime.turnId, runtime.error || "fake Codex turn did not start");

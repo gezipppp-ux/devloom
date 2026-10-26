@@ -48,6 +48,11 @@ function developmentStartInput(input) {
   for (const field of ["model", "reasoningEffort", "permissionMode"]) if (Object.hasOwn(input, field)) result[field] = text(input[field], "执行设置", 200);
   return result;
 }
+function developmentPreparationRetryInput(input) {
+  object(input, ["requestId", "revision"]);
+  if (typeof input.requestId !== "string" || !UUID.test(input.requestId)) throw accountError("重试请求标识无效。", 400);
+  return { requestId: input.requestId, revision: revision(input.revision) };
+}
 function manualDevelopmentInput(input) {
   object(input, ["requestId", "title", "content", "images", "baseBranch", "model", "reasoningEffort", "permissionMode"]);
   if (!UUID.test(input.requestId || "")) throw accountError("开发请求标识无效，请重新打开表单。", 400);
@@ -106,4 +111,4 @@ function developmentPrompt(issues, addition = false, templates = getPromptTempla
   return content;
 }
 
-module.exports = { developmentStatus, developmentInput, developmentMergeInput, developmentReworkInput, developmentStartInput, manualDevelopmentInput, manualDevelopmentPrompt, developmentEditInput, developmentPrompt };
+module.exports = { developmentStatus, developmentInput, developmentMergeInput, developmentReworkInput, developmentStartInput, developmentPreparationRetryInput, manualDevelopmentInput, manualDevelopmentPrompt, developmentEditInput, developmentPrompt };

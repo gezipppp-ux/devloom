@@ -13,6 +13,7 @@ const { presentDevelopment } = require("./project-development-presenter.cjs");
 const { isImageAttachment } = require("../domain/attachment-prompts.cjs");
 const { developmentReworkInput } = require("../domain/project-development.cjs");
 const { reworkAvailable, reworkPrompt } = require("../domain/development-lifecycle.cjs");
+const { developmentPreparationRetryInput } = require("../domain/project-development.cjs");
 
 class ProjectDevelopmentServices {
   constructor(database, projects, workspaces) {
@@ -56,6 +57,36 @@ class ProjectDevelopmentServices {
     if (task.executorId !== actor.id || task.revision !== input.revision) throw accountError("任务归属或修订已变化。", 409);
     await this.workflowExecution.recoverTask(task, true);
     return this.read(projectId, id, actor);
+  }
+  async retryPreparation(projectId, id, actor, input) {
+    const { requestId, revision: expected } = developmentPreparationRetryInput(input);
+    await this.authorize(projectId, actor, "session.start");
+    const task = await this.store.task(projectId, id);
+    if (task.executorId !== actor.id) throw accountError("只有任务执行人能重试准备。", 403);
+    if (!["started", "unknown"].includes(task.status) || !task.runKey || task.snapshot.sessionDeletion)
+      throw accountError("此任务不能重试准备，请检查原记录。", 409);
+    const context = await this.workspaces.get(task.workspaceId, actor);
+    if (this.starting.has(id)) throw accountError("开发任务正在准备，请等待执行结束。", 409);
+    this.starting.add(id);
+    try {
+      const result = await context.sessions.retryPreparation(task.runKey, requestId, () => this.store.transaction(async () => {
+        await this.authorize(projectId, actor, "session.start");
+        const current = await this.store.task(projectId, id);
+        this.assertRevision(current, expected);
+        if (current.executorId !== actor.id || current.workspaceId !== task.workspaceId || !["started", "unknown"].includes(current.status))
+          throw accountError("任务归属或状态已变化。", 409);
+        const space = await this.store.space(projectId, actor.id);
+        if (space.workspaceId !== task.workspaceId) throw accountError("开发空间已变化，不能重试原任务。", 409);
+        this.assertIssues(await this.store.issues(projectId, current.snapshot.issues.map(issue => issue.id)), current.releaseId);
+        if (current.release?.status === "archived") throw accountError("版本已归档，开发任务只读。", 409);
+      }));
+      await this.store.transaction(async () => {
+        const current = await this.store.task(projectId, id);
+        if (current.status === "unknown" || current.status === "started" && current.error)
+          await this.store.update(current, { status: "started", error: null });
+      });
+      return { task: await this.present(await this.store.task(projectId, id), actor, true), reused: Boolean(result.reused) };
+    } finally { this.starting.delete(id); }
   }
   async rework(projectId, id, actor, input) {
     const request = { ...developmentReworkInput(input), sourceTaskId: id, executorId: actor.id };

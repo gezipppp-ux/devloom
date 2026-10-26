@@ -12,6 +12,10 @@ const { RunStore } = require("../../src/storage/run-store.cjs");
 const { SessionViews } = require("../../src/application/session-views.cjs");
 const { runKey, sourceFor } = require("../../src/domain/run-identity.cjs");
 const { temporary } = require("../support/helpers.cjs");
+const { randomUUID } = require("node:crypto");
+const { setImmediate } = require("node:timers");
+const { SessionManager } = require("../support/session-manager.cjs");
+const { FakeClient } = require("../fixtures/web-client.cjs");
 
 function fixture(t) {
   const root = temporary(t);
@@ -49,6 +53,71 @@ function fixture(t) {
   } };
   return { root, remote, author, repository, original, commit, input, dependencies, starts: () => starts };
 }
+
+test("explicit preparation retry preserves snapshots and identities, fences active work, and never redispatches an accepted request", async t => {
+  const f = fixture(t), input = f.input("retry");
+  const key = runKey(sourceFor(input.channel.id, input.item)), runs = path.join(f.root, "runs");
+  fs.writeFileSync(input.configFile, JSON.stringify(input.config));
+  input.directory = path.join(runs, key);
+  const image = path.join(input.directory, "fixture.png");
+  fs.mkdirSync(input.directory, { recursive: true });
+  fs.writeFileSync(image, "original image bytes");
+  const task = { prompt: "original immutable task", images: [{ path: image }], execution_ready: true };
+  input.channel.prepare = async () => ({ workitem: input.item, task, worktreeSlug: "original-title" });
+  await assert.rejects(runExecution(input, { ...f.dependencies, fetchDevelopmentBaseline: async () => { throw new Error("fetch timeout"); } }), /fetch timeout/);
+  const before = await new RunStore(runs).read(key);
+  let attempts = 0;
+  const client = new FakeClient();
+  const originalRequest = client.request.bind(client);
+  client.request = async (method, params) => {
+    const result = await originalRequest(method, params);
+    if (method === "turn/start") setImmediate(() => client.notify("turn/completed", { threadId: params.threadId, turn: { ...result.turn, status: "completed" } }));
+    return result;
+  };
+  input.channel.prepare = () => assert.fail("retry must not regenerate the original task");
+  const manager = new SessionManager({ runsDirectory: runs, configFile: input.configFile, client,
+    channels: { get: id => { assert.equal(id, "fixture"); return input.channel; } },
+    run: async (args, dependencies) => { attempts++; return runExecution(args, dependencies); },
+  });
+  t.after(() => manager.close());
+  await manager.store.writeWeb(key, { turnId: "pending-turn" });
+  await assert.rejects(manager.retryPreparation(key, randomUUID()), /不能重新启动/);
+  await manager.store.writeWeb(key, {});
+  await manager.store.archive(key);
+  await assert.rejects(manager.retryPreparation(key, randomUUID()), /不能重新启动/);
+  await manager.store.restore(key);
+  await assert.rejects(manager.retryPreparation(key, "invalid"), /标识无效/);
+  await assert.rejects(manager.retryPreparation(key, randomUUID(), () => { throw new Error("revision changed"); }), /revision changed/);
+  const validateSelection = manager.validateStartSelection.bind(manager);
+  manager.validateStartSelection = async () => { throw new Error("original model unavailable"); };
+  await assert.rejects(manager.retryPreparation(key, randomUUID()), /original model unavailable/);
+  manager.validateStartSelection = validateSelection;
+  assert.equal(attempts, 0);
+  const requestId = randomUUID();
+  await manager.retryPreparation(key, requestId);
+  assert.equal((await manager.retryPreparation(key, requestId)).reused, true);
+  await assert.rejects(manager.retryPreparation(key, randomUUID()), /不能重新启动/);
+  await manager.sessions.get(key).operation;
+  const state = await manager.store.read(key);
+  assert.equal(state.execution.status, "completed", state.execution.error);
+  assert.equal(attempts, 1);
+  assert.equal(state.created_at, before.created_at);
+  assert.deepEqual(state.source, before.source);
+  assert.deepEqual(state.workitem, before.workitem);
+  assert.equal(state.preparationRetries[0].requestId, requestId);
+  assert.equal(state.preparationRetries[0].previousExecution.error, "fetch timeout");
+  const sent = client.calls.find(call => call.method === "turn/start");
+  assert.equal(sent.params.input[0].text, task.prompt);
+  assert.equal(sent.params.input.length, 2);
+  assert.deepEqual(await manager.store.readTask(key), task);
+  assert.equal((await manager.retryPreparation(key, requestId)).reused, true);
+  await assert.rejects(manager.retryPreparation(key, randomUUID()), /不能重新启动/);
+  await manager.close();
+  const reloaded = new SessionManager({ runsDirectory: runs, configFile: input.configFile, client: new FakeClient() });
+  t.after(() => reloaded.close());
+  assert.equal((await reloaded.retryPreparation(key, requestId)).reused, true);
+  assert.equal(attempts, 1);
+});
 
 test("new worktrees fetch current remote commits without changing dirty source checkout; existing runs never refetch", async (t) => {
   const f = fixture(t);

@@ -15,7 +15,7 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
   const apiTask = `/api${base}/tasks/search-task`;
   const initial = structuredClone(fixture.response(new URL(origin + apiTask)).task);
   let task, spaceReady = false, readonly = false, failBranches = false, failStart = false, rejectStart = false;
-  let permissionsAvailable = false, failRework = false, replacement;
+  let permissionsAvailable = false, failRework = false, replacement, loseRetryResponse = true;
   const writes = [], errors = [];
   const planned = () => ({ ...structuredClone(initial), revision: 1, status: "planned", execution: null, runKey: null, baseBranch: "", baseCommit: null, fetchedAt: null, additions: [], canStart: true, canEdit: true, canComplete: false, canCancel: true, canOpenSession: false });
   const started = (status = "completed") => ({ ...structuredClone(initial), execution: { status, sessionId: "fixture-session" }, canComplete: status === "completed", canCancel: status === "completed" });
@@ -56,6 +56,9 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
           if (failRework) return send({ error: "返工创建响应中断，请使用原请求重试。" }, 502);
           replacement = { ...planned(), id: "rework-task", title: "新的返工任务", reworkOfTaskId: task.id };
           return send({ task: replacement });
+        } else if (endpoint.endsWith("/retry-preparation")) {
+          if (loseRetryResponse) { loseRetryResponse = false; return send({ error: "重试响应中断，请核对状态。" }, 502); }
+          task = { ...started("preparing"), canRetryPreparation: false, baseBranch: "main", additions: [] };
         } else if (endpoint.endsWith("/start")) {
           if (rejectStart) return send({ error: "启动前校验失败，请修正后重试。" }, 400);
           if (failStart) { task = { ...task, status: "unknown", canStart: false, canEdit: false, canComplete: false, canCancel: false, error: "启动响应中断，请确认原会话。" }; return send({ error: task.error }, 502); }
@@ -327,6 +330,32 @@ async function verifyDevelopmentTaskDetail({ browser, output }) {
     assert.equal(await button("取消任务并释放认领").count(), 0);
     await capture("readonly");
     readonly = false;
+
+    task = { ...started("failed"), execution: { status: "failed", sessionId: null, error: "获取开发基准分支超时：Git 长时间没有响应，请检查服务器网络后重试。" }, canRetryPreparation: true, baseBranch: "main" };
+    await page.reload();
+    await button("重试准备并启动").waitFor();
+    await capture("preparation-retry");
+    await selectPreference(page, "locale", "en");
+    await button("Retry preparation and start").waitFor();
+    await capture("preparation-retry-en");
+    await button("Retry preparation and start").click();
+    await page.getByRole("dialog", { name: "Confirm preparation retry", exact: true }).waitFor();
+    await capture("preparation-retry-confirm-en");
+    await page.keyboard.press("Escape");
+    await selectPreference(page, "locale", "zh-CN");
+    const beforeRetry = writes.length;
+    await button("重试准备并启动").click();
+    dialog = page.getByRole("dialog", { name: "确认重试准备", exact: true });
+    await capture("preparation-retry-confirm");
+    assert.equal(writes.length, beforeRetry, "opening confirmation never starts an Agent");
+    await dialog.getByRole("button", { name: "确认重试并启动", exact: true }).click();
+    await button("刷新状态").waitFor({ state: "visible" });
+    await page.getByRole("alert").filter({ hasText: "重试响应中断" }).waitFor();
+    const retryRequest = writes.at(-1).input.requestId;
+    await dialog.getByRole("button", { name: "确认重试并启动", exact: true }).click();
+    await dialog.waitFor({ state: "hidden" });
+    assert.equal(writes.at(-1).input.requestId, retryRequest, "uncertain responses keep the same idempotency key");
+    assert.equal(await button("重试准备并启动").count(), 0);
 
     task = planned(); rejectStart = true;
     await page.reload();
