@@ -3,7 +3,8 @@ import { computed } from "vue";
 import { UserOutlined, RobotOutlined, CodeOutlined, FileTextOutlined, BulbOutlined, RightOutlined, ExclamationCircleOutlined } from "@antdv-next/icons";
 import { renderMessage } from "./message-content.js";
 import { activityFailed, activityLabels, activityPreview } from "./session-activity.js";
-import SessionPreview from "./SessionPreview.vue";
+import SessionPreviewGroup from "./SessionPreviewGroup.vue";
+import { previewParts } from "./session-preview-parts.js";
 const props = defineProps({ item: { type: Object, required: true }, agentLabel: { type: String, default: "Agent" }, runKey: { type: String, default: "" }, latestPreviewVersions: { type: Object, default: () => ({}) }, readonly: Boolean, canFeedback: Boolean, compact: Boolean, toolOpen: Boolean });
 const emit = defineEmits(["open-file", "tool-toggle", "preview-feedback"]);
 const failed = computed(() => activityFailed(props.item));
@@ -13,7 +14,7 @@ function openFile(event) {
   if (!target || !event.currentTarget.contains(target)) return;
   emit("open-file", { path: target.dataset.filePath, line: Number(target.dataset.fileLine) || null });
 }
-const messageParts = computed(() => (props.item.contentParts || [{ type: "text", text: props.item.text || "…" }])
+const messageParts = computed(() => previewParts(props.item.contentParts || [{ type: "text", text: props.item.text || "…" }])
   .map(part => part.type === "text" ? { ...part, html: renderMessage(part.text) } : part));
 const images = computed(() =>
   props.item.type === "userMessage"
@@ -48,7 +49,7 @@ const pretty = (value) =>
         <!-- Only sanitized Markdown output is rendered as HTML. -->
         <!-- eslint-disable-next-line vue/no-v-html -->
         <div v-if="part.type === 'text' && part.text" v-html="part.html" />
-        <SessionPreview v-else-if="part.type === 'preview' && runKey" :preview="part" :run-key="runKey" :readonly="readonly" :latest-version="latestPreviewVersions[part.group] || part.version" :can-feedback="canFeedback" @feedback="emit('preview-feedback', $event)" />
+        <SessionPreviewGroup v-else-if="part.type === 'preview-group' && runKey" :previews="part.previews" :run-key="runKey" :readonly="readonly" :latest-versions="latestPreviewVersions" :can-feedback="canFeedback" @feedback="emit('preview-feedback', $event)" />
         <p v-else-if="part.type === 'preview-error'" class="error">{{ part.title }} · {{ $t(part.error) }}</p>
       </template>
     </div>

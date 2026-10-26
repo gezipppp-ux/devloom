@@ -493,7 +493,7 @@ async function refreshCurrentSession() {
 .session-body { margin: 0 32px 24px; gap: 24px; min-width: 0; position: relative; }
 .session-conversation { flex: 1; min-width: 0; background: var(--canvas); }
 .timeline { padding: 28px max(16px, calc((100% - 900px) / 2)); scroll-padding-bottom: 24px; }
-.session-conversation :deep(.composer-wrap) { padding: 16px max(16px, calc((100% - 940px) / 2)); background: var(--canvas); border: 0; }
+.session-conversation :deep(.composer-wrap) { padding: 8px max(16px, calc((100% - 940px) / 2)); background: var(--canvas); border: 0; }
 .session-body.with-file-panel > :deep(.session-file-panel) { position: relative; inset: auto; width: 100%; flex: 1; box-shadow: none; }
 .working-line { font-size: 12px; line-height: 1.8; }
 .empty-state { background: var(--canvas); }

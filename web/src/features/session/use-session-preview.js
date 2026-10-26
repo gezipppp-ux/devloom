@@ -22,7 +22,7 @@ function controlDescriptors(value) {
 export function useSessionPreview(props, emit) {
   const workspace = currentWorkspaceId();
   const selected = ref(props.preview.id), data = ref(null), frame = ref(), src = ref(""),
-    loading = ref(false), error = ref(""), controls = ref([]), height = ref(320),
+    loading = ref(false), error = ref(""), controls = ref([]), height = ref(320), width = ref(0),
     ready = ref(false), saving = ref(false), dirty = ref(false), conflict = ref(false);
   let generation = 0, token = "", timer, deadline, alive = true, edit = 0;
   const current = () => alive && currentWorkspaceId() === workspace;
@@ -34,7 +34,7 @@ export function useSessionPreview(props, emit) {
     if (!current()) return;
     const version = ++generation;
     clearTimeout(timer); clearTimeout(deadline);
-    src.value = ""; ready.value = false; controls.value = []; data.value = null;
+    src.value = ""; ready.value = false; controls.value = []; data.value = null; height.value = 320; width.value = 0;
     error.value = ""; dirty.value = false; conflict.value = false; loading.value = true; saving.value = false;
     token = createRequestId();
     try {
@@ -84,7 +84,10 @@ export function useSessionPreview(props, emit) {
         if (Number.isSafeInteger(message.revision)) data.value.revision = message.revision;
         post("init", { writable: !readonly.value });
       } else if (message.type === "controls") controls.value = controlDescriptors(message.controls);
-      else if (message.type === "resize" && Number.isFinite(message.height)) height.value = Math.min(2000, Math.max(160, message.height));
+      else if (message.type === "resize" && Number.isFinite(message.height)) {
+        height.value = Math.min(20000, Math.max(160, message.height));
+        if (Number.isFinite(message.width) && message.width > 0) width.value = Math.min(10000, message.width);
+      } else if (message.type === "escape" && props.active) emit("escape");
       else if (message.type === "state" && ready.value && !readonly.value) changed(message.state);
       else if (message.type === "feedback" && ready.value && props.canFeedback &&
           typeof message.prompt === "string" && message.prompt.trim() && message.prompt.length <= 12000) feedback(message.prompt);
@@ -113,6 +116,6 @@ export function useSessionPreview(props, emit) {
   });
   onUnmounted(() => { alive = false; generation++; clearTimeout(timer); clearTimeout(deadline); window.removeEventListener("message", receive); });
   void load();
-  return { selected, data, frame, src, loading, error, controls, height, ready, saving, dirty, conflict,
+  return { selected, data, frame, src, loading, error, controls, height, width, ready, saving, dirty, conflict,
     readonly, state, load, save, select, post, change, feedback };
 }

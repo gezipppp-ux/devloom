@@ -1,5 +1,12 @@
 export const enPreviews = {
   "交互预览": "Interactive preview",
+  "切换预览": "Switch preview",
+  "上一个预览": "Previous preview",
+  "下一个预览": "Next preview",
+  "原始大小": "Actual size",
+  "适应窗口": "Fit to view",
+  "全屏预览": "Fullscreen preview",
+  "全屏": "Fullscreen",
   "预览版本": "Preview version",
   "版本 {version}": "Version {version}",
   "收起预览": "Collapse preview",

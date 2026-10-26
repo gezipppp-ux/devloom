@@ -11,6 +11,7 @@ const { previewHtml } = require("../fixtures/session-preview.cjs");
 const { normalizeItem } = require("../../src/codex/session-item.cjs");
 const { temporary } = require("../support/helpers.cjs");
 const { selectOption } = require("../support/select.cjs");
+const { verifySessionPreviewLayout } = require("./session-preview-layout.test.cjs");
 
 async function verifySessionPreviews(browser, origin, manager, key, output) {
   const directory = (await manager.store.read(key)).worktree.path;
@@ -154,6 +155,10 @@ async function verifySessionPreviews(browser, origin, manager, key, output) {
     await preview.getByRole("button", { name: "Adjust preview", exact: true }).click();
     await preview.getByRole("slider", { name: /Simple size/ }).waitFor();
     assert.equal(await preview.getByRole("slider").count(), 1);
+    // Capture the painted sandbox after scrolling it into the short mobile
+    // timeline, before exercising its own carousel controls.
+    await frame.getByRole("button", { name: "Next", exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(output, "session-preview-carousel-320.png"), fullPage: true });
     await frame.getByRole("button", { name: "Next", exact: true }).click();
     await preview.getByRole("slider", { name: /Detailed size/ }).waitFor();
     assert.equal(await preview.getByRole("slider").count(), 1);
@@ -165,6 +170,7 @@ async function verifySessionPreviews(browser, origin, manager, key, output) {
         scripts: [...document.scripts].map(script => ({ src: script.src, text: script.textContent.slice(0, 80) })) })).catch(() => null) });
     throw error;
   } finally { await page.close(); }
+  await verifySessionPreviewLayout(browser, origin, manager, key, output);
 }
 
 async function main() {

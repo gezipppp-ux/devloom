@@ -302,11 +302,11 @@ function send() {
 
 <style scoped>
 .composer-wrap { padding: 18px max(22px, calc((100% - var(--conversation-width)) / 2)); margin-top: auto; border-top: 1px solid var(--line); background: var(--surface-hover); border-radius: 0 0 var(--radius-card) var(--radius-card); }
-.composer { padding: 16px; border: 1px solid var(--line); border-radius: 12px; box-shadow: none; background: var(--surface); }
+.composer { padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; box-shadow: none; background: var(--surface); }
 .composer:focus-within { border-color: var(--focus); box-shadow: none; }
-.composer textarea { min-height: 76px; max-height: 220px; resize: vertical; font-size: 14px; line-height: 1.7; }
-.composer-footer { gap: 9px; margin-top: 8px; }
-.composer-hints { gap: 6px 16px; margin-top: 10px; }
+.composer textarea { min-height: 44px; height: 44px; max-height: 180px; resize: vertical; font-size: 14px; line-height: 1.6; }
+.composer-footer { gap: 9px; margin-top: 4px; }
+.composer-hints { gap: 4px 16px; margin-top: 6px; }
 .composer-note, .execution-settings-hint { font-size: 12px; line-height: 1.6; }
 .composer-send { border-radius: 6px; box-shadow: none; }
 .composer-add-images { border-color: transparent; background: transparent; }
@@ -317,7 +317,7 @@ function send() {
 .composer-preview-reference pre { max-height: 150px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
 @media (max-width: 767px) {
   .composer-wrap { padding: 16px; }
-  .composer textarea { min-height: 64px; }
+  .composer textarea { min-height: 44px; }
   .composer-footer, .composer-tools { min-width: 0; flex-wrap: wrap; }
 }
 </style>
