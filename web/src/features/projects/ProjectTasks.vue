@@ -4,7 +4,7 @@ import { useWorkListFilters } from "./use-work-list-filters.js";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { appApi, statusLabel } from "../../shared/api/api.js";
+import { appApi } from "../../shared/api/api.js";
 import MergeDevelopmentDialog from "./MergeDevelopmentDialog.vue";
 import DevelopmentTaskDetail from "./DevelopmentTaskDetail.vue";
 import { useResource } from "../../shared/api/use-resource.js";
@@ -44,7 +44,7 @@ const selectedTasks = ref([]),
 const { data, loading, error, reload } = useResource(() =>
   appApi(
     endpoint + "?" + new URLSearchParams({ offset: String(offset.value), scope: scope.value, ...filters.params.value, ...(props.issueId ? { issueId: props.issueId } : {}) }),
-  ),
+  ), { interval: 5000 },
 );
 const filters = useWorkListFilters("tasks", () => data.value?.filterOptions, { prefix: "task", defaultStatus: () => props.issueId ? "all" : "not_cancelled" });
 watch([offset, scope, () => JSON.stringify(filters.params.value)], () => {
@@ -144,7 +144,7 @@ function refresh() {
       <button :disabled="loading" @click="refresh">{{ $t("刷新任务") }}</button>
     </header>
     <FeedbackMessage :message="error" type="error" />
-    <p v-if="loading" role="status">{{ $t("正在读取开发任务…") }}</p>
+    <p v-if="loading && !data" role="status">{{ $t("正在读取开发任务…") }}</p>
     <nav v-if="!issueId" class="ui-segmented development-list-scopes" :aria-label="$t('开发任务范围')">
       <button
         :class="{ active: scope === 'mine' }"
@@ -173,7 +173,7 @@ function refresh() {
       }}</span>
     </div>
     <WorkItemTable v-if="taskRows.length" v-model:selected="selectedTasks" :items="taskRows" :people="data?.filterOptions?.people || []" kind="tasks" :selectable="!issueId && !readOnlyReason" :disabled="loading" @open="open" @open-session="item => emit('open-workspace', item.workspaceId, item.runKey)">
-      <template #details="{ item }"><p>{{ item.baseBranch || $t('基线未记录') }}<span v-if="item.execution"> · Codex：{{ $t(statusLabel(item.execution.status)) }}</span></p></template>
+      <template #details="{ item }"><p>{{ item.baseBranch || $t('基线未记录') }}</p></template>
     </WorkItemTable>
     <p v-if="data && !data.tasks.length" class="muted">
       {{

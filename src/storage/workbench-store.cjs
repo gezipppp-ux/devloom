@@ -54,6 +54,18 @@ class WorkbenchStore {
       table.count({ where }),
       table.findMany({ where, include, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: offset, take: limit }),
     ]);
+    if (kind === "tasks") {
+      const linked = items.filter(task => task.workspaceId && task.runKey);
+      const runs = linked.length ? await client.run.findMany({ where: {
+        ownerUserId: actorId, workspace: { ownerUserId: actorId },
+        OR: linked.map(task => ({ workspaceId: task.workspaceId, runKey: task.runKey })),
+      }, select: { workspaceId: true, runKey: true, executionState: true } }) : [];
+      const states = new Map(runs.map(run => [`${run.workspaceId}/${run.runKey}`, run.executionState || "unknown"]));
+      for (const task of items) {
+        const state = states.get(`${task.workspaceId}/${task.runKey}`);
+        task.execution = state ? { status: state } : task.snapshot.sessionDeletion?.execution || null;
+      }
+    }
     const ids = [...new Set(items.flatMap(item => [item.developerId, item.authorId, item.executorId, item.reporterId, item.issue?.reporterId, ...(item.issueLinks || []).map(link => link.issue.reporterId)]).filter(Boolean))];
     const people = await client.user.findMany({ where: { id: { in: ids } }, select: { id: true, displayName: true } });
     return { items, people, total, nextOffset: offset + items.length < total ? offset + items.length : null };

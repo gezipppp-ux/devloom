@@ -4,7 +4,7 @@ import StatusBadge from "../../shared/components/StatusBadge.vue";
 import RelativeTime from "../../shared/components/RelativeTime.vue";
 import PersonAvatar from "../../shared/components/PersonAvatar.vue";
 import { priorityLabels } from "./project-labels.js";
-import { developmentTaskLabels } from "./development-task-view.js";
+import { developmentTaskLabels, developmentTaskTones, developmentExecutionView } from "./development-task-view.js";
 import { translate } from "../../shared/i18n/index.js";
 const emit = defineEmits(["open", "open-session", "update:selected"]);
 const props = defineProps({ items: { type: Array, default: () => [] }, people: { type: Array, default: () => [] }, kind: { type: String, default: "issues" }, personal: Boolean, selectable: Boolean, selected: { type: Array, default: () => [] }, disabled: Boolean });
@@ -32,6 +32,7 @@ function select(item, checked) {
     <thead><tr>
       <th v-if="selectable" class="ui-table-check"><input type="checkbox" :checked="allSelected" :indeterminate="someSelected && !allSelected" :disabled="disabled || !selectableItems.length" :aria-label="$t(kind === 'tasks' ? '选择当前页全部任务' : '选择当前页全部事项')" @change="selectPage($event.target.checked)" /></th>
       <th class="ui-table-title-column">{{ $t(kind === 'tasks' ? '开发任务' : kind === 'deliveries' ? '交付' : '事项') }}</th><th>{{ kind === 'tasks' ? $t('任务状态') : $t('状态') }}</th>
+      <th v-if="kind === 'tasks'" class="work-execution-column">{{ $t('Agent 状态') }}</th>
       <th v-if="kind === 'issues'" class="work-priority-column">{{ $t('优先级') }}</th><th class="work-version-column">{{ $t('版本') }}</th><th class="work-owner-column">{{ $t(ownerLabel) }}</th><th class="work-reporter-column">{{ $t('提报人') }}</th><th><span class="sr-only">{{ $t('操作') }}</span></th>
     </tr></thead>
     <tbody><tr v-for="item in items" :key="item.id">
@@ -42,7 +43,8 @@ function select(item, checked) {
         <p v-if="personal || kind === 'deliveries'">{{ $t('最后更新') }} · <RelativeTime :value="item.updatedAt || item.createdAt" /></p>
         <slot name="details" :item="item" /><span v-if="item.tags?.length" class="ui-tags"><span v-for="tag in item.tags" :key="tag">{{ tag }}</span></span>
       </td>
-      <td :data-label="$t(kind === 'tasks' ? '任务状态' : '状态')"><StatusBadge :tone="item.completed || ['completed', 'accepted'].includes(item.status) ? 'success' : item.status === 'started' || item.status === 'planned' ? 'accent' : 'neutral'">{{ kind === 'issues' ? item.statusName : $t((kind === 'deliveries' ? deliveryLabels : developmentTaskLabels)[item.status] || item.status) }}</StatusBadge></td>
+      <td :data-label="$t(kind === 'tasks' ? '任务状态' : '状态')"><StatusBadge :tone="kind === 'tasks' ? developmentTaskTones[item.status] || 'warning' : item.completed || ['completed', 'accepted'].includes(item.status) ? 'success' : item.status === 'started' || item.status === 'planned' ? 'accent' : 'neutral'">{{ kind === 'issues' ? item.statusName : $t((kind === 'deliveries' ? deliveryLabels : developmentTaskLabels)[item.status] || item.status) }}</StatusBadge></td>
+      <td v-if="kind === 'tasks'" class="work-execution-status" :data-label="$t('Agent 状态')"><StatusBadge :tone="developmentExecutionView(item).tone">{{ $t(developmentExecutionView(item).label) }}</StatusBadge></td>
       <td v-if="kind === 'issues'" :data-label="$t('优先级')"><span class="ui-priority" :class="{ 'ui-priority-high': ['high', 'urgent'].includes(item.priority) }"><i />{{ $t(priorityLabels[item.priority] || '未提供') }}</span></td>
       <td :data-label="$t('版本')">{{ item.releaseName || item.release?.name || $t('未排期') }}</td>
       <td :data-label="$t(ownerLabel)"><span class="ui-person"><PersonAvatar :name="personLabel(item)" /><span class="work-person-name" :title="personLabel(item)">{{ personLabel(item) }}</span></span></td>
@@ -60,11 +62,19 @@ function select(item, checked) {
 .ui-data-table th.work-version-column { width: 10%; }
 .ui-data-table th.work-priority-column { width: 8%; }
 .ui-data-table th:last-child { width: 104px; }
+.development-data-table th.work-owner-column { width: 12%; }
+.development-data-table th.work-reporter-column { width: 12%; }
+.development-data-table th.work-version-column { width: 8%; }
+.development-data-table th.work-execution-column { width: 13%; }
+.development-data-table th:last-child { width: 128px; }
 .work-reporters { display: grid; gap: 6px; }
 .ui-person { white-space: normal; overflow-wrap: anywhere; width: 100%; }
 .work-person-name { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .ui-table-action button { white-space: nowrap; }
 .ui-data-table :deep(.ui-badge) { max-width: 100%; white-space: normal; }
+@media (min-width: 1200px) and (max-width: 1399px) {
+  .development-data-table th.ui-table-title-column, .development-data-table.ui-selectable-table th.ui-table-title-column { width: 24%; }
+}
 @media (min-width: 768px) and (max-width: 1199px) {
   .ui-person :deep(.ui-person-avatar) { display: none; }
   .ui-data-table :is(th, td) { padding-inline: 10px; }
@@ -73,6 +83,20 @@ function select(item, checked) {
   .ui-data-table th.work-reporter-column { width: 15%; }
   .ui-data-table th.work-priority-column { width: 10%; }
   .ui-data-table th:last-child { width: 88px; }
+  .development-data-table, .development-data-table tbody { display: block; width: 100%; }
+  .development-data-table thead { display: none; }
+  .development-data-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; position: relative; padding: 20px; border-bottom: 1px solid var(--line); }
+  .development-data-table tr:last-child { border: 0; }
+  .development-data-table td { display: block; min-width: 0; padding: 8px 0; border: 0; }
+  .development-data-table td.ui-table-check { position: absolute; top: 18px; right: 20px; width: auto; padding: 0; }
+  .development-data-table .ui-table-title, .development-data-table .ui-table-action { grid-column: 1 / -1; }
+  .development-data-table.ui-selectable-table .ui-table-title { padding-right: 32px; }
+  .development-data-table td[data-label] { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .development-data-table td[data-label]::before { content: attr(data-label); color: var(--muted); flex-shrink: 0; }
+  .development-data-table .ui-person { width: auto; }
+  .development-data-table .ui-table-action button { min-height: 44px; }
+  .ui-mobile-select-page:has(+ .ui-table-wrap .development-data-table) { display: flex; align-items: center; gap: 10px; min-height: 44px; margin-block: 8px; }
+  .ui-mobile-select-page input { width: 20px; height: 20px; accent-color: var(--highlight); }
 }
 @media (max-width: 767px) {
   .work-person-name { display: block; }

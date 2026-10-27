@@ -25,3 +25,15 @@ test("archived and merged tasks do not offer development guidance", async () => 
   assert.equal(view({ status: "merged", mergedIntoTaskId: "target" }).title, "此任务已合并");
   assert.match(view({ status: "completed" }).description, /各自流程验收/);
 });
+
+test("list execution labels distinguish absent, private and unconfirmed runs from task completion", async () => {
+  const { developmentExecutionView: view } = await load();
+  assert.equal(view({ status: "planned" }).label, "未启动");
+  assert.equal(view({ status: "started", canOpenSession: true }).label, "状态待确认");
+  assert.equal(view({ status: "started", canOpenSession: false }).label, "不可查看");
+  assert.equal(view({ status: "cancelled", canOpenSession: false, runKey: null }).label, "不可查看", "a private run key being hidden does not prove the Agent never ran");
+  assert.equal(view({ status: "completed", canOpenSession: true }).label, "状态待确认");
+  assert.equal(view({ status: "completed", execution: { status: "running" } }).label, "执行中");
+  assert.equal(view({ status: "started", execution: { status: "completed" } }).label, "本轮结束");
+  assert.equal(view({ status: "started", execution: { status: "new-server-state" } }).tone, "warning");
+});

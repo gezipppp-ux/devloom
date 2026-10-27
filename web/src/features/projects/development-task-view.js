@@ -1,3 +1,5 @@
+import { statusLabel } from "../../shared/api/api.js";
+
 export const developmentTaskLabels = {
   planned: "待开发",
   merged: "已合并",
@@ -6,6 +8,24 @@ export const developmentTaskLabels = {
   started: "已启动",
   unknown: "执行结果待确认",
 };
+export const developmentTaskTones = {
+  planned: "neutral", started: "accent", completed: "success",
+  cancelled: "danger", merged: "info", unknown: "warning",
+};
+const executionTones = {
+  preparing: "info", initializing: "info", starting: "info",
+  running: "accent", inProgress: "accent", completed: "success",
+  failed: "danger", error: "danger", interrupted: "warning",
+  cancelled: "warning", disconnected: "warning", unknown: "warning", idle: "neutral",
+};
+export function developmentExecutionView(task) {
+  const status = task.execution?.status;
+  if (status) return { label: status === "unknown" ? "状态待确认" : status === "cancelled" ? "已停止" : statusLabel(status), tone: executionTones[status] || "warning" };
+  if (task.sessionDeleted) return { label: "会话已删除", tone: "neutral" };
+  if (["planned", "merged"].includes(task.status)) return { label: "未启动", tone: "neutral" };
+  if (task.status === "unknown" || task.canOpenSession) return { label: "状态待确认", tone: "warning" };
+  return { label: "不可查看", tone: "neutral" };
+}
 export const additionLabels = {
   ready: "待发送",
   sending: "发送中",

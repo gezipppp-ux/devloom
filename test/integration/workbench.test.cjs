@@ -44,6 +44,7 @@ test("workbench aggregates only authorized content and delivery reviews are atom
   assert.equal(tasks.items[0].title, "Private task " + actor.id);
   assert.equal(tasks.items[0].canMerge, true, "the existing merge entry is restricted to the current executor");
   assert.equal(tasks.items[0].canOpenSession, false, "a planned task has no session to open");
+  assert.equal(tasks.items[0].execution, null, "unstarted tasks have no invented execution state");
   assert.deepEqual(tasks.items[0].issueIds, []);
   const workspace = await database.client.workspace.create({ data: { ownerUserId: actor.id, name: "Archive owner" } });
   const otherWorkspace = await database.client.workspace.create({ data: { ownerUserId: outsider.id, name: "Archive outsider" } });
@@ -51,6 +52,19 @@ test("workbench aggregates only authorized content and delivery reviews are atom
   const archive = await database.client.runDocument.create({ data: { path: "outsider/session-archive.json", workspaceId: otherWorkspace.id, runKey: "same-key", name: "session-archive.json", data: { archivedAt: new Date().toISOString() } } });
   assert.equal((await workbench.list("tasks", actor)).total, 2, "another workspace's archive with the same run key cannot hide an owned task");
   assert.equal((await workbench.list("tasks", actor)).items.find(task => task.id === sessionTask.id).canArchive, true);
+  await database.client.run.create({ data: { path: "outsider/run.json", workspaceId: otherWorkspace.id, ownerUserId: outsider.id, runKey: "same-key", executionState: "failed", data: {} } });
+  assert.equal((await workbench.list("tasks", actor)).items.find(task => task.id === sessionTask.id).execution, null, "execution lookup must not match another owner's identical run key");
+  const run = await database.client.run.create({ data: { path: "owner/run.json", workspaceId: workspace.id, ownerUserId: actor.id, runKey: "same-key", executionState: "running", data: {} } });
+  for (const status of ["running", "completed", "failed", "interrupted", null]) {
+    await database.client.run.update({ where: { path: run.path }, data: { executionState: status } });
+    const current = (await workbench.list("tasks", actor)).items.find(task => task.id === sessionTask.id);
+    assert.equal(current.execution.status, status || "unknown", "each list request reads the current persisted execution state");
+    assert.equal(current.status, "started", "a finished or failed Agent turn does not finish the development task");
+  }
+  await database.client.run.delete({ where: { path: run.path } });
+  await database.client.developmentTask.update({ where: { id: sessionTask.id }, data: { snapshot: { ...sessionTask.snapshot, sessionDeletion: { execution: { status: "interrupted" } } } } });
+  assert.equal((await workbench.list("tasks", actor)).items.find(task => task.id === sessionTask.id).execution.status, "interrupted", "deleted sessions retain their last recorded execution state");
+  await database.client.developmentTask.update({ where: { id: sessionTask.id }, data: { snapshot: sessionTask.snapshot } });
   await database.client.runDocument.update({ where: { path: archive.path }, data: { workspaceId: workspace.id } });
   const hidden = await workbench.list("tasks", actor);
   assert.equal(hidden.total, 1, "archived sessions are excluded before counting and pagination");

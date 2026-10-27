@@ -16,7 +16,7 @@ async function verifyWorkbench(browser) {
   let delivery = { id: 'delivery-1', projectId, issueId: issue.id, title: '客户搜索交付', body: '功能说明与验证记录', status: 'pending', revision: 1, checklist: ['搜索结果符合筛选条件', '移动端可完成操作'], checkedItems: [], authorId: 'visual-admin', reviewerId: 'visual-admin', commit: 'abc123', createdAt: '2026-10-14T08:00:00Z' };
   let resubmitted;
   const requests = [], errors = [];
-  let reviewForbidden = false;
+  let reviewForbidden = false, executionStatus = 'running';
   page.on('pageerror', error => errors.push(error.message));
   await page.route('**/*', async route => {
     const request = route.request(), url = new URL(request.url()), endpoint = url.pathname;
@@ -38,10 +38,14 @@ async function verifyWorkbench(browser) {
         if (kind === 'tasks') {
           const task = fixture.response(new URL(origin + base + '/tasks/search-task')).task;
           const items = [
-            { ...task, id: 'task-1', title: '统一搜索与项目筛选', status: 'planned', canMerge: true, canOpenSession: false, runKey: null, issueIds: ['search'] },
-            { ...task, id: 'task-2', title: '登录与首次使用体验优化', status: 'started', canMerge: false, issueIds: ['search'] },
-            { ...task, id: 'task-3', title: '修复移动端菜单遮挡', status: 'completed', canMerge: false, issueIds: ['search'] },
-            { ...task, id: 'task-4', title: '资产类型与目录整理', status: 'planned', canMerge: true, canOpenSession: false, runKey: null, issueIds: ['export'] },
+            { ...task, id: 'task-1', title: '统一搜索与项目筛选', status: 'planned', execution: null, canMerge: true, canOpenSession: false, runKey: null, issueIds: ['search'] },
+            { ...task, id: 'task-2', title: '登录与首次使用体验优化', status: 'started', execution: { status: executionStatus }, canMerge: false, issueIds: ['search'] },
+            { ...task, id: 'task-3', title: '修复移动端菜单遮挡', status: 'completed', execution: { status: 'completed' }, canMerge: false, issueIds: ['search'] },
+            { ...task, id: 'task-4', title: '资产类型与目录整理', status: 'planned', execution: null, canMerge: true, canOpenSession: false, runKey: null, issueIds: ['export'] },
+            { ...task, id: 'task-5', title: '完善项目成员权限与长标题的窄屏展示，保留现有流程和操作入口', status: 'started', execution: { status: 'failed' }, canMerge: false, issueIds: ['search'] },
+            { ...task, id: 'task-6', title: '确认发布准备结果', status: 'unknown', execution: null, canMerge: false, issueIds: ['search'] },
+            { ...task, id: 'task-7', title: '合并资料准备', status: 'merged', execution: null, canMerge: false, canOpenSession: false, runKey: null, issueIds: ['export'] },
+            { ...task, id: 'task-8', title: '已取消的开发计划', status: 'cancelled', execution: null, canMerge: false, canOpenSession: false, runKey: null, issueIds: ['export'] },
           ].map(item => ({ ...item, projectId, projectName: project.name, kind: 'issues', releaseName: 'v0.2' })).filter(item => !url.searchParams.get('status') || url.searchParams.get('status') === 'not_cancelled' ? item.status !== 'cancelled' : url.searchParams.get('status') === 'all' || item.status === url.searchParams.get('status'));
           return send({ items, people: [], total: items.length, nextOffset: null });
         }
@@ -76,6 +80,24 @@ async function verifyWorkbench(browser) {
     await page.waitForURL(url => url.pathname === '/work' && url.searchParams.get('bucket') === 'todo');
     await page.locator('.work-action').first().waitFor();
     assert.equal(await page.locator('.work-action').count(), 1, 'home and full queue keep the same action scope');
+    await page.goto(origin + '/development?status=all');
+    const taskRow = title => page.locator('.development-data-table tbody tr').filter({ has: page.getByRole('button', { name: title, exact: true }) });
+    const runningRow = taskRow('登录与首次使用体验优化');
+    await runningRow.getByText('执行中', { exact: true }).waitFor();
+    const taskColors = await page.locator('.development-data-table tbody tr td[data-label="任务状态"] .ui-badge').evaluateAll(elements => elements.map(element => window.getComputedStyle(element).color));
+    assert.equal(new Set(taskColors).size, 6, 'all six task states have distinct colors');
+    const executionColors = [];
+    for (const label of ['未启动', '执行中', '本轮结束', '执行失败', '状态待确认']) {
+      executionColors.push(await page.locator('.work-execution-status .ui-badge').getByText(label, { exact: true }).first().evaluate(element => window.getComputedStyle(element).color));
+    }
+    assert.equal(new Set(executionColors).size, 5, 'Agent state colors distinguish idle, running, finished, failed and uncertain');
+    await taskRow('统一搜索与项目筛选').getByRole('checkbox').check();
+    executionStatus = 'completed';
+    await page.clock.fastForward(5000);
+    await runningRow.getByText('本轮结束', { exact: true }).waitFor();
+    assert.equal(await runningRow.getByText('已启动', { exact: true }).count(), 1);
+    assert.equal(await taskRow('统一搜索与项目筛选').getByRole('checkbox').isChecked(), true, 'polling preserves task selection');
+    executionStatus = 'running';
     for(const locale of ['zh-CN','en']) {
       await selectPreference(page, "locale", locale);
       for(const [name, location, ready] of [
@@ -97,6 +119,10 @@ async function verifyWorkbench(browser) {
         for(const [width,height] of [[2560,1440],[1920,1080],[1440,900],[1280,720],[768,1024],[390,844],[320,740]]) {
           await page.setViewportSize({width,height});
           assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),`${locale} ${name} overflow at ${width}`);
+          if (name === 'development') assert.ok(await page.locator('.development-data-table').evaluate(table => {
+            const right = table.getBoundingClientRect().right;
+            return [...table.querySelectorAll('.ui-table-action button')].every(button => button.getBoundingClientRect().right <= right);
+          }), `${locale} development actions must not be clipped at ${width}`);
           await page.screenshot({path:path.join(output,`${name}-${locale}-${width}.png`),fullPage:true});
           if (locale === 'zh-CN' && [1920, 390].includes(width)) {
             await selectPreference(page, "theme", 'dark');

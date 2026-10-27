@@ -40,6 +40,8 @@
 
 页面布局在 `shared/styles/workbench-pages.css` 中对齐 B 原型，基础 `style.css` 先于应用样式加载。表单在大屏限制行宽，窄屏列表和设置分类重排；移动导航保留完整可访问名称。项目提示词采用作用域切换、模板分类与限宽编辑区，继续复用 `PromptTemplateEditor` 的光标位置插入占位符与纯文本示例预览；项目默认、个人覆盖和修订冲突流程保留。
 
+全局「开发」与项目开发任务列表分别展示任务状态、Agent 状态，复用 `WorkItemTable` 和 `StatusBadge`。任务状态采用灰色待开发、紫色已启动、绿色完成、红色取消、蓝色合并和黄色待确认；执行状态独立读取真实记录，本轮结束不改变任务状态。列表每 5 秒通过 `useResource` 刷新，保留选择并丢弃过期响应；未知或不可查看的状态明确标注，窄屏转为带标签的条目。
+
 会话文件查看归 `features/session/`：`file-reference.js` 解析本地链接，`SessionItem` 发出文件请求，app 仅协调侧栏开关；`use-session-files.js` 拥有文件/列表请求与代际隔离，`SessionFilePanel`、`SessionChangedFiles` 呈现预览和 Git 列表，`code-content.js` 处理高亮与差异行。高亮库仅在打开文件侧栏时加载。文件内容始终由后端按会话的 Worktree 校验，前端不拼接服务器磁盘路径。
 
 会话过程采用用户选定的 [A 方案](../../docs/prototypes/ui-refactor/session-activity/README.md)：`SessionTimeline` 将同一已知 turn 内相邻的普通过程合成默认折叠的一行，`session-activity.js` 只负责呈现分组、状态与预览。消息、执行计划、未知类型和失败条目保持独立；非零退出码即使标为 completed 也按失败显示。未提供 turnId 的记录不相互合并。`SessionItem` 保留原样输出和按需展开详情，审批／澄清仍由 `SessionRequest` 单独展示。展开状态按成员 ID 在当前会话内记忆，增量更新、历史前插及分组拆分不因组件重建丢失，切换会话清空；不修改原始记录、顺序、存储或执行状态。

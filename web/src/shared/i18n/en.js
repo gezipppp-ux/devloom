@@ -12,6 +12,9 @@ import { enProjectSpace } from "./en-project-space.js";
 import { enPreviews } from "./en-previews.js";
 
 export const en = {
+  "Agent 状态": "Agent status",
+  "未启动": "Not started",
+  "不可查看": "Not accessible",
   "不同条件同时满足，同一条件可多选。": "Match every filter; select multiple values within each.",
   "全部优先级": "All priorities",
   "全部负责人": "All assignees",
