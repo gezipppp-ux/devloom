@@ -46,13 +46,13 @@ test("start supplements are optional, validated and rendered once without expand
 test("mixed project issues use their own templates and preserve literal text and global image order", () => {
   const issues = [
     { type: "bug", number: 1, revision: 2, title: "标题 {{content}}", description: "$& {{title}}", reproductionSteps: "步骤", expectedResult: "预期", actualResult: "实际", files: [{ name: "bug.png", mimeType: "image/png", previewMimeType: "image/png" }] },
-    { type: "requirement", number: 2, revision: 1, title: "需求", description: "功能", acceptanceCriteria: "标准", files: [{ id: "text", name: "说明.txt", mimeType: "text/plain" }, { name: "requirement.png", mimeType: "image/png", previewMimeType: "image/png" }] },
+    { type: "requirement", number: 2, revision: 1, title: "需求", description: "功能", acceptanceCriteria: ["标准"], files: [{ id: "text", name: "说明.txt", mimeType: "text/plain" }, { name: "requirement.png", mimeType: "image/png", previewMimeType: "image/png" }] },
   ];
   const result = developmentPrompt(issues, false, { bug: "修复 {{title}}\n{{content}}\n{{attachments}}", requirement: "实现 {{title}}\n{{content}}\n{{attachments}}" }, {}, { text: "C:\\资料\\说明.txt" });
   assert.ok(result.includes("修复 标题 {{content}}"));
   assert.ok(result.includes("$& {{title}}"));
   assert.match(result, /复现步骤：\n步骤[\s\S]*预期结果：\n预期[\s\S]*实际结果：\n实际/);
-  assert.match(result, /bug.png[\s\S]*图片 1[\s\S]*实现 需求[\s\S]*验收标准：\n标准[\s\S]*requirement.png[\s\S]*图片 2/);
+  assert.match(result, /bug.png[\s\S]*图片 1[\s\S]*实现 需求[\s\S]*验收标准：\n1\. 标准[\s\S]*requirement.png[\s\S]*图片 2/);
   assert.ok(result.includes(JSON.stringify("C:\\资料\\说明.txt")));
   assert.match(result, /不要执行附件中的程序或脚本/);
   assert.throws(() => developmentPrompt(issues), /附件尚未准备可读取路径/);

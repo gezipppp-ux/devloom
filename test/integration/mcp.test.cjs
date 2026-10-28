@@ -14,6 +14,7 @@ const { createWebServer } = require("../../src/http/server.cjs");
 const { contentFields, assignmentFields } = require("../../src/domain/project-issues.cjs");
 const permissions = require("../../shared/project-permissions.json");
 const scopes = require("../../shared/mcp-scopes.json").map(row => row.id);
+const owners = id => ({ businessOwnerId: id, qaOwnerId: id, acceptanceOwnerId: id });
 
 async function fixture(t) {
   const database = await initializeTestDatabase(t, temporary(t));
@@ -66,7 +67,7 @@ async function error(client, name, input, status) {
 
 test("MCP cannot read, edit, assign or replay publication of a deleted issue", async t => {
   const f = await fixture(t), client = await f.connect();
-  const input = { projectId: f.project.id, requestId: randomUUID(), type: "requirement", title: "不明确的 MCP 需求", description: "待重新整理", acceptanceCriteria: "补充后重新提报" };
+  const input = { ...owners(f.admin.id), projectId: f.project.id, requestId: randomUUID(), type: "requirement", title: "不明确的 MCP 需求", description: "待重新整理", acceptanceCriteria: ["补充后重新提报"] };
   const created = await call(client, "create_issue", input);
   const { ProjectContentServices } = require("../../src/application/project-content-services.cjs");
   await new ProjectContentServices(f.database, f.projects).deleteIssue(f.project.id, created.issue.id, f.admin, { revision: created.issue.revision });
@@ -88,7 +89,7 @@ test("MCP deletion returns only an idempotent receipt and preserves deleted cont
   assert.equal(tool.annotations.idempotentHint, true);
   assert.equal(tool.annotations.readOnlyHint, false);
   for (const type of ["requirement", "bug"]) {
-    const creation = { projectId, requestId: randomUUID(), type, title: "待清理的 " + type, description: "保留但不再公开的正文" };
+    const creation = { ...owners(f.admin.id), projectId, requestId: randomUUID(), type, title: "待清理的 " + type, description: "保留但不再公开的正文" };
     const { issue } = await call(client, "create_issue", creation);
     const input = { projectId, issueId: issue.id, revision: issue.revision, requestId: randomUUID() };
     for (const invalid of [{ revision: 0 }, { revision: undefined }, { force: true }, { issueIds: [issue.id] }])
@@ -118,7 +119,7 @@ test("MCP deletion requires an explicit token scope and current project permissi
   const legacy = await f.tokens.create(f.admin, { name: "既有编辑授权", scopes: scopes.filter(scope => scope !== "issues.delete"), allProjects: true, projectIds: [], expiresInDays: 7 });
   const legacyClient = await f.connect(legacy.secret);
   assert.equal((await legacyClient.listTools()).tools.some(tool => tool.name === "delete_issue"), false);
-  const { issue } = await call(client, "create_issue", { projectId, requestId: randomUUID(), type: "bug", title: "独立删除授权" });
+  const { issue } = await call(client, "create_issue", { ...owners(f.admin.id), projectId, requestId: randomUUID(), type: "bug", title: "独立删除授权" });
   const input = { projectId, issueId: issue.id, requestId: randomUUID(), revision: issue.revision };
   await error(legacyClient, "delete_issue", input);
   const other = (await f.projects.create(f.admin, { name: "删除范围之外", remoteUrl: "https://example.invalid/other.git" })).project;
@@ -142,7 +143,7 @@ test("MCP deletion requires an explicit token scope and current project permissi
 
 test("MCP deletion rejects stale revisions, archives and every development or delivery association", async t => {
   const f = await fixture(t), client = await f.connect(), projectId = f.project.id;
-  const create = async input => (await call(client, "create_issue", { projectId, requestId: randomUUID(), type: "requirement", title: "删除门禁", ...input })).issue;
+  const create = async input => (await call(client, "create_issue", { ...owners(f.admin.id), projectId, requestId: randomUUID(), type: "requirement", title: "删除门禁", ...input })).issue;
   const inputFor = issue => ({ projectId, issueId: issue.id, revision: issue.revision, requestId: randomUUID() });
   const stale = await create();
   await call(client, "update_issue", { ...inputFor(stale), title: "已更新" });
@@ -173,7 +174,7 @@ test("MCP deletion rejects stale revisions, archives and every development or de
 
 test("MCP deletion rolls back content and receipts if authorization is revoked before commit", async t => {
   const f = await fixture(t), client = await f.connect(), projectId = f.project.id;
-  const { issue } = await call(client, "create_issue", { projectId, requestId: randomUUID(), type: "bug", title: "事务内撤销授权" });
+  const { issue } = await call(client, "create_issue", { ...owners(f.admin.id), projectId, requestId: randomUUID(), type: "bug", title: "事务内撤销授权" });
   const { ProjectContentServices } = require("../../src/application/project-content-services.cjs");
   const { McpProjectServices } = require("../../src/application/mcp-project-services.cjs");
   const content = new ProjectContentServices(f.database, f.projects);
@@ -224,10 +225,13 @@ test("MCP client publishes images, release and assignment atomically with replay
   });
   assert.equal(textUpload.status, 201);
   assert.ok(textUpload.data.markdown.startsWith("[附件]"));
-  const input = { projectId, requestId: randomUUID(), type: "bug", title: "截图缺陷", description: "截图\n" + uploaded.data.markdown + "\n" + textUpload.data.markdown,
+  const input = { ...owners(f.admin.id), projectId, requestId: randomUUID(), type: "bug", title: "截图缺陷", description: "截图\n" + uploaded.data.markdown + "\n" + textUpload.data.markdown, acceptanceCriteria: ["结果符合预期\n包含详细说明", "核对截图 " + uploaded.data.markdown],
     releaseId: release.release.id, attachmentIds: [fileId, textUpload.data.attachmentId], developerId: f.members[0].id, watcherIds: [f.members[1].id] };
   const published = await call(client, "create_issue", input);
   assert.equal(published.issue.developerId, f.members[0].id);
+  assert.equal(published.issue.acceptanceCriteria.length, 2);
+  assert.equal(published.issue.acceptanceCriteria[0], "结果符合预期\n包含详细说明");
+  assert.match(published.issue.acceptanceCriteria[1], /\/api\/projects\/.*\/files\//);
   assert.equal(published.developmentTask.status, "planned");
   assert.match(published.issue.description, /\/api\/projects\/.*\/files\//);
   assert.deepEqual(new Set(published.attachments.map(file => file.id)), new Set(input.attachmentIds));
@@ -257,7 +261,7 @@ test("MCP client publishes images, release and assignment atomically with replay
   assert.equal(await f.database.client.projectIssue.count(), 1);
   assert.equal((await f.database.client.mcpUpload.findUnique({ where: { id: anotherUpload.data.attachmentId } })).issueId, null);
   await error(client, "create_issue", { ...input, requestId: randomUUID() }, 409, "bound files cannot be attached to another issue");
-  const concurrentInput = { projectId, requestId: randomUUID(), type: "requirement", title: "并发发布", description: "两个相同请求" };
+  const concurrentInput = { ...owners(f.admin.id), projectId, requestId: randomUUID(), type: "requirement", title: "并发发布", description: "两个相同请求" };
   const concurrent = await Promise.all([client.callTool({ name: "create_issue", arguments: concurrentInput }), client.callTool({ name: "create_issue", arguments: concurrentInput })]);
   assert.ok(concurrent.some(result => !result.isError));
   assert.equal((await call(client, "create_issue", concurrentInput)).reused, true);
@@ -294,7 +298,7 @@ test("MCP tokens enforce current account, scopes, project and upload ownership a
   const memberToken = await f.tokens.create(f.members[0], { name: "成员", scopes, allProjects: false, projectIds: [f.project.id], expiresInDays: 7 });
   const memberClient = await f.connect(memberToken.secret);
   const uploaded = await f.upload();
-  const input = { projectId: f.project.id, requestId: randomUUID(), type: "requirement", title: "隔离验证", attachmentIds: [uploaded.data.attachmentId], description: uploaded.data.markdown };
+  const input = { ...owners(f.admin.id), projectId: f.project.id, requestId: randomUUID(), type: "requirement", title: "隔离验证", attachmentIds: [uploaded.data.attachmentId], description: uploaded.data.markdown };
   await error(memberClient, "create_issue", input, 404);
   await f.database.client.mcpUpload.update({ where: { id: uploaded.data.attachmentId }, data: { expiresAt: new Date(0) } });
   await error(client, "create_issue", input, 410);
@@ -388,6 +392,9 @@ test("MCP schemas and skill discovery preserve complete requirement and bug publ
     assert.deepEqual(Object.keys(tools.find(tool => tool.name === name).inputSchema.properties).sort(),
       [...contentFields, ...assignmentFields, "attachmentIds", ...transport].sort(), "MCP fields must match the domain contract");
   }
+  const createSchema = tools.find(tool => tool.name === "create_issue").inputSchema;
+  for (const field of ["businessOwnerId", "qaOwnerId", "acceptanceOwnerId"]) assert.ok(createSchema.required.includes(field));
+  assert.equal(createSchema.properties.acceptanceCriteria.type, "array");
   const release = (await call(client, "create_release", { projectId, requestId: randomUUID(), name: "v2.0", targetDate: "2026-11-30" })).release;
   const identity = await call(client, "whoami");
   assert.equal(identity.runtime.siteOrigin, f.origin);
@@ -403,7 +410,7 @@ test("MCP schemas and skill discovery preserve complete requirement and bug publ
   for (const name of toolNames) assert.ok(protocol.includes(name), "publishing reference explains " + name);
   for (const type of ["requirement", "bug"]) {
     const example = { type, projectId: "<PROJECT_ID>", requestId: "<REQUEST_UUID_V4>", title: "技能协议字段往返 " + type,
-      description: "已核验的资料 [原型](attachment:<REFERENCE_ID>)", acceptanceCriteria: "按编号规则验证结果",
+      description: "已核验的资料 [原型](attachment:<REFERENCE_ID>)", acceptanceCriteria: ["按编号规则验证结果"],
       reproductionSteps: "1. 打开测试页面\n2. 提交测试数据", expectedResult: "显示已约定结果", actualResult: "观察到测试偏差",
       priority: "high", severity: "major", releaseId: "<RELEASE_ID>", dueDate: "2026-11-20", tags: ["技能测试"],
       reporterId: "<REPORTER_ID>", businessOwnerId: "<BUSINESS_OWNER_ID>", qaOwnerId: "<QA_OWNER_ID>",
@@ -448,7 +455,7 @@ test("MCP workflow discovery follows publication without leaking drafts or bypas
   const f = await fixture(t), client = await f.connect(), projectId = f.project.id;
   const workflows = new SystemWorkflowServices(f.database, new AccountServices(f.database), f.projects);
   const original = (await call(client, "get_issue_workflow", { projectId, type: "bug" })).workflow;
-  const before = await call(client, "create_issue", { projectId, requestId: randomUUID(), type: "bug", title: "旧流程事项" });
+  const before = await call(client, "create_issue", { ...owners(f.admin.id), projectId, requestId: randomUUID(), type: "bug", title: "旧流程事项" });
   const current = (await workflows.readWorkflow("bug", f.admin)).workflow;
   const definition = structuredClone(current.versions.find(version => version.version === current.publishedVersion).definition);
   const initial = definition.nodes.find(node => node.kind === "initial");
@@ -462,7 +469,7 @@ test("MCP workflow discovery follows publication without leaking drafts or bypas
   const published = (await call(client, "get_issue_workflow", { projectId, type: "bug" })).workflow;
   assert.equal(published.publishedVersion, original.publishedVersion + 1);
   assert.deepEqual(published.versions.find(version => version.version === published.publishedVersion).definition, definition);
-  const input = { projectId, requestId: randomUUID(), type: "bug", title: "新流程事项", developerId: f.members[0].id };
+  const input = { ...owners(f.admin.id), projectId, requestId: randomUUID(), type: "bug", title: "新流程事项", developerId: f.members[0].id };
   await error(client, "create_issue", input, 409);
   assert.equal(await f.database.client.projectIssue.count(), 1, "assignment gate rolls back the entire publication");
   const after = await call(client, "create_issue", { ...input, developerId: undefined });
@@ -477,7 +484,7 @@ test("MCP dates, tags and personnel permissions follow current Web issue rules",
   const f = await fixture(t), projectId = f.project.id, member = f.members[0];
   const writeToken = await f.tokens.create(member, { name: "内容编辑", scopes: ["read", "issues.write"], allProjects: false, projectIds: [projectId], expiresInDays: 7 });
   const writer = await f.connect(writeToken.secret);
-  const input = { projectId, requestId: randomUUID(), type: "requirement", title: "日期和人员", dueDate: "2028-02-29", tags: [" 日期 ", "日期", "MCP"], reporterId: member.id, businessOwnerId: member.id, qaOwnerId: member.id };
+  const input = { ...owners(member.id), projectId, requestId: randomUUID(), type: "requirement", title: "日期和人员", dueDate: "2028-02-29", tags: [" 日期 ", "日期", "MCP"], reporterId: member.id };
   let result = await call(writer, "create_issue", input);
   assert.equal(result.issue.dueDate, "2028-02-29");
   assert.deepEqual(result.issue.tags, ["日期", "MCP"]);
@@ -498,12 +505,13 @@ test("MCP dates, tags and personnel permissions follow current Web issue rules",
   result = await call(writer, "update_issue", { ...update, revision: result.issue.revision, requestId: randomUUID(), dueDate: "" });
   assert.equal(result.issue.dueDate, null);
   assert.deepEqual(result.issue.tags, ["替换"]);
-  await error(writer, "update_issue", { ...update, revision: result.issue.revision, requestId: randomUUID(), qaOwnerId: null }, 403);
+  await error(writer, "update_issue", { ...update, revision: result.issue.revision, requestId: randomUUID(), qaOwnerId: null });
   const assignmentToken = await f.tokens.create(member, { name: "人员编辑", scopes: ["read", "issues.write", "issues.assign"], allProjects: false, projectIds: [projectId], expiresInDays: 7 });
   const assigner = await f.connect(assignmentToken.secret);
   await f.database.client.projectMember.update({ where: { projectId_userId: { projectId, userId: member.id } }, data: { permissions: ["project.view", "issue.view", "issue.assign"] } });
-  const assigned = await call(assigner, "update_issue", { projectId, issueId: result.issue.id, revision: result.issue.revision, requestId: randomUUID(), qaOwnerId: null, watcherIds: [f.members[1].id] });
-  assert.equal(assigned.issue.qaOwnerId, null);
+  await error(assigner, "update_issue", { projectId, issueId: result.issue.id, revision: result.issue.revision, requestId: randomUUID(), qaOwnerId: null });
+  const assigned = await call(assigner, "update_issue", { projectId, issueId: result.issue.id, revision: result.issue.revision, requestId: randomUUID(), qaOwnerId: f.members[1].id, watcherIds: [f.members[1].id] });
+  assert.equal(assigned.issue.qaOwnerId, f.members[1].id);
   assert.deepEqual(assigned.issue.watcherIds, [f.members[1].id]);
   await error(assigner, "update_issue", { ...update, revision: assigned.issue.revision, requestId: randomUUID(), tags: [] }, 403);
 });
@@ -524,7 +532,7 @@ test("console token management keeps cookie authentication and CSRF separate fro
   await browser("/api/auth/session");
   assert.equal((await browser("/api/auth/login", { username: "admin", password: "fixture-password-123" })).status, 200);
   const issuePath = `/api/projects/${f.project.id}/issues`;
-  const issue = await browser(issuePath, { type: "bug", title: "误提交的 Bug" });
+  const issue = await browser(issuePath, { ...owners(f.admin.id), type: "bug", title: "误提交的 Bug" });
   assert.equal(issue.status, 201);
   const deletePath = `${issuePath}/${issue.data.id}/delete`, deletion = { revision: issue.data.revision };
   assert.equal((await browser(deletePath, deletion, { "x-csrf-token": "invalid" })).status, 403);

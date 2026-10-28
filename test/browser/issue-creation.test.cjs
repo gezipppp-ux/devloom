@@ -33,6 +33,8 @@ async function verifyIssueCreation({ page, origin, projects }) {
   await pasteImage(page, "描述", "type-switch.png");
   const description = await markdownValue(page);
   await selectOption(page.getByLabel("业务负责人", { exact: true }), "member-1");
+  await selectOption(page.getByLabel("测试负责人", { exact: true }), "member-1");
+  await selectOption(page.getByLabel("业务验收人", { exact: true }), "member-2");
   await selectOption(page.getByLabel("关注人", { exact: true }), ["member-2"]);
   await page.getByLabel("截止日期", { exact: true }).fill("2026-10-25");
   await page.getByLabel("标签", { exact: true }).fill("画布, 体验");
@@ -41,9 +43,10 @@ async function verifyIssueCreation({ page, origin, projects }) {
   await page.getByRole("heading", { name: "新建需求", exact: true }).waitFor();
   assert.equal(await markdownValue(page), description);
   assert.equal(await markdownValue(page, "复现步骤"), "打开页面后再次导出");
-  await setMarkdown(page, "验收标准", "筛选结果与导出一致");
+  await page.getByRole("button", { name: "添加一条", exact: true }).click();
+  await page.getByLabel("验收标准第 1 条").fill("筛选结果与导出一致");
   await selectOption(page.getByLabel("事项类型", { exact: true }), "bug");
-  assert.equal(await markdownValue(page, "验收标准"), "筛选结果与导出一致");
+  assert.equal(await page.getByLabel("验收标准第 1 条").inputValue(), "筛选结果与导出一致");
   assert.equal(await page.getByLabel("标题", { exact: true }).inputValue(), "保留类型切换草稿");
   assert.equal(await selectValue(page.getByLabel("业务负责人", { exact: true })), "member-1");
   assert.deepEqual(await selectValue(page.getByLabel("关注人", { exact: true })), ["member-2"]);
@@ -72,7 +75,10 @@ async function verifyIssueCreation({ page, origin, projects }) {
     assert.equal(writes.length, 2);
     assert.equal(writes[0].requestId, writes[1].requestId, "retry keeps the original creation identity");
     assert.equal(writes[1].type, "bug");
+    assert.deepEqual(writes[1].acceptanceCriteria, ["筛选结果与导出一致"]);
     assert.equal(writes[1].businessOwnerId, "member-1");
+    assert.equal(writes[1].qaOwnerId, "member-1");
+    assert.equal(writes[1].acceptanceOwnerId, "member-2");
     assert.deepEqual(writes[1].watcherIds, ["member-2"]);
     assert.equal(writes[1].dueDate, "2026-10-25");
     assert.deepEqual(writes[1].tags, ["画布", "体验"]);

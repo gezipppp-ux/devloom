@@ -22,8 +22,18 @@ async function verifyWorkflowIssueFields({ page, origin, issue }) {
     try {
       await page.goto(`${origin}/fixture?fixture=issue`);
       await page.getByRole("button", { name: "编辑事项", exact: true }).click();
-      for (const [key, label] of fields) await setMarkdown(page, label, `${key} 已补齐`);
-      for (const width of [1440, 320]) {
+      for (const [key, label] of fields) {
+        if (key === "acceptanceCriteria") {
+          await page.getByRole("button", { name: "添加一条", exact: true }).click();
+          await page.getByLabel("验收标准第 1 条").fill(`${key} 已补齐`);
+          await page.getByRole("button", { name: "添加一条", exact: true }).click();
+          await page.getByLabel("验收标准第 2 条").fill("另一条\n包含多行");
+          await page.getByRole("button", { name: "添加一条", exact: true }).click();
+          await page.getByLabel("验收标准第 3 条").fill("需要删除的条目");
+          await page.getByRole("button", { name: "删除第 3 条验收标准", exact: true }).click();
+        } else await setMarkdown(page, label, `${key} 已补齐`);
+      }
+      for (const width of [1920, 2560, 1440, 1280, 768, 390, 320]) {
         await page.setViewportSize({ width, height: 900 });
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth));
         await page.screenshot({ path: path.join(output, `workflow-fields-${type}-${width}.png`), fullPage: true });
@@ -31,7 +41,7 @@ async function verifyWorkflowIssueFields({ page, origin, issue }) {
       await page.getByRole("button", { name: "保存事项", exact: true }).click();
       await page.getByRole("button", { name: "编辑事项", exact: true }).waitFor();
       for (const [key, label] of fields) {
-        assert.equal(writes.at(-1)[key], `${key} 已补齐`);
+        assert.deepEqual(writes.at(-1)[key], key === "acceptanceCriteria" ? [`${key} 已补齐`, "另一条\n包含多行"] : `${key} 已补齐`);
         await page.getByRole("heading", { name: label, exact: true }).waitFor();
         await page.getByText(`${key} 已补齐`, { exact: true }).waitFor();
       }

@@ -18,8 +18,8 @@ test("attention aggregates only own actionable session requests and deliveries t
   const project = await database.client.project.create({ data: { name: "Project", directoryName: "attention", directoryKey: "attention", remoteUrl: "https://example.test/repo.git", ownerUserId: actor.id } });
   for (const user of [actor, outsider]) await database.client.projectMember.create({ data: { projectId: project.id, userId: user.id, permissions } });
   const projects = new ProjectServices(database), content = new ProjectContentServices(database, projects);
-  const issue = await content.createIssue(project.id, actor, { type: "requirement", title: "UI review", businessOwnerId: outsider.id });
-  await content.createIssue(project.id, actor, { type: "requirement", title: "Separate pending work" });
+  const issue = await content.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "UI review", businessOwnerId: outsider.id });
+  await content.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "Separate pending work" });
   const delivery = await content.addDeliverable(project.id, outsider, { reviewerId: actor.id, issueId: issue.id, body: "Check UI" });
   await content.updateIssue(project.id, issue.id, actor, { revision: (await content.readIssue(project.id, issue.id, actor)).revision, businessOwnerId: actor.id });
   const workspace = await database.client.workspace.create({ data: { ownerUserId: actor.id, name: "Own space" } });

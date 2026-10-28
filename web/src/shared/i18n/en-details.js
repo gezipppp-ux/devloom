@@ -487,7 +487,7 @@ export const enDetails = {
     "没有匹配的模型，请调整搜索条件。": "No matching models. Adjust your search.",
     "没有匹配的远端分支。": "No matching remote branches.",
     "没有可添加的匹配事项，请调整搜索条件。": "No matching issues to add. Adjust your search.",
-    "没有负责人或关注人时可省略对应字段；需求使用 type: requirement，可另外填写 acceptanceCriteria。版本用 releaseId 指定。": "Omit the owner or participants if none are needed. Requirements use type: requirement and may include acceptanceCriteria. Specify the release with releaseId.",
+    "业务负责人、测试负责人和业务验收人必填；验收标准以数组逐条填写。版本用 releaseId 指定。": "Business, test and acceptance owners are required. Provide acceptance criteria as an array. Specify the release with releaseId.",
     "没有重叠修改，可以安全合并。": "No overlapping edits. Changes can be merged.",
     "流程图，拖动空白或方向键平移；Insert 新增状态，Delete 删除选中项": "Workflow graph: drag empty space or use arrow keys to pan; Insert adds a state, Delete removes the selection",
     "流程画布": "Workflow canvas",

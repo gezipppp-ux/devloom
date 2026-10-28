@@ -17,7 +17,7 @@ function assertWorkflowHandler(issue, node, actorId) {
   if (workflowHandler(issue, node) !== actorId) throw accountError("此步骤由指定处理人操作，请联系业务负责人调整分派。", 403);
 }
 function assertTransitionFields(issue, transition) {
-  const missing = (transition.requiredFields || []).filter(field => !issue[field]?.trim());
+  const missing = (transition.requiredFields || []).filter(field => field === "acceptanceCriteria" ? !issue.acceptanceCriteria?.length : !issue[field]?.trim());
   const labels = { description: "描述", acceptanceCriteria: "验收标准", reproductionSteps: "复现步骤", expectedResult: "预期结果", actualResult: "实际结果", releaseId: "目标版本", qaOwnerId: "测试负责人", acceptanceOwnerId: "业务验收人" };
   if (missing.length) throw accountError("流转所需资料尚未填写：" + missing.map(field => labels[field]).join("、"), 400);
 }

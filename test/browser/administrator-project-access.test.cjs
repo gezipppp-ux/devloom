@@ -34,6 +34,7 @@ async function verifyAdministratorProjectAccess({ page, origin, projects, accoun
   await tab("需求");
   await require("../support/browser-navigation.cjs").openIssueCreate(page);
   await page.getByLabel("标题", { exact: true }).fill("管理员创建协作事项");
+  for (const label of ["业务负责人", "测试负责人", "业务验收人"]) await selectOption(page.getByLabel(label, { exact: true }), owner.id);
   const issue = await save("保存事项", "/issues");
   await page.getByRole("heading", { name: "管理员创建协作事项", exact: true }).waitFor();
   assert.equal(await page.getByRole("button", { name: "认领", exact: true }).count(), 1);

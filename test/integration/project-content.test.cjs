@@ -32,7 +32,7 @@ test("deleting unlinked requirements and bugs hides all public content and prese
   const lifecycle = new ProjectLifecycleStore(database), workbench = new WorkbenchStore(database);
   const release = await database.client.projectRelease.create({ data: { projectId: project.id, name: "v-delete" } });
   for (const type of ["requirement", "bug"]) {
-    const input = { requestId: randomUUID(), type, title: `无效${type}`, releaseId: release.id };
+    const input = { requestId: randomUUID(), type, title: `无效${type}`, releaseId: release.id, businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id };
     const issue = await services.createIssue(project.id, actor, input);
     assert.equal(issue.deletion.allowed, true);
     const file = await services.uploadFile(project.id, "issues", issue.id, actor, { name: "notes.txt", mimeType: "text/plain", data: Buffer.from("context") });
@@ -71,12 +71,12 @@ test("deleting unlinked requirements and bugs hides all public content and prese
     assert.ok(await database.client.auditEvent.findFirst({ where: { actorUserId: actor.id, event: "issue.deleted", details: { path: ["resourceId"], equals: issue.id } } }));
   }
   await lifecycle.transaction(() => lifecycle.archiveRelease(project.id, release.id, release.revision, true));
-  assert.equal((await services.createIssue(project.id, actor, { type: "requirement", title: "下一条" })).number, 3);
+  assert.equal((await services.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "下一条" })).number, 3);
 });
 
 test("issue deletion checks independent permissions, project scope, archive and the confirmed revision", async t => {
   const { database, actor, outsider, project, other, services, permissions, setPermissions } = await fixture(t);
-  const issue = await services.createIssue(project.id, actor, { type: "bug", title: "删除权限测试" });
+  const issue = await services.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "bug", title: "删除权限测试" });
   await assert.rejects(services.deleteIssue(project.id, issue.id, outsider, { revision: 1 }), { statusCode: 404 });
   await assert.rejects(services.deleteIssue(other.id, issue.id, actor, { revision: 1 }), { statusCode: 404 });
   await setPermissions(permissions.filter(p => p !== "issue.delete"));
@@ -99,7 +99,7 @@ test("issue deletion checks independent permissions, project scope, archive and 
 test("all development and delivery history blocks issue deletion, including cancelled and accepted records", async t => {
   const { database, actor, project, services, projects } = await fixture(t);
   const development = new ProjectDevelopmentServices(database, projects);
-  const issue = await services.createIssue(project.id, actor, { type: "requirement", title: "已安排开发" });
+  const issue = await services.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "已安排开发" });
   const { tasks: [task] } = await development.create(project.id, actor, { requestId: randomUUID(), issueIds: [issue.id] });
   for (const status of ["planned", "cancelled", "completed", "merged"]) {
     await database.client.developmentTask.update({ where: { id: task.id }, data: { status } });
@@ -108,7 +108,7 @@ test("all development and delivery history blocks issue deletion, including canc
     assert.equal(current.deletion.allowed, false);
     await assert.rejects(services.deleteIssue(project.id, issue.id, actor, { revision: current.revision }), /关联开发任务或交付/);
   }
-  const delivered = await services.createIssue(project.id, actor, { type: "bug", title: "人工交付历史" });
+  const delivered = await services.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "bug", title: "人工交付历史" });
   await database.client.projectDeliverable.create({ data: { projectId: project.id, issueId: delivered.id, authorId: actor.id, reviewerId: actor.id, body: "成果", status: "accepted" } });
   await assert.rejects(services.deleteIssue(project.id, delivered.id, actor, { revision: 1 }), /关联开发任务或交付/);
   assert.equal(await database.client.projectIssue.count({ where: { deletedAt: { not: null } } }), 0);
@@ -116,7 +116,7 @@ test("all development and delivery history blocks issue deletion, including canc
 
 test("concurrent assignment and deletion cannot leave a task linked to a deleted issue", async t => {
   const { database, actor, project, services, projects } = await fixture(t);
-  const issue = await services.createIssue(project.id, actor, { type: "requirement", title: "并发操作" });
+  const issue = await services.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "并发操作" });
   const results = await Promise.allSettled([
     services.deleteIssue(project.id, issue.id, actor, { revision: 1 }),
     new ProjectDevelopmentServices(database, projects).create(project.id, actor, { requestId: randomUUID(), issueIds: [issue.id] }),
@@ -131,7 +131,7 @@ test("historical source snapshots and images survive local requirement and bug e
   const { database, actor, project, services } = await fixture(t);
   t.mock.method(globalThis, "fetch", () => assert.fail("history must not contact the retired source"));
   for (const type of ["requirement", "bug"]) {
-    const issue = await services.createIssue(project.id, actor, { type, title: "历史事项", description: "![历史图片](https://file.tapd.cn/diagram.png)" });
+    const issue = await services.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type, title: "历史事项", description: "![历史图片](https://file.tapd.cn/diagram.png)" });
     const file = await services.uploadFile(project.id, "issues", issue.id, actor, { name: "diagram.png", mimeType: "image/png", data: png });
     const source = await database.client.issueSource.create({ data: { projectId: project.id, issueId: issue.id, channel: "tapd", scope: "123", type, externalId: issue.id,
       url: "https://www.tapd.cn/123/story/1", snapshot: { title: "原始内容", projectImages: [{ source: "https://file.tapd.cn/diagram.png", fileId: file.id }] } } });
@@ -149,11 +149,11 @@ test("historical source snapshots and images survive local requirement and bug e
 test("project issues enforce membership, assignment, acceptance and revision history without starting execution", async t => {
   const { database, permissions, actor, outsider, project, services, setPermissions } = await fixture(t);
   await installReviewWorkflow(database);
-  const issue = await services.createIssue(project.id, actor, { qaOwnerId: actor.id, type: "requirement", title: "可验收需求", watcherIds: [actor.id], acceptanceCriteria: "可验证" });
+  const issue = await services.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, qaOwnerId: actor.id, type: "requirement", title: "可验收需求", watcherIds: [actor.id], acceptanceCriteria: ["可验证"] });
   assert.equal(issue.number, 1);
   assert.equal(issue.status, "draft");
   await assert.rejects(services.readIssue(project.id, issue.id, outsider), { statusCode: 404 });
-  await assert.rejects(services.createIssue(project.id, actor, { type: "bug", title: "缺陷", watcherIds: [outsider.id] }), /有效项目成员/);
+  await assert.rejects(services.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "bug", title: "缺陷", watcherIds: [outsider.id] }), /有效项目成员/);
   const outcomes = await Promise.allSettled(["甲", "乙"].map(title => services.updateIssue(project.id, issue.id, actor, { title, revision: 1 })));
   assert.equal(outcomes.filter(result => result.status === "fulfilled").length, 1);
   assert.equal(outcomes.find(result => result.status === "rejected").reason.statusCode, 409);
@@ -180,8 +180,8 @@ test("project issues enforce membership, assignment, acceptance and revision his
 
 test("project assets encrypt sensitive history, audit reads, enforce independent secret permissions and scope attachments", async t => {
   const { database, permissions, actor, outsider, project, other, services, setPermissions } = await fixture(t);
-  const issue = await services.createIssue(project.id, actor, { type: "bug", title: "登录缺陷" });
-  const foreign = await services.createIssue(other.id, actor, { type: "bug", title: "另一项目" });
+  const issue = await services.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "bug", title: "登录缺陷" });
+  const foreign = await services.createIssue(other.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "bug", title: "另一项目" });
   const secret = "private-token-should-never-leak";
   const asset = await services.saveAsset(project.id, null, actor, { type: "credential", title: "测试账号", username: "tester", environment: "test", secret, issueIds: [issue.id] });
   assert.equal(asset.hasSecret, true);
@@ -220,16 +220,16 @@ test("issue attachments commit with full bug fields, enforce permissions and rol
   const attachment = (data = png) => ({ id: randomUUID(), name: '截图.png', mimeType: 'image/png', data: data.toString('base64') });
   const first = attachment();
   await setPermissions(['project.view', 'issue.view', 'issue.create']);
-  const input = { type: 'bug', title: '完整缺陷', description: `![截图](/api/projects/${project.id}/files/${first.id})`, priority: 'urgent', severity: 'critical', reproductionSteps: '复现步骤', expectedResult: '预期', actualResult: '实际', acceptanceCriteria: '验收', attachments: [first] };
+  const input = { type: 'bug', title: '完整缺陷', businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id, description: `![截图](/api/projects/${project.id}/files/${first.id})`, priority: 'urgent', severity: 'critical', reproductionSteps: '复现步骤', expectedResult: '预期', actualResult: '实际', acceptanceCriteria: ['验收'], attachments: [first] };
   const issue = await services.createIssue(project.id, actor, input);
-  for (const key of ['description', 'priority', 'severity', 'reproductionSteps', 'expectedResult', 'actualResult', 'acceptanceCriteria']) assert.equal(issue[key], input[key]);
+  for (const key of ['description', 'priority', 'severity', 'reproductionSteps', 'expectedResult', 'actualResult', 'acceptanceCriteria']) assert.deepEqual(issue[key], input[key]);
   await assert.rejects(services.createIssue(project.id, outsider, input), { statusCode: 404 });
   await setPermissions(['project.view', 'issue.view', 'issue.assign']);
   await assert.rejects(services.updateIssue(project.id, issue.id, actor, { revision: 1, attachments: [attachment()] }), { statusCode: 403 });
   await setPermissions(permissions);
   const view = await services.readIssue(project.id, issue.id, actor);
   assert.deepEqual(view.images, [{ source: `/api/projects/${project.id}/files/${first.id}`, url: `/api/projects/${project.id}/files/${first.id}?inline=1` }]);
-  const foreign = await services.createIssue(other.id, actor, { type: 'bug', title: '另一项目', attachments: [attachment()] });
+  const foreign = await services.createIssue(other.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: 'bug', title: '另一项目', attachments: [attachment()] });
   const foreignFile = (await services.listFiles(other.id, 'issues', foreign.id, actor, {})).items[0];
   const fresh = attachment();
   await assert.rejects(services.updateIssue(project.id, issue.id, actor, { revision: 1, title: '不能保存', attachments: [fresh, { ...attachment(), id: foreignFile.id }] }), { statusCode: 409 });
@@ -237,7 +237,7 @@ test("issue attachments commit with full bug fields, enforce permissions and rol
   assert.equal(await database.client.projectFile.count({ where: { id: fresh.id } }), 0);
   assert.equal((await services.downloadFile(other.id, foreignFile.id, actor)).data.equals(png), true);
   const count = await database.client.projectIssue.count();
-  await assert.rejects(services.createIssue(project.id, actor, { ...input, attachments: [fresh, first] }), { statusCode: 409 });
+  await assert.rejects(services.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, ...input, attachments: [fresh, first] }), { statusCode: 409 });
   assert.equal(await database.client.projectIssue.count(), count);
   assert.equal(await database.client.projectFile.count({ where: { id: fresh.id } }), 0);
   const changed = await services.updateIssue(project.id, issue.id, actor, { revision: 1, actualResult: '新实际', attachments: [fresh] });
@@ -256,11 +256,11 @@ test('issue creation retries preserve identity and initial request, attachment r
   const { randomUUID } = require('node:crypto');
   const { database, permissions, actor, outsider, project, other, services } = await fixture(t);
   const file = { id: randomUUID(), name: 'note.txt', mimeType: 'text/plain', data: Buffer.from('original').toString('base64') };
-  const input = { requestId: randomUUID(), type: 'bug', title: 'retry', actualResult: 'original result', attachments: [file] };
-  for (const requestId of [null, '', 'not-a-uuid']) await assert.rejects(services.createIssue(project.id, actor, { ...input, requestId }), { statusCode: 400 });
+  const input = { requestId: randomUUID(), type: 'bug', title: 'retry', businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id, actualResult: 'original result', attachments: [file] };
+  for (const requestId of [null, '', 'not-a-uuid']) await assert.rejects(services.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, ...input, requestId }), { statusCode: 400 });
   const original = await services.createIssue(project.id, actor, input);
   assert.equal(original.id, input.requestId);
-  const retried = await services.createIssue(project.id, actor, { ...input });
+  const retried = await services.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, ...input });
   assert.equal(retried.id, original.id);
   assert.equal(retried.number, original.number);
   assert.equal(await database.client.projectIssue.count(), 1);
@@ -271,7 +271,7 @@ test('issue creation retries preserve identity and initial request, attachment r
   assert.equal(changed.revision, 2);
   assert.equal((await services.createIssue(project.id, actor, input)).title, changed.title);
   for (const patch of [{ title: 'different' }, { attachments: [] }, { attachments: [{ ...file, name: 'renamed.txt' }] }, { attachments: [{ ...file, data: Buffer.from('changed!').toString('base64') }] }])
-    await assert.rejects(services.createIssue(project.id, actor, { ...input, ...patch }), { statusCode: 409 });
+    await assert.rejects(services.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, ...input, ...patch }), { statusCode: 409 });
   await assert.rejects(services.createIssue(other.id, actor, input), { statusCode: 409 });
   await database.client.projectMember.create({ data: { projectId: project.id, userId: outsider.id, permissions } });
   await assert.rejects(services.createIssue(project.id, outsider, input), { statusCode: 409 });

@@ -44,7 +44,7 @@ async function fixture(t, count = 1) {
   workspaces.authorizeProject = (id, user, permission) => projects.workspaceAuthorization(id, user, permission);
   const development = new ProjectDevelopmentServices(database, projects, workspaces), content = new ProjectContentServices(database, projects);
   const issues = [];
-  for (let i = 0; i < count; i++) issues.push(await content.createIssue(project.id, actor, { type: "requirement", title: "Rework " + i, description: "Implement", acceptanceCriteria: "Verified", qaOwnerId: qa.id }));
+  for (let i = 0; i < count; i++) issues.push(await content.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "Rework " + i, description: "Implement", acceptanceCriteria: ["Verified"], qaOwnerId: qa.id }));
   const planned = (await development.create(project.id, actor, { requestId: randomUUID(), issueIds: issues.map(issue => issue.id) })).tasks;
   let task = planned.length === 1 ? planned[0] : (await development.merge(project.id, actor, { requestId: randomUUID(), title: "Combined rework", tasks: planned.map(({ id, revision }) => ({ id, revision })) })).task;
   const { sessions } = await workspaces.get(workspace.id, actor);

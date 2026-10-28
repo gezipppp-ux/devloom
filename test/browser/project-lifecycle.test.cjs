@@ -65,6 +65,7 @@ async function verifyProjectLifecycle({ page, origin, project, database, output,
   assert.ok(publishedStatuses.some(option => option.label.includes("需求规划")), JSON.stringify(publishedStatuses));
   await require("../support/browser-navigation.cjs").openIssueCreate(page);
   await page.getByLabel("标题", { exact: true }).fill("版本规划事项");
+  for (const label of ["业务负责人", "测试负责人", "业务验收人"]) await selectOption(page.getByLabel(label, { exact: true }), admin.id);
   await selectOption(page.getByLabel("目标版本", { exact: true }), { label: "v0.2" });
   await page.getByRole("button", { name: "保存事项", exact: true }).click();
   await page.getByRole("heading", { name: "版本规划事项", exact: true }).waitFor();
@@ -80,6 +81,7 @@ async function verifyProjectLifecycle({ page, origin, project, database, output,
   assert.ok((await selectOptions(page.getByLabel("事项状态", { exact: true }))).some(option => option.label === "需求规划"));
   await require("../support/browser-navigation.cjs").openIssueCreate(page);
   await page.getByLabel("标题", { exact: true }).fill("跨项目系统流程事项");
+  for (const label of ["业务负责人", "测试负责人", "业务验收人"]) await selectOption(page.getByLabel(label, { exact: true }), admin.id);
   await page.getByRole("button", { name: "保存事项", exact: true }).click();
   await page.getByRole("heading", { name: "跨项目系统流程事项", exact: true }).waitFor();
   assert.equal(await page.getByRole("group", { name: "事项流程图", exact: true }).count(), 0);

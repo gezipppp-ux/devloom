@@ -20,7 +20,7 @@ test("list filters apply before pagination, keep task ownership and distinguish 
   const release = await client.projectRelease.create({ data: { projectId: project.id, name: "v1" } });
   const projects = new ProjectServices(database), content = new ProjectContentServices(database, projects), workbench = new WorkbenchServices(database, projects), development = new ProjectDevelopmentServices(database, projects, {});
   const issues = [];
-  for (let i = 0; i < 4; i++) issues.push(await content.createIssue(project.id, actor, { type: "requirement", title: `Filter issue ${i}`, reporterId: i < 2 ? reporter.id : actor.id, priority: i < 3 ? "high" : "low", ...(i < 3 ? { releaseId: release.id } : {}) }));
+  for (let i = 0; i < 4; i++) issues.push(await content.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: `Filter issue ${i}`, reporterId: i < 2 ? reporter.id : actor.id, priority: i < 3 ? "high" : "low", ...(i < 3 ? { releaseId: release.id } : {}) }));
   const input = { projectId: project.id, releaseId: release.id, reporterId: reporter.id, priority: "high,urgent", ownerId: "none", status: issues[0].status, limit: "1" };
   const first = await workbench.list("issues", actor, input), second = await workbench.list("issues", actor, { ...input, offset: "1" });
   assert.equal(first.total, 2); assert.equal(first.nextOffset, 1); assert.equal(second.total, 2); assert.equal(second.nextOffset, null);

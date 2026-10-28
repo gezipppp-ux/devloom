@@ -3,7 +3,7 @@ const { object, text, revision, choice } = require("./project-issues.cjs");
 
 function deliveryChecklist(issue) {
   if (!issue) return ["交付结果符合独立开发目标", "相关验证已完成，结果可复核", "交付说明与提交信息完整"];
-  const criteria = (issue.acceptanceCriteria || (issue.type === "bug" ? issue.expectedResult : "")).split(/\r?\n/).map(line => line.replace(/^\s*(?:[-*]|\d+\.)\s*(?:\[[ xX]\])?\s*/, "").trim()).filter(Boolean).slice(0, 30);
+  const criteria = issue.acceptanceCriteria?.length ? issue.acceptanceCriteria : (issue.type === "bug" && issue.expectedResult ? [issue.expectedResult] : []);
   return [...(criteria.length ? criteria : ["交付结果符合事项描述与预期"]), "相关验证已完成，结果可复核", "交付说明与提交信息完整"];
 }
 function deliveryReview(input, delivery) {

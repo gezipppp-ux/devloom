@@ -5,7 +5,7 @@ const people = [
   { id: "shan", username: "user-03", displayName: "单明" },
 ];
 const members = people.map(person => ({ ...person, userId: person.id, status: "active", userStatus: "active", permissions, effectivePermissions: permissions }));
-const issue = { id: "i", number: 1, type: "requirement", title: "测试事项", description: "人员搜索", revision: 1, priority: "normal", status: "ready", statusName: "规划中", watcherIds: ["li"], reporterId: "li", businessOwnerId: "li", people, attachments: [], processing: { category: "planning", handlerId: "li" }, availableTransitions: [{ id: "handoff", statusName: "处理中", name: "交接", permission: "issue.transition", assignment: "selection" }] };
+const issue = { id: "i", number: 1, type: "requirement", title: "测试事项", description: "人员搜索", acceptanceCriteria: [], revision: 1, priority: "normal", status: "ready", statusName: "规划中", watcherIds: ["li"], reporterId: "li", businessOwnerId: "li", qaOwnerId: "li", acceptanceOwnerId: "li", people, attachments: [], processing: { category: "planning", handlerId: "li" }, availableTransitions: [{ id: "handoff", statusName: "处理中", name: "交接", permission: "issue.transition", assignment: "selection" }] };
 const task = { id: "t", title: "测试开发任务", status: "planned", canEdit: true, revision: 1, executorId: "li", executor: people[1], issueIds: ["i"], issues: [issue], additions: [] };
 const source = `
 import { createApp, h, ref } from 'vue';

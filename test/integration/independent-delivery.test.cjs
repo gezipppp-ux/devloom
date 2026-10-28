@@ -36,7 +36,7 @@ test("independent delivery validates private task ownership, project and source,
     const invalidTask = await createTask(invalid);
     await assert.rejects(content.addDeliverable(project.id, actor, { ...input, taskId: invalidTask.id }), { statusCode: 400 });
   }
-  const issue = await content.createIssue(project.id, actor, { type: "requirement", title: "Unrelated issue" });
+  const issue = await content.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "Unrelated issue" });
   await assert.rejects(content.addDeliverable(project.id, actor, { ...input, issueId: issue.id }), { statusCode: 400 });
   const delivery = await content.addDeliverable(project.id, actor, input);
   assert.equal(delivery.issueId, null);

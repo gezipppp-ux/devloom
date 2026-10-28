@@ -2,6 +2,7 @@
 import AppSelect from "../../shared/components/AppSelect.vue";
 import { computed } from "vue";
 import MarkdownEditor from "../../shared/components/MarkdownEditor.vue";
+import AcceptanceCriteriaEditor from "./AcceptanceCriteriaEditor.vue";
 import { priorityLabels } from "./project-labels.js";
 import { issueDetailFields } from "./issue-fields.js";
 const props = defineProps({
@@ -21,7 +22,7 @@ const details = computed(() => issueDetailFields(props.type, props.workflow, pro
       <fieldset class="issue-fields-content" :disabled="!canEdit || disabled">
     <label>{{ $t("标题") }}<input :value="modelValue.title" required maxlength="200" @input="update('title', $event.target.value)" /></label>
     <MarkdownEditor :model-value="modelValue.description" :label="$t('描述')" :rows="6" :show-help="!creation" :disabled="!canEdit || disabled" :context-key="contextKey" :images="images" :attachments="attachments" :error="attachmentError" :busy="attachmentBusy" @update:model-value="update('description', $event)" @files="emit('files', $event)" @remove="emit('remove', $event)" />
-    <MarkdownEditor v-for="[key, label] in details" :key="key" :model-value="modelValue[key]" :label="$t(label)" :rows="4" :show-help="!creation" :disabled="!canEdit || disabled" :context-key="contextKey" :images="images" :busy="attachmentBusy" @update:model-value="update(key, $event)" @files="emit('files', $event)" />
+    <template v-for="[key, label] in details" :key="key"><AcceptanceCriteriaEditor v-if="key === 'acceptanceCriteria'" :model-value="modelValue.acceptanceCriteria" :disabled="!canEdit || disabled" @update:model-value="update(key, $event)" /><MarkdownEditor v-else :model-value="modelValue[key]" :label="$t(label)" :rows="4" :show-help="!creation" :disabled="!canEdit || disabled" :context-key="contextKey" :images="images" :busy="attachmentBusy" @update:model-value="update(key, $event)" @files="emit('files', $event)" /></template>
     <p v-if="creation" class="field-hint issue-attachment-hint">{{ $t('支持粘贴图片、Markdown 与附件。') }} {{ $t('单个附件最多 10 MiB，每次合计 20 MiB。') }}</p>
       <p class="field-hint">{{ $t("PNG、JPEG、WebP 直接作为图片输入；其他附件向 Codex 提供本地路径，是否能解析取决于运行环境中的工具。") }}</p>
     </fieldset>
@@ -29,7 +30,7 @@ const details = computed(() => issueDetailFields(props.type, props.workflow, pro
         <h2 v-if="creation">{{ $t('责任人与关注人') }}</h2>
         <slot name="people-feedback" />
         <div class="issue-responsibility-fields">
-          <label v-for="[key, label] in [['reporterId', '提报人'], ['businessOwnerId', '业务负责人'], ['qaOwnerId', '测试负责人'], ['acceptanceOwnerId', '业务验收人']]" :key="key">{{ $t(label) }}<AppSelect search-pinyin native-events :aria-label="$t(label)" :value="modelValue[key] || ''" @change="update(key, $event.target.value || null)"><option value="" :disabled="Boolean(modelValue.id) && ['reporterId','businessOwnerId'].includes(key)">{{ $t(['reporterId','businessOwnerId'].includes(key) ? '创建时默认本人' : '尚未指定') }}</option><option v-if="modelValue[key] && !members.some(person => person.userId === modelValue[key])" :value="modelValue[key]">{{ modelValue.people?.find(person => person.id === modelValue[key])?.displayName || $t('已指定成员') }}</option><option v-for="p in members" :key="p.userId" :value="p.userId">{{ p.displayName }}（{{ p.username }}）</option></AppSelect></label>
+          <label v-for="[key, label] in [['reporterId', '提报人'], ['businessOwnerId', '业务负责人'], ['qaOwnerId', '测试负责人'], ['acceptanceOwnerId', '业务验收人']]" :key="key"><span>{{ $t(label) }}<span v-if="key !== 'reporterId'" class="required-mark" aria-hidden="true"> *</span></span><AppSelect search-pinyin native-events :required="key !== 'reporterId'" :aria-label="$t(label)" :value="modelValue[key] || ''" @change="update(key, $event.target.value || null)"><option value="" :disabled="key !== 'reporterId' || Boolean(modelValue.id)">{{ $t(key === 'reporterId' && creation ? '创建时默认本人' : '请选择') }}</option><option v-if="modelValue[key] && !members.some(person => person.userId === modelValue[key])" :value="modelValue[key]">{{ modelValue.people?.find(person => person.id === modelValue[key])?.displayName || $t('已指定成员') }}</option><option v-for="p in members" :key="p.userId" :value="p.userId">{{ p.displayName }}（{{ p.username }}）</option></AppSelect></label>
         </div>
         <label>{{ $t("关注人") }}<AppSelect search-pinyin native-events :aria-label="$t('关注人')" multiple @change="update('watcherIds', [...$event.target.selectedOptions].map(option => option.value))"><option v-for="p in members" :key="p.userId" :value="p.userId" :selected="modelValue.watcherIds.includes(p.userId)">{{ p.displayName }}（{{ p.username }}）</option></AppSelect></label>
         <p class="field-hint">{{ $t('业务负责人对结果负责；当前处理人由流程决定；关注人仅用于关注，不生成待办。') }}</p>
@@ -46,4 +47,5 @@ const details = computed(() => issueDetailFields(props.type, props.workflow, pro
 </template>
 <style scoped>
 .issue-fields, .issue-fields-main, .issue-responsibility-fields { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.required-mark { color: var(--danger); }
 </style>

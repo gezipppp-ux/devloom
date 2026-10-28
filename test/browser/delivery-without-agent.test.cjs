@@ -34,7 +34,7 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,
     const output = path.resolve("state/browser/delivery-without-agent"); fs.mkdirSync(output, { recursive: true });
     const origin = `http://127.0.0.1:${server.httpServer.address().port}`, definition = recommendedWorkflow("requirement");
     let mode = "manual", rejectWrite = true, rejectPrevious = false, latestVersion = 2, actionLabel = "线下处理";
-    const issue = (id = "i") => ({ id, number: id === "i" ? 1 : 2, type: "requirement", title: id === "i" ? "客户列表支持跨页筛选与导出，保留筛选条件并补齐错误反馈" : id === "k" ? "首次送验的事项" : "另一条待处理事项", description: "已完成配置或开发，并提供实际核验记录。", acceptanceCriteria: "结果符合业务要求", priority: "normal", revision: 3, watcherIds: [],
+    const issue = (id = "i") => ({ id, number: id === "i" ? 1 : 2, type: "requirement", title: id === "i" ? "客户列表支持跨页筛选与导出，保留筛选条件并补齐错误反馈" : id === "k" ? "首次送验的事项" : "另一条待处理事项", description: "已完成配置或开发，并提供实际核验记录。", acceptanceCriteria: ["结果符合业务要求"], priority: "normal", revision: 3, watcherIds: [],
       status: "ready", statusName: "待开发", workflow: { version: 2, latestPublishedVersion: latestVersion, definition }, processing: { handlerId: "u", status: "ready" },
       deliverySubmission: { allowed: true, label: actionLabel, taskId: mode === "manual" ? null : "t", previous: mode === "rework" && id !== "k" ? { id: 'previous-' + id, revision: 4 } : null },
       assignmentAllowed: true, developerId: assigned.has(id) ? "u" : null, development: mode === "manual" && !assigned.has(id) ? null : { taskId: "t", executorId: "u", executorName: "处理人" }, people: [], availableTransitions: [],

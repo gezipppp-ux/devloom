@@ -6,7 +6,7 @@ const { selectRemoteBranch } = require("../support/remote-branch-select.cjs");
 
 async function verifyProjectTaskMerging({ page, origin, project, database, content, admin, output, clients }) {
   const issues = [];
-  for (const title of ["批量分配：搜索需求", "批量分配：搜索结果修复"]) issues.push(await content.createIssue(project.id, admin, { type: "requirement", title, qaOwnerId: admin.id }));
+  for (const title of ["批量分配：搜索需求", "批量分配：搜索结果修复"]) issues.push(await content.createIssue(project.id, admin, { type: "requirement", title, businessOwnerId: admin.id, qaOwnerId: admin.id, acceptanceOwnerId: admin.id }));
   const starts = () => clients.flatMap(client => client.calls).filter(call => call.method === "turn/start").length;
   const before = starts();
   await page.goto(`${origin}/projects/${project.id}?tab=issues&q=${encodeURIComponent("批量分配")}`);
@@ -114,7 +114,7 @@ async function verifyProjectTaskMerging({ page, origin, project, database, conte
   }
   assert.equal((await database.client.developmentTask.findUnique({ where: { id } })).status, "completed");
   assert.equal(await database.client.issueDevelopmentClaim.count({ where: { taskId: id } }), 0);
-  await content.createIssue(project.id, admin, { type: "requirement", title: "批量分配：尚未认领的事项" });
+  await content.createIssue(project.id, admin, { type: "requirement", title: "批量分配：尚未认领的事项", businessOwnerId: admin.id, qaOwnerId: admin.id, acceptanceOwnerId: admin.id });
   await page.goto(`${origin}/projects/${project.id}?tab=issues&q=${encodeURIComponent("批量分配")}`);
   for (const issue of issues) {
     const row = page.locator(".ui-data-table tbody tr").filter({ hasText: issue.title });

@@ -5,7 +5,7 @@ const { pageInput, revision, contentFields, assignmentFields, responsibilityFiel
 const { projectFileInput, previewMimeType } = require("../domain/project-files.cjs");
 const { presentMcpProject, presentMcpMember, presentMcpUpload, presentMcpIssue, presentMcpIssueResult } = require("./mcp-presenter.cjs");
 
-const markdownFields = ["description", "acceptanceCriteria", "reproductionSteps", "expectedResult", "actualResult"];
+const markdownFields = ["description", "reproductionSteps", "expectedResult", "actualResult"];
 const writeScopes = { create_release: "releases.write", create_issue: "issues.write", update_issue: "issues.write", delete_issue: "issues.delete", assign_issue: "issues.assign" };
 class McpProjectServices {
   constructor(database, { tokens, projects, content, lifecycle, development, workflows }) {
@@ -123,12 +123,12 @@ class McpProjectServices {
     const value = { ...input };
     for (const key of ["projectId", "issueId", "attachmentIds", "developerId"]) delete value[key];
     if (issueId) delete value.requestId;
-    for (const field of markdownFields) if (typeof value[field] === "string") {
-      value[field] = value[field].replace(/attachment:([a-zA-Z0-9_-]+)/g, (_match, id) => {
+    const replaceAttachments = text => text.replace(/attachment:([a-zA-Z0-9_-]+)/g, (_match, id) => {
         if (!ids.includes(id)) throw accountError("正文中的附件引用必须包含在 attachmentIds 中。", 400);
         return "/api/projects/" + projectId + "/files/" + id;
       });
-    }
+    for (const field of markdownFields) if (typeof value[field] === "string") value[field] = replaceAttachments(value[field]);
+    if (Array.isArray(value.acceptanceCriteria)) value.acceptanceCriteria = value.acceptanceCriteria.map(replaceAttachments);
     if (files.length) value.attachments = files.map(file => ({ ...file, data: file.data.toString("base64") }));
     return { value, ids };
   }

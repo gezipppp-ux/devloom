@@ -35,20 +35,20 @@
 
 - `requiredFields` 在相应流转时检查，不是要求创建时把未来交付材料全部填完。本技能的内容门禁独立执行，接口字段可省略不代表本技能可以省略。
 - 既有事项绑定创建时的流程版本，更新时不能用最新流程替代原绑定版本。
-- `reporterId`、`businessOwnerId` 默认当前账号；`qaOwnerId`、`acceptanceOwnerId` 默认未指定。开发负责人用 `developerId`，必须为有效且 `canAssign: true` 的成员，其他职责不要求具备开发资格。
+- `reporterId` 默认当前账号；创建必须明确提供 `businessOwnerId`、`qaOwnerId` 和 `acceptanceOwnerId`，三者可以相同，但不得猜测用户没有明确授权的人员安排。开发负责人用 `developerId`，必须为有效且 `canAssign: true` 的成员，其他职责不要求具备开发资格。
 - 设置他人职责、非空关注人或开发负责人需要额外指派权限。不要为了通过权限校验把用户指定的人换成当前账号。
 - 仅在用户要求且初始节点及相关门禁允许时，创建参数才携带 `developerId`；否则正常创建未指派事项。用户要求的指派被拒绝时说明具体门禁，不自行删掉指派要求重发。
 - MCP 不提供手动流转、启动开发、删除附件或版本编辑 / 归档接口。创建或指派只保存事项或生成待开发任务，不启动 Agent、不建立开发 worktree。需要这些后续动作时引导到控制台。
 
 ## 内容映射与默认值
 
-`create_issue` 结构必填为 `projectId`、`requestId`、`type`、`title`；`type` 是 `requirement` 或 `bug`。本技能还要求需求的描述与验收、Bug 的四项专用内容和修复验证达到正文规范。
+`create_issue` 结构必填为 `projectId`、`requestId`、`type`、`title`、`businessOwnerId`、`qaOwnerId`、`acceptanceOwnerId`；`type` 是 `requirement` 或 `bug`。本技能还要求需求的描述与验收、Bug 的四项专用内容和修复验证达到正文规范。
 
 | 字段 | 使用规则 |
 | --- | --- |
 | `title` | 非空，最多 200 字，表达具体变化或异常 |
 | `description` | 需求背景、范围、规则、实施依赖、原型清单；Bug 环境、影响和上下文 |
-| `acceptanceCriteria` | 需求 AC 用例或 Bug 修复验证，不只写“见正文” |
+| `acceptanceCriteria` | 非空字符串数组，每条为一项独立验收标准或 Bug 修复验证，不只写“见正文”；空数组清空 |
 | `reproductionSteps` | Bug 前置条件、编号步骤；需求仅在当前流程另有要求时补充 |
 | `expectedResult` / `actualResult` | Bug 的预期依据与观察事实分别填写 |
 | `priority` | `low / normal / high / urgent`，默认 `normal`；表示处理优先级 |
@@ -56,11 +56,11 @@
 | `releaseId` | 本项目 active 版本 UUID；不指定则未关联，不能把环境中的故障版本自动作为目标修复版本 |
 | `dueDate` | 有依据的截止日期 `YYYY-MM-DD`；未约定则省略，不按优先级编造排期 |
 | `tags` | 最多 12 个，每个最多 30 字；只用实际相关标签 |
-| 职责字段 | 使用已查询的有效成员 ID；没指定 QA、验收人或开发人时不要虚构安排 |
+| 职责字段 | 使用已查询的有效成员 ID；三项必填职责未明确时先询问；未指定开发人时不要虚构安排 |
 | `watcherIds` | 最多 50 个不同的有效成员 ID；必须在授权范围内添加 |
 | `attachmentIds` | 本次待绑定附件 ID，最多 20 个且合计不超过 20 MiB；与正文引用一致 |
 
-五个 Markdown 文本字段（description、acceptanceCriteria、reproductionSteps、expectedResult、actualResult）每项最多 60000 字。创建不能提交 `status`、`workflowVersionId`、处理人或执行状态。展示草稿时说明将使用的默认值，不把默认优先级说成业务已确认。
+四个 Markdown 文本字段（description、reproductionSteps、expectedResult、actualResult）每项最多 60000 字；`acceptanceCriteria` 为字符串数组，各条合计最多 60000 字，不要把整份 Markdown 清单编码为一个字符串。更新该字段会替换全部条目。创建不能提交 `status`、`workflowVersionId`、处理人或执行状态。展示草稿时说明将使用的默认值，不把默认优先级说成业务已确认。
 
 ## 附件：本地核验 → 临时 Token → HTTP 上传 → 事项绑定
 
@@ -132,7 +132,7 @@ $uploadResult = Invoke-RestMethod -Method Post -Uri $uploadUrl `
 
 更新已授权补充的事项时，先 `get_issue` 取得 `revision`，用 `update_issue({projectId,issueId,requestId,revision,...变更字段})`；只提交有意修改的字段。`type`、`status`、`developerId` 不能通过该工具修改。
 
-更新中省略字段表示保留；`tags`、`watcherIds` 是整组替换，先合并原有内容；`attachmentIds` 是追加，空数组不能删除附件。`releaseId`、`qaOwnerId`、`acceptanceOwnerId` 可用 null 清空，`dueDate` 可用 null 或空字符串清空，不能顺手重置用户未要求变更的字段。
+更新中省略字段表示保留；`tags`、`watcherIds` 是整组替换，先合并原有内容；`attachmentIds` 是追加，空数组不能删除附件。`releaseId` 可用 null 清空；三项必填职责不得清空，旧事项若缺失则编辑时须补齐，`dueDate` 可用 null 或空字符串清空，不能顺手重置用户未要求变更的字段。
 
 修订冲突时先确认原操作没有成功，再重新读取、比较并合并用户授权的变更；不得覆盖他人的修改。合并产生了新的实质决策时展示差异待确认，随后用新的 requestId 提交新操作。转派用 `assign_issue`，已有任务还需其 `taskRevision`；只允许尚未启动的独立事项任务转派，合并任务按控制台限制处理。
 

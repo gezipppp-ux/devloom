@@ -23,7 +23,7 @@ async function fixture(t, { count = 1, type = "requirement" } = {}) {
   const development = new ProjectDevelopmentServices(database, projects, { get: () => assert.fail("Agent must not start") });
   const workbench = new WorkbenchServices(database, projects);
   const issues = [];
-  for (let index = 0; index < count; index++) issues.push(await content.createIssue(project.id, users.product, { type, title: "Outcome " + index, description: "Configuration behavior", reproductionSteps: "Open the result", expectedResult: "Expected behavior", actualResult: "Original behavior", acceptanceCriteria: "The result can be verified.", ...(type === "bug" ? { acceptanceOwnerId: users.other.id } : {}) }));
+  for (let index = 0; index < count; index++) issues.push(await content.createIssue(project.id, users.product, { ...{ businessOwnerId: users.product.id, qaOwnerId: users.product.id, acceptanceOwnerId: users.product.id }, type, title: "Outcome " + index, description: "Configuration behavior", reproductionSteps: "Open the result", expectedResult: "Expected behavior", actualResult: "Original behavior", acceptanceCriteria: ["The result can be verified."], ...(type === "bug" ? { acceptanceOwnerId: users.other.id } : {}) }));
   const publish = (manual = false) => {
     const definition = recommendedWorkflow(type);
     if (manual) {

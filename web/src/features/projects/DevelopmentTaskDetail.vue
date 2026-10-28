@@ -10,6 +10,7 @@ import { statusLabel, appApi } from "../../shared/api/api.js";
 import { useResource } from "../../shared/api/use-resource.js";
 import FeedbackMessage from "../../shared/components/FeedbackMessage.vue";
 import MarkdownContent from "../../shared/components/MarkdownContent.vue";
+import AcceptanceCriteriaList from "./AcceptanceCriteriaList.vue";
 import AgentModelSettings from "../../shared/components/AgentModelSettings.vue";
 import PersonAvatar from "../../shared/components/PersonAvatar.vue";
 import StatusBadge from "../../shared/components/StatusBadge.vue";
@@ -457,7 +458,7 @@ async function submitConfirmation() {
               :key="field"
               ><template v-if="issue[field]"
                 ><h5>{{ $t(label) }}</h5>
-                <MarkdownContent :content="issue[field]" :images="issue.images || []" /></template
+                <AcceptanceCriteriaList v-if="field === 'acceptanceCriteria'" :items="issue[field]" :images="issue.images || []" /><MarkdownContent v-else :content="issue[field]" :images="issue.images || []" /></template
             ></template>
           </details>
           <button v-if="canEdit && task.issueIds.length > 1" class="development-quiet-button development-danger-text development-remove-issue" :disabled="busy" @click="confirm('remove', issue)">{{ $t('移出此任务') }}</button>

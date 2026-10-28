@@ -543,7 +543,7 @@ test("administrators manage all collaboration without membership or department a
   await f.projects.saveMember(f.project.id, f.admin, { userId: f.member.id, permissions: grants });
   const observer = await f.accounts.create({ username: "observer", password: "fixture-password", role: "admin", departmentId: f.department.id }, f.admin);
   await f.accounts.store.update(observer.id, { departmentId: null });
-  const issue = await content.createIssue(f.project.id, f.member, { type: "bug", title: "Visible bug" });
+  const issue = await content.createIssue(f.project.id, f.member, { ...{ businessOwnerId: f.member.id, qaOwnerId: f.member.id, acceptanceOwnerId: f.member.id }, type: "bug", title: "Visible bug" });
   await content.addComment(f.project.id, issue.id, f.member, { body: "Visible comment" });
   await content.addDeliverable(f.project.id, f.member, { reviewerId: f.member.id, issueId: issue.id, body: "Visible delivery" });
   const asset = await content.saveAsset(f.project.id, null, f.member, { type: "credential", title: "Credential metadata", secret: "hidden-secret" });
@@ -655,7 +655,7 @@ test("departmentless nonmember administrators can prepare their own space and cl
   await assert.rejects(f.projects.workspaceAuthorization(ready.workspaceId, f.admin, "session.view"), { statusCode: 404 });
   const { ProjectContentServices } = require("../../src/application/project-content-services.cjs");
   const { ProjectDevelopmentServices } = require("../../src/application/project-development-services.cjs");
-  const issue = await new ProjectContentServices(f.database, f.projects).createIssue(f.project.id, admin, { type: "bug", title: "Admin development" });
+  const issue = await new ProjectContentServices(f.database, f.projects).createIssue(f.project.id, admin, { ...{ businessOwnerId: admin.id, qaOwnerId: admin.id, acceptanceOwnerId: admin.id }, type: "bug", title: "Admin development" });
   const services = new ProjectDevelopmentServices(f.database, f.projects);
   const planned = await services.create(f.project.id, admin, { requestId: randomUUID(), issueIds: [issue.id] });
   assert.equal(planned.tasks[0].executorId, admin.id);

@@ -89,7 +89,6 @@ class ProjectContentServices {
   async createIssue(projectId, actor, input) {
     const data = issueInput(input);
     data.reporterId ??= actor.id;
-    data.businessOwnerId ??= actor.id;
     const requestId = issueRequestId(input);
     const attachments = issueAttachments(input);
     const permissions = ["issue.create", ...(data.watcherIds.length || responsibilityFields.some(field => data[field] && data[field] !== actor.id) ? ["issue.assign"] : [])];

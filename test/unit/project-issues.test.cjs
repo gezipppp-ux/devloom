@@ -4,11 +4,13 @@ const { defaultWorkflow } = require("../../src/domain/issue-workflows.cjs");
 const issue = (type, status) => ({ type, status, workflowVersion: { definition: defaultWorkflow(type) } });
 const { issueInput, issueTransition, issueTransitions, pageInput } = require("../../src/domain/project-issues.cjs");
 
+const responsibilities = { businessOwnerId: "business", qaOwnerId: "qa", acceptanceOwnerId: "acceptance" };
+
 test("issues validate typed content and never accept arbitrary execution or state fields", () => {
-  assert.equal(issueInput({ type: "requirement", title: "需求" }).type, "requirement");
-  assert.equal(issueInput({ type: "bug", title: "缺陷" }).type, "bug");
+  assert.equal(issueInput({ type: "requirement", title: "需求", ...responsibilities }).type, "requirement");
+  assert.equal(issueInput({ type: "bug", title: "缺陷", ...responsibilities }).type, "bug");
   assert.throws(() => issueInput({ type: "requirement", title: "需求", status: "done" }), /字段/);
-  assert.throws(() => issueInput({ type: "bug", title: "缺陷", watcherIds: ["a", "a"] }), /不同标识/);
+  assert.throws(() => issueInput({ type: "bug", title: "缺陷", ...responsibilities, watcherIds: ["a", "a"] }), /不同标识/);
   assert.throws(() => issueInput({ revision: 0, title: "修改" }, { type: "bug" }), /修订号/);
   assert.throws(() => pageInput({ limit: 1000 }), /分页/);
 });
@@ -20,4 +22,25 @@ test("default flows reserve delivery outcomes for events and require reasons for
   assert.equal(issueTransition(issue("bug", "verified"), { status: "closed", revision: 1 }).permission, "issue.accept");
   assert.throws(() => issueTransition(issue("bug", "closed"), { status: "pending", revision: 1 }), /原因/);
   assert.equal(issueTransition(issue("bug", "closed"), { status: "pending", revision: 1, reason: "再次出现" }).permission, "issue.transition");
+});
+
+
+test("create and edit require the three responsibility members while preserving omitted valid fields", () => {
+  for (const field of Object.keys(responsibilities)) {
+    const input = { type: "bug", title: "缺陷", ...responsibilities };
+    delete input[field];
+    assert.throws(() => issueInput(input), /业务负责人、测试负责人和业务验收人/);
+    assert.throws(() => issueInput({ revision: 1, [field]: null }, { type: "bug", ...responsibilities }), /职责成员无效/);
+  }
+  assert.deepEqual(issueInput({ revision: 1, title: "修改" }, { type: "bug", ...responsibilities }), { title: "修改" });
+  assert.throws(() => issueInput({ revision: 1, title: "修改" }, { type: "bug", ...responsibilities, qaOwnerId: null }), /业务负责人、测试负责人和业务验收人/);
+  assert.deepEqual(issueInput({ revision: 1, qaOwnerId: "qa" }, { type: "bug", ...responsibilities, qaOwnerId: null }), { qaOwnerId: "qa" });
+});
+
+test("acceptance criteria are ordered independent nonempty items", () => {
+  const input = { type: "requirement", title: "需求", ...responsibilities };
+  assert.deepEqual(issueInput({ ...input, acceptanceCriteria: [" first\n detail ", "second"] }).acceptanceCriteria, ["first\n detail", "second"]);
+  assert.deepEqual(issueInput({ ...input, acceptanceCriteria: [] }).acceptanceCriteria, []);
+  for (const acceptanceCriteria of ["- old list", [""], ["  "], [null], ["x".repeat(60001)]])
+    assert.throws(() => issueInput({ ...input, acceptanceCriteria }), /验收标准/);
 });

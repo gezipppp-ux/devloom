@@ -23,9 +23,9 @@ async function fixture(t, { definition, count = 1 } = {}) {
   const projects = new ProjectServices(database), content = new ProjectContentServices(database, projects);
   const development = new ProjectDevelopmentServices(database, projects, { get: () => assert.fail("No real Agent") });
   const workspace = await database.client.workspace.create({ data: { ownerUserId: users.dev.id, name: "Fake execution" } });
-  const issue = await content.createIssue(project.id, users.owner, { type: "requirement", title: "Handoff", qaOwnerId: users.qa.id, acceptanceOwnerId: users.owner.id });
+  const issue = await content.createIssue(project.id, users.owner, { ...{ businessOwnerId: users.owner.id, qaOwnerId: users.owner.id, acceptanceOwnerId: users.owner.id }, type: "requirement", title: "Handoff", qaOwnerId: users.qa.id, acceptanceOwnerId: users.owner.id });
   const issues = [issue];
-  for (let i = 1; i < count; i++) issues.push(await content.createIssue(project.id, users.owner, { type: "requirement", title: "Scope " + i, qaOwnerId: users.qa.id }));
+  for (let i = 1; i < count; i++) issues.push(await content.createIssue(project.id, users.owner, { ...{ businessOwnerId: users.owner.id, qaOwnerId: users.owner.id, acceptanceOwnerId: users.owner.id }, type: "requirement", title: "Scope " + i, qaOwnerId: users.qa.id }));
   const { tasks } = await development.create(project.id, users.dev, { requestId: randomUUID(), issueIds: issues.map(issue => issue.id) });
   const task = tasks.length === 1 ? tasks[0] : (await development.merge(project.id, users.dev, { requestId: randomUUID(), title: "Combined", tasks: tasks.map(({ id, revision }) => ({ id, revision })) })).task;
   const read = () => content.readIssue(project.id, issue.id, users.dev);
@@ -192,7 +192,7 @@ test("cancelled development can be explicitly claimed again without reviving its
 
 test("editing planned scope hands newly added issues to the executor and releases removed claims", async t => {
   const f = await fixture(t);
-  const issue = await f.content.createIssue(f.project.id, f.owner, { type: "requirement", title: "Replacement scope", qaOwnerId: f.qa.id });
+  const issue = await f.content.createIssue(f.project.id, f.owner, { ...{ businessOwnerId: f.owner.id, qaOwnerId: f.owner.id, acceptanceOwnerId: f.owner.id }, type: "requirement", title: "Replacement scope", qaOwnerId: f.qa.id });
   const result = await f.development.update(f.project.id, f.task.id, f.dev, { revision: f.task.revision, issueIds: [issue.id] });
   const updated = await f.content.readIssue(f.project.id, issue.id, f.dev);
   assert.equal(updated.status, "ready");

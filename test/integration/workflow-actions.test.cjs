@@ -26,7 +26,7 @@ async function fixture(t) {
   const workbench = new WorkbenchServices(database, projects);
   const accounts = new AccountServices(database); t.after(() => accounts.close());
   const workflows = new SystemWorkflowServices(database, accounts, projects);
-  const create = (extra = {}) => content.createIssue(project.id, users.owner, { type: "requirement", title: "Shared issue", qaOwnerId: users.qa.id, acceptanceOwnerId: users.owner.id, watcherIds: [users.watcher.id], ...extra });
+  const create = (extra = {}) => content.createIssue(project.id, users.owner, { ...{ businessOwnerId: users.owner.id, qaOwnerId: users.owner.id, acceptanceOwnerId: users.owner.id }, type: "requirement", title: "Shared issue", qaOwnerId: users.qa.id, acceptanceOwnerId: users.owner.id, watcherIds: [users.watcher.id], ...extra });
   return { database, project, projects, content, development, workbench, workflows, permissions, create, ...users };
 }
 
@@ -253,7 +253,7 @@ test("published workflow fields and delivery gates roll back a review with an in
   await assert.rejects(content.reviewDeliverable(project.id, delivery.id, qa, review), /验收标准/);
   assert.equal((await content.readDeliverable(project.id, delivery.id, qa)).delivery.status, "pending");
   issue = await content.readIssue(project.id, issue.id, owner);
-  await content.updateIssue(project.id, issue.id, owner, { revision: issue.revision, acceptanceCriteria: "Expected result" });
+  await content.updateIssue(project.id, issue.id, owner, { revision: issue.revision, acceptanceCriteria: ["Expected result"] });
   await content.reviewDeliverable(project.id, delivery.id, qa, review);
   assert.equal((await content.readIssue(project.id, issue.id, qa)).status, "done");
   assert.equal((await f.workbench.actions(qa)).total, 0);

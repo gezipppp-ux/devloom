@@ -42,7 +42,7 @@ function cancel() { if (!saving.value) void router.replace(returnLocation.value.
 async function attach({ files, insert }) { const markdown = await add(files); if (markdown) insert(markdown); }
 function removeFile(id) { removeAttachmentLinks(form, `/api/projects/${props.projectId}/files/${id}`); remove(id); }
 function create() {
-  if (saving.value || attachmentBusy.value || !can("issue.create")) return;
+  if (saving.value || attachmentBusy.value || !can("issue.create") || !can("issue.assign")) return;
   const location = route.fullPath, type = props.type;
   const query = returnLocation.value.name === "project" ? returnLocation.value.query : {};
   return save(`/projects/${props.projectId}/issues`, { requestId, type, ...issueFieldsInput(form, { assign: can("issue.assign") }), attachments: serialize() }, issue => {
@@ -60,7 +60,8 @@ function create() {
       <IssueFields creation :model-value="form" :type="type" :workflow="publishedWorkflow" can-edit :can-assign="can('issue.assign')" :disabled="saving" :context-key="`${projectId}/new/${requestId}`" :members="activeMembers" :releases="releases.data.value?.items || []" :images="images" :attachments="pending" :attachment-error="attachmentError" :attachment-busy="attachmentBusy" @update:model-value="Object.assign(form, $event)" @files="attach" @remove="removeFile">
         <template #people-feedback><p v-if="members.loading.value" role="status">{{ $t('正在读取可分派成员…') }}</p><FeedbackMessage :message="members.error.value" type="error" /><button v-if="members.error.value" type="button" :disabled="members.loading.value" @click="members.reload">{{ $t('重试读取成员') }}</button></template>
       </IssueFields>
-      <footer class="issue-create-footer"><button type="button" :disabled="saving" @click="cancel">{{ $t('取消') }}</button><button class="primary" type="submit" :disabled="saving || attachmentBusy">{{ saving ? $t('正在保存…') : $t('保存事项') }}</button></footer>
+      <p v-if="!can('issue.assign')" class="warning" role="status">{{ $t('新建事项需指定三位负责人，请联系管理员授予事项分派权限。') }}</p>
+      <footer class="issue-create-footer"><button type="button" :disabled="saving" @click="cancel">{{ $t('取消') }}</button><button class="primary" type="submit" :disabled="saving || attachmentBusy || !can('issue.assign')">{{ saving ? $t('正在保存…') : $t('保存事项') }}</button></footer>
     </form>
     <p v-else class="warning" role="status">{{ $t('当前项目只读或你没有新建事项权限。') }}</p>
   </section>

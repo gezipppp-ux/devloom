@@ -92,7 +92,7 @@ function developmentPrompt(issues, addition = false, templates = getPromptTempla
       const details = [
         `--- 项目事项 #${issue.number}（${issue.type === "bug" ? "Bug" : "需求"}，修订 ${issue.revision}）---`,
         issue.description,
-        issue.acceptanceCriteria ? `验收标准：\n${issue.acceptanceCriteria}` : "",
+        issue.acceptanceCriteria?.length ? `验收标准：\n${issue.acceptanceCriteria.map((item, index) => `${index + 1}. ${item}`).join("\n")}` : "",
         issue.reproductionSteps ? `复现步骤：\n${issue.reproductionSteps}` : "",
         issue.expectedResult ? `预期结果：\n${issue.expectedResult}` : "",
         issue.actualResult ? `实际结果：\n${issue.actualResult}` : "",

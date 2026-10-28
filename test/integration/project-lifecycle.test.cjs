@@ -24,7 +24,7 @@ test("release archive refuses unresolved delivery reviews even when its issues a
   const { database, actor, projectId, lifecycle, content } = await fixture(t);
   await installReviewWorkflow(database);
   const release = await lifecycle.saveRelease(projectId, null, actor, { name: "v3.1" });
-  const issue = await content.createIssue(projectId, actor, { type: "requirement", title: "Completed scope", releaseId: release.id });
+  const issue = await content.createIssue(projectId, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "Completed scope", releaseId: release.id });
   const delivery = await content.addDeliverable(projectId, actor, { issueId: issue.id, body: "Handover evidence", reviewerId: actor.id });
   // Seed an inconsistent terminal issue to exercise archive defense independently of workflow gates.
   await database.client.projectIssue.update({ where: { id: issue.id }, data: { status: "done" } });
@@ -59,7 +59,7 @@ test("release creation and editing reject invalid names without changing persist
 test("release archive checks continued execution after task completion and retained deletion summaries", async t => {
   const { database, actor, projectId, lifecycle, content } = await fixture(t);
   let release = await lifecycle.saveRelease(projectId, null, actor, { name: "v3.2" });
-  let issue = await content.createIssue(projectId, actor, { type: "requirement", title: "Finished scope", releaseId: release.id });
+  let issue = await content.createIssue(projectId, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "Finished scope", releaseId: release.id });
   issue = await content.transitionIssue(projectId, issue.id, actor, { revision: issue.revision, transitionId: "planned_rejected", reason: "Finished" });
   const workspace = await database.client.workspace.create({ data: { name: "Continued session", ownerUserId: actor.id } });
   const snapshot = { kind: "issues", issues: [issue], additions: [] };
@@ -78,7 +78,7 @@ test("release archive checks continued execution after task completion and retai
 test("release archive gates unfinished work and protects all issue write paths until restore", async t => {
   const { actor, projectId, lifecycle, content } = await fixture(t);
   let release = await lifecycle.saveRelease(projectId, null, actor, { name: "v0.2" });
-  const request = { requestId: randomUUID(), type: "bug", title: "版本缺陷", releaseId: release.id };
+  const request = { requestId: randomUUID(), type: "bug", title: "版本缺陷", releaseId: release.id, businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id };
   let issue = await content.createIssue(projectId, actor, request);
   const asset = await content.saveAsset(projectId, null, actor, { type: "document", title: "版本文档", issueIds: [issue.id] });
   await assert.rejects(lifecycle.archiveRelease(projectId, release.id, actor, { revision: release.revision }, true), /未完成/);
@@ -97,7 +97,7 @@ test("release archive gates unfinished work and protects all issue write paths u
     () => content.addComment(projectId, issue.id, actor, { body: "评论" }),
     () => content.addDeliverable(projectId, actor, { reviewerId: actor.id, issueId: issue.id, body: "交付" }),
     () => content.uploadFile(projectId, "issues", issue.id, actor, { name: "readme.txt", mimeType: "text/plain", data: Buffer.from("data") }),
-    () => content.createIssue(projectId, actor, { type: "bug", title: "新事项", releaseId: release.id }),
+    () => content.createIssue(projectId, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "bug", title: "新事项", releaseId: release.id }),
     () => content.saveAsset(projectId, asset.id, actor, { revision: asset.revision, issueIds: [] }),
     () => content.saveAsset(projectId, null, actor, { type: "document", title: "新关联", issueIds: [issue.id] }),
   ]) await assert.rejects(action(), /归档/);
@@ -110,7 +110,7 @@ test("release archive racing an issue reopen cannot leave an archived unfinished
   const { actor, projectId, lifecycle, content } = await fixture(t);
   for (let attempt = 0; attempt < 3; attempt++) {
     const release = await lifecycle.saveRelease(projectId, null, actor, { name: `v0.4.${attempt}` });
-    let issue = await content.createIssue(projectId, actor, { type: "bug", title: "并发重开", releaseId: release.id });
+    let issue = await content.createIssue(projectId, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "bug", title: "并发重开", releaseId: release.id });
     issue = await content.transitionIssue(projectId, issue.id, actor, { revision: issue.revision, transitionId: "pending_cancelled", reason: "暂不处理" });
     const results = await Promise.allSettled([
       lifecycle.archiveRelease(projectId, release.id, actor, { revision: release.revision }, true),
@@ -144,12 +144,12 @@ test("release progress uses each issue's recorded workflow and excludes other pr
   const { database, actor, projectId, lifecycle, content } = await fixture(t);
   const release = await lifecycle.saveRelease(projectId, null, actor, { name: "v6.0" });
   const otherRelease = await lifecycle.saveRelease(projectId, null, actor, { name: "v6.1" });
-  const requirement = await content.createIssue(projectId, actor, { type: "requirement", title: "已完成需求", releaseId: release.id });
-  const bug = await content.createIssue(projectId, actor, { type: "bug", title: "已完成缺陷", releaseId: release.id });
-  const cancelled = await content.createIssue(projectId, actor, { type: "bug", title: "取消缺陷", releaseId: release.id });
-  await content.createIssue(projectId, actor, { type: "requirement", title: "未完成需求", releaseId: release.id });
-  await content.createIssue(projectId, actor, { type: "requirement", title: "其他版本", releaseId: otherRelease.id });
-  await content.createIssue(projectId, actor, { type: "requirement", title: "未排期" });
+  const requirement = await content.createIssue(projectId, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "已完成需求", releaseId: release.id });
+  const bug = await content.createIssue(projectId, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "bug", title: "已完成缺陷", releaseId: release.id });
+  const cancelled = await content.createIssue(projectId, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "bug", title: "取消缺陷", releaseId: release.id });
+  await content.createIssue(projectId, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "未完成需求", releaseId: release.id });
+  await content.createIssue(projectId, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "其他版本", releaseId: otherRelease.id });
+  await content.createIssue(projectId, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "未排期" });
   await database.client.projectIssue.update({ where: { id: requirement.id }, data: { status: "implemented" } });
   await database.client.projectIssue.update({ where: { id: bug.id }, data: { status: "closed" } });
   await database.client.projectIssue.update({ where: { id: cancelled.id }, data: { status: "cancelled" } });

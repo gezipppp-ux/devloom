@@ -6,6 +6,7 @@ const SEVERITIES = ["minor", "normal", "major", "critical"];
 const contentFields = ["releaseId", "title", "description", "priority", "acceptanceCriteria", "reproductionSteps", "expectedResult", "actualResult", "severity", "dueDate", "tags"];
 const responsibilityFields = ["reporterId", "businessOwnerId", "qaOwnerId", "acceptanceOwnerId"];
 const assignmentFields = ["watcherIds", ...responsibilityFields];
+const requiredResponsibilityFields = ["businessOwnerId", "qaOwnerId", "acceptanceOwnerId"];
 
 function text(value, label, limit, { required = false } = {}) {
   if (typeof value !== "string" || value.length > limit || (required && !value.trim()))
@@ -43,9 +44,10 @@ function issueInput(input, current) {
   object(input, ["attachments", ...contentFields, ...assignmentFields, ...(current ? ["revision"] : ["type", "requestId"])]);
   if (current) revision(input.revision);
   const type = current?.type || choice(input.type, ISSUE_TYPES, "事项类型");
-  const value = current ? {} : { type, title: "", description: "", priority: "normal", severity: "normal", developerId: null, watcherIds: [], acceptanceCriteria: "", reproductionSteps: "", expectedResult: "", actualResult: "" };
+  const value = current ? {} : { type, title: "", description: "", priority: "normal", severity: "normal", developerId: null, watcherIds: [], acceptanceCriteria: [], reproductionSteps: "", expectedResult: "", actualResult: "" };
   for (const field of contentFields) if (Object.hasOwn(input, field)) {
-    value[field] = field === "dueDate" ? issueDueDate(input[field])
+    value[field] = field === "acceptanceCriteria" ? issueCriteriaItems(input[field])
+      : field === "dueDate" ? issueDueDate(input[field])
       : field === "tags" ? issueTags(input[field])
       : field === "releaseId" ? (input[field] === null ? null : identifier(input[field], "发布版本"))
       : field === "priority" ? choice(input[field], PRIORITIES, "优先级")
@@ -55,9 +57,17 @@ function issueInput(input, current) {
   if (!current && !value.title) throw accountError("请填写事项标题。", 400);
   if (Object.hasOwn(input, "watcherIds")) value.watcherIds = identifiers(input.watcherIds, "关注人");
   for (const field of responsibilityFields) if (Object.hasOwn(input, field)) {
-    value[field] = input[field] === null && ["qaOwnerId", "acceptanceOwnerId"].includes(field) ? null : identifier(input[field], "职责成员");
+    value[field] = identifier(input[field], "职责成员");
   }
+  const missing = requiredResponsibilityFields.filter(field => !(Object.hasOwn(value, field) ? value[field] : current?.[field]));
+  if (missing.length) throw accountError("请填写业务负责人、测试负责人和业务验收人。", 400);
   return value;
+}
+function issueCriteriaItems(value) {
+  if (!Array.isArray(value)) throw accountError("验收标准需为逐条列表。", 400);
+  const items = value.map(item => text(item, "验收标准", 60000, { required: true }));
+  if (items.reduce((sum, item) => sum + item.length, 0) > 60000) throw accountError("验收标准合计最多 60000 字。", 400);
+  return items;
 }
 function issueDueDate(value) {
   if (value === null || value === "") return null;

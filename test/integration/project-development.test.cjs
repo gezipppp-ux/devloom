@@ -67,7 +67,7 @@ async function fixture(t) {
   } };
   const services = new ProjectDevelopmentServices(database, projects, workspaces);
   const issue = async title => {
-    const created = await content.createIssue(project.id, actor, { type: "requirement", title, description: `${title}内容`, acceptanceCriteria: "明确验收标准" });
+    const created = await content.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title, description: `${title}内容`, acceptanceCriteria: ["明确验收标准"] });
     await database.client.projectIssue.update({ where: { id: created.id }, data: { status: "planned" } });
     return { ...created, status: "planned" };
   };
@@ -139,7 +139,7 @@ test("development snapshots expose verified inline image mappings without rewrit
   const selected = await issue("图片快照");
   const fileId = randomUUID(), source = `/api/projects/${project.id}/files/${fileId}`;
   const imported = "https://example.test/requirement/original.png";
-  await content.updateIssue(project.id, selected.id, actor, { revision: 1, description: `![原图](${source})\n![导入图片](${imported})`, acceptanceCriteria: `![验收图片](${source})`, attachments: [{ id: fileId, name: "screenshot.png", mimeType: "image/png", data: png.toString("base64") }] });
+  await content.updateIssue(project.id, selected.id, actor, { revision: 1, description: `![原图](${source})\n![导入图片](${imported})`, acceptanceCriteria: [`![验收图片](${source})`], attachments: [{ id: fileId, name: "screenshot.png", mimeType: "image/png", data: png.toString("base64") }] });
   await database.client.issueSource.create({ data: { projectId: project.id, issueId: selected.id, channel: "manual", scope: "fixture", type: "requirement", externalId: selected.id, snapshot: { projectImages: [{ source: imported, fileId }] } } });
   const { tasks: [task] } = await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [selected.id] });
   const before = (await services.store.task(project.id, task.id)).snapshot;
@@ -448,7 +448,7 @@ async function launch(services, projectId, actor, input, startInput = {}) {
 test("assigning separate issues and merging my plans preserves sources and starts exactly one session", async t => {
   const { database, actor, other, project, services, calls, content, issue } = await fixture(t);
   const requirement = await issue("合并需求");
-  const bug = await content.createIssue(project.id, actor, { type: "bug", title: "合并缺陷", reproductionSteps: "复现步骤" });
+  const bug = await content.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "bug", title: "合并缺陷", reproductionSteps: "复现步骤" });
   const input = { requestId: randomUUID(), issueIds: [requirement.id, bug.id], executorId: actor.id };
   const { tasks } = await services.create(project.id, other, input);
   assert.equal(tasks.length, 2);
@@ -721,7 +721,7 @@ test("global workflow publication preserves planned task issue versions and appl
   t.after(() => accounts.close());
   const admin = await database.client.user.create({ data: { username: "workflow-admin", displayName: "系统流程管理员", passwordHash: "unused", role: "admin" } });
   const workflows = new SystemWorkflowServices(database, accounts, services.projects);
-  const before = await content.createIssue(project.id, actor, { type: "requirement", title: "发布前规划" });
+  const before = await content.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "发布前规划" });
   const beforeTask = (await services.create(project.id, actor, { requestId: randomUUID(), issueIds: [before.id] })).tasks[0];
   let { workflow } = await workflows.readWorkflow("requirement", admin);
   const definition = {
@@ -743,8 +743,8 @@ test("global workflow publication preserves planned task issue versions and appl
   const nextProject = await database.client.project.create({ data: { name: "统一流程项目", directoryName: "repo-other", directoryKey: "repo-other", ownerUserId: actor.id, remoteUrl: project.remoteUrl } });
   const permissions = projectPermissionCatalog.filter(entry => entry.scope === "project").map(entry => entry.id);
   await database.client.projectMember.create({ data: { projectId: nextProject.id, userId: actor.id, permissions } });
-  const firstNew = await content.createIssue(project.id, actor, { type: "requirement", title: "原项目新流程事项" });
-  const secondNew = await content.createIssue(nextProject.id, actor, { type: "requirement", title: "另一项目新流程事项" });
+  const firstNew = await content.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "原项目新流程事项" });
+  const secondNew = await content.createIssue(nextProject.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "另一项目新流程事项" });
   assert.equal(firstNew.status, "triage");
   assert.equal(secondNew.status, "triage");
   const firstRecord = await database.client.projectIssue.findUnique({ where: { id: firstNew.id } });

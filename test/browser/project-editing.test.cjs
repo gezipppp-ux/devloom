@@ -13,7 +13,7 @@ async function main() {
   await require("./operation-feedback.test.cjs").operationFeedbackChecks();
   const { createServer } = await import("vite"), { default: vue } = await import("@vitejs/plugin-vue");
   const project = { id: "p", name: "原项目", description: "原说明", ownerUserId: "u", revision: 1, settings: {} };
-  const issue = { id: "i", number: 1, type: "requirement", title: "原事项", description: "原描述", revision: 1, priority: "normal", status: "ready", statusName: "规划中", watcherIds: [], developerId: null, acceptanceCriteria: "", availableTransitions: [{ id: "develop", name: "开发中", permission: "issue.edit", requiresReason: true }], people: [] };
+  const issue = { id: "i", number: 1, type: "requirement", title: "原事项", description: "原描述", revision: 1, priority: "normal", status: "ready", statusName: "规划中", watcherIds: [], developerId: null, businessOwnerId: "u", qaOwnerId: "u", acceptanceOwnerId: "u", acceptanceCriteria: [], availableTransitions: [{ id: "develop", name: "开发中", permission: "issue.edit", requiresReason: true }], people: [] };
   const asset = { id: "a", title: "测试资产", type: "note", environment: "test", category: "", tags: ["参考"], content: "内容", ownerId: "u", issueIds: ["i"], expiresAt: "2027-01-01T00:00:00Z", revision: 32, people: [{ id: "u", username: "product-member", displayName: "产品成员" }] };
   const permissions = ["asset.view", "asset.edit", "issue.view", "issue.edit", "issue.accept", "collaboration.view", "comment.create", "deliverable.create", "session.start"];
   const source = `import {i18n} from '/src/shared/i18n/index.js';

@@ -496,7 +496,7 @@ model ProjectIssue {
   acceptanceOwnerId  String?  @map("acceptance_owner_id")
   watcherIds         String[] @default([]) @map("watcher_ids")
   actions            WorkAction[]
-  acceptanceCriteria String   @default("") @map("acceptance_criteria")
+  acceptanceCriteria String[] @default([]) @map("acceptance_criteria")
   reproductionSteps  String   @default("") @map("reproduction_steps")
   expectedResult     String   @default("") @map("expected_result")
   actualResult       String   @default("") @map("actual_result")
@@ -541,6 +541,35 @@ model IssueSource {
   @@unique([projectId, channel, scope, type, externalId])
   @@unique([projectId, issueId])
   @@map("issue_sources")
+}
+
+// Immutable source copies from the acceptance criteria conversion; not used by runtime flows.
+model AcceptanceCriteriaMigrationBackup {
+  issueId String @id @map("issue_id")
+  originalText String @map("original_text")
+  @@map("acceptance_criteria_migration_backup")
+}
+
+model AcceptanceCriteriaTaskBackup {
+  id String @id
+  snapshot Json
+  @@map("acceptance_criteria_task_backup")
+}
+
+model AcceptanceCriteriaTaskLinkBackup {
+  taskId String @map("task_id")
+  issueId String @map("issue_id")
+  snapshot Json
+  @@id([taskId, issueId])
+  @@map("acceptance_criteria_task_link_backup")
+}
+
+model AcceptanceCriteriaMcpReceiptBackup {
+  userId String @map("user_id")
+  requestId String @map("request_id")
+  result Json
+  @@id([userId, requestId])
+  @@map("acceptance_criteria_mcp_receipt_backup")
 }
 
 model IssueComment {

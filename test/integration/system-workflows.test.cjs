@@ -30,7 +30,7 @@ test("system workflows are migration-seeded, shared across projects and keep imm
   const { database, actor, admin, projects, workflows, content } = await fixture(t);
   assert.equal(await database.client.systemWorkflow.count(), 2);
   assert.equal(await database.client.systemWorkflowVersion.count(), 2);
-  const before = await Promise.all(projects.map(project => content.createIssue(project.id, actor, { type: "requirement", title: "发布前事项" })));
+  const before = await Promise.all(projects.map(project => content.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "发布前事项" })));
   assert.equal(before[0].workflowVersionId, before[1].workflowVersionId);
   let { workflow } = await workflows.readWorkflow("requirement", admin);
   const definition = { nodes: [{ id: "triage", name: "分诊", kind: "initial", allowDevelopment: false }, { id: "resolved", name: "完成", kind: "completed", allowDevelopment: false }], transitions: [{ id: "resolve", name: "完成确认", from: "triage", to: "resolved", permission: "issue.accept", requiresReason: true }] };
@@ -48,7 +48,7 @@ test("system workflows are migration-seeded, shared across projects and keep imm
     assert.equal(old.workflow.version, 1);
     assert.equal(old.workflowVersionId, before[index].workflowVersionId);
   }
-  const after = await Promise.all(projects.map(project => content.createIssue(project.id, actor, { type: "requirement", title: "发布后事项" })));
+  const after = await Promise.all(projects.map(project => content.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "发布后事项" })));
   assert.equal(after[0].workflowVersionId, after[1].workflowVersionId);
   assert.notEqual(after[0].workflowVersionId, before[0].workflowVersionId);
   assert.equal(after[0].statusName, "分诊");
@@ -64,12 +64,12 @@ test("all configured issue text fields can satisfy an immutable published workfl
     let { workflow } = await workflows.readWorkflow(type, admin);
     ({ workflow } = await workflows.saveWorkflow(type, admin, { revision: workflow.revision, definition }));
     ({ workflow } = await workflows.saveWorkflow(type, admin, { revision: workflow.revision }, true));
-    let issue = await content.createIssue(projects[0].id, actor, { type, title: "流程要求的文本资料" });
+    let issue = await content.createIssue(projects[0].id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type, title: "流程要求的文本资料" });
     definition.transitions[0].requiredFields = [];
     ({ workflow } = await workflows.saveWorkflow(type, admin, { revision: workflow.revision, definition }));
     await workflows.saveWorkflow(type, admin, { revision: workflow.revision }, true);
     await assert.rejects(content.transitionIssue(projects[0].id, issue.id, actor, { revision: issue.revision, transitionId: "finish" }), /资料尚未填写/);
-    issue = await content.updateIssue(projects[0].id, issue.id, actor, { revision: issue.revision, [field]: "明确且完整的资料" });
+    issue = await content.updateIssue(projects[0].id, issue.id, actor, { revision: issue.revision, [field]: field === "acceptanceCriteria" ? ["明确且完整的资料"] : "明确且完整的资料" });
     assert.deepEqual(issue.workflow.definition.transitions[0].requiredFields, [field]);
     assert.equal((await content.transitionIssue(projects[0].id, issue.id, actor, { revision: issue.revision, transitionId: "finish" })).status, "done");
   }

@@ -18,7 +18,7 @@ test("workbench aggregates only authorized content and delivery reviews are atom
   const project = await database.client.project.create({ data: { name: "Visible", directoryName: "visible", directoryKey: "visible", remoteUrl: "https://example.test/repo.git", ownerUserId: actor.id } });
   await database.client.projectMember.create({ data: { projectId: project.id, userId: actor.id, permissions } });
   const projects = new ProjectServices(database), content = new ProjectContentServices(database, projects), workbench = new WorkbenchServices(database, projects);
-  const issue = await content.createIssue(project.id, actor, { type: "requirement", title: "Responsive search", dueDate: "2026-12-10", tags: ["UI"], acceptanceCriteria: "- Search works\n- Mobile fits" });
+  const issue = await content.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "Responsive search", dueDate: "2026-12-10", tags: ["UI"], acceptanceCriteria: ["Search works", "Mobile fits"] });
   assert.equal((await workbench.list("issues", actor, { query: "UI" })).total, 1);
   assert.equal((await workbench.list("issues", outsider)).total, 0);
   await assert.rejects(workbench.list("issues", outsider, { projectId: project.id }), { statusCode: 403 });

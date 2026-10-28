@@ -38,7 +38,7 @@
 
 列表默认每页 30 条，最多 100 条，按 nextOffset 继续。list_releases 省略 projectIds 时按权限遍历项目；显式提供不可访问项目时整次报错，不伪装为空列表。
 
-create_issue / update_issue 字段与事项表单同步：title、description、releaseId、priority、acceptanceCriteria、reproductionSteps、expectedResult、actualResult、severity、dueDate、tags，以及下述职责和关注人。dueDate 接受有效 YYYY-MM-DD、null 或空字符串（清空）；tags 最多 12 项，每项最多 30 字，去首尾空白后非空并去重，更新替换整组。省略字段不改变已有值。type 仅创建时使用，developerId 仅创建或 assign_issue 使用；status、workflowVersionId、执行状态不接受直接赋值。create_release 的 targetDate 使用相同日历日期表达，不转换用户时区。
+create_issue / update_issue 字段与事项表单同步：title、description、releaseId、priority、acceptanceCriteria、reproductionSteps、expectedResult、actualResult、severity、dueDate、tags，以及下述职责和关注人。acceptanceCriteria 为非空字符串组成的数组，顺序即展示与验收顺序，总计最多 60000 字；更新替换整组，空数组清空。dueDate 接受有效 YYYY-MM-DD、null 或空字符串（清空）；tags 最多 12 项，每项最多 30 字，去首尾空白后非空并去重，更新替换整组。创建时必须提供业务负责人、测试负责人和业务验收人；更新时三项职责不得清空，历史事项缺失时须先补齐。省略字段不改变已有值。type 仅创建时使用，developerId 仅创建或 assign_issue 使用；status、workflowVersionId、执行状态不接受直接赋值。create_release 的 targetDate 使用相同日历日期表达，不转换用户时区。
 
 get_issue_workflow 复用 SystemWorkflowServices.readPublished，要求 Token read、项目范围及 issue.view，返回前重新鉴权。流程 requiredFields 在相应流转时生效；创建使用当前已发布版本和初始节点，带 developerId 时还需满足该节点的分派与流转门禁。MCP 不提供手动状态流转或启动开发工具；仅发布不会启动 Agent，分派也只创建待开发任务。
 

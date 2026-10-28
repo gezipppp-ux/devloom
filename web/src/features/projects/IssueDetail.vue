@@ -16,10 +16,11 @@ import EditConflict from "./EditConflict.vue";
 import ProjectFiles from "./ProjectFiles.vue";
 import IssueDiscussion from "./IssueDiscussion.vue";
 import IssueFields from "./IssueFields.vue";
+import AcceptanceCriteriaList from "./AcceptanceCriteriaList.vue";
 import MarkdownContent from "../../shared/components/MarkdownContent.vue";
 import IssueInformation from "./IssueInformation.vue";
 import IssueStatusBadge from "./IssueStatusBadge.vue";
-import {issueDetailFields, issueFieldsInput, removeAttachmentLinks} from "./issue-fields.js";
+import {issueDetailFields, issueFieldsInput, missingIssueResponsibilities, removeAttachmentLinks} from "./issue-fields.js";
 import {useProjectAttachments} from "./use-project-attachments.js";
 
 const props = defineProps({
@@ -75,6 +76,7 @@ function edit() {
   latest.value = null;
   Object.assign(form, data.value);
   form.watcherIds = [...data.value.watcherIds];
+  form.acceptanceCriteria = [...data.value.acceptanceCriteria];
   editing.value = true;
 }
 
@@ -202,8 +204,9 @@ function person(id) {
                            :releases="releases.data.value?.items || []" :images="images" :attachments="pending"
                            :attachment-error="attachmentError" :attachment-busy="attachmentBusy"
                            @update:model-value="Object.assign(form, $event)" @files="attach" @remove="removeFile"/>
+              <p v-if="!can('issue.assign') && missingIssueResponsibilities(form)" class="warning" role="status">{{ $t('此事项缺少必填负责人，请联系有事项分派权限的成员补齐。') }}</p>
               <div class="actions">
-                <button type="submit" class="primary" :disabled="saving || attachmentBusy || Boolean(latest)">
+                <button type="submit" class="primary" :disabled="saving || attachmentBusy || Boolean(latest) || (!can('issue.assign') && missingIssueResponsibilities(form))">
                   {{ saving ? $t("正在保存…") : $t("保存事项") }}
                 </button>
                 <button type="button" :disabled="saving" @click="cancelEdit">{{ $t("取消编辑") }}</button>
@@ -226,9 +229,7 @@ function person(id) {
                 <MarkdownContent v-if="data.description" :content="data.description" :images="data.images || []"/>
                 <p v-else class="muted">{{ $t("暂无描述。") }}</p></section>
               <section v-if="data.type === 'requirement'" class="issue-content-block"><h4>{{ $t("验收标准") }}</h4>
-                <MarkdownContent v-if="data.acceptanceCriteria" :content="data.acceptanceCriteria"
-                                 :images="data.images || []"/>
-                <p v-else class="muted">{{ $t("尚未填写。") }}</p></section>
+                <AcceptanceCriteriaList :items="data.acceptanceCriteria" :images="data.images || []" /></section>
               <template v-else>
                 <section class="issue-content-block"><h4>{{ $t("复现步骤") }}</h4>
                   <MarkdownContent v-if="data.reproductionSteps" :content="data.reproductionSteps"
@@ -244,7 +245,8 @@ function person(id) {
               <section v-for="[key, label] in extraDetails" :key="key" class="issue-content-block"><h4>{{
                   $t(label)
                 }}</h4>
-                <MarkdownContent v-if="data[key]" :content="data[key]" :images="data.images || []"/>
+                <AcceptanceCriteriaList v-if="key === 'acceptanceCriteria'" :items="data[key]" :images="data.images || []" />
+                <MarkdownContent v-else-if="data[key]" :content="data[key]" :images="data.images || []"/>
                 <p v-else class="muted">{{ $t("尚未填写。") }}</p></section>
             </div>
           </section>

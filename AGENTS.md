@@ -14,3 +14,10 @@ Standalone Node.js 22.13+ CommonJS backend and Vue 3 Web console for requirement
 - Local credentials, uploads, runs, logs and screenshots are ignored. Never commit `config/*.local.json`, `state/` or `runs/`.
 - Preserve existing session identities, recorded worktree paths and source state. Do not move business worktrees when changing application installation paths.
 - Use Conventional Commits with Chinese descriptions.
+
+## 代码简洁性约定
+
+1. 防过度防御：几乎不会发生的边界或并发问题，讲清发生概率并经用户确认后再增加处理；严禁为“理论上更稳”私自膨胀代码。
+2. 入口单次校验：外部数据只在边界校验一次，内部靠类型系统流转，禁止层层重复判断。
+3. 拒绝提前抽象：单次使用的逻辑就近内联，不随意提前拆分无意义的 helper。
+4. 控制复杂度：非必要不用 try/catch，能在单个函数中清晰处理的逻辑不要强行拆分。

@@ -11,8 +11,8 @@ const fields = {
   title: z.string().min(1).max(200).optional(), description: text.optional(), releaseId: id.nullable().optional(),
   priority: z.enum(PRIORITIES).optional(), dueDate: date,
   tags: z.array(z.string().min(1).max(30)).max(12).optional().describe("最多 12 个标签，每项最多 30 字；去除首尾空白后去重；空数组清空，省略保留。"),
-  acceptanceCriteria: text.optional(), reproductionSteps: text.optional(), expectedResult: text.optional(), actualResult: text.optional(),
-  reporterId: id.optional(), businessOwnerId: id.optional(), qaOwnerId: id.nullable().optional(), acceptanceOwnerId: id.nullable().optional(),
+  acceptanceCriteria: z.array(z.string().min(1).max(60000)).optional().describe("逐条验收标准，按顺序提供非空字符串；空数组表示清空，总计最多 60000 字。"), reproductionSteps: text.optional(), expectedResult: text.optional(), actualResult: text.optional(),
+  reporterId: id.optional(), businessOwnerId: id.optional(), qaOwnerId: id.optional(), acceptanceOwnerId: id.optional(),
   severity: z.enum(SEVERITIES).optional(), watcherIds: z.array(id).max(50).optional(),
   attachmentIds: z.array(id).max(20).optional().describe("先通过受鉴权 HTTP 上传；正文用 attachment:附件ID 引用。不可传本地路径或 base64。"),
 };
@@ -40,7 +40,7 @@ const commands = [
   }, "searchIssues"],
   ["get_issue", "读取事项、修订号、开发任务修订号、正式附件与网页链接。", { projectId: id, issueId: id }, "getIssue"],
   ["create_issue", "原子发布包含正文与附件的需求或 Bug，可指定一名开发负责人和多名关注人。指派只创建待开发任务，不启动 Agent。", {
-    ...fields, projectId: id, requestId, type: z.enum(ISSUE_TYPES), title: z.string().min(1).max(200), developerId: id.optional(),
+    ...fields, projectId: id, requestId, type: z.enum(ISSUE_TYPES), title: z.string().min(1).max(200), businessOwnerId: id, qaOwnerId: id, acceptanceOwnerId: id, developerId: id.optional(),
   }, "createIssue", "issues.write"],
   ["update_issue", "编辑事项及补充 HTTP 上传的附件。携带 get_issue 返回的 revision，冲突后重新读取。", {
     ...fields, projectId: id, issueId: id, requestId, revision: z.number().int().min(1),
@@ -59,7 +59,7 @@ const commands = [
 
 function createMcpServer({ context, tokens, services, isBusy, origin }) {
   const server = new McpServer({ name: "devloom", version: "1.0.0" }, {
-    instructions: "先查询项目、版本、成员和 get_issue_workflow 已发布流程，发布前查重。事项支持截止日期 dueDate、标签 tags，版本支持目标日期 targetDate。发布、编辑及删除使用稳定 UUIDv4 requestId，超时查询原请求或原样重试。" +
+    instructions: "先查询项目、版本、成员和 get_issue_workflow 已发布流程，发布前查重。创建事项须指定业务负责人、测试负责人和业务验收人，编辑后也必须保留三者。事项支持截止日期 dueDate、标签 tags，版本支持目标日期 targetDate。发布、编辑及删除使用稳定 UUIDv4 requestId，超时查询原请求或原样重试。" +
       "delete_issue 需要独立 issues.delete scope 和项目 issue.delete 权限；先 get_issue 核对目标和 revision，仅按用户明确授权删除。已关联开发任务或交付的事项不能删除，归档事项只读。" +
       "附件上传前调用 create_upload_token({projectId}) 获取最长 24 小时有效的临时上传 Token；MCP Token 不能直接上传。" +
       "使用 create_upload_token 返回的 uploadUrl 添加 name 查询参数，POST 原始二进制；地址须与 whoami.runtime.siteOrigin 同源。" +

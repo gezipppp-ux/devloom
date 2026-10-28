@@ -25,7 +25,7 @@ const powershell = computed(() => [
 ].join("\n"));
 const issueExample = JSON.stringify({ projectId: "<PROJECT_ID>", requestId: "<CREATE_UUID>", type: "bug", title: "登录后出现错误",
   description: "复现截图：\n![错误截图](attachment:<ATTACHMENT_ID>)", attachmentIds: ["<ATTACHMENT_ID>"],
-  developerId: "<负责人用户ID>", watcherIds: ["<关注人用户ID>"] }, null, 2);
+  businessOwnerId: "<业务负责人ID>", qaOwnerId: "<测试负责人ID>", acceptanceOwnerId: "<业务验收人ID>", acceptanceCriteria: ["错误不再出现", "登录成功后进入首页"], developerId: "<开发负责人ID>", watcherIds: ["<关注人用户ID>"] }, null, 2);
 const uploadCommand = computed(() => language.value === "curl" ? shell.value : powershell.value);
 </script>
 <template>
@@ -36,7 +36,7 @@ const uploadCommand = computed(() => language.value === "curl" ? shell.value : p
     <pre class="mcp-code"><code>{{ uploadCommand }}</code></pre>
     <div><h3>{{ $t("3. 引用附件，发布需求或 Bug") }}</h3><p class="field-hint">{{ $t("响应包含") }} <code>attachmentId</code> {{ $t("和") }} <code>markdown</code>{{ $t("。在正文引用附件，同时把 ID 放入") }} <code>attachmentIds</code>{{ $t("。调用") }} <code>create_issue</code> {{ $t("发布，或用") }} <code>update_issue</code> {{ $t("补充附件。") }}</p></div>
     <pre class="mcp-code"><code>[附件说明](attachment:&lt;ATTACHMENT_ID&gt;)</code></pre>
-    <details><summary>{{ $t("发布 Bug 的完整 MCP 参数") }}</summary><pre class="mcp-code"><code>{{ issueExample }}</code></pre><p class="field-hint">{{ $t("没有负责人或关注人时可省略对应字段；需求使用 type: requirement，可另外填写 acceptanceCriteria。版本用 releaseId 指定。") }}</p></details>
+    <details><summary>{{ $t("发布 Bug 的完整 MCP 参数") }}</summary><pre class="mcp-code"><code>{{ issueExample }}</code></pre><p class="field-hint">{{ $t("业务负责人、测试负责人和业务验收人必填；验收标准以数组逐条填写。版本用 releaseId 指定。") }}</p></details>
     <p class="field-hint">{{ $t("支持图片、文本、PDF、Office 等文件；单个最多 10 MiB，每次最多 20 个、合计 20 MiB。暂存附件 24 小时有效，每人暂存最多 100 MiB。文件名需 URL 编码。") }}</p>
     <p class="field-hint">{{ $t("PNG、JPEG、WebP 直接作为图片输入；其他附件向 Codex 提供本地路径，是否能解析取决于运行环境中的工具。") }}</p>
     <details><summary>{{ $t("上传重试与指派规则") }}</summary><p class="field-hint">{{ $t("每个文件生成一个 UUIDv4 作为 Idempotency-Key，上传超时后使用相同标识和相同文件重试。发布超时后保留 requestId 和全部原参数，可调用 get_request_result 查询。上传失败或已过期时先处理附件，不要省略后发布。") }}</p><p class="field-hint">{{ $t("一名开发负责人和多名关注人。负责人需有项目开发资格；创建与指派不会自动启动开发。") }}</p></details>

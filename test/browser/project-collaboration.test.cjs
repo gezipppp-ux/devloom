@@ -119,7 +119,11 @@ async function main() {
       assert.equal(await page.evaluate(() => window.issueXss), undefined);
       assert.equal(await markdownValue(page), markdown, "unsupported source is kept intact rather than silently discarded");
       await setMarkdown(page, "描述", markdown.split("\n\n<script>")[0]);
-      await setMarkdown(page, type === "需求" ? "验收标准" : "复现步骤", "首次保存即可重复验证的标准");
+      if (type === "需求") {
+        await page.getByRole("button", { name: "添加一条", exact: true }).click();
+        await page.getByLabel("验收标准第 1 条").fill("首次保存即可重复验证的标准");
+      } else await setMarkdown(page, "复现步骤", "首次保存即可重复验证的标准");
+      for (const label of ["业务负责人", "测试负责人", "业务验收人"]) await selectOption(page.getByLabel(label, { exact: true }), product.id);
       await selectOption(page.getByLabel("优先级", { exact: true }), "high");
       await selectOption(page.getByLabel("关注人", { exact: true }), [admin.id]);
       if (type === "Bug") {
@@ -188,7 +192,7 @@ async function main() {
       assert.equal(stored.priority, "high");
       assert.equal(stored.developerId, null);
       assert.deepEqual(stored.watcherIds, [admin.id]);
-      assert.equal(stored[type === "需求" ? "acceptanceCriteria" : "reproductionSteps"], "首次保存即可重复验证的标准");
+      assert.deepEqual(stored[type === "需求" ? "acceptanceCriteria" : "reproductionSteps"], type === "需求" ? ["首次保存即可重复验证的标准"] : "首次保存即可重复验证的标准");
       if (type === "Bug") { assert.equal(stored.severity, "major"); assert.equal(stored.expectedResult, "**预期完整显示**"); assert.equal(stored.actualResult, "实际出现错误"); }
       assert.equal(await database.client.projectFile.count({ where: { issueId } }), 2);
       assert.ok(new URL(issueUrl).searchParams.get("issue"), "issue detail has a stable shareable address");
@@ -212,7 +216,8 @@ async function main() {
       await page.getByRole("button", { name: "编辑事项", exact: true }).click();
       await visual(page);
       assert.equal(await editor(page).getByRole("button", { name: "撤销", exact: true }).isDisabled(), true, "opening saved content establishes the history baseline");
-      await setMarkdown(page, type === "需求" ? "验收标准" : "复现步骤", "可重复验证的标准");
+      if (type === "需求") await page.getByLabel("验收标准第 1 条").fill("可重复验证的标准");
+      else await setMarkdown(page, "复现步骤", "可重复验证的标准");
       await visual(page); await editor(page).locator('img[alt="pasted-proof.png"]').waitFor(); await captureEditor(page, output, `edit-${type === "Bug" ? "bug" : "requirement"}`);
       await selectOption(page.getByRole("combobox", { name: "关注人", exact: true }), product.id);
       await page.getByRole("button", { name: "保存事项", exact: true }).click();
@@ -395,7 +400,7 @@ async function main() {
     await page.getByRole("button", { name: "■ 停止", exact: true }).waitFor();
     assert.equal(await database.client.developmentTask.count(), 1);
     const startedTask = await database.client.developmentTask.findFirst();
-    assert.equal(startedTask.snapshot.issues[0].acceptanceCriteria, "可重复验证的标准");
+    assert.deepEqual(startedTask.snapshot.issues[0].acceptanceCriteria, ["可重复验证的标准"]);
     assert.match(startedTask.snapshot.issues[0].description, /pasted-proof\.png/);
     assert.equal(startedTask.snapshot.issues[0].files.filter(file => file.mimeType === "image/png").length, 1);
     assert.ok(clients.flatMap(client => client.calls).some(call => call.method === "turn/start" && call.params.input.some(input => input.type === "localImage")), "explicit fake execution receives the persisted image");
@@ -431,7 +436,7 @@ async function main() {
     await page.getByRole("button", { name: "编辑研发与产品", exact: true }).click();
     assert.equal(await page.getByLabel("部门名称", { exact: true }).inputValue(), department.name);
     assert.equal(await page.getByRole("button", { name: "仓库目录", exact: true }).count(), 0);
-    const unclaimed = await content.createIssue(project.id, admin, { type: "requirement", title: "迟到响应测试" });
+    const unclaimed = await content.createIssue(project.id, admin, { type: "requirement", title: "迟到响应测试", businessOwnerId: admin.id, qaOwnerId: admin.id, acceptanceOwnerId: admin.id });
     await page.goto(sourceIssueUrl.replace(/issue=[^&]+/, `issue=${unclaimed.id}`));
     const tasksUrl = `${origin}/api/projects/${project.id}/tasks`;
     let releaseStart, markStarted;
