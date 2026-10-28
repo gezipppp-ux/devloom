@@ -35,5 +35,18 @@ test("list execution labels distinguish absent, private and unconfirmed runs fro
   assert.equal(view({ status: "completed", canOpenSession: true }).label, "状态待确认");
   assert.equal(view({ status: "completed", execution: { status: "running" } }).label, "执行中");
   assert.equal(view({ status: "started", execution: { status: "completed" } }).label, "本轮结束");
-  assert.equal(view({ status: "started", execution: { status: "new-server-state" } }).tone, "warning");
+  assert.equal(view({ status: "started", execution: { status: "new-server-state" } }).colorKey, "new-server-state");
+});
+
+ test("task and Agent status colours are automatic, distinct and stable", async () => {
+  const { developmentTaskStatuses, developmentExecutionStatuses, developmentExecutionView } = await load();
+  const { statusHue } = await import("../../web/src/features/projects/status-color.js");
+  for (const statuses of [developmentTaskStatuses, developmentExecutionStatuses]) {
+    const hues = statuses.map(status => statusHue(status, statuses));
+    assert.equal(new Set(hues).size, statuses.length);
+    assert.deepEqual(statuses.map(status => statusHue(status, [...statuses].reverse())), hues);
+    assert.deepEqual(statuses.map(status => statusHue(status, statuses)), hues);
+  }
+  assert.equal(developmentExecutionView({ execution: { status: "inProgress" } }).colorKey, "running");
+  assert.equal(developmentExecutionView({ execution: { status: "cancelled" } }).colorKey, "stopped");
 });

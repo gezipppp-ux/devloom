@@ -1,10 +1,12 @@
 <script setup>
 import { computed } from "vue";
 import StatusBadge from "../../shared/components/StatusBadge.vue";
+import IssueStatusBadge from "./IssueStatusBadge.vue";
+import StatusColorBadge from "./StatusColorBadge.vue";
 import RelativeTime from "../../shared/components/RelativeTime.vue";
 import PersonAvatar from "../../shared/components/PersonAvatar.vue";
 import { priorityLabels } from "./project-labels.js";
-import { developmentTaskLabels, developmentTaskTones, developmentExecutionView } from "./development-task-view.js";
+import { developmentTaskLabels, developmentTaskStatuses, developmentExecutionStatuses, developmentExecutionView } from "./development-task-view.js";
 import { translate } from "../../shared/i18n/index.js";
 const emit = defineEmits(["open", "open-session", "update:selected"]);
 const props = defineProps({ items: { type: Array, default: () => [] }, people: { type: Array, default: () => [] }, kind: { type: String, default: "issues" }, personal: Boolean, selectable: Boolean, selected: { type: Array, default: () => [] }, disabled: Boolean });
@@ -43,8 +45,8 @@ function select(item, checked) {
         <p v-if="personal || kind === 'deliveries'">{{ $t('最后更新') }} · <RelativeTime :value="item.updatedAt || item.createdAt" /></p>
         <slot name="details" :item="item" /><span v-if="item.tags?.length" class="ui-tags"><span v-for="tag in item.tags" :key="tag">{{ tag }}</span></span>
       </td>
-      <td :data-label="$t(kind === 'tasks' ? '任务状态' : '状态')"><StatusBadge :tone="kind === 'tasks' ? developmentTaskTones[item.status] || 'warning' : item.completed || ['completed', 'accepted'].includes(item.status) ? 'success' : item.status === 'started' || item.status === 'planned' ? 'accent' : 'neutral'">{{ kind === 'issues' ? item.statusName : $t((kind === 'deliveries' ? deliveryLabels : developmentTaskLabels)[item.status] || item.status) }}</StatusBadge></td>
-      <td v-if="kind === 'tasks'" class="work-execution-status" :data-label="$t('Agent 状态')"><StatusBadge :tone="developmentExecutionView(item).tone">{{ $t(developmentExecutionView(item).label) }}</StatusBadge></td>
+      <td :data-label="$t(kind === 'tasks' ? '任务状态' : '状态')"><IssueStatusBadge v-if="kind === 'issues'" :issue="item" /><StatusColorBadge v-else-if="kind === 'tasks'" :status="item.status" :statuses="developmentTaskStatuses">{{ $t(developmentTaskLabels[item.status] || item.status) }}</StatusColorBadge><StatusBadge v-else :tone="item.completed || ['completed', 'accepted'].includes(item.status) ? 'success' : item.status === 'started' || item.status === 'planned' ? 'accent' : 'neutral'">{{ $t(deliveryLabels[item.status] || item.status) }}</StatusBadge></td>
+      <td v-if="kind === 'tasks'" class="work-execution-status" :data-label="$t('Agent 状态')"><StatusColorBadge :status="developmentExecutionView(item).colorKey" :statuses="developmentExecutionStatuses">{{ $t(developmentExecutionView(item).label) }}</StatusColorBadge></td>
       <td v-if="kind === 'issues'" :data-label="$t('优先级')"><span class="ui-priority" :class="{ 'ui-priority-high': ['high', 'urgent'].includes(item.priority) }"><i />{{ $t(priorityLabels[item.priority] || '未提供') }}</span></td>
       <td :data-label="$t('版本')">{{ item.releaseName || item.release?.name || $t('未排期') }}</td>
       <td :data-label="$t(ownerLabel)"><span class="ui-person"><PersonAvatar :name="personLabel(item)" /><span class="work-person-name" :title="personLabel(item)">{{ personLabel(item) }}</span></span></td>

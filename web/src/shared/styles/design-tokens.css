@@ -7,6 +7,7 @@
   --warning: #95620c; --warning-soft: #fff7e7; --success: #26765a; --success-soft: #edf7f1;
   --focus: #7256d8; --focus-ring: #7256d825;
   --on-accent: #fff; --backdrop: #24252d4d;
+  --status-color-bg-saturation: 45%; --status-color-bg-lightness: 93%; --status-color-text-saturation: 55%; --status-color-text-lightness: 25%;
   --tone-blue: #6683ac; --tone-blue-soft: #eaf0f8; --tone-warm: #b7865e; --tone-warm-soft: #f7eee7;
   --shadow-xs: none; --shadow-sm: 0 2px 8px #26223705; --shadow-md: 0 4px 20px #26223708;
   --shadow-dialog: 0 12px 48px #26223718; --shadow-composer: 0 6px 24px #2622370c;
@@ -26,6 +27,7 @@
   --soft: #292a32; --selected: #332a49; --highlight: #b9a0ff; --danger: #f0969e; --danger-soft: #40272e;
   --warning: #e9bd74; --warning-soft: #3c3224; --success: #80c9a7; --success-soft: #243c32;
   --focus: #b9a0ff; --focus-ring: #b9a0ff38; --on-accent: #202127; --backdrop: #090a10a6;
+  --status-color-bg-saturation: 35%; --status-color-bg-lightness: 22%; --status-color-text-saturation: 70%; --status-color-text-lightness: 82%;
   --tone-blue: #9dbce6; --tone-blue-soft: #28364b; --tone-warm: #dbb18c; --tone-warm-soft: #3c3029;
   --shadow-sm: 0 2px 8px #0002; --shadow-md: 0 4px 20px #0003;
   --shadow-dialog: 0 12px 48px #0006; --shadow-composer: 0 6px 24px #0004;

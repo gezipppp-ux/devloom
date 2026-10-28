@@ -18,6 +18,7 @@ import IssueDiscussion from "./IssueDiscussion.vue";
 import IssueFields from "./IssueFields.vue";
 import MarkdownContent from "../../shared/components/MarkdownContent.vue";
 import IssueInformation from "./IssueInformation.vue";
+import IssueStatusBadge from "./IssueStatusBadge.vue";
 import {issueDetailFields, issueFieldsInput, removeAttachmentLinks} from "./issue-fields.js";
 import {useProjectAttachments} from "./use-project-attachments.js";
 
@@ -164,7 +165,7 @@ function person(id) {
           <h1>{{ data.title }}</h1>
           <p class="issue-identity"><span class="issue-type" :class="{ 'issue-type-bug': data.type === 'bug' }">{{
               data.type === 'bug' ? $t('缺陷') : $t("需求")
-            }}</span><span class="issue-status-badge">{{ data.statusName }}</span><span>#{{ data.number }}</span>
+            }}</span><IssueStatusBadge :issue="data" /><span>#{{ data.number }}</span>
             <template v-if="projectName"><span aria-hidden="true">·</span><span>{{ projectName }}</span></template>
             <template v-if="data.updatedAt"><span
                 aria-hidden="true">·</span><span>{{ $t('更新于 {date}', {date: formatDate(data.updatedAt)}) }}</span>
@@ -261,8 +262,7 @@ function person(id) {
               <SwapOutlined aria-hidden="true"/>
               {{ $t("当前操作") }}
             </h3>
-            <p class="issue-current-status"><span class="muted">{{ $t("当前状态") }}</span><span
-                class="issue-status-badge">{{ data.statusName }}</span></p>
+            <p class="issue-current-status"><span class="muted">{{ $t("当前状态") }}</span><IssueStatusBadge :issue="data" /></p>
             <p v-if="data.processing" class="field-hint">{{ $t('当前处理人') }}：{{ person(data.processing.handlerId) }}
               · {{
                 $t(data.processing.needsAssignment ? '等待分派处理人' : data.processing.status === 'active' ? '处理中' : '待开始')

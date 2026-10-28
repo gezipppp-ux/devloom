@@ -13,6 +13,7 @@ import MarkdownContent from "../../shared/components/MarkdownContent.vue";
 import AgentModelSettings from "../../shared/components/AgentModelSettings.vue";
 import PersonAvatar from "../../shared/components/PersonAvatar.vue";
 import StatusBadge from "../../shared/components/StatusBadge.vue";
+import StatusColorBadge from "./StatusColorBadge.vue";
 import { accountSession } from "../../shared/api/account-session.js";
 import RemoteBranchSelect from "./RemoteBranchSelect.vue";
 import PublishDelivery from "./PublishDelivery.vue";
@@ -22,6 +23,9 @@ import DevelopmentTaskContext from "./DevelopmentTaskContext.vue";
 import { useDevelopmentTask } from "./use-development-task.js";
 import {
   developmentTaskLabels,
+  developmentTaskStatuses,
+  developmentExecutionStatuses,
+  developmentExecutionView,
   additionLabels,
   developmentTaskView,
 } from "./development-task-view.js";
@@ -148,13 +152,8 @@ const eligibleMembers = computed(
         member.effectivePermissions?.includes("session.start"),
     ) || [],
 );
-const codexStatus = computed(() =>
-  task.value.execution
-    ? statusLabel(task.value.execution.status)
-    : task.value.status === "planned"
-      ? "尚未启动"
-      : "未提供执行状态",
-);
+const executionView = computed(() => developmentExecutionView(task.value));
+const codexStatus = computed(() => task.value.execution ? statusLabel(task.value.execution.status) : task.value.status === "planned" ? "尚未启动" : "未提供执行状态");
 const sessionLabel = computed(() =>
   task.value.canRetryPreparation || task.value.worktreeRemoved || task.value.status === "cancelled" || task.value.status === "completed" && task.value.kind === "manual" || readOnly.value
     ? "查看历史会话"
@@ -517,7 +516,7 @@ async function submitConfirmation() {
         class="development-panel development-next"
         aria-labelledby="development-next-title"
       >
-        <div v-if="task.workflowErrors?.length" class="warning"><p v-for="entry in task.workflowErrors" :key="entry.id">{{ entry.error }}</p><button :disabled="busy" @click="mutate('workflow/retry', {}, '已重新核对业务流转。')">{{ $t('仅重试业务流转') }}</button></div><p v-if="task.deliveryPhase" class="field-hint">{{ $t(task.deliveryPhase) }}</p><ul v-if="task.scope?.length" class="project-records"><li v-for="issue in task.scope" :key="issue.id">{{ issue.title }} · {{ issue.statusName }}<a v-if="issue.delivery" :href="'/deliveries?projectId=' + projectId + '&delivery=' + issue.delivery.id">{{ $t('查看交付与验收') }}</a></li></ul><div class="development-states"><span class="development-task-status">{{ $t('任务：') }}{{ $t(developmentTaskLabels[task.status] || task.status) }}</span><span class="development-execution-status">Codex：{{ $t(codexStatus) }}</span></div>
+        <div v-if="task.workflowErrors?.length" class="warning"><p v-for="entry in task.workflowErrors" :key="entry.id">{{ entry.error }}</p><button :disabled="busy" @click="mutate('workflow/retry', {}, '已重新核对业务流转。')">{{ $t('仅重试业务流转') }}</button></div><p v-if="task.deliveryPhase" class="field-hint">{{ $t(task.deliveryPhase) }}</p><ul v-if="task.scope?.length" class="project-records"><li v-for="issue in task.scope" :key="issue.id">{{ issue.title }} · {{ issue.statusName }}<a v-if="issue.delivery" :href="'/deliveries?projectId=' + projectId + '&delivery=' + issue.delivery.id">{{ $t('查看交付与验收') }}</a></li></ul><div class="development-states"><StatusColorBadge :status="task.status" :statuses="developmentTaskStatuses">{{ $t('任务：') }}{{ $t(developmentTaskLabels[task.status] || task.status) }}</StatusColorBadge><StatusColorBadge :status="executionView.colorKey" :statuses="developmentExecutionStatuses">Codex：{{ $t(codexStatus) }}</StatusColorBadge></div>
         <p class="development-eyebrow">
           {{
             ["completed", "cancelled", "merged"].includes(task.status) ||
@@ -575,11 +574,11 @@ async function submitConfirmation() {
         <details class="development-info" :open="infoExpanded">
         <summary>{{ $t('任务信息') }}</summary>
         <dl class="ui-meta-list">
-          <dt>{{ $t('任务状态') }}</dt><dd><StatusBadge :tone="task.status === 'completed' ? 'success' : task.status === 'planned' ? 'accent' : 'neutral'">{{ $t(developmentTaskLabels[task.status] || task.status) }}</StatusBadge></dd>
+          <dt>{{ $t('任务状态') }}</dt><dd><StatusColorBadge :status="task.status" :statuses="developmentTaskStatuses">{{ $t(developmentTaskLabels[task.status] || task.status) }}</StatusColorBadge></dd>
           <dt>{{ $t('执行者') }}</dt><dd><span class="ui-person"><PersonAvatar :name="task.executor?.displayName || $t('未分配')" />{{ task.executor?.displayName || $t('未分配') }}</span></dd>
           <dt>{{ $t('目标版本') }}</dt><dd>{{ task.release?.name || $t('未排期') }}</dd>
           <dt>{{ $t('任务来源') }}</dt><dd>{{ task.kind === 'manual' ? $t('独立开发') : $t('项目事项') }}</dd>
-          <dt>{{ $t('Agent 状态') }}</dt><dd><StatusBadge>{{ $t(codexStatus) }}</StatusBadge></dd>
+          <dt>{{ $t('Agent 状态') }}</dt><dd><StatusColorBadge :status="executionView.colorKey" :statuses="developmentExecutionStatuses">{{ $t(codexStatus) }}</StatusColorBadge></dd>
         </dl>
         <button v-if="canEdit" ref="editButton" :disabled="busy || editing" @click="edit">{{ $t('编辑任务信息') }}</button>
 

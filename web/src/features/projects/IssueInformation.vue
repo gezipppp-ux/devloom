@@ -3,6 +3,7 @@
 import { ref, onMounted, onUnmounted } from "vue";
 import { formatDate, translate } from "../../shared/i18n/index.js";
 import PersonAvatar from "../../shared/components/PersonAvatar.vue";
+import IssueStatusBadge from "./IssueStatusBadge.vue";
 import { priorityLabels } from "./project-labels.js";
 defineProps({ issue: { type: Object, required: true }, projectName: { type: String, default: "" } });
 const media = window.matchMedia('(min-width: 1200px)');
@@ -18,7 +19,7 @@ const person = (issue, id, missing = "未分派") => !id ? translate(missing) : 
       <summary>{{ $t('事项信息') }}</summary>
       <dl class="context-facts">
         <template v-if="projectName"><dt>{{ $t('所属项目') }}</dt><dd>{{ projectName }}</dd></template>
-        <dt>{{ $t('事项状态') }}</dt><dd>{{ issue.statusName || issue.status }}</dd>
+        <dt>{{ $t('事项状态') }}</dt><dd><IssueStatusBadge :issue="issue" /></dd>
         <dt>{{ $t('目标版本') }}</dt><dd><RouterLink v-if="issue.release" :to="{ path: `/projects/${issue.projectId}`, query: { tab: 'releases' } }">{{ issue.release.name }}</RouterLink><span v-else>{{ $t('未排期') }}</span></dd>
         <dt>{{ $t('优先级') }}</dt><dd>{{ $t(priorityLabels[issue.priority] || '未知') }}</dd>
         <template v-for="[key, label] in [['reporterId', '提报人'], ['businessOwnerId', '业务负责人'], ['developerId', '开发负责人'], ['qaOwnerId', '测试负责人'], ['acceptanceOwnerId', '业务验收人'], ['createdById', '创建者']]" :key="key">

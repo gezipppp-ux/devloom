@@ -8,23 +8,18 @@ export const developmentTaskLabels = {
   started: "已启动",
   unknown: "执行结果待确认",
 };
-export const developmentTaskTones = {
-  planned: "neutral", started: "accent", completed: "success",
-  cancelled: "danger", merged: "info", unknown: "warning",
-};
-const executionTones = {
-  preparing: "info", initializing: "info", starting: "info",
-  running: "accent", inProgress: "accent", completed: "success",
-  failed: "danger", error: "danger", interrupted: "warning",
-  cancelled: "warning", disconnected: "warning", unknown: "warning", idle: "neutral",
-};
+export const developmentTaskStatuses = Object.keys(developmentTaskLabels);
+export const developmentExecutionStatuses = [
+  "preparing", "initializing", "starting", "running", "completed", "failed", "error",
+  "stopped", "disconnected", "unknown", "idle", "not_started", "deleted", "unavailable",
+];
 export function developmentExecutionView(task) {
   const status = task.execution?.status;
-  if (status) return { label: status === "unknown" ? "状态待确认" : status === "cancelled" ? "已停止" : statusLabel(status), tone: executionTones[status] || "warning" };
-  if (task.sessionDeleted) return { label: "会话已删除", tone: "neutral" };
-  if (["planned", "merged"].includes(task.status)) return { label: "未启动", tone: "neutral" };
-  if (task.status === "unknown" || task.canOpenSession) return { label: "状态待确认", tone: "warning" };
-  return { label: "不可查看", tone: "neutral" };
+  if (status) return { label: status === "unknown" ? "状态待确认" : status === "cancelled" ? "已停止" : statusLabel(status), colorKey: status === "inProgress" ? "running" : ["cancelled", "interrupted"].includes(status) ? "stopped" : status };
+  if (task.sessionDeleted) return { label: "会话已删除", colorKey: "deleted" };
+  if (["planned", "merged"].includes(task.status)) return { label: "未启动", colorKey: "not_started" };
+  if (task.status === "unknown" || task.canOpenSession) return { label: "状态待确认", colorKey: "unknown" };
+  return { label: "不可查看", colorKey: "unavailable" };
 }
 export const additionLabels = {
   ready: "待发送",
