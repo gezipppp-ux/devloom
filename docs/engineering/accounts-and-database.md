@@ -123,7 +123,7 @@ npm start -- --host 127.0.0.1 --port 4317
 
 ### 项目生命周期
 
-- 版本 `targetDate` 是可空的日历日期，API 使用 `YYYY-MM-DD`／`null`，省略字段保留原值。`progress` 按版本中每个事项自身不可变流程版本统计 `{ total, completed, cancelled }`，取消不算完成，空版本不显示完成百分比。管理仍要求 `release.manage`，读取要求 `issue.view`，归档写保护不变。
+- 版本 `targetDate` 是可空的日历日期，API 使用 `YYYY-MM-DD`／`null`，省略字段保留原值。`progress` 按版本中每个事项当前流程状态统计 `{ total, completed, cancelled }`，取消不算完成，空版本不显示完成百分比。管理仍要求 `release.manage`，读取要求 `issue.view`，归档写保护不变。
 - `POST /api/projects/:id/visit` 在成功读取项目后记录本账号最近访问；事务内校验 `project.view`。`GET /api/workbench/recent-projects` 返回本账号最近三项仍可访问的项目，查询后复核权限，不在浏览器存储业务访问记录。
 - `GET /api/projects/:id/activity` 返回最近十条事项创建／编辑／流转、交付发布／验收摘要；事项要求 `issue.view`，交付额外要求 `collaboration.view`，返回前复核权限。响应只含动作、公开事项身份、成员显示名和时间，不含历史快照、私人会话、代码或敏感资产。
 - `GET /api/workbench/attention` 与 `/api/workbench/actions` 共用按当前职责分派的快照，只提醒待推进与待验证动作。交付限指定验证人，失效分派交给协调人；执行请求仍校验本人工作区和会话权限。详细聚合与去重规则见[流程动作契约](./workflow-actions.md)。打开应用期间每 30 秒轮询完整快照，账号切换重置；首次不补发、失败保留去重基线。桌面通知沿用 `notificationsEnabled` 和每台浏览器授权，不自动审批或验收。
@@ -137,7 +137,7 @@ npm start -- --host 127.0.0.1 --port 4317
 - 交付发布保存标题、说明、提交引用、指定验证人和当时的验收清单；不共享私人会话。`GET /api/projects/:id/deliveries/:deliveryId` 读取授权详情，`POST .../review` 接受修订号、核对项和通过／退回结论，仅指定且有权限的验证人可提交。通过须完整核对，退回必填原因，仅待验证交付可操作。验证开始、重新分派与退回重提遵循[流程动作契约](./workflow-actions.md)。验收记录及可选的显式事项流转在同一事务完成；独立验收不隐式修改事项或执行 Agent。归档只读、撤权和并发修改由服务端再次验证。
 
 - 发布版本使用项目权限 `release.manage`，部门限定上限，项目分配授权。需求／Bug 流程是系统设置，仅当前有效系统管理员可以修改和发布；删除项目权限 `workflow.manage`，不允许项目覆盖系统流程。
-- 事项绑定项目 `releaseId` 和不可变的系统流程版本，状态为该版本节点 ID。流程草稿保存与发布使用 revision；发布校验唯一初始节点、节点可达且均能到达终态、权限白名单，完成／取消节点禁止开发。所有项目的新事项使用该类型当前系统发布版本，发布不自动切换旧事项。未处理、无交付和执行历史的事项可经过预览和修订校验，显式采用新发布版本；旧步骤和原流程版本保留，详见[流程动作契约](./workflow-actions.md)。
+- 事项绑定项目 `releaseId` 和当前系统流程版本，状态为该版本节点 ID。流程草稿保存与发布使用 revision；发布校验节点可达、终态及送验验证路径，并将同类型已有事项切换到新的全局版本。正在使用的状态不存在时，管理员先选择对应的新状态；历史版本、任务、交付和会话保留，详见[流程动作契约](./workflow-actions.md)。
 - `/api/system/workflows/:type` 和 `/:type/publish` 由 `SystemWorkflowServices` 复核管理员身份；`GET /api/projects/:id/issue-workflows/:type` 按 `issue.view` 仅返回已发布版本，不公开草稿。旧 `/api/projects/:id/workflows` 管理接口删除，不保留路由别名。系统流程表和版本表不含 projectId。
 - 发布版本归档要求所有事项结束、无未结束开发任务，且没有待验证或退回后尚未重提的交付。归档后事项编辑、流转、评论、交付、附件及资产关联变更均被后端拒绝；读取和幂等只读复用不改历史。
 - `POST /api/projects/:id/tasks` 为每条事项分别认领／指派待开发任务；按 `issue.assign` 指派有效且有 `session.start` 权限的执行人，无需 Git。批量分配可跨版本，合并任务仅关联同一发布版本的事项。数据库 `issue_development_claims` 的唯一约束和串行化事务防止重复认领。

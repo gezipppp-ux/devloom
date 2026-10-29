@@ -6,17 +6,18 @@ function deliveryChecklist(issue) {
   const criteria = issue.acceptanceCriteria?.length ? issue.acceptanceCriteria : (issue.type === "bug" && issue.expectedResult ? [issue.expectedResult] : []);
   return [...(criteria.length ? criteria : ["交付结果符合事项描述与预期"]), "相关验证已完成，结果可复核", "交付说明与提交信息完整"];
 }
-function deliveryReview(input, delivery) {
+function deliveryReview(input, delivery, issue = null) {
   object(input, ["revision", "status", "checkedItems", "reviewNote"]);
   revision(input.revision);
   const status = choice(input.status, ["accepted", "returned"], "验收结果");
+  const edge = issue?.workflowVersion.definition.transitions.find(item => item.from === issue.status && item.trigger === `verification.${status}`);
   const reviewNote = text(input.reviewNote || "", "验收说明", 4000);
   if (delivery.status !== "pending") throw accountError("该交付已完成验收，请刷新查看结果。", 409);
-  if (status === "returned" && !reviewNote) throw accountError("退回交付必须填写原因。", 400);
+  if (status === "returned" && (edge ? edge.requiresReason : true) && !reviewNote) throw accountError("退回交付必须填写原因。", 400);
   const checkedItems = input.checkedItems;
   if (!Array.isArray(checkedItems) || new Set(checkedItems).size !== checkedItems.length || checkedItems.some(i => !Number.isInteger(i) || i < 0 || i >= delivery.checklist.length))
     throw accountError("验收核对项无效。", 400);
-  if (status === "accepted" && checkedItems.length !== delivery.checklist.length) throw accountError("请逐项核对全部验收标准。", 400);
+  if (status === "accepted" && edge?.requireChecklist !== false && checkedItems.length !== delivery.checklist.length) throw accountError("请逐项核对全部验收标准。", 400);
   return { status, checkedItems, reviewNote };
 }
 module.exports = { deliveryChecklist, deliveryReview };

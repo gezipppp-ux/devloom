@@ -12,6 +12,7 @@ const { sourceFor, runKey } = require("../domain/run-identity.cjs");
 const { initializeWorktree } = require("./worktree-init.cjs");
 const { ExecutionStore } = require("../storage/execution-store.cjs");
 const { canRetryPreparation } = require("../domain/preparation-retry.cjs");
+const { worktreeReason } = require("../git/worktree-access.cjs");
 
 async function runExecution(
   { config, configFile, session, item, directory, channel, retry = false, baseBranch, preparationRetry },
@@ -89,6 +90,10 @@ async function runExecution(
     );
     if (previous && (repository !== previous.worktree.repository || config.execution.baseBranch !== previous.worktree.baseline.branch))
       throw new Error("开发仓库或起始分支已变更，不能重试原任务。");
+    if (previous?.initialization) {
+      const reason = worktreeReason(previous);
+      if (reason) throw new Error(reason);
+    }
     const { workitem, task, target, worktreeSlug, worktreeName } = previous
       ? { workitem: previous.workitem, task: dependencies.preparedTask, target: previous.target_status,
         worktreeSlug: previous.preparation?.worktreeSlug, worktreeName: previous.preparation?.worktreeName ?? previous.workitem.worktree_name }
@@ -110,7 +115,7 @@ async function runExecution(
       source,
       created_at: previous?.created_at || new Date().toISOString(),
       workitem,
-      worktree: { repository, baseline: { remote: "origin", branch: config.execution.baseBranch || null, commit: null, fetchedAt: null } },
+      worktree: previous?.initialization ? previous.worktree : { repository, baseline: { remote: "origin", branch: config.execution.baseBranch || null, commit: null, fetchedAt: null } },
       target_status: target,
       session_id: null,
       agent: {
@@ -129,7 +134,7 @@ async function runExecution(
     };
     // Keep preparation failures readable even when no worktree could be created.
     await store.save(state);
-    const worktree = await services.withRepositoryOperation(services.repositoryCommonDirectory(repository), async () => {
+    const worktree = previous?.initialization ? previous.worktree : await services.withRepositoryOperation(services.repositoryCommonDirectory(repository), async () => {
       const baseline = await services.fetchDevelopmentBaseline(repository, config.execution.baseBranch, {
         credentials: dependencies.gitCredentials,
         signal: dependencies.signal,

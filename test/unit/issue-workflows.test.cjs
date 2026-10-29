@@ -14,6 +14,9 @@ test("published workflows validate reachable nodes, immutable identifiers and pe
   assert.throws(validate(draft => { draft.nodes[0].category = "unknown"; }), /类别/);
   assert.throws(validate(draft => { draft.transitions[0].requiredFields = ["secret"]; }), /字段/);
   assert.throws(validate(draft => { draft.transitions[0].requireAcceptedDelivery = "true"; }), /门禁/);
+  assert.throws(validate(draft => { draft.transitions = draft.transitions.map(edge => edge.trigger === "verification.returned" ? { ...edge, trigger: "manual", actor: "handler" } : edge); }), /验证通过和退回/);
+  assert.throws(validate(draft => { draft.transitions = draft.transitions.filter(edge => !(edge.from === "rework" && ["development.started", "delivery.submitted"].includes(edge.trigger))); }), /退回后.*重新送验/);
+  assert.throws(validate(draft => { draft.nodes.find(node => node.id === "rework").allowDevelopment = false; draft.transitions = draft.transitions.filter(edge => !(edge.from === "rework" && edge.trigger === "delivery.submitted")); }), /退回后.*重新送验/);
   assert.throws(validate(draft => { draft.nodes.splice(1, 1); }), /连线/);
   assert.throws(validate(draft => { draft.nodes[1].id = draft.nodes[0].id; }), /标识/);
   assert.throws(validate(draft => { draft.transitions[1].id = draft.transitions[0].id; }), /连线/);

@@ -1,4 +1,10 @@
 const { workflowActorAllowed } = require("./workflow-handoffs.cjs");
+const { workflowHandler } = require("./workflow-actions.cjs");
+
+function deliveryReviewer(issue, edge) {
+  const next = issue.workflowVersion.definition.nodes.find(node => node.id === edge.to);
+  return edge.assignment === "executor" ? issue.developerId : workflowHandler(issue, next);
+}
 
 function deliverySubmission(issue, actorId, permissions) {
   const edges = issue.workflowVersion.definition.transitions.filter(edge => edge.from === issue.status && edge.trigger === "delivery.submitted");
@@ -8,8 +14,8 @@ function deliverySubmission(issue, actorId, permissions) {
     && workflowActorAllowed(issue, edge, actorId, permissions)
     && (!task || permissions.includes("session.view") && task.executorId === actorId && ["planned", "started", "completed"].includes(task.status));
   const previous = issue.deliverables?.[0];
-  return { allowed, taskId: task?.id || null, label: edge?.name || "", transitionId: edge?.id || null,
+  return { allowed, taskId: task?.id || null, label: edge?.name || "", transitionId: edge?.id || null, reviewerId: edge ? deliveryReviewer(issue, edge) : null,
     previous: previous?.status === "returned" ? { id: previous.id, revision: previous.revision } : null };
 }
 
-module.exports = { deliverySubmission };
+module.exports = { deliverySubmission, deliveryReviewer };

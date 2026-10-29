@@ -7,6 +7,7 @@ const props = defineProps({
   busy: Boolean,
   disabled: Boolean,
   retainSession: Boolean,
+  retryInitialization: Boolean,
 });
 const emit = defineEmits(["confirm", "closed"]);
 const dialog = ref();
@@ -14,8 +15,8 @@ const copy = computed(
   () =>
     ({
       "retry-preparation": {
-        title: "确认重试准备",
-        description: "将沿用原任务资料、起始分支和执行设置，重新获取远端代码并准备工作目录。准备成功后会启动 Agent。",
+        title: props.retryInitialization ? "确认重试初始化" : "确认重试准备",
+        description: props.retryInitialization ? "将在原工作目录重新执行当前初始化命令，成功后启动 Agent。请先处理失败原因；命令可能修改目录中的文件。" : "将沿用原任务资料、起始分支和执行设置，重新获取远端代码并准备工作目录。准备成功后会启动 Agent。",
         button: "确认重试并启动",
       },
       complete: {

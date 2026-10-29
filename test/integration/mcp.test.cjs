@@ -475,7 +475,7 @@ test("MCP workflow discovery follows publication without leaking drafts or bypas
   const after = await call(client, "create_issue", { ...input, developerId: undefined });
   const oldRow = await f.database.client.projectIssue.findUnique({ where: { id: before.issue.id } });
   const newRow = await f.database.client.projectIssue.findUnique({ where: { id: after.issue.id } });
-  assert.equal(oldRow.workflowVersionId, original.versions.find(version => version.version === original.publishedVersion).id);
+  assert.equal(oldRow.workflowVersionId, published.versions.find(version => version.version === published.publishedVersion).id);
   assert.equal(newRow.workflowVersionId, published.versions.find(version => version.version === published.publishedVersion).id);
   assert.equal(await f.database.client.developmentTask.count(), 0);
 });

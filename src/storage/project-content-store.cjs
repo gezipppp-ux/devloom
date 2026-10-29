@@ -44,10 +44,14 @@ class ProjectContentStore {
     if (!value) throw missing();
     return value;
   }
-  async issues(projectId, { type, status, releaseId, includeArchived, query, limit, offset, filters }) {
+  async issues(projectId, { type, status, releaseId, includeArchived, active, query, limit, offset, filters }) {
     const where = { projectId, deletedAt: null, ...(releaseId !== undefined ? { releaseId } : {}), ...(!includeArchived ? { OR: [{ releaseId: null }, { release: { status: "active" } }] } : {}), ...(type ? { type } : {}), ...(status ? { status } : {}),
       ...(query ? { AND: [{ OR: [{ title: { contains: query, mode: "insensitive" } }, { description: { contains: query, mode: "insensitive" } }] }] } : {}) };
     where.AND = [...(where.AND || []), ...workListWhere("issues", filters)];
+    if (active) {
+      const versions = await this.database.client.systemWorkflowVersion.findMany({ select: { id: true, definition: true } });
+      where.AND.push({ OR: versions.map(version => ({ workflowVersionId: version.id, status: { in: version.definition.nodes.filter(node => !["completed", "cancelled"].includes(node.kind)).map(node => node.id) } })) });
+    }
     const [rows, total] = await Promise.all([this.database.client.projectIssue.findMany({ where, orderBy: [{ number: "desc" }], skip: offset, take: limit + 1, include: issueRelations }), this.database.client.projectIssue.count({ where })]);
     return { items: rows.slice(0, limit), total, nextOffset: rows.length > limit ? offset + limit : null };
   }

@@ -101,16 +101,36 @@ test("concurrent cleaned-worktree rework transfers claims once and preserves the
   assert.equal(original.status, "cancelled");
 });
 
-test("failed handoff rolls back delivery; another qualified reviewer becomes the actual handler", async t => {
+test("the configured issue reviewer receives the delivery and permission failures roll back", async t => {
   const f = await fixture(t); await f.run();
-  await assert.rejects(f.submit({ reviewerId: f.dev.id }), { statusCode: 403 });
+  let issue = await f.read();
+  await f.content.updateIssue(f.project.id, issue.id, f.owner, { revision: issue.revision, qaOwnerId: f.dev.id });
+  await assert.rejects(f.submit(), { statusCode: 403 });
   assert.equal(await f.database.client.projectDeliverable.count(), 0);
   assert.equal((await f.read()).status, "developing");
-  const requestId = randomUUID(), input = { requestId, reviewerId: f.other.id };
+  issue = await f.read();
+  await f.content.updateIssue(f.project.id, issue.id, f.owner, { revision: issue.revision, qaOwnerId: f.other.id });
+  const requestId = randomUUID(), input = { requestId, reviewerId: f.qa.id };
   const delivery = await f.submit(input);
+  assert.equal(delivery.reviewerId, f.other.id);
+  assert.equal(delivery.title, issue.title);
   assert.equal((await f.read()).processing.handlerId, f.other.id);
   assert.equal((await f.submit(input)).id, delivery.id);
   await f.content.reviewDeliverable(f.project.id, delivery.id, f.other, { revision: delivery.revision, status: "accepted", checkedItems: delivery.checklist.map((_, i) => i) });
+  assert.equal((await f.read()).status, "implemented");
+});
+
+test("delivery uses the configured destination responsibility rather than a fixed QA reviewer", async t => {
+  const definition = defaultWorkflow("requirement");
+  definition.nodes.find(node => node.id === "pending_verification").handler = "acceptanceOwner";
+  const f = await fixture(t, { definition });
+  await f.run();
+  const current = await f.read();
+  assert.equal(current.deliverySubmission.reviewerId, f.owner.id);
+  const delivery = await f.submit({ reviewerId: f.qa.id });
+  assert.equal(delivery.reviewerId, f.owner.id);
+  assert.equal((await f.read()).processing.handlerId, f.owner.id);
+  await f.content.reviewDeliverable(f.project.id, delivery.id, f.owner, { revision: delivery.revision, status: "accepted", checkedItems: delivery.checklist.map((_, i) => i) });
   assert.equal((await f.read()).status, "implemented");
 });
 
@@ -140,13 +160,19 @@ test("merged tasks submit only covered scopes and atomically submit multiple rem
   const first = await f.submit();
   for (const issue of f.issues.slice(1)) assert.equal((await f.content.readIssue(f.project.id, issue.id, f.dev)).status, "developing");
   const items = f.issues.slice(1).map(issue => ({ requestId: randomUUID(), issueId: issue.id, taskId: f.task.id, reviewerId: f.qa.id, title: issue.title, body: "Batch evidence" }));
-  await assert.rejects(f.content.addDeliverables(f.project.id, f.dev, { items: [items[0], { ...items[1], reviewerId: f.dev.id }] }), { statusCode: 403 });
+  let lastIssue = await f.content.readIssue(f.project.id, f.issues[2].id, f.owner);
+  await f.content.updateIssue(f.project.id, lastIssue.id, f.owner, { revision: lastIssue.revision, qaOwnerId: f.dev.id });
+  await assert.rejects(f.content.addDeliverables(f.project.id, f.dev, { items }), { statusCode: 403 });
   assert.equal(await f.database.client.projectDeliverable.count(), 1, "invalid batch rolls back every handoff");
+  lastIssue = await f.content.readIssue(f.project.id, f.issues[2].id, f.owner);
+  await f.content.updateIssue(f.project.id, lastIssue.id, f.owner, { revision: lastIssue.revision, qaOwnerId: f.other.id });
   const batch = await f.content.addDeliverables(f.project.id, f.dev, { items });
+  assert.deepEqual(batch.items.map(item => item.reviewerId), [f.qa.id, f.other.id]);
+  assert.deepEqual(batch.items.map(item => item.title), f.issues.slice(1).map(issue => issue.title));
   for (const delivery of [first, ...batch.items.slice(0, 1)]) await f.content.reviewDeliverable(f.project.id, delivery.id, f.qa, { revision: 1, status: "accepted", checkedItems: delivery.checklist.map((_, i) => i) });
   assert.equal((await f.development.read(f.project.id, f.task.id, f.dev)).task.status, "started");
   const last = batch.items[1];
-  await f.content.reviewDeliverable(f.project.id, last.id, f.qa, { revision: 1, status: "accepted", checkedItems: last.checklist.map((_, i) => i) });
+  await f.content.reviewDeliverable(f.project.id, last.id, f.other, { revision: 1, status: "accepted", checkedItems: last.checklist.map((_, i) => i) });
   assert.equal((await f.development.read(f.project.id, f.task.id, f.dev)).task.status, "completed");
 });
 

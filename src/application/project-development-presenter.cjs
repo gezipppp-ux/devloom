@@ -3,7 +3,7 @@ const { issueDevelopmentAllowed } = require("../domain/issue-workflows.cjs");
 const { reworkAvailable } = require("../domain/development-lifecycle.cjs");
 const { presentIssueImages } = require("./project-content-presenter.cjs");
 
-function presentDevelopment(task, actorId, execution = null, { detail = false, permissions = [], projectStatus = "active", previews = [] } = {}) {
+function presentDevelopment(task, actorId, execution = null, { detail = false, permissions = [], projectStatus = "active", previews = [], reviewers = [] } = {}) {
   const snapshot = task.snapshot;
   const additions = snapshot.additions || [];
   const withImages = issue => {
@@ -15,14 +15,16 @@ function presentDevelopment(task, actorId, execution = null, { detail = false, p
   const sessionDeleted = Boolean(task.snapshot.sessionDeletion);
   const writable = projectStatus === "active" && task.release?.status !== "archived";
   const canManage = writable && (own ? permissions.includes("session.start") : permissions.includes("issue.assign"));
-  const scope = (task.issueLinks || []).map(({ issue }) => ({ id: issue.id, title: issue.title, status: issue.status, developmentAllowed: issueDevelopmentAllowed(issue), developmentAction: issue.workflowVersion.definition.transitions.find(edge => edge.from === issue.status && edge.trigger === "development.started")?.name || null, submission: deliverySubmission({ ...issue, developmentClaim: { task } }, actorId, permissions), statusName: issue.workflowVersion.definition.nodes.find(node => node.id === issue.status)?.name, complete: ["completed", "cancelled"].includes(issue.workflowVersion.definition.nodes.find(node => node.id === issue.status)?.kind), delivery: issue.deliverables?.[0] ? { id: issue.deliverables[0].id, status: issue.deliverables[0].status, revision: issue.deliverables[0].revision } : null }));
-  const deliveryPhase = scope.some(issue => issue.delivery?.status === "returned") ? "待返工" : scope.length && scope.every(issue => issue.complete || issue.delivery?.status === "pending" || issue.delivery?.status === "accepted") ? "等待验证" : "";
+  const scope = (task.issueLinks || []).map(({ issue }) => ({ id: issue.id, number: issue.number, type: issue.type, title: issue.title, status: issue.status, developmentAllowed: issueDevelopmentAllowed(issue), developmentAction: issue.workflowVersion.definition.transitions.find(edge => edge.from === issue.status && edge.trigger === "development.started")?.name || null, submission: deliverySubmission({ ...issue, developmentClaim: { task } }, actorId, permissions), statusName: issue.workflowVersion.definition.nodes.find(node => node.id === issue.status)?.name, complete: ["completed", "cancelled"].includes(issue.workflowVersion.definition.nodes.find(node => node.id === issue.status)?.kind), delivery: issue.deliverables?.[0] ? { id: issue.deliverables[0].id, status: issue.deliverables[0].status, revision: issue.deliverables[0].revision, reviewerName: reviewers.find(person => person.id === issue.deliverables[0].reviewerId)?.displayName || null } : null }));
+  const independentDelivery = snapshot.kind === "manual" && permissions.includes("collaboration.view") && task.deliverables?.[0] ? { id: task.deliverables[0].id, status: task.deliverables[0].status, reviewerName: reviewers.find(person => person.id === task.deliverables[0].reviewerId)?.displayName || null } : null;
+  const deliveryPhase = scope.some(issue => issue.delivery?.status === "returned") || independentDelivery?.status === "returned" ? "待返工" : scope.some(issue => issue.delivery?.status === "pending") && scope.every(issue => issue.complete || ["pending", "accepted"].includes(issue.delivery?.status)) || independentDelivery?.status === "pending" ? "等待验证" : "";
   const open = !["completed", "cancelled", "merged"].includes(task.status);
   const idle = !task.runKey || ["completed", "failed", "interrupted", "cancelled"].includes(execution?.status);
-  return { id: task.id, projectId: task.projectId, executorId: task.executorId, title: snapshot.title, kind: snapshot.kind || "issues", scope, deliveryPhase, canSubmitDelivery: writable && own && open && idle && scope.some(issue => issue.submission.allowed), workflowErrors: (task.workflowEvents || []).map(event => ({ id: event.id, error: event.error })),
+  return { id: task.id, projectId: task.projectId, executorId: task.executorId, title: snapshot.title, kind: snapshot.kind || "issues", scope, deliveryPhase, independentDelivery, canSubmitDelivery: writable && own && open && idle && scope.some(issue => issue.submission.allowed), workflowErrors: (task.workflowEvents || []).map(event => ({ id: event.id, error: event.error })),
     mergedIntoTaskId: snapshot.mergedIntoTaskId || null, mergedFromTaskIds: snapshot.mergedFromTaskIds || [],
     canMerge: writable && own && permissions.includes("session.start") && task.status === "planned" && !scope.some(issue => issue.delivery),
     canRetryPreparation: writable && privateSession && permissions.includes("session.start") && !sessionDeleted && ["started", "unknown"].includes(task.status) && Boolean(execution?.canRetryPreparation),
+    retryInitialization: privateSession && Boolean(execution?.retryInitialization),
     canArchive: writable && privateSession && !sessionDeleted && permissions.includes("session.continue") && Boolean(task.workspaceId && task.runKey),
     sessionDeleted: privateSession && sessionDeleted, worktreeRemoved: privateSession && Boolean(execution?.worktreeRemoved),
     canRework: writable && own && permissions.includes("session.start") && permissions.includes("collaboration.view") && Boolean(reworkAvailable(task, execution)),

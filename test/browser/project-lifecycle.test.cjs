@@ -48,8 +48,8 @@ async function verifyProjectLifecycle({ page, origin, project, database, output,
   await selected.focus(); await selected.press("ArrowRight");
   await page.getByRole("button", { name: "校验并发布流程", exact: true }).click();
   await page.getByText("已发布 v2", { exact: true }).waitFor();
-  const unchanged = await database.client.projectIssue.findUnique({ where: { id: oldIssue.id } });
-  assert.equal(unchanged.workflowVersionId, oldIssue.workflowVersionId, "published flow cannot rewrite in-flight issues");
+  const updated = await database.client.projectIssue.findUnique({ where: { id: oldIssue.id } });
+  assert.notEqual(updated.workflowVersionId, oldIssue.workflowVersionId, "published flow applies to existing issues");
   await page.locator(".operation-message-close").evaluateAll(buttons => buttons.forEach(button => button.click()));
   for (const width of [1440, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -72,7 +72,7 @@ async function verifyProjectLifecycle({ page, origin, project, database, output,
   assert.equal(await page.getByRole("group", { name: "事项流程图", exact: true }).count(), 0);
   const sourceIssueUrl = page.url();
   const first = await database.client.projectIssue.findFirst({ where: { projectId: project.id, title: "版本规划事项" } });
-  assert.notEqual(first.workflowVersionId, oldIssue.workflowVersionId, "new issues use the newly published system workflow");
+  assert.equal(first.workflowVersionId, updated.workflowVersionId, "new and existing issues use the same published workflow");
   const other = (await projects.create(admin, { name: "复用系统流程的另一项目", remoteUrl: project.remoteUrl })).project;
   const otherFlowLoaded = page.waitForResponse(response => new URL(response.url()).pathname === `/api/projects/${other.id}/issues` && response.status() === 200);
   await page.goto(`${origin}/projects/${other.id}?tab=issues`);
@@ -120,6 +120,7 @@ async function verifyProjectLifecycle({ page, origin, project, database, output,
   await page.goto(`${origin}/projects/${project.id}?tab=issues`);
   await page.getByRole("button", { name: "查询", exact: true }).waitFor();
   assert.equal(await page.getByRole("button", { name: "版本规划事项", exact: true }).count(), 0);
+  await page.getByRole("button", { name: "查看全部事项", exact: true }).click();
   await page.getByRole("checkbox", { name: "包含归档事项", exact: true }).check();
   await page.getByRole("button", { name: "查询", exact: true }).click();
   await page.getByRole("button", { name: "版本规划事项", exact: true }).waitFor();

@@ -1,4 +1,4 @@
-const { workListWhere } = require("./work-list-where.cjs");
+const { workListWhere, activeTaskIds } = require("./work-list-where.cjs");
 
 class WorkbenchStore {
   constructor(database) { this.database = database; }
@@ -19,7 +19,7 @@ class WorkbenchStore {
     const people = await client.user.findMany({ where: { id: { in: [...new Set(items.map(row => row.actorId))] } }, select: { id: true, displayName: true } });
     return { items, people };
   }
-  async list(kind, projectIds, actorId, { limit, offset, query, scope, type, priority, status, tag, active, filters }) {
+  async list(kind, projectIds, actorId, { limit, offset, query, scope, type, priority, status, tag, active, current, filters }) {
     const client = this.database.client;
     const projects = { projectId: { in: projectIds } };
     let table, where, include;
@@ -41,13 +41,17 @@ class WorkbenchStore {
       const archives = await client.runDocument.findMany({ where: { name: "session-archive.json", workspace: { ownerUserId: actorId } }, select: { workspaceId: true, runKey: true, data: true } });
       const hidden = archives.filter(row => row.workspaceId && row.runKey && row.data?.archivedAt);
       if (hidden.length) where.OR = [{ workspaceId: null }, { runKey: null }, { NOT: hidden.map(({ workspaceId, runKey }) => ({ workspaceId, runKey })) }];
-      include = { release: true, issueLinks: { include: { issue: { include: { workflowVersion: true, actions: { where: { status: { in: ["ready", "active"] } } }, deliverables: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1 } } } } } };
+      include = { release: true, deliverables: { where: { issueId: null }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1 }, issueLinks: { include: { issue: { include: { workflowVersion: true, actions: { where: { status: { in: ["ready", "active"] } } }, deliverables: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1 } } } } } };
       if (active && (filters ? filters.statuses.length === 1 && filters.statuses[0] === "not_cancelled" : !status || status === "not_cancelled")) where.status = { notIn: ["merged", "completed", "cancelled"] };
     } else {
       table = client.projectDeliverable;
-      where = { ...projects, ...(status ? { status } : {}), ...(scope === "mine" ? { authorId: actorId } : {}),
+      where = { ...projects, ...(status ? { status } : {}), ...(current ? { next: { is: null } } : {}), ...(scope === "mine" ? { authorId: actorId } : {}),
         ...(query ? { OR: [{ title: { contains: query, mode: "insensitive" } }, { body: { contains: query, mode: "insensitive" } }, { issue: { title: { contains: query, mode: "insensitive" } } }] } : {}) };
       include = { issue: { select: { id: true, title: true, number: true, type: true, status: true, reporterId: true, release: true } }, task: { select: { release: true } } };
+    }
+    if (kind === "tasks" && filters?.statuses.includes("active")) {
+      where.AND = [...(where.AND || []), { id: { in: await activeTaskIds(client, { ...projects, executorId: actorId }) } }];
+      filters = { ...filters, statuses: filters.statuses.filter(value => value !== "active") };
     }
     where.AND = [...(where.AND || []), ...workListWhere(kind, filters)];
     const [total, items] = await Promise.all([

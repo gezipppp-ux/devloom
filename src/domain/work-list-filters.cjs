@@ -10,6 +10,7 @@ function values(input, label) {
 function workListFilters(input, kind) {
   const statuses = values(input.status, "状态");
   if (kind === "tasks") statuses.forEach(developmentStatus);
+  if (kind === "tasks" && statuses.includes("active") && statuses.length > 1) throw accountError("需要开发筛选不能与其他任务状态同时使用。", 400);
   if (kind === "deliveries") statuses.forEach(value => choice(value, ["pending", "accepted", "returned"], "验收状态"));
   const priorities = values(input.priority, "优先级");
   priorities.forEach(value => choice(value, PRIORITIES, "优先级"));

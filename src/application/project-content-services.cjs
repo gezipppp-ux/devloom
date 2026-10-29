@@ -14,6 +14,7 @@ const { issueWorkflowNode, assertIssueWritable } = require("../domain/issue-work
 const { canProcessWorkflowStep } = require("../domain/workflow-actions.cjs");
 const { ProjectWorkflowServices } = require("./project-workflow-services.cjs");
 const { currentHandler, workflowEventEdge } = require("../domain/workflow-handoffs.cjs");
+const { deliveryReviewer } = require("../domain/delivery-submission.cjs");
 const { ProjectDevelopmentStore } = require("../storage/project-development-store.cjs");
 const { IssueWorkflowVersionServices } = require("./issue-workflow-version-services.cjs");
 const { presentDevelopment } = require("./project-development-presenter.cjs");
@@ -52,6 +53,7 @@ class ProjectContentServices {
     const page = { ...pageInput(input), filters: workListFilters(input, "issues") };
     if (input.type) page.type = choice(input.type, ISSUE_TYPES, "事项类型");
     page.includeArchived = input.includeArchived === "true" || input.includeArchived === "1";
+    page.active = input.active === "true";
     return this.read(projectId, actor, ["issue.view"], async () => {
       const { permissions } = await this.projects.authorize(projectId, actor, "issue.view");
       const result = await this.store.issues(projectId, page);
@@ -184,11 +186,12 @@ class ProjectContentServices {
       const requestId = input.requestId ? identifier(input.requestId, "提交标识") : undefined;
       const existing = await this.store.deliveryRequest(requestId);
       if (existing) {
-        if (existing.projectId !== projectId || existing.authorId !== actor.id || existing.issueId !== issueId || existing.taskId !== data.taskId || existing.body !== data.body || input.title !== undefined && existing.title !== text(input.title, "交付标题", 200, { required: true }) || input.reviewerId !== undefined && existing.reviewerId !== input.reviewerId || existing.commit !== data.commit || existing.supersedesId !== (input.supersedesId || null)) throw accountError("相同提交标识不能更改交付内容。", 409);
+        if (existing.projectId !== projectId || existing.authorId !== actor.id || existing.issueId !== issueId || existing.taskId !== data.taskId || existing.body !== data.body || !issueId && input.title !== undefined && existing.title !== text(input.title, "交付标题", 200, { required: true }) || !issueId && input.reviewerId !== undefined && existing.reviewerId !== input.reviewerId || existing.commit !== data.commit || existing.supersedesId !== (input.supersedesId || null)) throw accountError("相同提交标识不能更改交付内容。", 409);
         return presentDeliverable(existing);
       }
       if (requestId) data.requestId = requestId;
       const issue = issueId ? await this.store.issue(projectId, issueId) : null;
+      if (issue) assertIssueWritable(issue);
       if (issue?.developmentClaim && data.taskId !== issue.developmentClaim.task.id) throw accountError("送验必须关联当前开发任务。", 409);
       const task = await this.store.deliveryTask(projectId, issueId, actor.id, { ...data, supersedesId: input.supersedesId });
       if (input.supersedesId) {
@@ -206,13 +209,14 @@ class ProjectContentServices {
         data.supersedesId = previous.id;
       }
       if (issue && input.issueRevision !== undefined && issue.revision !== revision(input.issueRevision)) throw accountError("事项已变化，请刷新后重新提交。", 409);
-      data.reviewerId = identifier(input.reviewerId || issue?.qaOwnerId || issue?.acceptanceOwnerId, "交付验证人");
+      const submission = issue ? workflowEventEdge(issue, "delivery.submitted") : null;
+      const reviewer = issue ? deliveryReviewer(issue, submission) : input.reviewerId;
+      if (!reviewer) throw accountError(issue ? "事项未设置流程要求的验证人，请先补充负责人。" : "请选择交付验证人。", 409);
+      data.reviewerId = identifier(reviewer, "交付验证人");
       await this.store.members(projectId, [data.reviewerId]);
       await this.projects.authorize(projectId, { id: data.reviewerId }, "deliverable.review");
-      const title = text(input.title ?? issue?.title, "交付标题", 200, { required: true });
+      const title = text(issue?.title ?? input.title ?? task?.snapshot.title, "交付标题", 200, { required: true });
       if (issue) {
-        assertIssueWritable(issue);
-        const submission = workflowEventEdge(issue, "delivery.submitted");
         const previous = await this.store.latestDelivery(projectId, issueId);
         if (previous?.status === "pending") throw accountError("本事项已有待验证交付，请先处理该交付。", 409);
         if (previous?.status === "returned" && data.supersedesId !== previous.id) throw accountError("请沿原退回交付重新提交。", 409);
@@ -240,7 +244,7 @@ class ProjectContentServices {
         const task = await this.development.task(projectId, issue?.developmentClaim?.task.id || delivery.taskId);
         if (task.executorId === actor.id) developmentTask = presentDevelopment(task, actor.id, await this.development.execution(task), { permissions: context.permissions, projectStatus: context.project.status });
       }
-      return { delivery: presentDeliverable(delivery), developmentTask, issue: issue ? presentIssue(issue, actor.id, context.permissions) : null, canReview: delivery.reviewerId === actor.id, canResubmit: (delivery.authorId === actor.id || !delivery.taskId && issue?.actions[0]?.explicitHandler && currentHandler(issue) === actor.id) && delivery.status === "returned" && !delivery.next, permissions: context.project.status === "archived" ? context.permissions.filter(p => p.endsWith(".view")) : context.permissions, people: await this.store.people([delivery.authorId, delivery.reviewerId, delivery.reviewedById]) };
+      return { delivery: presentDeliverable(delivery), developmentTask, issue: issue ? { ...presentIssue(issue, actor.id, context.permissions), images: presentIssueImages(await this.store.issuePreviewFiles(projectId, issue.id), issue.source) } : null, canReview: delivery.reviewerId === actor.id, canResubmit: (delivery.authorId === actor.id || !delivery.taskId && issue?.actions[0]?.explicitHandler && currentHandler(issue) === actor.id) && delivery.status === "returned" && !delivery.next, permissions: context.project.status === "archived" ? context.permissions.filter(p => p.endsWith(".view")) : context.permissions, people: await this.store.people([delivery.authorId, delivery.reviewerId, delivery.reviewedById, issue?.businessOwnerId]) };
     });
   }
   async beginDelivery(projectId, id, actor, input) {
@@ -282,7 +286,7 @@ class ProjectContentServices {
       const current = await this.store.readDeliverable(projectId, id);
       if (current.reviewerId !== actor.id) throw accountError("只有指定验证人能验收此交付。", 403);
       const issue = await this.workflow.assertCurrentDelivery(current);
-      const review = deliveryReview(input, current);
+      const review = deliveryReview(input, current, issue);
       const saved = await this.store.reviewDeliverable(projectId, id, actor.id, input.revision, review);
       if (issue) await this.workflow.event(issue, actor, "verification." + review.status, { delivery: saved, reviewerId: actor.id, reason: review.reviewNote });
       if (saved.taskId) await this.executionWorkflow.settle(saved.taskId);

@@ -36,8 +36,8 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,
     let mode = "manual", rejectWrite = true, rejectPrevious = false, latestVersion = 2, actionLabel = "线下处理";
     const issue = (id = "i") => ({ id, number: id === "i" ? 1 : 2, type: "requirement", title: id === "i" ? "客户列表支持跨页筛选与导出，保留筛选条件并补齐错误反馈" : id === "k" ? "首次送验的事项" : "另一条待处理事项", description: "已完成配置或开发，并提供实际核验记录。", acceptanceCriteria: ["结果符合业务要求"], priority: "normal", revision: 3, watcherIds: [],
       status: "ready", statusName: "待开发", workflow: { version: 2, latestPublishedVersion: latestVersion, definition }, processing: { handlerId: "u", status: "ready" },
-      deliverySubmission: { allowed: true, label: actionLabel, taskId: mode === "manual" ? null : "t", previous: mode === "rework" && id !== "k" ? { id: 'previous-' + id, revision: 4 } : null },
-      assignmentAllowed: true, developerId: assigned.has(id) ? "u" : null, development: mode === "manual" && !assigned.has(id) ? null : { taskId: "t", executorId: "u", executorName: "处理人" }, people: [], availableTransitions: [],
+      deliverySubmission: { allowed: true, label: actionLabel, reviewerId: 'qa', taskId: mode === "manual" ? null : "t", previous: mode === "rework" && id !== "k" ? { id: 'previous-' + id, revision: 4 } : null },
+      assignmentAllowed: true, developerId: assigned.has(id) ? "u" : null, development: mode === "manual" && !assigned.has(id) ? null : { taskId: "t", executorId: "u", executorName: "处理人" }, people: [{ id: 'qa', displayName: '验证人' }], availableTransitions: [],
       workflowActions: [{ trigger: "delivery.submitted", name: actionLabel, statusName: "待验证" }],
     });
     await page.route("**/api/**", async route => {
@@ -114,14 +114,14 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,
       await page.getByRole('button', { name: /采用新流程版本/ }).waitFor();
       latestVersion = 2;
       await page.getByRole("button", { name: "线下处理", exact: true }).click();
+      await page.getByLabel("交付说明", { exact: true }).fill("");
       await page.getByText("请填写交付说明。", { exact: true }).waitFor();
       assert.equal(await page.getByRole("dialog").getByRole("button", { name: actionLabel, exact: true }).isDisabled(), true);
       assert.equal(await page.getByLabel("验证结果", { exact: true }).count(), 0);
       assert.equal(await page.getByLabel("提交标识（可选）", { exact: true }).count(), 0);
       if (mode === "existing") await capture("delivery-required");
       await page.getByLabel("交付说明", { exact: true }).fill("已完成工作和可复核的证据");
-      await selectOption(page.getByLabel("交付验证人", { exact: true }), "qa");
-      await page.getByRole("dialog").getByRole("checkbox").check();
+      assert.equal(await page.getByLabel("交付验证人", { exact: true }).count(), 0);
       await capture(`delivery-${mode}`);
       const submit = page.getByRole("dialog").getByRole("button", { name: actionLabel, exact: true });
       await submit.click(); await submit.waitFor({ state: "visible" });
@@ -145,7 +145,6 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth));
     await open("resubmit");
     assert.equal(await page.getByLabel("Delivery notes", { exact: true }).inputValue(), "原成果与核验记录");
-    await page.getByRole("dialog").getByRole("checkbox").check();
     await page.getByRole("dialog").getByRole("button", { name: actionLabel, exact: true }).click();
     await page.getByText("Delivery submitted. Issue status and review work have been updated.", { exact: true }).last().waitFor();
     const resubmission = writes.at(-1).input;
@@ -164,19 +163,15 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,
       }
       await page.getByText('导出结果缺少筛选条件，请补齐后再次验证。', { exact: true }).waitFor();
       assert.equal(await page.getByLabel('Delivery notes', { exact: true }).inputValue(), kind === 'task' ? '失败后保留的返工草稿' : '原成果与核验记录');
-      await selectOption(page.getByLabel('Delivery reviewer', { exact: true }), 'qa');
-      await page.getByRole('checkbox', { name: /I confirm/ }).check();
-      await page.getByRole('checkbox', { name: '另一条待处理事项', exact: true }).check();
-      await page.getByRole('checkbox', { name: '首次送验的事项', exact: true }).check();
+      assert.equal(await page.getByLabel('Delivery reviewer', { exact: true }).count(), 0);
+      assert.equal(await page.getByRole('checkbox', { name: '另一条待处理事项', exact: true }).count(), 0);
       if (kind === 'task') await capture('rework-submit-en');
       else { await selectPreference(page, 'locale', 'zh-CN'); await capture('rework-session-submit'); }
       await page.getByRole('button', { name: actionLabel, exact: true }).click();
       await page.getByText(kind === 'task' ? 'Delivery submitted. Issue status and review work have been updated.' : '交付已提交，事项和验证待办已同步更新。', { exact: true }).last().waitFor();
-      const batch = writes.at(-1).input.items;
-      assert.deepEqual(batch.map(item => [item.issueId, item.taskId, item.supersedesId, item.previousRevision]), [['i', 't', 'previous-i', 4], ['j', 't', 'previous-j', 7], ['k', 't', undefined, undefined]]);
-      assert.equal(batch[0].commit, 'abc123');
-      assert.equal(batch[1].commit, undefined, 'other issues never inherit the first delivery commit');
-      assert.equal(batch[2].commit, undefined);
+      const submission = writes.at(-1).input;
+      assert.deepEqual([submission.issueId, submission.taskId, submission.supersedesId, submission.previousRevision], ['i', 't', 'previous-i', 4]);
+      assert.equal(submission.commit, 'abc123');
     }
     mode = 'existing';
     await open("workflow");
@@ -227,14 +222,14 @@ createApp({render:()=>h('div',[h(LocaleSelect),h(OperationMessages),h(component,
     for (const kind of ['tasks', 'queue']) {
       await open(kind);
       await page.getByLabel('任务状态', { exact: true }).waitFor();
-      assert.equal(reads.filter(url => url.pathname.endsWith('/tasks')).at(-1).searchParams.get('status'), 'not_cancelled');
+      assert.equal(reads.filter(url => url.pathname.endsWith('/tasks')).at(-1).searchParams.get('status'), 'active');
       for (const status of ['all', 'cancelled']) {
         const response = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/tasks') && new URL(response.url()).searchParams.get('status') === status);
         await selectOption(page.getByLabel('任务状态', { exact: true }), status); await response;
       }
     }
     await open('review');
-    await page.getByRole('button', { name: '进入质检', exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: '进入质检', exact: true }).count(), 0);
     await page.getByRole('button', { name: '确认交付合格', exact: true }).waitFor();
     assert.equal(await page.getByRole('button', { name: '发回补充材料', exact: true }).count(), 0);
     assert.equal(await page.getByRole('button', { name: '通过验收', exact: true }).count(), 0);

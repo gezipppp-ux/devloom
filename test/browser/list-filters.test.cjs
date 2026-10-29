@@ -29,7 +29,7 @@ async function verifyListFilters({ page, origin, projects }) {
     const records = items.map((item, index) => kind === "issues" ? item : kind === "tasks" ? { ...originalTask, id: index ? `task-${index}` : "search-task", title: item.title, projectId: projects.projectId, projectName: "MY智营", status: index ? "planned" : "started", releaseId: item.releaseId, releaseName: item.releaseName, executorId: "visual-admin", reporterIds: index === 2 ? ["member-1", "member-2"] : [item.reporterId] } : { ...item, authorId: "visual-admin", status: "pending" });
     const filtered = records.filter(row => ["releaseId", "priority", "ownerId", "reporterId", "status"].every(key => {
       const selected = (url.searchParams.get(key) || "").split(",").filter(Boolean);
-      if (!selected.length || selected.includes("all") || selected.includes("not_cancelled")) return true;
+      if (!selected.length || selected.includes("all") || selected.includes("active") || selected.includes("not_cancelled")) return true;
       const values = key === "reporterId" ? row.reporterIds || [row.reporterId] : [key === "ownerId" ? row.executorId || row.developerId : row[key]];
       return selected.some(value => values.includes(value));
     }));

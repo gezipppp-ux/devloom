@@ -266,7 +266,7 @@ async function refreshCurrentSession() {
       </ArchivedSessions></div>
     <FeedbackMessage :message="preferenceError" type="error" />
     <main>
-      <PublishDelivery v-if="publishing && projectId && session" :key="session.key" :project-id="projectId" :run-key="session.key" :can-publish="allowed('deliverable.create')" @close="publishing = false" @finished="publishing = false; refreshCurrentSession()" @published="delivery => { publishing = false; emit('open-project', { tab: 'deliveries', delivery: delivery.id }); }" />
+      <PublishDelivery v-if="publishing && projectId && session" :key="session.key" :project-id="projectId" :run-key="session.key" :can-publish="allowed('deliverable.create')" @close="publishing = false" @finished="publishing = false; refreshCurrentSession()" @published="(delivery, items) => { publishing = false; emit('open-project', { tab: 'deliveries', ...(items?.length > 1 ? {} : { delivery: delivery.id }) }); }" />
       <SettingsPanel
         v-if="settingsOpen && !props.projectId"
         :can-manage-system="canManageSystem"

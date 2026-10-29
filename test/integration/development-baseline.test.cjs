@@ -119,6 +119,43 @@ test("explicit preparation retry preserves snapshots and identities, fences acti
   assert.equal(attempts, 1);
 });
 
+test("failed worktree initialization retries in the same real worktree before starting the Agent", async t => {
+  const f = fixture(t), input = f.input("initialization-retry");
+  fs.writeFileSync(path.join(f.author, "init.cjs"), 'const fs = require("node:fs"); fs.appendFileSync("attempts.txt", "attempt\\n"); if (!fs.existsSync("ready.txt")) process.exit(1);');
+  git(f.author, ["add", "init.cjs"]);
+  git(f.author, ["commit", "-m", "add initialization"]);
+  git(f.author, ["push", "origin", "main"]);
+  input.config.execution.initCommands = ["node init.cjs"];
+  fs.writeFileSync(input.configFile, JSON.stringify(input.config));
+  const key = runKey(sourceFor(input.channel.id, input.item)), runs = path.join(f.root, "runs");
+  input.directory = path.join(runs, key);
+  await assert.rejects(runExecution(input, f.dependencies), /初始化第 1 条命令失败/);
+  const before = await new RunStore(runs).read(key);
+  assert.equal(before.initialization.status, "failed");
+  assert.equal(f.starts(), 0);
+  fs.writeFileSync(path.join(before.worktree.path, "ready.txt"), "resolved");
+  const client = new FakeClient();
+  const request = client.request.bind(client);
+  client.request = async (method, params) => {
+    const result = await request(method, params);
+    if (method === "turn/start") setImmediate(() => client.notify("turn/completed", { threadId: params.threadId, turn: { ...result.turn, status: "completed" } }));
+    return result;
+  };
+  const manager = new SessionManager({ runsDirectory: runs, configFile: input.configFile, client,
+    channels: { get: () => input.channel } });
+  t.after(() => manager.close());
+  const requestId = randomUUID();
+  await manager.retryPreparation(key, requestId);
+  await manager.sessions.get(key).operation;
+  const after = await manager.store.read(key);
+  assert.equal(after.execution.status, "completed", after.execution.error);
+  assert.equal(after.initialization.status, "completed");
+  assert.deepEqual(after.worktree, before.worktree);
+  assert.equal(fs.readFileSync(path.join(before.worktree.path, "attempts.txt"), "utf8"), "attempt\nattempt\n");
+  assert.equal(client.calls.filter(call => call.method === "turn/start").length, 1);
+  assert.equal((await manager.retryPreparation(key, requestId)).reused, true);
+});
+
 test("new worktrees fetch current remote commits without changing dirty source checkout; existing runs never refetch", async (t) => {
   const f = fixture(t);
   fs.writeFileSync(path.join(f.repository, "file.txt"), "dirty source");

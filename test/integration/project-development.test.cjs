@@ -611,6 +611,7 @@ test("selection preflight runs before accepting a plan and rejects changed issue
 test("pending delivery prevents cancellation; a returned delivery can be linked to explicitly claimed rework", async t => {
   const { database, actor, other, project, services, content, issue } = await fixture(t);
   const selected = await issue("已有交付返工");
+  await content.updateIssue(project.id, selected.id, actor, { revision: selected.revision, qaOwnerId: other.id });
   const { task } = await launch(services, project.id, actor, { requestId: randomUUID(), issueIds: [selected.id] });
   await recordDevelopmentTurn(database, services, project.id, task.id, actor);
   const input = { issueId: selected.id, taskId: task.id, body: "Original result", reviewerId: other.id };
@@ -715,7 +716,7 @@ test("running execution and pending approvals prevent completing a task and rele
   assert.ok(cancelled.people.some(person => person.id === actor.id), "business owner remains in the people directory");
 });
 
-test("global workflow publication preserves planned task issue versions and applies the same development gates across projects", async t => {
+test("global workflow publication updates planned tasks and applies the same development gates across projects", async t => {
   const { database, actor, other, project, content, services, calls } = await fixture(t);
   const accounts = new AccountServices(database);
   t.after(() => accounts.close());
@@ -737,9 +738,9 @@ test("global workflow publication preserves planned task issue versions and appl
   };
   await assert.rejects(workflows.saveWorkflow("requirement", actor, { revision: workflow.revision, definition }), { statusCode: 403 });
   ({ workflow } = await workflows.saveWorkflow("requirement", admin, { revision: workflow.revision, definition }));
-  await workflows.saveWorkflow("requirement", admin, { revision: workflow.revision }, true);
+  await workflows.saveWorkflow("requirement", admin, { revision: workflow.revision, mapping: { ready: "development" } }, true);
   assert.equal((await services.start(project.id, beforeTask.id, actor, { requestId: randomUUID(), revision: beforeTask.revision, baseBranch: "main" })).task.status, "started");
-  assert.equal((await content.readIssue(project.id, before.id, actor)).status, "ready");
+  assert.equal((await content.readIssue(project.id, before.id, actor)).status, "development");
   const nextProject = await database.client.project.create({ data: { name: "统一流程项目", directoryName: "repo-other", directoryKey: "repo-other", ownerUserId: actor.id, remoteUrl: project.remoteUrl } });
   const permissions = projectPermissionCatalog.filter(entry => entry.scope === "project").map(entry => entry.id);
   await database.client.projectMember.create({ data: { projectId: nextProject.id, userId: actor.id, permissions } });
@@ -751,7 +752,7 @@ test("global workflow publication preserves planned task issue versions and appl
   const secondRecord = await database.client.projectIssue.findUnique({ where: { id: secondNew.id } });
   const beforeRecord = await database.client.projectIssue.findUnique({ where: { id: before.id } });
   assert.equal(firstRecord.workflowVersionId, secondRecord.workflowVersionId, "projects bind the same immutable system workflow version");
-  assert.notEqual(beforeRecord.workflowVersionId, firstRecord.workflowVersionId);
+  assert.equal(beforeRecord.workflowVersionId, firstRecord.workflowVersionId);
   await assert.rejects(services.create(project.id, actor, { requestId: randomUUID(), issueIds: [firstNew.id] }), /不允许认领/);
   await database.client.projectIssue.update({ where: { id: firstNew.id }, data: { developerId: actor.id } });
   await content.transitionIssue(project.id, firstNew.id, actor, { revision: firstNew.revision, transitionId: "approve" });

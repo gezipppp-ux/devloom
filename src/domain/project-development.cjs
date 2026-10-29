@@ -7,7 +7,7 @@ const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{1
 
 function developmentStatus(input) {
   if (input === undefined || input === "") return "not_cancelled";
-  if (!["not_cancelled", "all", "planned", "started", "unknown", "merged", "completed", "cancelled"].includes(input)) throw accountError("任务状态无效。", 400);
+  if (!["active", "not_cancelled", "all", "planned", "started", "unknown", "merged", "completed", "cancelled"].includes(input)) throw accountError("任务状态无效。", 400);
   return input;
 }
 

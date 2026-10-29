@@ -3,7 +3,7 @@ import AppSelect from "../../shared/components/AppSelect.vue";
 import ListFilters from "../../shared/components/ListFilters.vue";
 import { useWorkListFilters } from "./use-work-list-filters.js";
 import { computed, ref, watch } from "vue";
-import { formatNumber } from "../../shared/i18n/index.js";
+import { formatNumber, translate } from "../../shared/i18n/index.js";
 import { useRoute, useRouter } from "vue-router";
 import { appApi } from "../../shared/api/api.js";
 import { useResource } from "../../shared/api/use-resource.js";
@@ -26,15 +26,18 @@ const query = ref(String(route.query.q || ""));
 const publishing = ref(route.query.publish === "1");
 const selected = ref([]), merging = ref(false);
 const archiving = ref(null);
-const scope = ref(String(route.query.scope || "all")), type = ref(String(route.query.type || "")), status = ref(String(route.query.status || (props.kind === "tasks" ? "not_cancelled" : "")));
+const defaultStatus = () => props.kind === "tasks" ? "active" : props.kind === "deliveries" ? "open" : "";
+const scope = ref(String(route.query.scope || "all")), type = ref(String(route.query.type || "")), status = ref(String(route.query.status || defaultStatus()));
 const offset = computed(() => Math.max(0, Number.parseInt(route.query.offset, 10) || 0));
 const headings = { issues: ["事项", "从清晰的表达开始，一起把问题推进到完成。"], tasks: ["开发", "继续已有任务，或开始新的开发。"], deliveries: ["交付", "把完成的工作，变成可验证的结果。"] };
 const { data, loading, error, reload } = useResource(() => {
-  const params = new URLSearchParams({ query: String(route.query.q || ""), scope: String(route.query.scope || "all"), type: String(route.query.type || ""), status: String(route.query.status || ""), ...filters.params.value, offset: String(offset.value), ...(props.projectId ? { projectId: props.projectId } : {}) });
+  const selectedStatus = String(route.query.status || defaultStatus());
+  const params = new URLSearchParams({ query: String(route.query.q || ""), scope: String(route.query.scope || "all"), type: String(route.query.type || ""), status: props.kind === "deliveries" ? selectedStatus === "open" ? "pending,returned" : selectedStatus === "all" ? "" : selectedStatus : selectedStatus, ...filters.params.value, ...(props.kind === "deliveries" && selectedStatus === "open" ? { current: "true" } : {}), ...(props.kind === "issues" && route.query.view !== "all" && !filters.params.value.status ? { active: "true" } : {}), offset: String(offset.value), ...(props.projectId ? { projectId: props.projectId } : {}) });
   return appApi(`/workbench/${props.kind}?${params}`);
 }, { interval: props.kind === "tasks" ? 5000 : 0 });
 const filters = useWorkListFilters(() => props.kind, () => data.value?.filterOptions);
-watch(() => route.fullPath, () => { selected.value = []; merging.value = false; archiving.value = null; query.value = String(route.query.q || ""); scope.value = String(route.query.scope || "all"); type.value = String(route.query.type || ""); status.value = String(route.query.status || (props.kind === "tasks" ? "not_cancelled" : "")); void reload(); });
+const filterFields = computed(() => filters.fields.value.map(field => props.kind === "issues" && field.key === "status" && route.query.view !== "all" ? { ...field, placeholder: translate("未结束") } : field));
+watch(() => route.fullPath, () => { selected.value = []; merging.value = false; archiving.value = null; query.value = String(route.query.q || ""); scope.value = String(route.query.scope || "all"); type.value = String(route.query.type || ""); status.value = String(route.query.status || defaultStatus()); void reload(); });
 const rows = computed(() => (data.value?.items || []).map(item => ({ ...item, selectionDisabled: !item.canMerge && !item.canArchive })));
 watch(rows, items => { selected.value = selected.value.filter(id => items.some(item => item.id === id && !item.selectionDisabled)); });
 const mergeTasks = computed(() => rows.value.filter(item => selected.value.includes(item.id)));
@@ -68,11 +71,11 @@ function backFromDelivery() { const target = workReturnLocation(router, route, "
       <div v-if="kind === 'tasks'" class="development-entry"><div><button class="primary" @click="emit('create', 'manual')"><PlusOutlined aria-hidden="true" />{{ $t('独立开发') }}</button><p class="field-hint">{{ $t('无需关联需求或 Bug。') }}</p></div><button @click="router.push({ name: 'issues', query: projectId ? { projectId } : {} })">{{ $t('从事项开发') }}</button></div>
       <form class="ui-list-toolbar" role="search" @submit.prevent="search">
         <div v-if="kind === 'issues'" class="ui-segmented" :aria-label="$t('事项类型')"><button v-for="option in [['', '全部'], ['requirement', '需求'], ['bug', '缺陷']]" :key="option[0]" type="button" :aria-pressed="type === option[0]" @click="type = option[0]; search()">{{ $t(option[1]) }}</button></div>
-        <div v-else-if="kind === 'deliveries'" class="ui-segmented" :aria-label="$t('验收状态')"><button v-for="option in [['', '全部'], ['pending', '待验证'], ['accepted', '已通过'], ['returned', '已退回']]" :key="option[0]" type="button" :aria-pressed="status === option[0]" @click="status = option[0]; search()">{{ $t(option[1]) }}</button></div>
+        <div v-else-if="kind === 'deliveries'" class="ui-segmented" :aria-label="$t('验收状态')"><button v-for="option in [['open', '待处理'], ['all', '全部'], ['pending', '待验证'], ['accepted', '已通过'], ['returned', '已退回']]" :key="option[0]" type="button" :aria-pressed="status === option[0]" @click="status = option[0]; search()">{{ $t(option[1]) }}</button></div>
         <div v-else class="ui-segmented"><button type="button" aria-pressed="true">{{ $t('我的任务') }}</button><RouterLink v-if="projectId" :to="{ name: 'project', params: { projectId }, query: { tab: 'tasks', taskScope: 'all' } }">{{ $t('项目全部任务') }}</RouterLink><button v-else type="button" disabled :title="$t('请先在顶部选择具体项目')">{{ $t('项目全部任务') }}</button></div>
         <span class="ui-toolbar-spacer" /><label class="ui-compact-search"><button type="submit" :disabled="loading" :aria-label="$t('搜索')"><SearchOutlined aria-hidden="true" /></button><input v-model="query" type="search" :aria-label="$t('搜索')" :placeholder="$t(kind === 'issues' ? '搜索事项' : kind === 'tasks' ? '搜索开发任务' : '搜索交付')" @change="search" /></label><button v-if="kind === 'tasks'" type="button" class="development-quiet-button" @click="emit('create', 'history')"><ClockCircleOutlined aria-hidden="true" />{{ $t('查看已归档会话') }}</button>
       </form>
-      <ListFilters :fields="filters.fields.value" :model-value="filters.model.value" @update:model-value="filters.update" @reset="filters.reset"><label v-if="kind !== 'tasks'" class="list-scope-filter">{{ $t('工作范围') }}<AppSelect native-events v-model="scope" :aria-label="$t('工作范围')" @change="search"><option value="all">{{ $t('全部') }}</option><option value="mine">{{ $t('与我有关') }}</option></AppSelect></label></ListFilters>
+      <ListFilters :fields="filterFields" :model-value="filters.model.value" @update:model-value="filters.update" @reset="filters.reset"><label v-if="kind !== 'tasks'" class="list-scope-filter">{{ $t('工作范围') }}<AppSelect native-events v-model="scope" :aria-label="$t('工作范围')" @change="search"><option value="all">{{ $t('全部') }}</option><option value="mine">{{ $t('与我有关') }}</option></AppSelect></label><button v-if="kind === 'issues'" type="button" @click="router.push({ query: { ...route.query, view: route.query.view === 'all' ? undefined : 'all', status: undefined, offset: undefined } })">{{ $t(route.query.view === 'all' ? '仅看未结束事项' : '查看全部事项') }}</button></ListFilters>
       <FeedbackMessage :message="error" type="error" /><button v-if="error" @click="reload">{{ $t('重试') }}</button><p v-if="loading && !data" role="status">{{ $t('正在加载…') }}</p>
       <div v-if="kind === 'tasks' && selected.length" class="ui-selection-bar project-development-action"><span>{{ $t('已选择 {count} 个任务', { count: formatNumber(selected.length) }) }}</span><button class="primary" :disabled="loading || Boolean(archiveError)" :title="$t(archiveError)" @click="archiving = [...mergeTasks]">{{ $t('归档所选会话') }}</button><button :disabled="loading || Boolean(mergeError)" :title="$t(mergeError)" @click="merging = true">{{ $t('合并所选任务（') }}{{ selected.length }}）</button><button :disabled="loading" @click="selected = []">{{ $t('取消选择') }}</button><span class="field-hint">{{ $t(archiveError || '归档会话保留历史和代码，不改变开发任务状态。') }}</span></div>
       <template v-if="data?.items.length"><WorkItemTable v-model:selected="selected" :items="rows" :people="data.people" :kind="kind" :selectable="kind === 'tasks'" :personal="kind === 'tasks'" :disabled="loading" @open="item => router.push(workLocation(kind, item, route.fullPath))" @open-session="item => emit('open-workspace', item.workspaceId, item.runKey)" /></template>

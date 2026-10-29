@@ -13,6 +13,9 @@ import { freeNodePosition, workflowNodes } from "../../shared/components/workflo
 const actorLabels = { handler: "当前处理人", developer: "开发负责人", reviewer: "本轮验证人", assigner: "分派协调人" };
 const assignmentLabels = { role: "目标节点职责", selection: "本次选择处理人", executor: "当前开发执行人", reviewer: "本轮验证人", submitter: "本轮交付提交人" };
 const replacing = ref(false), previewing = ref(false);
+const mappingOpen = ref(false), statusMapping = ref({});
+const isTerminal = kind => ['completed', 'cancelled'].includes(kind);
+const missingStatuses = computed(() => (data.value?.statusUsage || []).filter(status => !definition.value.nodes.some(item => item.id === status.id && isTerminal(item.kind) === isTerminal(status.kind))));
 const fieldLabels = { description: '描述', acceptanceCriteria: '验收标准', reproductionSteps: '复现步骤', expectedResult: '预期结果', actualResult: '实际结果', releaseId: '目标版本', qaOwnerId: '测试负责人', acceptanceOwnerId: '业务验收人' };
 function preview() { simulationNode.value = selected.value || definition.value.nodes.find(node => node.kind === 'initial')?.id || ''; simulationEvent.value = 'manual'; previewing.value = true; }
 const dirty = computed(() => data.value && JSON.stringify(definition.value) !== JSON.stringify(data.value.workflow.draft));
@@ -27,7 +30,7 @@ function clear() { selected.value = ""; selectedEdge.value = ""; deleting.value 
 function closeEditor() { clear(); graph.value?.focusCanvas(); }
 function cancelDelete() { deleting.value = false; void focusName(); }
 watch(data, value => { if (value) { definition.value = JSON.parse(JSON.stringify(value.workflow.draft)); clear(); } });
-watch(type, () => { replacing.value = false; previewing.value = false; data.value = null; definition.value = { nodes: [], transitions: [] }; notice.value = ""; clear(); void reload(); });
+watch(type, () => { replacing.value = false; previewing.value = false; mappingOpen.value = false; statusMapping.value = {}; data.value = null; definition.value = { nodes: [], transitions: [] }; notice.value = ""; clear(); void reload(); });
 watch(definition, value => {
   if (data.value && JSON.stringify(value) !== JSON.stringify(data.value.workflow.draft)) notice.value = "";
 }, { deep: true });
@@ -67,17 +70,24 @@ function remove() {
   } else definition.value.transitions = definition.value.transitions.filter(item => item.id !== selectedEdge.value);
   closeEditor();
 }
-async function persist(publish = false) {
+async function persist(publish = false, mapped = false) {
   if (loading.value || !data.value) return;
+  if (publish && !mapped) statusMapping.value = {};
+  if (publish && !mapped && missingStatuses.value.length) { statusMapping.value = {}; mappingOpen.value = true; return; }
   const path = endpoint(), draft = JSON.parse(JSON.stringify(definition.value)), revision = data.value.workflow.revision;
   const result = await save(path, { revision, definition: draft }, result => { data.value = result; }, "流程草稿已保存。");
-  if (result && publish) await save(`${path}/publish`, { revision: result.workflow.revision }, result => { data.value = result; }, "流程已发布，新事项将使用此版本。");
+  if (result && publish) await save(`${path}/publish`, { revision: result.workflow.revision, mapping: statusMapping.value }, result => { data.value = result; mappingOpen.value = false; }, "流程已发布，事项已使用当前流程。");
 }
 </script>
 
 <template>
   <section class="workflow-settings" :aria-label="$t('流程编排')">
-    <header class="ui-settings-heading"><div><h2>{{ $t("流程编排") }}</h2><p>{{ $t("系统统一维护需求和 Bug 两套流程，发布后用于所有项目的新事项。") }}</p></div><div v-show="!graph?.fullscreen" class="actions"><button :disabled="!data || loading || saving" @click="persist()">{{ $t('保存流程草稿') }}</button><button class="primary" :disabled="!data || loading || saving" @click="persist(true)">{{ saving ? $t('正在保存…') : $t('校验并发布流程') }}</button></div></header>
+    <header class="ui-settings-heading"><div><h2>{{ $t("流程编排") }}</h2><p>{{ $t("系统统一维护需求和 Bug 两套流程，发布后用于所有项目的事项。") }}</p></div><div v-show="!graph?.fullscreen" class="actions"><button :disabled="!data || loading || saving" @click="persist()">{{ $t('保存流程草稿') }}</button><button class="primary" :disabled="!data || loading || saving" @click="persist(true)">{{ saving ? $t('正在保存…') : $t('校验并发布流程') }}</button></div></header>
+    <ModalDialog v-if="mappingOpen" open :title="$t('调整已有事项的状态')" @close="mappingOpen = false">
+      <p>{{ $t('以下状态正在使用，请选择发布后对应的状态。') }}</p>
+      <div class="project-form"><label v-for="status in missingStatuses" :key="status.id">{{ status.name }} · {{ $t('{count} 个事项', { count: status.count }) }}<AppSelect v-model="statusMapping[status.id]" :aria-label="status.name" :options="definition.nodes.filter(item => isTerminal(item.kind) === isTerminal(status.kind)).map(item => ({ value: item.id, label: item.name }))" /></label></div>
+      <template #footer><button :disabled="saving" @click="mappingOpen = false">{{ $t('取消') }}</button><button class="primary" :disabled="saving || missingStatuses.some(status => !statusMapping[status.id])" @click="persist(true, true)">{{ $t('确认并发布') }}</button></template>
+    </ModalDialog>
     <div class="workflow-page-toolbar"><div class="workflow-type-tabs" role="group" :aria-label="$t('流程类型')"><button type="button" :aria-pressed="type === 'requirement'" :disabled="saving" @click="type = 'requirement'">{{ $t("需求流程") }}</button><button type="button" :aria-pressed="type === 'bug'" :disabled="saving" @click="type = 'bug'">{{ $t("Bug 流程") }}</button></div><span v-if="data" class="workflow-version">{{ $t("已发布 v") }}{{ data.workflow.publishedVersion }}</span><span v-if="dirty" class="field-hint">{{ $t('草稿未保存') }}</span><div class="actions workflow-tools"><button :disabled="!data?.recommendedDefinition || saving || loading" @click="replacing = true">{{ $t('流程模板') }}</button><button :disabled="!data || saving || loading" @click="preview">{{ $t('交接预览') }}</button></div></div>
     <FeedbackMessage :message="error" type="error" /><FeedbackMessage :message="notice" type="success" />
     <p v-if="loading" role="status">{{ $t("正在读取流程…") }}</p>
@@ -110,6 +120,7 @@ async function persist(publish = false) {
               <label>{{ $t("所需权限") }}<AppSelect native-events v-model="edge.permission" :aria-label="$t('所需权限')"><option value="issue.transition">{{ $t("事项流转") }}</option><option value="issue.accept">{{ $t("事项验收") }}</option></AppSelect></label>
               <label>{{ $t('流转必填资料') }}<AppSelect native-events multiple :aria-label="$t('流转必填资料')" @change="edge.requiredFields = [...$event.target.selectedOptions].map(option => option.value)"><option v-for="[value, label] in [['description','描述'], ['acceptanceCriteria','验收标准'], ['reproductionSteps','复现步骤'], ['expectedResult','预期结果'], ['actualResult','实际结果'], ['releaseId','目标版本'], ['qaOwnerId','测试负责人'], ['acceptanceOwnerId','业务验收人']]" :key="value" :value="value" :selected="edge.requiredFields?.includes(value)">{{ $t(label) }}</option></AppSelect></label>
               <label class="permission-choice"><input type="checkbox" v-model="edge.requireAcceptedDelivery" />{{ $t('必须已有通过验收的交付') }}</label>
+              <label v-if="edge.trigger === 'verification.accepted'" class="permission-choice"><input type="checkbox" :checked="edge.requireChecklist !== false" @change="edge.requireChecklist = $event.target.checked" />{{ $t('通过前必须核对全部验收标准') }}</label>
               <label class="permission-choice"><input v-model="edge.requiresReason" type="checkbox" />{{ $t("必须填写原因") }}</label>
             </template>
             <div v-if="deleting" class="canvas-delete" role="alert">
@@ -121,12 +132,12 @@ async function persist(publish = false) {
         </template>
         <template #actions="{ fullscreen }"><p v-if="fullscreen && (error || notice)" class="canvas-feedback" :class="{ 'is-error': error }" :role="error ? 'alert' : 'status'">{{ error || notice }}</p><div v-if="fullscreen" class="actions"><button :disabled="loading || saving" @click="persist()">{{ $t("保存流程草稿") }}</button><button class="primary" :disabled="loading || saving" @click="persist(true)">{{ saving ? $t("正在保存…") : $t("校验并发布流程") }}</button></div></template>
       </WorkflowGraph>
-      <p class="field-hint">{{ $t("修改先保留为草稿；发布不会改变已有事项绑定的流程。") }}</p>
+      <p class="field-hint">{{ $t("修改先保留为草稿；发布后所有事项使用当前流程。") }}</p>
     </template>
     <ModalDialog v-if="replacing && data?.recommendedDefinition" open wide :title="$t('流程模板')" @close="replacing = false">
       <div class="workflow-template-summary"><h3>{{ $t('开发与线下处理') }}</h3><p>{{ $t('从待开发提交已有成果，送验、退回与再次提交沿用同一流程。') }}</p></div>
       <WorkflowGraph :definition="data.recommendedDefinition" />
-      <div class="workflow-template-scope"><h3>{{ $t('替换范围') }}</h3><p>{{ $t('将替换当前未保存的流程草稿。保存或发布之前，已发布版本和现有事项保持原样。') }}</p><p class="field-hint">{{ $t('修改先保留为草稿；发布不会改变已有事项绑定的流程。') }}</p></div>
+      <div class="workflow-template-scope"><h3>{{ $t('替换范围') }}</h3><p>{{ $t('将替换当前未保存的流程草稿。保存或发布之前，已发布版本和现有事项保持原样。') }}</p><p class="field-hint">{{ $t('修改先保留为草稿；发布后所有事项使用当前流程。') }}</p></div>
       <template #footer><button @click="replacing = false">{{ $t('取消') }}</button><button class="primary" @click="loadRecommended">{{ $t('确认载入草稿') }}</button></template>
     </ModalDialog>
     <ModalDialog v-if="previewing" open :title="$t('交接预览')" @close="previewing = false">

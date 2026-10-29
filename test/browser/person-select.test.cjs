@@ -32,7 +32,7 @@ async function personSelectChecks() {
       if (pathname.endsWith("/members")) result = { members: new URL(page.url()).searchParams.get("kind") === "members" ? [] : members, candidates: people.map(person => ({ ...person, grantablePermissions: permissions })) };
       else if (pathname.endsWith("/reviewers")) result = { items: people };
       else if (pathname.endsWith("/issues/i")) result = issue;
-      else if (pathname.endsWith("/tasks/t")) result = { task };
+      else if (pathname.endsWith("/tasks/t")) result = { task: new URL(page.url()).searchParams.get("kind") === "publish" ? { ...task, kind: "manual", issues: [], issueIds: [] } : task };
       else if (pathname.endsWith("/deliveries/d")) result = { delivery: { id: "d", title: "测试交付", status: "pending", checklist: [], checkedItems: [], reviewerId: "li", authorId: "li", revision: 1 }, permissions, people };
       await route.fulfill({ json: result });
     });
@@ -93,6 +93,7 @@ async function personSelectChecks() {
     for (const [kind, label, button] of [["plan", "开发负责人"], ["settings", "负责人"], ["members", "用户", "添加成员"], ["publish", "交付验证人"], ["delivery", "重新指定验证人"], ["assets", "负责人", "新建资产"], ["task", "开发负责人", "编辑任务信息"]]) {
       await open(kind);
       if (button) await page.getByRole("button", { name: button, exact: true }).click();
+      if (kind === "delivery") await page.locator(".delivery-reassign summary").click();
       const control = await check(label);
       await search(control, "zs", ["zhang"]);
       await popup.locator('[data-value="zhang"]').click();

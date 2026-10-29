@@ -9,6 +9,9 @@ export const developmentTaskLabels = {
   unknown: "执行结果待确认",
 };
 export const developmentTaskStatuses = Object.keys(developmentTaskLabels);
+export function developmentTaskStatusLabel(task) {
+  return ["planned", "started"].includes(task.status) && task.deliveryPhase ? task.deliveryPhase : developmentTaskLabels[task.status] || task.status;
+}
 export const developmentExecutionStatuses = [
   "preparing", "initializing", "starting", "running", "completed", "failed", "error",
   "stopped", "disconnected", "unknown", "idle", "not_started", "deleted", "unavailable",
@@ -82,7 +85,7 @@ export function developmentTaskView(
             "前往「代码与环境」配置个人 Git 并准备开发空间，完成后返回此任务。",
         };
   }
-  if (task.canRetryPreparation) return { step: 2, title: "准备失败，Agent 尚未启动", description: "可沿用原任务资料、起始分支和执行设置重试准备，成功后启动 Agent。" };
+  if (task.canRetryPreparation) return { step: 2, title: "准备失败，Agent 尚未启动", description: task.retryInitialization ? "可在原工作目录重试初始化，成功后启动 Agent。" : "可沿用原任务资料、起始分支和执行设置重试准备，成功后启动 Agent。" };
   if (task.status === "unknown")
     return {
       step: 3,

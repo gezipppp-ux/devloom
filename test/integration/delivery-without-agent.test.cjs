@@ -23,7 +23,7 @@ async function fixture(t, { count = 1, type = "requirement" } = {}) {
   const development = new ProjectDevelopmentServices(database, projects, { get: () => assert.fail("Agent must not start") });
   const workbench = new WorkbenchServices(database, projects);
   const issues = [];
-  for (let index = 0; index < count; index++) issues.push(await content.createIssue(project.id, users.product, { ...{ businessOwnerId: users.product.id, qaOwnerId: users.product.id, acceptanceOwnerId: users.product.id }, type, title: "Outcome " + index, description: "Configuration behavior", reproductionSteps: "Open the result", expectedResult: "Expected behavior", actualResult: "Original behavior", acceptanceCriteria: ["The result can be verified."], ...(type === "bug" ? { acceptanceOwnerId: users.other.id } : {}) }));
+  for (let index = 0; index < count; index++) issues.push(await content.createIssue(project.id, users.product, { ...{ businessOwnerId: users.product.id, qaOwnerId: users.qa.id, acceptanceOwnerId: users.product.id }, type, title: "Outcome " + index, description: "Configuration behavior", reproductionSteps: "Open the result", expectedResult: "Expected behavior", actualResult: "Original behavior", acceptanceCriteria: ["The result can be verified."], ...(type === "bug" ? { acceptanceOwnerId: users.other.id } : {}) }));
   const publish = (manual = false) => {
     const definition = recommendedWorkflow(type);
     if (manual) {
@@ -109,14 +109,26 @@ test("existing outcomes retain an unstarted task through return and resubmission
   const f = await fixture(t);
   const { tasks: [task] } = await f.development.create(f.project.id, f.dev, { requestId: randomUUID(), issueIds: [f.issues[0].id] });
   await f.publish(); const { issue } = await f.upgrade();
-  const returned = await f.review(await f.submit(issue, f.dev, { taskId: task.id }), "returned");
+  const visible = async () => (await f.workbench.list("tasks", f.dev, { status: "active" })).items.some(item => item.id === task.id);
+  assert.equal(await visible(), true);
+  const submitted = await f.submit(issue, f.dev, { taskId: task.id });
+  assert.equal(await visible(), false, "submitted offline work leaves the development queue");
+  assert.equal((await f.development.read(f.project.id, task.id, f.dev)).task.scope[0].delivery.reviewerName, f.qa.displayName);
+  assert.equal((await f.workbench.list("tasks", f.dev, { status: "all" })).items.some(item => item.id === task.id), true, "the task remains in history");
+  assert.equal((await f.development.list(f.project.id, f.dev, { status: "active" })).tasks.some(item => item.id === task.id), false);
+  const returned = await f.review(submitted, "returned");
+  assert.equal(await visible(), true, "returned work reappears in development");
   const current = await f.read();
   assert.deepEqual(current.deliverySubmission.previous, { id: returned.id, revision: returned.revision });
   assert.equal(current.processing.handlerId, f.dev.id);
   assert.equal((await f.development.store.task(f.project.id, task.id)).status, "planned");
   const next = await f.submit(current, f.dev, { taskId: task.id, supersedesId: returned.id, previousRevision: returned.revision });
+  assert.equal(await visible(), false, "resubmission leaves the queue again");
+  const deliveries = await f.workbench.list("deliveries", f.dev, { status: "pending,returned", current: "true" });
+  assert.deepEqual(deliveries.items.map(item => item.id), [next.id], "superseded returns do not remain in the pending delivery queue");
   await f.review(next);
   assert.equal((await f.development.store.task(f.project.id, task.id)).status, "completed");
+  assert.equal(await visible(), false);
 });
 
 test("manual rework can explicitly acquire development and retain the original delivery chain", async t => {
@@ -154,6 +166,7 @@ test("partial delivery does not settle a merged task and delivery source cannot 
   for (const issue of f.issues) await f.upgrade(issue);
   await assert.rejects(f.submit(await f.read(), f.dev), { statusCode: 409 });
   const first = await f.submit(await f.read(), f.dev, { taskId: task.id });
+  assert.equal((await f.workbench.list("tasks", f.dev, { status: "active" })).items.some(item => item.id === task.id), true, "another issue still needs development");
   const pending = (await f.development.read(f.project.id, task.id, f.dev)).task;
   assert.equal(pending.canEdit, false);
   assert.equal(pending.canMerge, false);
@@ -161,6 +174,7 @@ test("partial delivery does not settle a merged task and delivery source cannot 
   await f.review(first);
   assert.equal((await f.development.store.task(f.project.id, task.id)).status, "planned");
   const second = await f.submit(await f.read(f.issues[1]), f.dev, { taskId: task.id });
+  assert.equal((await f.workbench.list("tasks", f.dev, { status: "active" })).items.some(item => item.id === task.id), false, "all linked issues have been submitted or completed");
   await f.review(second);
   assert.equal((await f.development.store.task(f.project.id, task.id)).status, "completed");
 });
@@ -246,6 +260,19 @@ test("manual Bug results retain business acceptance and return to the delivery a
   assert.equal((await f.read()).status, "closed");
   assert.equal(accepted.authorId, f.product.id);
   assert.equal(await f.database.client.developmentTask.count(), 0);
+});
+
+test("business acceptance can return an already verified Bug to development", async t => {
+  const f = await fixture(t, { type: "bug" });
+  const { tasks: [task] } = await f.development.create(f.project.id, f.dev, { requestId: randomUUID(), issueIds: [f.issues[0].id] });
+  await f.publish(); const { issue } = await f.upgrade();
+  await f.review(await f.submit(issue, f.dev, { taskId: task.id }));
+  let current = await f.read();
+  assert.equal(current.status, "verified");
+  assert.equal((await f.workbench.list("tasks", f.dev, { status: "active" })).items.some(item => item.id === task.id), false);
+  current = await f.content.transitionIssue(f.project.id, current.id, f.other, { revision: current.revision, transitionId: "verified_rework", reason: "业务验收需要调整" });
+  assert.equal(current.status, "rework");
+  assert.equal((await f.workbench.list("tasks", f.dev, { status: "active" })).items.some(item => item.id === task.id), true);
 });
 
 

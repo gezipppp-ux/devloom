@@ -83,7 +83,7 @@ docs/engineering/  # 行为契约与架构规则
 | `application/workbench-services.cjs`、`work-action-presenter.cjs`、`attention-services.cjs` | 按当前分派、真实执行和权限聚合个人动作；首页、完整队列与通知使用同一快照，不把资源列表等同于待办 |
 | `storage/work-action-store.cjs`、`work-action-query-store.cjs`、`domain/workflow-actions.cjs` | 步骤轮次与分派的原子持久化、聚合候选查询、职责与栏目纯规则；详细定义见流程动作契约 |
 | `application/project-workflow-services.cjs`、`workflow-execution-services.cjs`、`storage/workflow-execution-store.cjs` | 统一交接门禁、持久真实执行事件与幂等恢复；状态和处理人原子更新，失败不重放 Agent |
-| `application/project-content-services.cjs`、`project-content-presenter.cjs` | 按不可变流程版本流转事项、评论／交付、项目附件、资产加密与独立敏感字段授权 |
+| `application/project-content-services.cjs`、`project-content-presenter.cjs` | 按当前全局流程流转事项、评论／交付、项目附件、资产加密与独立敏感字段授权 |
 | `application/project-lifecycle-services.cjs`、`project-lifecycle-presenter.cjs` | 项目发布版本与归档门禁；storage 拥有事务与修订号 |
 | `application/system-workflow-services.cjs`、`system-workflow-presenter.cjs` | 系统管理员维护需求／Bug 全局流程与不可变发布版本，项目授权读取已发布版本；`domain/issue-workflows.cjs` 拥有图规则，`storage/system-workflow-store.cjs` 拥有无项目归属的流程持久化 |
 | `application/project-development-services.cjs`、`project-development-presenter.cjs` | 认领／指派规划、唯一活跃认领、内容快照、显式幂等启动、完成／取消及追加／发送；通过业务事件协调事项交接，不读取资产 |

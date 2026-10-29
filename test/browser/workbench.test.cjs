@@ -12,7 +12,7 @@ async function verifyWorkbench(browser) {
   const origin = 'http://127.0.0.1:49025', base = `/api/projects/${projectId}`;
   const output = path.resolve('state/browser/workbench'); fs.mkdirSync(output, {recursive:true});
   const project = fixture.response(new URL(origin + '/api/projects')).projects[0];
-  const issue = { ...fixture.response(new URL(origin + base + '/issues/search')), dueDate: '2026-10-20', tags: ['体验', 'MVP'], deliverySubmission: { allowed: true, label: '提交配置成果' }, workflowActions: [{ trigger: 'delivery.submitted', name: '提交配置成果', allowed: true, statusName: '待验证' }, { trigger: 'verification.started', name: '开始质检', allowed: true, statusName: '验证中' }, { trigger: 'verification.accepted', name: '确认质检通过', allowed: true, statusName: '已实现' }, { trigger: 'verification.returned', name: '退回补充', allowed: true, statusName: '待返工' }] };
+  const issue = { ...fixture.response(new URL(origin + base + '/issues/search')), dueDate: '2026-10-20', tags: ['体验', 'MVP'], deliverySubmission: { allowed: true, reviewerId: 'visual-admin', label: '提交配置成果' }, workflowActions: [{ trigger: 'delivery.submitted', name: '提交配置成果', allowed: true, statusName: '待验证' }, { trigger: 'verification.started', name: '开始质检', allowed: true, statusName: '验证中' }, { trigger: 'verification.accepted', name: '确认质检通过', allowed: true, statusName: '已实现' }, { trigger: 'verification.returned', name: '退回补充', allowed: true, statusName: '待返工' }] };
   let delivery = { id: 'delivery-1', projectId, issueId: issue.id, title: '客户搜索交付', body: '功能说明与验证记录', status: 'pending', revision: 1, checklist: ['搜索结果符合筛选条件', '移动端可完成操作'], checkedItems: [], authorId: 'visual-admin', reviewerId: 'visual-admin', commit: 'abc123', createdAt: '2026-10-14T08:00:00Z' };
   let resubmitted;
   const requests = [], errors = [];
@@ -46,7 +46,7 @@ async function verifyWorkbench(browser) {
             { ...task, id: 'task-6', title: '确认发布准备结果', status: 'unknown', execution: null, canMerge: false, issueIds: ['search'] },
             { ...task, id: 'task-7', title: '合并资料准备', status: 'merged', execution: null, canMerge: false, canOpenSession: false, runKey: null, issueIds: ['export'] },
             { ...task, id: 'task-8', title: '已取消的开发计划', status: 'cancelled', execution: null, canMerge: false, canOpenSession: false, runKey: null, issueIds: ['export'] },
-          ].map(item => ({ ...item, projectId, projectName: project.name, kind: 'issues', releaseName: 'v0.2' })).filter(item => !url.searchParams.get('status') || url.searchParams.get('status') === 'not_cancelled' ? item.status !== 'cancelled' : url.searchParams.get('status') === 'all' || item.status === url.searchParams.get('status'));
+          ].map(item => ({ ...item, projectId, projectName: project.name, kind: 'issues', releaseName: 'v0.2' })).filter(item => url.searchParams.get('status') === 'active' ? !['completed', 'cancelled', 'merged'].includes(item.status) : !url.searchParams.get('status') || url.searchParams.get('status') === 'not_cancelled' ? item.status !== 'cancelled' : url.searchParams.get('status') === 'all' || item.status === url.searchParams.get('status'));
           return send({ items, people: [], total: items.length, nextOffset: null });
         }
         const row={ ...issue, projectId, projectName:project.name, releaseName:'v0.2', ...(kind==='deliveries'?{...delivery}:{} ) };
@@ -179,10 +179,8 @@ async function verifyWorkbench(browser) {
     await dialog.getByRole('button',{name:'Next',exact:true}).click();
     await selectOption(dialog.getByLabel('Related issue',{exact:true}), 'issue-31');
     await dialog.getByLabel('Delivery notes',{exact:true}).fill('发布内容保留原文 @ {name}');
-    await selectOption(dialog.getByLabel('Delivery reviewer',{exact:true}), 'visual-admin');
     const publish=dialog.getByRole('button',{name:'提交配置成果',exact:true});
-    assert.equal(await publish.isEnabled(),false,'sharing requires explicit confirmation');
-    await dialog.getByRole('checkbox').check();
+    assert.equal(await dialog.getByLabel('Delivery reviewer',{exact:true}).count(),0);
     await publish.click();
     await page.getByRole('heading',{name:'Acceptance checklist',exact:true}).waitFor();
     const accept=page.getByRole('button',{name:'确认质检通过',exact:true});
@@ -210,18 +208,17 @@ async function verifyWorkbench(browser) {
     await page.getByLabel('Review notes',{exact:true}).waitFor();
     assert.equal(await page.getByLabel('Review notes',{exact:true}).inputValue(),'','access recovery cannot resurrect a revoked draft');
     assert.equal(await page.getByRole('checkbox').nth(0).isChecked(),false);
-    await page.getByRole('button', { name: '开始质检', exact: true }).click();
-    await page.getByText('Review progress：Review in progress', { exact: true }).waitFor();
-    await page.getByLabel('Review notes', { exact: true }).fill('请补充移动端验证证据');
+    assert.equal(await page.getByRole('button', { name: '开始质检', exact: true }).count(), 0);
     await page.getByRole('button', { name: '退回补充', exact: true }).click();
+    await page.getByRole('dialog').getByLabel('Return reason', { exact: true }).fill('请补充移动端验证证据');
+    await page.getByRole('dialog').getByRole('button', { name: 'Confirm return', exact: true }).click();
     await page.getByRole('button', { name: '提交配置成果', exact: true }).click();
     const revisionDialog = page.getByRole('dialog');
     await revisionDialog.getByLabel('Delivery notes', { exact: true }).fill('已补充移动端验证证据');
-    await revisionDialog.getByRole('checkbox').check();
     await revisionDialog.getByRole('button', { name: '提交配置成果', exact: true }).click();
     await page.waitForURL(url => url.searchParams.get('delivery') === 'delivery-2');
     assert.equal(resubmitted.supersedesId, 'delivery-1');
-    assert.equal(resubmitted.reviewerId, 'visual-admin');
+    assert.equal(resubmitted.issueId, issue.id);
     assert.equal(resubmitted.previousRevision, delivery.revision);
     await page.getByRole('link', { name: 'View original delivery', exact: true }).waitFor();
     assert.deepEqual(errors,[]);

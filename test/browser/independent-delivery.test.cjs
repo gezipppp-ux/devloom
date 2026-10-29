@@ -8,8 +8,8 @@ async function verifyIndependentDelivery({ page, origin, projectId, output }) {
   const base = `${origin}/api/projects/${projectId}`;
   const publications = [], completions = [];
   await page.route(base + "/tasks/session?*", route => route.fulfill({ json: { task } }));
-  await page.route(base + "/deliveries", async route => { publications.push(route.request().postDataJSON()); await route.fulfill({ json: { id: "independent-published", ...publications.at(-1) } }); });
-  await page.route(base + "/deliveries/independent-published", route => route.fulfill({ json: { delivery: { id: "independent-published", ...publications.at(-1), status: "pending", checklist: [], checkedItems: [] }, issue: null, permissions: ["collaboration.view"], people: [] } }));
+  await page.route(base + "/deliveries", async route => { publications.push(route.request().postDataJSON()); await route.fulfill({ json: { id: "independent-published", title: task.title, ...publications.at(-1) } }); });
+  await page.route(base + "/deliveries/independent-published", route => route.fulfill({ json: { delivery: { id: "independent-published", title: task.title, ...publications.at(-1), status: "pending", checklist: [], checkedItems: [] }, issue: null, permissions: ["collaboration.view"], people: [] } }));
   await page.route(base + "/tasks/independent-delivery-task/complete", async route => { completions.push(route.request().postDataJSON()); await route.fulfill({ json: { task: { ...task, status: "completed" } } }); });
   const open = async () => {
     await page.goto(origin + "/?workspace=ux-workspace&task=1-1");
@@ -25,20 +25,16 @@ async function verifyIndependentDelivery({ page, origin, projectId, output }) {
     assert.equal(await page.getByRole("button", { name: "发布交付", exact: true }).isDisabled(), true);
     assert.equal(await page.getByLabel("验证结果", { exact: true }).count(), 0);
     assert.equal(await page.getByLabel("提交标识（可选）", { exact: true }).count(), 0);
-    await page.getByText("请填写交付说明。", { exact: true }).waitFor();
-    await page.getByLabel("交付标题", { exact: true }).fill("   ");
-    await page.getByText("请填写交付标题。", { exact: true }).waitFor();
-    await page.getByLabel("交付标题", { exact: true }).fill("启动速度优化成果");
+    assert.equal(await page.getByLabel("交付标题", { exact: true }).count(), 0);
     await page.getByLabel("交付说明", { exact: true }).fill("   ");
     await page.getByText("请填写交付说明。", { exact: true }).waitFor();
     assert.equal(await page.getByRole("button", { name: "发布交付", exact: true }).isDisabled(), true);
     await page.getByLabel("交付说明", { exact: true }).fill("完成缓存复用，保留失败反馈。");
     await page.getByText("请选择交付验证人。", { exact: true }).waitFor();
     await selectOption(page.getByRole("combobox", { name: "交付验证人", exact: true }), "member-2");
-    await page.getByText("请勾选共享确认后提交。", { exact: true }).waitFor();
     await selectPreference(page, "locale", "en");
-    assert.equal(await page.getByLabel("Delivery title", { exact: true }).inputValue(), "启动速度优化成果");
-    await page.getByText("Confirm sharing before submitting.", { exact: true }).waitFor();
+    assert.equal(await page.getByLabel("Delivery title", { exact: true }).count(), 0);
+    assert.equal(await page.getByLabel("Delivery notes", { exact: true }).inputValue(), "完成缓存复用，保留失败反馈。");
     await selectPreference(page, "locale", "zh-CN");
     for (const locale of ["zh-CN", "en"]) {
       await selectPreference(page, "locale", locale);
@@ -56,9 +52,8 @@ async function verifyIndependentDelivery({ page, origin, projectId, output }) {
     }
     await selectPreference(page, "locale", "zh-CN");
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: "发布交付", exact: true }).click();
-    await page.getByRole("heading", { name: "启动速度优化成果", exact: true }).waitFor();
+    await page.getByRole("heading", { name: task.title, exact: true }).waitFor();
     assert.equal(publications.length, 1);
     assert.equal(publications[0].taskId, task.id);
     assert.equal(publications[0].reviewerId, "member-2");

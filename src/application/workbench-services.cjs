@@ -98,6 +98,7 @@ class WorkbenchServices {
     page.filters = workListFilters(input, kind);
     if (input.tag) page.tag = text(input.tag, "标签", 30);
     page.active = input.active === "true";
+    page.current = input.current === "true";
     const directory = await this.projects.list(actor);
     const projects = directory.projects.filter(p => p.permissions.includes(permission) && (kind !== "deliveries" || p.permissions.includes("issue.view")) && (!input.projectId || p.id === input.projectId));
     if (input.projectId && !projects.length) throw accountError("无权访问此项目的内容。", 403);

@@ -22,9 +22,10 @@ function workflowDefinition(input, { publish = false } = {}) {
   });
   const edgeIds = new Set();
   const transitions = input.transitions.map(edge => {
-    if (!edge || Object.keys(edge).some(key => !["id", "from", "to", "name", "permission", "requiresReason", "requiredFields", "requireAcceptedDelivery", "trigger", "actor", "assignment", "requireDelivery"].includes(key)) || !validId(edge.id) || edgeIds.has(edge.id) || !ids.has(edge.from) || !ids.has(edge.to) || edge.from === edge.to || !validName(edge.name) || !["issue.transition", "issue.accept"].includes(edge.permission) || typeof edge.requiresReason !== "boolean") invalid("流程连线、操作权限或名称无效。");
+    if (!edge || Object.keys(edge).some(key => !["id", "from", "to", "name", "permission", "requiresReason", "requiredFields", "requireAcceptedDelivery", "requireChecklist", "trigger", "actor", "assignment", "requireDelivery"].includes(key)) || !validId(edge.id) || edgeIds.has(edge.id) || !ids.has(edge.from) || !ids.has(edge.to) || edge.from === edge.to || !validName(edge.name) || !["issue.transition", "issue.accept"].includes(edge.permission) || typeof edge.requiresReason !== "boolean") invalid("流程连线、操作权限或名称无效。");
     if (edge.requiredFields !== undefined && (!Array.isArray(edge.requiredFields) || edge.requiredFields.some(field => !requiredFieldNames.includes(field)) || new Set(edge.requiredFields).size !== edge.requiredFields.length)) invalid("必填字段无效。");
     if (edge.requireAcceptedDelivery !== undefined && typeof edge.requireAcceptedDelivery !== "boolean") invalid("交付门禁无效。");
+    if (edge.requireChecklist !== undefined && typeof edge.requireChecklist !== "boolean") invalid("验收核对规则无效。");
     const trigger = edge.trigger ?? "manual", actor = edge.actor ?? "handler", assignment = edge.assignment ?? "role";
     if (!Object.hasOwn(workflowEvents, trigger) || !workflowEvents[trigger].actors.includes(actor) || !["role", "selection", "executor", "reviewer", "submitter"].includes(assignment)) invalid("流转触发事件、操作主体或交接规则无效。");
     if (edge.requireDelivery !== undefined && typeof edge.requireDelivery !== "boolean") invalid("交付证据门禁无效。");
@@ -43,6 +44,22 @@ function workflowDefinition(input, { publish = false } = {}) {
       eventKeys.add(key);
     }
     for (const node of nodes) if (node.allowAssignment && !transitions.some(edge => edge.from === node.id && edge.trigger === "development.assigned") && node.handler !== "developer") invalid("允许认领的节点必须配置开发分派流转。");
+    for (const edge of transitions.filter(edge => ["delivery.submitted", "verification.started"].includes(edge.trigger))) {
+      for (const trigger of ["verification.accepted", "verification.returned"]) {
+        if (!transitions.some(next => next.from === edge.to && next.trigger === trigger)) invalid("送验或开始验证后的节点必须配置验证通过和退回流转。");
+      }
+    }
+    for (const edge of transitions.filter(edge => edge.trigger === "verification.returned")) {
+      const reachable = new Set([edge.to]);
+      for (let changed = true; changed;) {
+        changed = false;
+        for (const next of transitions) {
+          const from = nodes.find(node => node.id === next.from), to = nodes.find(node => node.id === next.to);
+          if (reachable.has(next.from) && ["manual", "development.assigned", "development.started"].includes(next.trigger) && (next.trigger !== "development.assigned" || from.allowAssignment) && (next.trigger !== "development.started" || from.allowDevelopment) && !["completed", "cancelled"].includes(to.kind) && !reachable.has(next.to)) { reachable.add(next.to); changed = true; }
+        }
+      }
+      if (!transitions.some(next => reachable.has(next.from) && next.trigger === "delivery.submitted")) invalid("验证退回后必须能够继续处理并重新送验。");
+    }
     const initial = nodes.filter(node => node.kind === "initial");
     if (initial.length !== 1) invalid("流程必须有且仅有一个初始节点。");
     if (!nodes.some(node => ["completed", "cancelled"].includes(node.kind))) invalid("流程必须包含完成或取消节点。");

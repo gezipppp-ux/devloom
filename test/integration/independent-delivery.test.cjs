@@ -39,6 +39,8 @@ test("independent delivery validates private task ownership, project and source,
   const issue = await content.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "Unrelated issue" });
   await assert.rejects(content.addDeliverable(project.id, actor, { ...input, issueId: issue.id }), { statusCode: 400 });
   const delivery = await content.addDeliverable(project.id, actor, input);
+  const active = async () => (await workbench.list("tasks", actor, { status: "active" })).items.find(item => item.id === task.id);
+  assert.equal(await active(), undefined, "submitted independent work leaves the development queue");
   assert.equal(delivery.issueId, null);
   assert.equal((await content.readDeliverable(project.id, delivery.id, other)).issue, null);
   assert.equal((await workbench.list("deliveries", actor, { query: "Refactor" })).items[0].title, input.title);
@@ -56,6 +58,12 @@ test("independent delivery validates private task ownership, project and source,
   await assert.rejects(content.reviewDeliverable(project.id, delivery.id, other, review), { statusCode: 409 });
   const returned = await content.addDeliverable(project.id, actor, input);
   assert.equal((await content.reviewDeliverable(project.id, returned.id, other, { revision: 1, status: "returned", checkedItems: [], reviewNote: "Add validation evidence" })).status, "returned");
+  assert.equal((await active()).independentDelivery.id, returned.id, "returned independent work links back to its delivery");
+  await development.store.transaction(() => development.store.finish(task, "completed", actor.id));
+  assert.equal((await active()).independentDelivery.id, returned.id, "a finished independent task still shows its returned delivery");
+  const independentTask = await createTask({});
+  const defaultTitle = await content.addDeliverable(project.id, actor, { reviewerId: other.id, taskId: independentTask.id, body: "Independent work" });
+  assert.equal(defaultTitle.title, independentTask.snapshot.title);
   await database.client.project.update({ where: { id: project.id }, data: { status: "archived" } });
   await assert.rejects(content.addDeliverable(project.id, actor, input), { statusCode: 409 });
   assert.equal((await content.readDeliverable(project.id, delivery.id, actor)).permissions.includes("deliverable.review"), false);

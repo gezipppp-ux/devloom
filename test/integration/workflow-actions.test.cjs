@@ -208,7 +208,9 @@ test("delivery return, explicit reviewer and resubmission preserve history and p
   await installReviewWorkflow(f.database);
   const issue = await f.create({ businessOwnerId: dev.id });
   const separateIssue = await f.create();
-  await assert.rejects(content.addDeliverable(project.id, dev, { issueId: issue.id, body: "Result", reviewerId: "missing-user" }), /有效项目成员/);
+  await grant(f, qa, f.permissions.filter(permission => permission !== "deliverable.review"));
+  await assert.rejects(content.addDeliverable(project.id, dev, { issueId: issue.id, body: "Result" }), { statusCode: 403 });
+  await grant(f, qa, f.permissions);
   const delivery = await content.addDeliverable(project.id, dev, { issueId: issue.id, body: "Result", reviewerId: qa.id });
   assert.equal((await workbench.actions(owner)).items[0].kind, "issue", "delivery must not hide a different person's planning action");
   assert.deepEqual((await workbench.actions(qa)).items.map(item => [item.kind, item.bucket]), [["delivery", "verify"]]);

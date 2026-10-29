@@ -38,7 +38,8 @@ class ProjectDevelopmentServices {
     const execution = await this.store.execution(task);
     const previews = detail ? await this.store.issuePreviews(task) : [];
     const { permissions, project } = await this.authorize(task.projectId, actor, "issue.view");
-    return presentDevelopment(task, actor.id, execution, { detail, permissions, projectStatus: project.status, previews });
+    const reviewers = detail && permissions.includes("collaboration.view") ? await this.store.reviewers(task) : [];
+    return presentDevelopment(task, actor.id, execution, { detail, permissions, projectStatus: project.status, previews, reviewers });
   }
   async list(projectId, actor, input = {}) {
     await this.authorize(projectId, actor, "issue.view");

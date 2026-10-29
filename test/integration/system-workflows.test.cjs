@@ -7,6 +7,9 @@ const { ProjectServices } = require("../../src/application/project-services.cjs"
 const { ProjectContentServices } = require("../../src/application/project-content-services.cjs");
 const { SystemWorkflowServices } = require("../../src/application/system-workflow-services.cjs");
 const { projectPermissionCatalog } = require("../../src/domain/project-permissions.cjs");
+const { ProjectDevelopmentServices } = require("../../src/application/project-development-services.cjs");
+const { recommendedWorkflow } = require("../../src/domain/recommended-workflow.cjs");
+const { randomUUID } = require("node:crypto");
 
 async function fixture(t) {
   const database = await initializeTestDatabase(t, temporary(t));
@@ -26,7 +29,7 @@ async function fixture(t) {
   return { database, actor, admin, projects, workflows: new SystemWorkflowServices(database, accounts, projectServices), content: new ProjectContentServices(database, projectServices) };
 }
 
-test("system workflows are migration-seeded, shared across projects and keep immutable issue bindings", async t => {
+test("system workflows publish one current version for issues across projects", async t => {
   const { database, actor, admin, projects, workflows, content } = await fixture(t);
   assert.equal(await database.client.systemWorkflow.count(), 2);
   assert.equal(await database.client.systemWorkflowVersion.count(), 2);
@@ -40,13 +43,15 @@ test("system workflows are migration-seeded, shared across projects and keep imm
   assert.equal(Object.hasOwn(published.workflow, "revision"), false);
   assert.doesNotMatch(JSON.stringify(published), /triage/);
   await assert.rejects(workflows.saveWorkflow("requirement", admin, { revision: 1 }, true), { statusCode: 409 });
-  ({ workflow } = await workflows.saveWorkflow("requirement", admin, { revision: workflow.revision }, true));
+  await assert.rejects(workflows.saveWorkflow("requirement", admin, { revision: workflow.revision }, true), /需要选择对应的新状态/);
+  ({ workflow } = await workflows.saveWorkflow("requirement", admin, { revision: workflow.revision, mapping: { planned: "triage" } }, true));
   assert.equal(workflow.publishedVersion, 2);
   for (let index = 0; index < projects.length; index++) {
     const old = await content.readIssue(projects[index].id, before[index].id, actor);
-    assert.equal(old.status, "planned");
-    assert.equal(old.workflow.version, 1);
-    assert.equal(old.workflowVersionId, before[index].workflowVersionId);
+    assert.equal(old.status, "triage");
+    assert.equal(old.workflow.version, 2);
+    assert.notEqual(old.workflowVersionId, before[index].workflowVersionId);
+    assert.equal((await database.client.workAction.findFirst({ where: { issueId: old.id, status: "ready" } })).nodeId, "triage");
   }
   const after = await Promise.all(projects.map(project => content.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, type: "requirement", title: "发布后事项" })));
   assert.equal(after[0].workflowVersionId, after[1].workflowVersionId);
@@ -56,7 +61,52 @@ test("system workflows are migration-seeded, shared across projects and keep imm
   assert.equal((await content.transitionIssue(projects[0].id, after[0].id, actor, { revision: 1, transitionId: "resolve", reason: "检查通过" })).status, "resolved");
 });
 
-test("all configured issue text fields can satisfy an immutable published workflow", async t => {
+test("publishing the global workflow keeps an existing delivery actionable", async t => {
+  const { database, actor, admin, projects, workflows, content } = await fixture(t);
+  const project = projects[0], definition = recommendedWorkflow("requirement");
+  let { workflow } = await workflows.readWorkflow("requirement", admin);
+  ({ workflow } = await workflows.saveWorkflow("requirement", admin, { revision: workflow.revision, definition }));
+  ({ workflow } = await workflows.saveWorkflow("requirement", admin, { revision: workflow.revision }, true));
+  const issue = await content.createIssue(project.id, actor, { type: "requirement", title: "送验中的事项", businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id });
+  const development = new ProjectDevelopmentServices(database, content.projects);
+  const { tasks: [task] } = await development.create(project.id, actor, { requestId: randomUUID(), issueIds: [issue.id] });
+  const ready = await content.readIssue(project.id, issue.id, actor);
+  const delivery = await content.addDeliverable(project.id, actor, { requestId: randomUUID(), issueId: issue.id, issueRevision: ready.revision, taskId: task.id, reviewerId: actor.id, body: "准备好的成果" });
+  const pending = await content.readIssue(project.id, issue.id, actor);
+  const actionId = pending.processing.id;
+  definition.nodes.find(node => node.id === pending.status).name = "等待团队验证";
+  ({ workflow } = await workflows.saveWorkflow("requirement", admin, { revision: workflow.revision, definition }));
+  await workflows.saveWorkflow("requirement", admin, { revision: workflow.revision }, true);
+  const current = await content.readIssue(project.id, issue.id, actor);
+  assert.equal(current.statusName, "等待团队验证");
+  assert.equal(current.processing.id, actionId);
+  await content.reviewDeliverable(project.id, delivery.id, actor, { revision: delivery.revision, status: "accepted", checkedItems: delivery.checklist.map((_, index) => index), reviewNote: "已验证" });
+  assert.equal((await content.readIssue(project.id, issue.id, actor)).status, "implemented");
+});
+
+test("verification follows the configured checklist and return reason rules", async t => {
+  const { database, actor, admin, projects, workflows, content } = await fixture(t);
+  const project = projects[0], definition = recommendedWorkflow("requirement");
+  for (const edge of definition.transitions) {
+    if (edge.trigger === "verification.accepted") edge.requireChecklist = false;
+    if (edge.trigger === "verification.returned") edge.requiresReason = false;
+  }
+  let { workflow } = await workflows.readWorkflow("requirement", admin);
+  ({ workflow } = await workflows.saveWorkflow("requirement", admin, { revision: workflow.revision, definition }));
+  await workflows.saveWorkflow("requirement", admin, { revision: workflow.revision }, true);
+  const issue = await content.createIssue(project.id, actor, { type: "requirement", title: "自定义验收", acceptanceCriteria: ["确认结果"], businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id });
+  const development = new ProjectDevelopmentServices(database, content.projects);
+  const { tasks: [task] } = await development.create(project.id, actor, { requestId: randomUUID(), issueIds: [issue.id] });
+  let current = await content.readIssue(project.id, issue.id, actor);
+  let delivery = await content.addDeliverable(project.id, actor, { requestId: randomUUID(), issueId: issue.id, issueRevision: current.revision, taskId: task.id, reviewerId: actor.id, body: "完成的成果" });
+  delivery = await content.reviewDeliverable(project.id, delivery.id, actor, { revision: delivery.revision, status: "returned", checkedItems: [], reviewNote: "" });
+  current = await content.readIssue(project.id, issue.id, actor);
+  delivery = await content.addDeliverable(project.id, actor, { requestId: randomUUID(), issueId: issue.id, issueRevision: current.revision, taskId: task.id, reviewerId: actor.id, body: "补充后的成果", supersedesId: delivery.id, previousRevision: delivery.revision });
+  await content.reviewDeliverable(project.id, delivery.id, actor, { revision: delivery.revision, status: "accepted", checkedItems: [], reviewNote: "" });
+  assert.equal((await content.readIssue(project.id, issue.id, actor)).status, "implemented");
+});
+
+test("existing issues use the latest published workflow fields", async t => {
   const { actor, admin, projects, workflows, content } = await fixture(t);
   for (const [type, field] of [["requirement", "reproductionSteps"], ["bug", "acceptanceCriteria"]]) {
     const definition = { nodes: [{ id: "start", name: "开始", kind: "initial", allowDevelopment: false }, { id: "done", name: "完成", kind: "completed", allowDevelopment: false }],
@@ -68,9 +118,8 @@ test("all configured issue text fields can satisfy an immutable published workfl
     definition.transitions[0].requiredFields = [];
     ({ workflow } = await workflows.saveWorkflow(type, admin, { revision: workflow.revision, definition }));
     await workflows.saveWorkflow(type, admin, { revision: workflow.revision }, true);
-    await assert.rejects(content.transitionIssue(projects[0].id, issue.id, actor, { revision: issue.revision, transitionId: "finish" }), /资料尚未填写/);
-    issue = await content.updateIssue(projects[0].id, issue.id, actor, { revision: issue.revision, [field]: field === "acceptanceCriteria" ? ["明确且完整的资料"] : "明确且完整的资料" });
-    assert.deepEqual(issue.workflow.definition.transitions[0].requiredFields, [field]);
+    issue = await content.readIssue(projects[0].id, issue.id, actor);
+    assert.deepEqual(issue.workflow.definition.transitions[0].requiredFields, []);
     assert.equal((await content.transitionIssue(projects[0].id, issue.id, actor, { revision: issue.revision, transitionId: "finish" })).status, "done");
   }
 });
@@ -96,4 +145,14 @@ test("system workflow management rejects project owners and rechecks persisted a
   await database.client.projectMember.update({ where: { projectId_userId: { projectId: projects[0].id, userId: actor.id } }, data: { status: "inactive" } });
   await assert.rejects(workflows.readPublished(projects[0].id, "bug", actor), { statusCode: 404 });
   assert.equal((await workflows.readPublished(projects[1].id, "bug", actor)).workflow.publishedVersion, 1);
+});
+
+test("publishing rejects a returned delivery with no route to resubmission", async t => {
+  const { admin, workflows } = await fixture(t);
+  let { workflow } = await workflows.readWorkflow("requirement", admin);
+  const definition = structuredClone(workflow.draft);
+  definition.transitions = definition.transitions.filter(edge => !(edge.from === "rework" && ["development.started", "delivery.submitted"].includes(edge.trigger)));
+  ({ workflow } = await workflows.saveWorkflow("requirement", admin, { revision: workflow.revision, definition }));
+  await assert.rejects(workflows.saveWorkflow("requirement", admin, { revision: workflow.revision }, true), /退回后.*重新送验/);
+  assert.equal((await workflows.readWorkflow("requirement", admin)).workflow.publishedVersion, 1);
 });

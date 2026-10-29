@@ -23,7 +23,7 @@ import DevelopmentTaskConfirmation from "./DevelopmentTaskConfirmation.vue";
 import DevelopmentTaskContext from "./DevelopmentTaskContext.vue";
 import { useDevelopmentTask } from "./use-development-task.js";
 import {
-  developmentTaskLabels,
+  developmentTaskStatusLabel,
   developmentTaskStatuses,
   developmentExecutionStatuses,
   developmentExecutionView,
@@ -487,7 +487,7 @@ async function submitConfirmation() {
         </section>
       </section>
       <section v-if="task.canSubmitDelivery" class="development-panel">
-        <h3>{{ $t('整理成果') }}</h3><p class="field-hint">{{ $t('填写已完成的工作与核验结果，选择验证人后送验。') }}</p>
+        <h3>{{ $t('整理成果') }}</h3><p class="field-hint">{{ $t('填写已完成的工作，送交事项对应的验证人。') }}</p>
         <button :disabled="busy || editing" @click="publishing = true">{{ submissionLabel || $t('整理成果') }}</button>
       </section>
       <section v-if="canStart" class="development-preparation" :aria-label="$t('执行准备')">
@@ -517,7 +517,7 @@ async function submitConfirmation() {
         class="development-panel development-next"
         aria-labelledby="development-next-title"
       >
-        <div v-if="task.workflowErrors?.length" class="warning"><p v-for="entry in task.workflowErrors" :key="entry.id">{{ entry.error }}</p><button :disabled="busy" @click="mutate('workflow/retry', {}, '已重新核对业务流转。')">{{ $t('仅重试业务流转') }}</button></div><p v-if="task.deliveryPhase" class="field-hint">{{ $t(task.deliveryPhase) }}</p><ul v-if="task.scope?.length" class="project-records"><li v-for="issue in task.scope" :key="issue.id">{{ issue.title }} · {{ issue.statusName }}<a v-if="issue.delivery" :href="'/deliveries?projectId=' + projectId + '&delivery=' + issue.delivery.id">{{ $t('查看交付与验收') }}</a></li></ul><div class="development-states"><StatusColorBadge :status="task.status" :statuses="developmentTaskStatuses">{{ $t('任务：') }}{{ $t(developmentTaskLabels[task.status] || task.status) }}</StatusColorBadge><StatusColorBadge :status="executionView.colorKey" :statuses="developmentExecutionStatuses">Codex：{{ $t(codexStatus) }}</StatusColorBadge></div>
+        <div v-if="task.workflowErrors?.length" class="warning"><p v-for="entry in task.workflowErrors" :key="entry.id">{{ entry.error }}</p><button :disabled="busy" @click="mutate('workflow/retry', {}, '已重新核对业务流转。')">{{ $t('仅重试业务流转') }}</button></div><p v-if="task.deliveryPhase" class="field-hint">{{ $t(task.deliveryPhase) }}</p><ul v-if="task.scope?.length" class="project-records"><li v-for="issue in task.scope" :key="issue.id">{{ issue.title }} · {{ issue.statusName }}<span v-if="issue.delivery?.status === 'pending' && issue.delivery.reviewerName"> · {{ $t('验证人') }}：{{ issue.delivery.reviewerName }}</span><a v-if="issue.delivery" :href="'/deliveries?projectId=' + projectId + '&delivery=' + issue.delivery.id"> · {{ $t('查看交付与验收') }}</a></li></ul><p v-if="task.independentDelivery"><span v-if="task.independentDelivery.status === 'pending' && task.independentDelivery.reviewerName">{{ $t('验证人') }}：{{ task.independentDelivery.reviewerName }} · </span><a :href="'/deliveries?projectId=' + projectId + '&delivery=' + task.independentDelivery.id">{{ $t('查看交付与验收') }}</a></p><div class="development-states"><StatusColorBadge :status="task.status" :statuses="developmentTaskStatuses">{{ $t('任务：') }}{{ $t(developmentTaskStatusLabel(task)) }}</StatusColorBadge><StatusColorBadge :status="executionView.colorKey" :statuses="developmentExecutionStatuses">Codex：{{ $t(codexStatus) }}</StatusColorBadge></div>
         <p class="development-eyebrow">
           {{
             ["completed", "cancelled", "merged"].includes(task.status) ||
@@ -547,7 +547,7 @@ async function submitConfirmation() {
           </button>
         </div>
         <div v-else class="actions">
-          <button v-if="canRetryPreparation" class="primary" :disabled="busy" @click="confirm('retry-preparation')">{{ $t('重试准备并启动') }}</button>
+          <button v-if="canRetryPreparation" class="primary" :disabled="busy" @click="confirm('retry-preparation')">{{ $t(task.retryInitialization ? '重试初始化并启动' : '重试准备并启动') }}</button>
           <ReworkDevelopment :key="task.id + ':' + task.revision" :project-id="projectId" :task="task" />
           <button
             v-if="task.canOpenSession && task.runKey"
@@ -575,7 +575,7 @@ async function submitConfirmation() {
         <details class="development-info" :open="infoExpanded">
         <summary>{{ $t('任务信息') }}</summary>
         <dl class="ui-meta-list">
-          <dt>{{ $t('任务状态') }}</dt><dd><StatusColorBadge :status="task.status" :statuses="developmentTaskStatuses">{{ $t(developmentTaskLabels[task.status] || task.status) }}</StatusColorBadge></dd>
+          <dt>{{ $t('任务状态') }}</dt><dd><StatusColorBadge :status="task.status" :statuses="developmentTaskStatuses">{{ $t(developmentTaskStatusLabel(task)) }}</StatusColorBadge></dd>
           <dt>{{ $t('执行者') }}</dt><dd><span class="ui-person"><PersonAvatar :name="task.executor?.displayName || $t('未分配')" />{{ task.executor?.displayName || $t('未分配') }}</span></dd>
           <dt>{{ $t('目标版本') }}</dt><dd>{{ task.release?.name || $t('未排期') }}</dd>
           <dt>{{ $t('任务来源') }}</dt><dd>{{ task.kind === 'manual' ? $t('独立开发') : $t('项目事项') }}</dd>
@@ -640,6 +640,7 @@ async function submitConfirmation() {
       <DevelopmentTaskConfirmation
         v-if="confirmation"
         :action="confirmation.action"
+        :retry-initialization="task.retryInitialization"
         :retain-session="task.kind !== 'manual'"
         :title="confirmation.title"
         :busy="saving"

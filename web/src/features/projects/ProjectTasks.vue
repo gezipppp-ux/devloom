@@ -46,7 +46,7 @@ const { data, loading, error, reload } = useResource(() =>
     endpoint + "?" + new URLSearchParams({ offset: String(offset.value), scope: scope.value, ...filters.params.value, ...(props.issueId ? { issueId: props.issueId } : {}) }),
   ), { interval: 5000 },
 );
-const filters = useWorkListFilters("tasks", () => data.value?.filterOptions, { prefix: "task", defaultStatus: () => props.issueId ? "all" : "not_cancelled" });
+const filters = useWorkListFilters("tasks", () => data.value?.filterOptions, { prefix: "task", defaultStatus: () => props.issueId ? "all" : "active" });
 watch([offset, scope, () => JSON.stringify(filters.params.value)], () => {
   selectedTasks.value = [];
   merging.value = false;
