@@ -1,4 +1,4 @@
-const { selectOption, selectPreference } = require("../support/select.cjs");
+const { selectOption, selectOptions, selectPreference } = require("../support/select.cjs");
 const { openSessionContext } = require("../support/browser-navigation.cjs");
 const { openProjectTab } = require("../support/browser-navigation.cjs");
 /* global document, window, localStorage */
@@ -572,6 +572,7 @@ async function main() {
         await checkIssueCards(width);
         await capture('12-project-issue-detail-' + width);
         await page.getByRole('button', { name: '编辑事项', exact: true }).click();
+        assert.ok(!(await selectOptions(page.getByLabel('测试负责人', { exact: true }))).some(option => option.value === 'member-dev'));
         await capture('12-project-issue-edit-' + width);
         await tab('Bug');
         await page.getByRole('button', { name: '修复导出结果与筛选条件不一致', exact: true }).click();

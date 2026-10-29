@@ -11,7 +11,7 @@ const { accountError } = require("../domain/account.cjs");
 const { deliveryChecklist, deliveryReview } = require("../domain/deliverable-review.cjs");
 const { responsibilityFields, revision } = require("../domain/project-issues.cjs");
 const { issueWorkflowNode, assertIssueWritable } = require("../domain/issue-workflows.cjs");
-const { canProcessWorkflowStep } = require("../domain/workflow-actions.cjs");
+const { canProcessWorkflowStep, responsibilityPermissions } = require("../domain/workflow-actions.cjs");
 const { ProjectWorkflowServices } = require("./project-workflow-services.cjs");
 const { currentHandler, workflowEventEdge } = require("../domain/workflow-handoffs.cjs");
 const { deliveryReviewer } = require("../domain/delivery-submission.cjs");
@@ -96,7 +96,8 @@ class ProjectContentServices {
     const permissions = ["issue.create", ...(data.watcherIds.length || responsibilityFields.some(field => data[field] && data[field] !== actor.id) ? ["issue.assign"] : [])];
     return this.mutate(projectId, actor, permissions, async () => {
       await this.store.members(projectId, [...data.watcherIds, ...responsibilityFields.map(field => data[field])]);
-      const issue = await this.store.createIssue(projectId, actor.id, data, { requestId, attachments });
+      const { issue, created } = await this.store.createIssue(projectId, actor.id, data, { requestId, attachments });
+      if (created) await this.validateResponsibilities(projectId, issue, data);
       for (const file of attachments) await this.store.addFile(projectId, "issues", issue.id, actor.id, file);
       return { ...presentIssue(issue, actor.id, (await this.projects.authorize(projectId, actor, "project.view")).permissions), images: presentIssueImages(await this.store.issuePreviewFiles(projectId, issue.id), issue.source) };
     });
@@ -111,10 +112,25 @@ class ProjectContentServices {
       const data = issueInput(input, current);
       const attachments = issueAttachments(input);
       await this.store.members(projectId, [...(data.watcherIds || []), ...responsibilityFields.map(field => data[field])]);
+      await this.validateResponsibilities(projectId, current, data, current);
       const issue = await this.store.updateIssue(projectId, id, actor.id, input.revision, data);
       for (const file of attachments) await this.store.addFile(projectId, "issues", id, actor.id, file);
       return { ...presentIssue(issue, actor.id, (await this.projects.authorize(projectId, actor, "project.view")).permissions), images: presentIssueImages(await this.store.issuePreviewFiles(projectId, issue.id), issue.source) };
     });
+  }
+  async validateResponsibilities(projectId, issue, data, previous = {}) {
+    const requirements = responsibilityPermissions(issue.workflowVersion.definition);
+    for (const [field, label] of [["qaOwnerId", "测试负责人"], ["acceptanceOwnerId", "业务验收人"]]) {
+      if (!data[field] || data[field] === previous[field]) continue;
+      let permissions;
+      try { ({ permissions } = await this.projects.authorize(projectId, { id: data[field] }, "issue.view")); }
+      catch (error) {
+        if (error.statusCode !== 403) throw error;
+        throw accountError(`${label}缺少当前流程所需的项目权限，请选择有权限的成员。`, 400);
+      }
+      if (!requirements[field].every(permission => permissions.includes(permission)))
+        throw accountError(`${label}缺少当前流程所需的项目权限，请选择有权限的成员。`, 400);
+    }
   }
   async transitionIssue(projectId, id, actor, input) {
     await this.authorized(projectId, actor, ["issue.view"]);
@@ -214,7 +230,11 @@ class ProjectContentServices {
       if (!reviewer) throw accountError(issue ? "事项未设置流程要求的验证人，请先补充负责人。" : "请选择交付验证人。", 409);
       data.reviewerId = identifier(reviewer, "交付验证人");
       await this.store.members(projectId, [data.reviewerId]);
-      await this.projects.authorize(projectId, { id: data.reviewerId }, "deliverable.review");
+      try { await this.projects.authorize(projectId, { id: data.reviewerId }, "deliverable.review"); }
+      catch (error) {
+        if (error.statusCode !== 403) throw error;
+        throw accountError("指定验证人没有项目交付验收权限，请调整验证人或联系项目负责人。", 403);
+      }
       const title = text(issue?.title ?? input.title ?? task?.snapshot.title, "交付标题", 200, { required: true });
       if (issue) {
         const previous = await this.store.latestDelivery(projectId, issueId);

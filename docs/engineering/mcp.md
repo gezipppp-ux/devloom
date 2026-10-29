@@ -93,6 +93,8 @@ Windows PowerShell：
 
 ## 需求与 Bug 提报技能
 
+`list_project_members` 返回成员的 `effectivePermissions`；`get_issue_workflow` 的每个流程版本以及 `get_issue` 的事项返回 `responsibilityPermissions`，供测试负责人和业务验收人选择。创建或更换这两项职责时，服务端依据绑定流程和当前有效权限校验；未更换的历史职责不会因编辑其他字段被自动改写。
+
 唯一发布的技能为 `web-coding-issue-authoring`，资源位于 `resources/skills/web-coding-issue-authoring/`。入口、references、agents 和 scripts 使用同一个版本，`SKILL.md` 的 `metadata.version` 是版本唯一来源。文件变化必须递增版本；发布后重启服务，不能原地改写已发布版本。技能与安装提示只提供中文，不维护英文副本。
 
 `/skills` 与 `/skills/` 提供无需登录、无需 JavaScript 的 HTML 指南，页面由同一份入口 Markdown 渲染，引用链接指向同一发布版本的文件。`Accept: text/markdown` 返回入口内容，仅用于阅读，不作为单文件安装包。公开路由为：

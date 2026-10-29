@@ -104,8 +104,10 @@ test("concurrent cleaned-worktree rework transfers claims once and preserves the
 test("the configured issue reviewer receives the delivery and permission failures roll back", async t => {
   const f = await fixture(t); await f.run();
   let issue = await f.read();
-  await f.content.updateIssue(f.project.id, issue.id, f.owner, { revision: issue.revision, qaOwnerId: f.dev.id });
-  await assert.rejects(f.submit(), { statusCode: 403 });
+  await assert.rejects(f.content.updateIssue(f.project.id, issue.id, f.owner, { revision: issue.revision, qaOwnerId: f.dev.id }), /测试负责人缺少/);
+  const membership = await f.database.client.projectMember.findUnique({ where: { projectId_userId: { projectId: f.project.id, userId: f.qa.id } } });
+  await f.database.client.projectMember.update({ where: { projectId_userId: { projectId: f.project.id, userId: f.qa.id } }, data: { permissions: membership.permissions.filter(p => p !== "deliverable.review") } });
+  await assert.rejects(f.submit(), { statusCode: 403, message: /指定验证人没有项目交付验收权限/ });
   assert.equal(await f.database.client.projectDeliverable.count(), 0);
   assert.equal((await f.read()).status, "developing");
   issue = await f.read();
@@ -161,11 +163,12 @@ test("merged tasks submit only covered scopes and atomically submit multiple rem
   for (const issue of f.issues.slice(1)) assert.equal((await f.content.readIssue(f.project.id, issue.id, f.dev)).status, "developing");
   const items = f.issues.slice(1).map(issue => ({ requestId: randomUUID(), issueId: issue.id, taskId: f.task.id, reviewerId: f.qa.id, title: issue.title, body: "Batch evidence" }));
   let lastIssue = await f.content.readIssue(f.project.id, f.issues[2].id, f.owner);
-  await f.content.updateIssue(f.project.id, lastIssue.id, f.owner, { revision: lastIssue.revision, qaOwnerId: f.dev.id });
+  await f.content.updateIssue(f.project.id, lastIssue.id, f.owner, { revision: lastIssue.revision, qaOwnerId: f.other.id });
+  const membership = await f.database.client.projectMember.findUnique({ where: { projectId_userId: { projectId: f.project.id, userId: f.other.id } } });
+  await f.database.client.projectMember.update({ where: { projectId_userId: { projectId: f.project.id, userId: f.other.id } }, data: { permissions: membership.permissions.filter(p => p !== "deliverable.review") } });
   await assert.rejects(f.content.addDeliverables(f.project.id, f.dev, { items }), { statusCode: 403 });
   assert.equal(await f.database.client.projectDeliverable.count(), 1, "invalid batch rolls back every handoff");
-  lastIssue = await f.content.readIssue(f.project.id, f.issues[2].id, f.owner);
-  await f.content.updateIssue(f.project.id, lastIssue.id, f.owner, { revision: lastIssue.revision, qaOwnerId: f.other.id });
+  await f.database.client.projectMember.update({ where: { projectId_userId: { projectId: f.project.id, userId: f.other.id } }, data: { permissions: membership.permissions } });
   const batch = await f.content.addDeliverables(f.project.id, f.dev, { items });
   assert.deepEqual(batch.items.map(item => item.reviewerId), [f.qa.id, f.other.id]);
   assert.deepEqual(batch.items.map(item => item.title), f.issues.slice(1).map(issue => issue.title));

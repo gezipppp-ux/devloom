@@ -28,17 +28,17 @@ const commands = [
   ["create_release", "新建发布版本；名称必须如 v1.2 或 v1.2.3；不允许后缀。", {
     projectId: id, requestId, name: z.string().max(releaseNameRules.maxLength).regex(new RegExp("^(?:" + releaseNameRules.pattern + ")$")), description: z.string().max(4000).optional(), targetDate: date,
   }, "createRelease", "releases.write"],
-  ["list_project_members", "读取有效项目成员，用稳定用户 ID 指派；canAssign 表示可担任开发负责人。", {
+  ["list_project_members", "读取有效项目成员及 effectivePermissions；canAssign 表示可担任开发负责人。测试及验收职责须满足流程返回的 responsibilityPermissions。", {
     ...page, projectId: id, query: z.string().max(200).optional(), assignableOnly: z.boolean().default(false),
   }, "members"],
-  ["get_issue_workflow", "读取需求或 Bug 的已发布系统流程：按 publishedVersion 选择 definition，了解初始节点、分派限制及流转必填字段。不包含草稿；既有事项仍绑定创建时的流程版本。", {
+  ["get_issue_workflow", "读取需求或 Bug 的已发布系统流程：按 publishedVersion 选择 definition 和 responsibilityPermissions，了解节点、流转与职责权限。不包含草稿；既有事项使用 get_issue 返回的职责权限。", {
     projectId: id, type: z.enum(ISSUE_TYPES),
   }, "getIssueWorkflow"],
   ["search_issues", "发布前搜索同类事项避免重复；支持版本、类型和归档筛选。", {
     ...page, projectId: id, query: z.string().max(200).optional(), type: z.enum(ISSUE_TYPES).optional(),
     releaseId: z.union([id, z.literal("unassigned")]).optional(), includeArchived: z.boolean().default(false),
   }, "searchIssues"],
-  ["get_issue", "读取事项、修订号、开发任务修订号、正式附件与网页链接。", { projectId: id, issueId: id }, "getIssue"],
+  ["get_issue", "读取事项、修订号、开发任务修订号、职责所需权限、正式附件与网页链接。", { projectId: id, issueId: id }, "getIssue"],
   ["create_issue", "原子发布包含正文与附件的需求或 Bug，可指定一名开发负责人和多名关注人。指派只创建待开发任务，不启动 Agent。", {
     ...fields, projectId: id, requestId, type: z.enum(ISSUE_TYPES), title: z.string().min(1).max(200), businessOwnerId: id, qaOwnerId: id, acceptanceOwnerId: id, developerId: id.optional(),
   }, "createIssue", "issues.write"],
@@ -59,7 +59,7 @@ const commands = [
 
 function createMcpServer({ context, tokens, services, isBusy, origin }) {
   const server = new McpServer({ name: "devloom", version: "1.0.0" }, {
-    instructions: "先查询项目、版本、成员和 get_issue_workflow 已发布流程，发布前查重。创建事项须指定业务负责人、测试负责人和业务验收人，编辑后也必须保留三者。事项支持截止日期 dueDate、标签 tags，版本支持目标日期 targetDate。发布、编辑及删除使用稳定 UUIDv4 requestId，超时查询原请求或原样重试。" +
+    instructions: "先查询项目、版本、成员和 get_issue_workflow 已发布流程，发布前查重。创建事项须指定业务负责人、测试负责人和业务验收人，编辑后也必须保留三者。测试负责人及业务验收人的 effectivePermissions 必须满足绑定流程的 responsibilityPermissions；已有事项以 get_issue 返回的要求为准。事项支持截止日期 dueDate、标签 tags，版本支持目标日期 targetDate。发布、编辑及删除使用稳定 UUIDv4 requestId，超时查询原请求或原样重试。" +
       "delete_issue 需要独立 issues.delete scope 和项目 issue.delete 权限；先 get_issue 核对目标和 revision，仅按用户明确授权删除。已关联开发任务或交付的事项不能删除，归档事项只读。" +
       "附件上传前调用 create_upload_token({projectId}) 获取最长 24 小时有效的临时上传 Token；MCP Token 不能直接上传。" +
       "使用 create_upload_token 返回的 uploadUrl 添加 name 查询参数，POST 原始二进制；地址须与 whoami.runtime.siteOrigin 同源。" +

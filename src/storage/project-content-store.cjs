@@ -65,7 +65,7 @@ class ProjectContentStore {
         const history = await this.database.client.issueHistory.findFirst({ where: { projectId, issueId: requestId, actorId, action: "created" } });
         const storedHash = history?.data?.creationRequestHash;
         if (storedHash !== creationRequestHash) throw conflict();
-        return this.issue(projectId, requestId);
+        return { issue: await this.issue(projectId, requestId), created: false };
       }
     }
     const lifecycle = new ProjectLifecycleStore(this.database);
@@ -77,7 +77,7 @@ class ProjectContentStore {
     const issue = await this.database.client.projectIssue.create({ data: { ...data, ...(requestId ? { id: requestId } : {}), projectId, number: project.issueSequence, createdById: actorId, updatedById: actorId } });
     await new WorkActionStore(this.database).syncIssue({ ...issue, workflowVersion: version }, { initial: true });
     await this.issueHistory(projectId, issue.id, actorId, "created", { after: issue, ...(creationRequestHash ? { creationRequestHash } : {}) });
-    return this.issue(projectId, issue.id);
+    return { issue: await this.issue(projectId, issue.id), created: true };
   }
   async updateIssue(projectId, id, actorId, revision, data, action = "updated", extra = {}) {
     const before = await this.issue(projectId, id);

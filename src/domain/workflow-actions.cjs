@@ -13,6 +13,17 @@ function workflowStepPermissions(issue, node) {
 function canProcessWorkflowStep(issue, node, permissions) {
   return permissions.includes("issue.view") && workflowStepPermissions(issue, node).some(permission => permissions.includes(permission));
 }
+function responsibilityPermissions(definition) {
+  return Object.fromEntries([["qaOwnerId", "qaOwner"], ["acceptanceOwnerId", "acceptanceOwner"]].map(([field, handler]) => {
+    const nodes = definition.nodes.filter(node => node.handler === handler && node.category === "verification");
+    const permissions = new Set(["issue.view"]);
+    for (const node of nodes) {
+      for (const edge of definition.transitions.filter(edge => edge.from === node.id && definition.nodes.find(target => target.id === edge.to)?.kind !== "cancelled")) permissions.add(edge.permission);
+      if (definition.transitions.some(edge => edge.to === node.id && edge.trigger === "delivery.submitted" && edge.assignment !== "executor")) permissions.add("deliverable.review");
+    }
+    return [field, [...permissions]];
+  }));
+}
 function assertWorkflowHandler(issue, node, actorId) {
   if (workflowHandler(issue, node) !== actorId) throw accountError("此步骤由指定处理人操作，请联系业务负责人调整分派。", 403);
 }
@@ -37,4 +48,4 @@ function developmentAction(task, execution, requests = []) {
   if (["completed", "failed", "interrupted", "cancelled"].includes(execution?.status)) return { bucket: "todo", label: "整理成果", phase: "本轮已结束" };
   return { bucket: "todo", label: "核对原执行", phase: "执行结果待确认" };
 }
-module.exports = { handlerFields, actionCategories, requiredFieldNames, workflowHandler, workflowStepPermissions, canProcessWorkflowStep, assertWorkflowHandler, assertTransitionFields, actionBucket, developmentAction };
+module.exports = { handlerFields, actionCategories, requiredFieldNames, workflowHandler, workflowStepPermissions, canProcessWorkflowStep, responsibilityPermissions, assertWorkflowHandler, assertTransitionFields, actionBucket, developmentAction };

@@ -219,7 +219,7 @@ test("issue attachments commit with full bug fields, enforce permissions and rol
   const { database, permissions, actor, outsider, project, other, services, setPermissions } = await fixture(t);
   const attachment = (data = png) => ({ id: randomUUID(), name: '截图.png', mimeType: 'image/png', data: data.toString('base64') });
   const first = attachment();
-  await setPermissions(['project.view', 'issue.view', 'issue.create']);
+  await setPermissions(['project.view', 'issue.view', 'issue.create', 'issue.accept', 'collaboration.view', 'deliverable.review']);
   const input = { type: 'bug', title: '完整缺陷', businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id, description: `![截图](/api/projects/${project.id}/files/${first.id})`, priority: 'urgent', severity: 'critical', reproductionSteps: '复现步骤', expectedResult: '预期', actualResult: '实际', acceptanceCriteria: ['验收'], attachments: [first] };
   const issue = await services.createIssue(project.id, actor, input);
   for (const key of ['description', 'priority', 'severity', 'reproductionSteps', 'expectedResult', 'actualResult', 'acceptanceCriteria']) assert.deepEqual(issue[key], input[key]);
@@ -254,7 +254,7 @@ test("issue attachments commit with full bug fields, enforce permissions and rol
 
 test('issue creation retries preserve identity and initial request, attachment retries preserve stored bytes', async t => {
   const { randomUUID } = require('node:crypto');
-  const { database, permissions, actor, outsider, project, other, services } = await fixture(t);
+  const { database, permissions, actor, outsider, project, other, services, setPermissions } = await fixture(t);
   const file = { id: randomUUID(), name: 'note.txt', mimeType: 'text/plain', data: Buffer.from('original').toString('base64') };
   const input = { requestId: randomUUID(), type: 'bug', title: 'retry', businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id, actualResult: 'original result', attachments: [file] };
   for (const requestId of [null, '', 'not-a-uuid']) await assert.rejects(services.createIssue(project.id, actor, { ...{ businessOwnerId: actor.id, qaOwnerId: actor.id, acceptanceOwnerId: actor.id }, ...input, requestId }), { statusCode: 400 });
@@ -267,6 +267,9 @@ test('issue creation retries preserve identity and initial request, attachment r
   assert.equal(await database.client.issueHistory.count({ where: { issueId: original.id } }), 1);
   assert.equal((await database.client.project.findUnique({ where: { id: project.id } })).issueSequence, 1);
   assert.equal(await database.client.projectFile.count(), 1);
+  await setPermissions(permissions.filter(p => p !== 'issue.accept' && p !== 'deliverable.review'));
+  assert.equal((await services.createIssue(project.id, actor, input)).id, original.id);
+  await setPermissions(permissions);
   const changed = await services.updateIssue(project.id, original.id, actor, { revision: 1, title: 'edited since creation', attachments: [file] });
   assert.equal(changed.revision, 2);
   assert.equal((await services.createIssue(project.id, actor, input)).title, changed.title);

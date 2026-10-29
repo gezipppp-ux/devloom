@@ -8,6 +8,7 @@ import { issueDetailFields } from "./issue-fields.js";
 const props = defineProps({
   modelValue: { type: Object, required: true }, type: { type: String, required: true },
   workflow: { type: Object, default: null },
+  responsibilityPermissions: { type: Object, default: null },
   canEdit: Boolean, canAssign: Boolean, disabled: Boolean, creation: Boolean, contextKey: { type: String, required: true },
   releases: { type: Array, default: () => [] }, members: { type: Array, default: () => [] }, images: { type: Array, default: () => [] },
   attachments: { type: Array, default: () => [] }, attachmentError: { type: String, default: "" }, attachmentBusy: Boolean,
@@ -15,6 +16,7 @@ const props = defineProps({
 const emit = defineEmits(["update:modelValue", "files", "remove"]);
 const update = (key, value) => emit("update:modelValue", { ...props.modelValue, [key]: value });
 const details = computed(() => issueDetailFields(props.type, props.workflow, props.modelValue));
+const eligibleMembers = key => props.members.filter(member => (props.responsibilityPermissions?.[key] || []).every(permission => member.effectivePermissions?.includes(permission)));
 </script>
 <template>
   <div class="issue-fields" :class="{ 'issue-fields-creation': creation }">
@@ -30,7 +32,7 @@ const details = computed(() => issueDetailFields(props.type, props.workflow, pro
         <h2 v-if="creation">{{ $t('责任人与关注人') }}</h2>
         <slot name="people-feedback" />
         <div class="issue-responsibility-fields">
-          <label v-for="[key, label] in [['reporterId', '提报人'], ['businessOwnerId', '业务负责人'], ['qaOwnerId', '测试负责人'], ['acceptanceOwnerId', '业务验收人']]" :key="key"><span>{{ $t(label) }}<span v-if="key !== 'reporterId'" class="required-mark" aria-hidden="true"> *</span></span><AppSelect search-pinyin native-events :required="key !== 'reporterId'" :aria-label="$t(label)" :value="modelValue[key] || ''" @change="update(key, $event.target.value || null)"><option value="" :disabled="key !== 'reporterId' || Boolean(modelValue.id)">{{ $t(key === 'reporterId' && creation ? '创建时默认本人' : '请选择') }}</option><option v-if="modelValue[key] && !members.some(person => person.userId === modelValue[key])" :value="modelValue[key]">{{ modelValue.people?.find(person => person.id === modelValue[key])?.displayName || $t('已指定成员') }}</option><option v-for="p in members" :key="p.userId" :value="p.userId">{{ p.displayName }}（{{ p.username }}）</option></AppSelect></label>
+          <label v-for="[key, label] in [['reporterId', '提报人'], ['businessOwnerId', '业务负责人'], ['qaOwnerId', '测试负责人'], ['acceptanceOwnerId', '业务验收人']]" :key="key"><span>{{ $t(label) }}<span v-if="key !== 'reporterId'" class="required-mark" aria-hidden="true"> *</span></span><AppSelect search-pinyin native-events :required="key !== 'reporterId'" :aria-label="$t(label)" :value="modelValue[key] || ''" @change="update(key, $event.target.value || null)"><option value="" :disabled="key !== 'reporterId' || Boolean(modelValue.id)">{{ $t(key === 'reporterId' && creation ? '创建时默认本人' : '请选择') }}</option><option v-if="modelValue[key] && !eligibleMembers(key).some(person => person.userId === modelValue[key])" :value="modelValue[key]" disabled>{{ modelValue.people?.find(person => person.id === modelValue[key])?.displayName || members.find(person => person.userId === modelValue[key])?.displayName || $t('已指定成员') }}</option><option v-for="p in eligibleMembers(key)" :key="p.userId" :value="p.userId">{{ p.displayName }}（{{ p.username }}）</option></AppSelect><span v-if="modelValue[key] && responsibilityPermissions?.[key] && !eligibleMembers(key).some(person => person.userId === modelValue[key])" class="field-hint">{{ $t('当前负责人缺少流程所需权限，请选择有权限的成员。') }}</span></label>
         </div>
         <label>{{ $t("关注人") }}<AppSelect search-pinyin native-events :aria-label="$t('关注人')" multiple @change="update('watcherIds', [...$event.target.selectedOptions].map(option => option.value))"><option v-for="p in members" :key="p.userId" :value="p.userId" :selected="modelValue.watcherIds.includes(p.userId)">{{ p.displayName }}（{{ p.username }}）</option></AppSelect></label>
         <p class="field-hint">{{ $t('业务负责人对结果负责；当前处理人由流程决定；关注人仅用于关注，不生成待办。') }}</p>

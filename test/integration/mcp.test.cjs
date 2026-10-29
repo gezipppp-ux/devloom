@@ -65,6 +65,34 @@ async function error(client, name, input, status) {
   return result;
 }
 
+test("MCP validates workflow responsibility permissions on create and reassignment", async t => {
+  const f = await fixture(t), client = await f.connect(), projectId = f.project.id;
+  const member = f.members[0];
+  const key = { projectId_userId: { projectId, userId: member.id } };
+  const membership = await f.database.client.projectMember.findUnique({ where: key });
+  await f.database.client.projectMember.update({ where: key, data: { permissions: membership.permissions.filter(p => p !== "deliverable.review" && p !== "issue.accept") } });
+  const listed = (await call(client, "list_project_members", { projectId })).items.find(row => row.id === member.id);
+  assert.ok(!listed.effectivePermissions.includes("deliverable.review"));
+  const workflow = (await call(client, "get_issue_workflow", { projectId, type: "bug" })).workflow;
+  const requirements = workflow.versions.find(version => version.version === workflow.publishedVersion).responsibilityPermissions;
+  assert.ok(requirements.qaOwnerId.includes("deliverable.review"));
+  assert.ok(requirements.acceptanceOwnerId.includes("issue.accept"));
+  const input = { ...owners(f.admin.id), projectId, requestId: randomUUID(), type: "bug", title: "职责权限" };
+  await error(client, "create_issue", { ...input, qaOwnerId: member.id }, 400);
+  assert.equal(await f.database.client.projectIssue.count(), 0);
+  const { issue } = await call(client, "create_issue", { ...input, requestId: randomUUID() });
+  assert.deepEqual(issue.responsibilityPermissions, requirements);
+  await error(client, "update_issue", { projectId, issueId: issue.id, requestId: randomUUID(), revision: issue.revision, acceptanceOwnerId: member.id }, 400);
+  assert.equal((await call(client, "get_issue", { projectId, issueId: issue.id })).issue.acceptanceOwnerId, f.admin.id);
+  await f.database.client.projectMember.update({ where: key, data: { permissions: membership.permissions } });
+  const updated = await call(client, "update_issue", { projectId, issueId: issue.id, requestId: randomUUID(), revision: issue.revision, qaOwnerId: member.id, acceptanceOwnerId: member.id });
+  assert.equal(updated.issue.qaOwnerId, member.id);
+  assert.equal(updated.issue.acceptanceOwnerId, member.id);
+  await f.database.client.projectMember.update({ where: key, data: { permissions: membership.permissions.filter(p => p !== "deliverable.review" && p !== "issue.accept") } });
+  const edit = await call(client, "update_issue", { projectId, issueId: issue.id, requestId: randomUUID(), revision: updated.issue.revision, title: "保留既有职责" });
+  assert.equal(edit.issue.qaOwnerId, member.id);
+});
+
 test("MCP cannot read, edit, assign or replay publication of a deleted issue", async t => {
   const f = await fixture(t), client = await f.connect();
   const input = { ...owners(f.admin.id), projectId: f.project.id, requestId: randomUUID(), type: "requirement", title: "不明确的 MCP 需求", description: "待重新整理", acceptanceCriteria: ["补充后重新提报"] };

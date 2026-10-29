@@ -2,7 +2,7 @@
 name: web-coding-issue-authoring
 description: 帮助产品经理、运营人员和研发通过 DevLoom MCP 整理并创建需求或 Bug，检查页面原型、实施边界、复现资料和验收门禁。用于事项提报、发布前检查，以及按授权补充或删除已有事项。
 metadata:
-  version: "1.1.6"
+  version: "1.1.7"
 ---
 
 # DevLoom 需求与 Bug 提报

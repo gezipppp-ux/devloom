@@ -198,7 +198,7 @@ function person(id) {
             <EditConflict v-if="latest" :key="latest.revision" :base="baseline" :draft="form" :latest="latest"
                           :people="data.people" @resolve="resolve" @discard="discardDraft"/>
             <form class="project-form" @submit.prevent="submit">
-              <IssueFields :model-value="form" :type="data.type" :workflow="data.workflow?.definition"
+              <IssueFields :model-value="form" :type="data.type" :workflow="data.workflow?.definition" :responsibility-permissions="data.workflow?.responsibilityPermissions"
                            :can-edit="can('issue.edit')" :can-assign="can('issue.assign')" :disabled="saving"
                            :context-key="`${projectId}/${issueId}/${draftVersion}`" :members="data.members"
                            :releases="releases.data.value?.items || []" :images="images" :attachments="pending"

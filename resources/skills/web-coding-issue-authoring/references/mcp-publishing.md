@@ -35,7 +35,7 @@
 
 - `requiredFields` 在相应流转时检查，不是要求创建时把未来交付材料全部填完。本技能的内容门禁独立执行，接口字段可省略不代表本技能可以省略。
 - 既有事项绑定创建时的流程版本，更新时不能用最新流程替代原绑定版本。
-- `reporterId` 默认当前账号；创建必须明确提供 `businessOwnerId`、`qaOwnerId` 和 `acceptanceOwnerId`，三者可以相同，但不得猜测用户没有明确授权的人员安排。开发负责人用 `developerId`，必须为有效且 `canAssign: true` 的成员，其他职责不要求具备开发资格。
+- `reporterId` 默认当前账号；创建必须明确提供 `businessOwnerId`、`qaOwnerId` 和 `acceptanceOwnerId`，三者可以相同，但不得猜测用户没有明确授权的人员安排。开发负责人用 `developerId`，必须为有效且 `canAssign: true` 的成员。测试负责人及业务验收人的 `effectivePermissions` 必须包含流程版本返回的 `responsibilityPermissions` 对应字段；编辑时以 `get_issue` 返回的事项绑定流程要求为准。权限不足须提示，不擅自替换人员。
 - 设置他人职责、非空关注人或开发负责人需要额外指派权限。不要为了通过权限校验把用户指定的人换成当前账号。
 - 仅在用户要求且初始节点及相关门禁允许时，创建参数才携带 `developerId`；否则正常创建未指派事项。用户要求的指派被拒绝时说明具体门禁，不自行删掉指派要求重发。
 - MCP 不提供手动流转、启动开发、删除附件或版本编辑 / 归档接口。创建或指派只保存事项或生成待开发任务，不启动 Agent、不建立开发 worktree。需要这些后续动作时引导到控制台。

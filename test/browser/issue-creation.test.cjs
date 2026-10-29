@@ -1,6 +1,6 @@
 /* global document */
 const assert = require("node:assert/strict");
-const { selectOption, selectValue, selectPreference } = require("../support/select.cjs");
+const { selectOption, selectValue, selectOptions, selectPreference } = require("../support/select.cjs");
 const { openIssueCreate } = require("../support/browser-navigation.cjs");
 const { setMarkdown, markdownValue, pasteImage } = require("../support/issue-markdown.cjs");
 
@@ -32,6 +32,9 @@ async function verifyIssueCreation({ page, origin, projects }) {
   await setMarkdown(page, "复现步骤", "打开页面后再次导出");
   await pasteImage(page, "描述", "type-switch.png");
   const description = await markdownValue(page);
+  assert.ok((await selectOptions(page.getByLabel("业务负责人", { exact: true }))).some(option => option.value === "member-dev"));
+  assert.ok(!(await selectOptions(page.getByLabel("测试负责人", { exact: true }))).some(option => option.value === "member-dev"));
+  assert.ok(!(await selectOptions(page.getByLabel("业务验收人", { exact: true }))).some(option => option.value === "member-dev"));
   await selectOption(page.getByLabel("业务负责人", { exact: true }), "member-1");
   await selectOption(page.getByLabel("测试负责人", { exact: true }), "member-1");
   await selectOption(page.getByLabel("业务验收人", { exact: true }), "member-2");
@@ -45,7 +48,10 @@ async function verifyIssueCreation({ page, origin, projects }) {
   assert.equal(await markdownValue(page, "复现步骤"), "打开页面后再次导出");
   await page.getByRole("button", { name: "添加一条", exact: true }).click();
   await page.getByLabel("验收标准第 1 条").fill("筛选结果与导出一致");
+  await selectOption(page.getByLabel("业务验收人", { exact: true }), "member-dev");
   await selectOption(page.getByLabel("事项类型", { exact: true }), "bug");
+  await page.getByText("当前负责人缺少流程所需权限，请选择有权限的成员。", { exact: true }).waitFor();
+  await selectOption(page.getByLabel("业务验收人", { exact: true }), "member-2");
   assert.equal(await page.getByLabel("验收标准第 1 条").inputValue(), "筛选结果与导出一致");
   assert.equal(await page.getByLabel("标题", { exact: true }).inputValue(), "保留类型切换草稿");
   assert.equal(await selectValue(page.getByLabel("业务负责人", { exact: true })), "member-1");

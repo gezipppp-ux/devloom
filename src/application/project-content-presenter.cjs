@@ -1,7 +1,7 @@
 const { workflowActorAllowed } = require("../domain/workflow-handoffs.cjs");
 const { issueDeletionReason } = require("../domain/issue-deletion.cjs");
 const { issueWorkflowNode, issueDevelopmentAllowed } = require("../domain/issue-workflows.cjs");
-const { workflowHandler } = require("../domain/workflow-actions.cjs");
+const { workflowHandler, responsibilityPermissions } = require("../domain/workflow-actions.cjs");
 const { deliverySubmission } = require("../domain/delivery-submission.cjs");
 
 function dates(row) {
@@ -25,7 +25,7 @@ function presentIssue(row, actorId, permissions = []) {
       && (!edge.trigger.startsWith('verification.') || permissions.includes('deliverable.review') && deliverables[0]?.status === 'pending' && deliverables[0]?.actionId === action?.id);
     return { ...edge, allowed, status: edge.to, statusName: next.name, nextHandlerId: edge.assignment === "submitter" ? deliverables[0]?.authorId || null : edge.assignment === "executor" ? row.developerId : workflowHandler(row, next), terminal: ["completed", "cancelled"].includes(next.kind) };
   });
-  return { ...dates(issue), processing, development: developmentClaim ? { taskId: developmentClaim.task.id, executorId: developmentClaim.task.executorId, executorName: developmentClaim.task.executor.displayName } : null, release: release ? { id: release.id, name: release.name, status: release.status } : null, workflow: { id: workflowVersion.workflowId, version: workflowVersion.version, latestPublishedVersion: workflowVersion.workflow?.publishedVersion ?? workflowVersion.version, definition: workflowVersion.definition }, statusName: issueWorkflowNode(row)?.name || row.status, developmentAllowed: issueDevelopmentAllowed(row), assignmentAllowed: issueWorkflowNode(row)?.allowAssignment === true, workflowActions, availableTransitions: workflowActions.filter(edge => edge.trigger === "manual" && permissions.includes(edge.permission) && (!actorId || workflowActorAllowed(row, edge, actorId, permissions))), source: source ? { channel: source.channel, scope: source.scope, type: source.type, externalId: source.externalId, url: source.url, capturedAt: source.capturedAt.toISOString() } : null };
+  return { ...dates(issue), processing, development: developmentClaim ? { taskId: developmentClaim.task.id, executorId: developmentClaim.task.executorId, executorName: developmentClaim.task.executor.displayName } : null, release: release ? { id: release.id, name: release.name, status: release.status } : null, workflow: { id: workflowVersion.workflowId, version: workflowVersion.version, latestPublishedVersion: workflowVersion.workflow?.publishedVersion ?? workflowVersion.version, definition: workflowVersion.definition, responsibilityPermissions: responsibilityPermissions(workflowVersion.definition) }, statusName: issueWorkflowNode(row)?.name || row.status, developmentAllowed: issueDevelopmentAllowed(row), assignmentAllowed: issueWorkflowNode(row)?.allowAssignment === true, workflowActions, availableTransitions: workflowActions.filter(edge => edge.trigger === "manual" && permissions.includes(edge.permission) && (!actorId || workflowActorAllowed(row, edge, actorId, permissions))), source: source ? { channel: source.channel, scope: source.scope, type: source.type, externalId: source.externalId, url: source.url, capturedAt: source.capturedAt.toISOString() } : null };
 }
 function presentIssueImages(rows, source) {
   const files = rows.map(presentProjectFile);

@@ -27,12 +27,12 @@ function presentMcpProject(row) { return { id: row.id, name: row.name, descripti
 function presentMcpMember(row) {
   return { id: row.userId, username: row.username, displayName: row.displayName, status: row.status,
     active: row.status === "active" && row.userStatus === "active",
-    canAssign: row.status === "active" && row.userStatus === "active" && row.effectivePermissions.includes("session.start") };
+    canAssign: row.status === "active" && row.userStatus === "active" && row.effectivePermissions.includes("session.start"), effectivePermissions: row.effectivePermissions };
 }
 function presentMcpIssue(issue) {
   const value = { ...issue };
   delete value.source; delete value.workflow;
-  return { ...value, url: "/projects/" + issue.projectId + "?tab=" + (issue.type === "bug" ? "bugs" : "issues") + "&issue=" + issue.id };
+  return { ...value, responsibilityPermissions: issue.workflow.responsibilityPermissions, url: "/projects/" + issue.projectId + "?tab=" + (issue.type === "bug" ? "bugs" : "issues") + "&issue=" + issue.id };
 }
 function presentMcpIssueResult(issue, task, attachments) {
   return { issue: presentMcpIssue(issue), developmentTask: task

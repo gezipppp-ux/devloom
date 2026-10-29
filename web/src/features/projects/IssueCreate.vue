@@ -23,7 +23,8 @@ const members = useResource(() => can("issue.assign") ? appApi(`/projects/${prop
 const activeMembers = computed(() => (members.data.value?.members || []).filter(member => member.status === "active" && member.userStatus === "active"));
 const releases = useResource(() => appApi(`/projects/${props.projectId}/releases?includeArchived=true`));
 const workflow = useResource(() => appApi(`/projects/${props.projectId}/issue-workflows/${props.type}`));
-const publishedWorkflow = computed(() => workflow.data.value?.workflow?.versions.find(version => version.version === workflow.data.value.workflow.publishedVersion)?.definition);
+const publishedVersion = computed(() => workflow.data.value?.workflow?.versions.find(version => version.version === workflow.data.value.workflow.publishedVersion));
+const publishedWorkflow = computed(() => publishedVersion.value?.definition);
 watch(() => props.type, () => { workflow.data.value = null; void workflow.reload(); });
 watch(() => can("issue.assign"), () => { members.data.value = null; void members.reload(); });
 const returnLocation = computed(() => {
@@ -57,7 +58,7 @@ function create() {
     <FeedbackMessage :message="error || releases.error.value || workflow.error.value" type="error" />
     <div v-if="releases.error.value || workflow.error.value" class="actions"><button v-if="releases.error.value" type="button" :disabled="releases.loading.value" @click="releases.reload">{{ $t('重新读取版本') }}</button><button v-if="workflow.error.value" type="button" :disabled="workflow.loading.value" @click="workflow.reload">{{ $t('重新读取流程') }}</button></div>
     <form v-if="can('issue.create')" class="project-form issue-create-form" @submit.prevent="create">
-      <IssueFields creation :model-value="form" :type="type" :workflow="publishedWorkflow" can-edit :can-assign="can('issue.assign')" :disabled="saving" :context-key="`${projectId}/new/${requestId}`" :members="activeMembers" :releases="releases.data.value?.items || []" :images="images" :attachments="pending" :attachment-error="attachmentError" :attachment-busy="attachmentBusy" @update:model-value="Object.assign(form, $event)" @files="attach" @remove="removeFile">
+      <IssueFields creation :model-value="form" :type="type" :workflow="publishedWorkflow" :responsibility-permissions="publishedVersion?.responsibilityPermissions" can-edit :can-assign="can('issue.assign')" :disabled="saving" :context-key="`${projectId}/new/${requestId}`" :members="activeMembers" :releases="releases.data.value?.items || []" :images="images" :attachments="pending" :attachment-error="attachmentError" :attachment-busy="attachmentBusy" @update:model-value="Object.assign(form, $event)" @files="attach" @remove="removeFile">
         <template #people-feedback><p v-if="members.loading.value" role="status">{{ $t('正在读取可分派成员…') }}</p><FeedbackMessage :message="members.error.value" type="error" /><button v-if="members.error.value" type="button" :disabled="members.loading.value" @click="members.reload">{{ $t('重试读取成员') }}</button></template>
       </IssueFields>
       <p v-if="!can('issue.assign')" class="warning" role="status">{{ $t('新建事项需指定三位负责人，请联系管理员授予事项分派权限。') }}</p>

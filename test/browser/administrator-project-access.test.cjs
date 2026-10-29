@@ -6,6 +6,8 @@ const path = require("node:path");
 async function verifyAdministratorProjectAccess({ page, origin, projects, accounts, admin, department, remoteUrl, output }) {
   const owner = await accounts.create({ username: "independent-owner", displayName: "独立项目负责人", password: "fixture-password", departmentId: department.id, canCreateProjects: true }, admin);
   const project = (await projects.create(owner, { name: "管理员未加入的项目", remoteUrl })).project;
+  const membership = (await projects.members(project.id, admin)).members.find(member => member.userId === owner.id);
+  await projects.saveMember(project.id, admin, { revision: membership.revision, permissions: [...membership.permissions, "issue.view", "issue.accept", "collaboration.view", "deliverable.review"] }, owner.id);
   const tab = name => openProjectTab(page, name);
   const save = async (name, endpoint) => {
     const pending = page.waitForResponse(response => response.url() === `${origin}/api/projects/${project.id}${endpoint}` && response.request().method() === "POST");
@@ -67,11 +69,11 @@ async function verifyAdministratorProjectAccess({ page, origin, projects, accoun
   await page.getByRole("button", { name: "保存成员", exact: true }).click();
   const memberResponse = await pendingMember;
   assert.ok(memberResponse.ok(), await memberResponse.text());
-  const membership = (await projects.members(managed.id, admin)).members.find(member => member.userId === departmentlessAdmin.id);
-  assert.deepEqual(membership.permissions, []);
-  assert.equal(membership.administratorAccess, true);
-  assert.equal(membership.effectivePermissions.includes("project.members.manage"), true);
-  assert.equal(membership.effectivePermissions.some(permission => permission.startsWith("code.") || permission.startsWith("session.") || permission.startsWith("asset.secret.")), true);
+  const adminMembership = (await projects.members(managed.id, admin)).members.find(member => member.userId === departmentlessAdmin.id);
+  assert.deepEqual(adminMembership.permissions, []);
+  assert.equal(adminMembership.administratorAccess, true);
+  assert.equal(adminMembership.effectivePermissions.includes("project.members.manage"), true);
+  assert.equal(adminMembership.effectivePermissions.some(permission => permission.startsWith("code.") || permission.startsWith("session.") || permission.startsWith("asset.secret.")), true);
   assert.equal((await projects.read(managed.id, departmentlessAdmin)).space.status, "awaiting_credentials");
   await page.getByRole("button", { name: "调整无部门管理员（departmentless-admin）权限", exact: true }).waitFor();
   await page.screenshot({ path: path.join(output, "administrator-departmentless-owner.png"), fullPage: true });
